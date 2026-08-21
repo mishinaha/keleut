@@ -1,0 +1,3 @@
+[submodule "diktor"]
+	path = diktor
+	url = github:mishinaha/diktor.git
