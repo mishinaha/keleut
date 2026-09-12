@@ -208,6 +208,7 @@ newtype Never                                 // コンストラクタを持た�
 //   Some(A)                       … 無名。位置指定でのみ束縛できる
 //   Cons(head: A, tail: List[A])  … ラベル付き。位置指定でも `Cons(tail = t)` でも書ける
 // 混在してよい。
+// 型パラメータのカインドは使われ方から決まり、決まらなければ Type（§9 の Callback は E を行として使う）。
 
 // 単一コンストラクタで型名と同名の場合の略記法
 newtype UserId(Int32)                         // = newtype UserId = UserId(Int32)
@@ -497,7 +498,9 @@ effect File = {
 //   __read  : (Int32) => String @ Fs
 //   __write : (Int32, String) => Unit @ Fs
 //   __close : (Int32) => Unit @ Fs
-let with_file[A, E](path: String, body: () => A @ {File extends E}): A @ {Fs extends E} = {
+// サブエフェクティングが無いので、ハンドラの外側の行は body の行から File を除いたものと一致する。
+// with_file 自身が Fs を起こす以上、body の行にも Fs が現れる。
+let with_file[A, E](path: String, body: () => A @ {File, Fs extends E}): A @ {Fs extends E} = {
   let h = __open(path)
   body() handle {
     case read()    => resume(__read(h))
