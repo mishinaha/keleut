@@ -461,14 +461,47 @@ perform write(capture(fn() => println("test")).output)
 // h が結果型に漏れていないことを脱出検査で確かめる（Koka の st<h> と同じ）。
 // ランク2多相を一般機能として持たないので、構文として提供する。
 // run はハンドラなので、キャンセルされればリージョンも巻き戻される。
+//
+// Heap[h] は操作を持たないエフェクトラベルで、Ref と可変配列の操作だけが要求する。
+// 配列は不変の Array[A] と可変の MutableArray[h, A] に分ける。
+// 可変配列はリージョン変数を型に持つので脱出検査が効き、不変配列はリージョンから出てよい。
+// 引数を壊す関数が純粋として型付くことはなく、並列性の決定性（§11）と pub の純粋性（§13）を型が守る。
+// 標準ライブラリ側のシグネチャ：
+//   Ref.new             : [h, A] (A) => Ref[h, A] @ Heap[h]
+//   Ref.get             : [h, A] (Ref[h, A]) => A @ Heap[h]
+//   Ref.set             : [h, A] (Ref[h, A], A) => Unit @ Heap[h]
+//   Array.length        : [A] (Array[A]) => Int32
+//   Array.get           : [A] (Array[A], Int32) => A
+//   Array.each          : [A, E] (Array[A], (A) => Unit @ E) => Unit @ E
+//   MutableArray.new    : [h, A] (Int32, A) => MutableArray[h, A] @ Heap[h]
+//   MutableArray.length : [h, A] (MutableArray[h, A]) => Int32 @ Heap[h]
+//   MutableArray.get    : [h, A] (MutableArray[h, A], Int32) => A @ Heap[h]
+//   MutableArray.set    : [h, A] (MutableArray[h, A], Int32, A) => Unit @ Heap[h]
+//   MutableArray.freeze : [h, A] (MutableArray[h, A]) => Array[A] @ Heap[h]
+// 添字が範囲外なら実行時エラー。
+// freeze は可変配列の内容を不変配列として取り出す。freeze 後に元の可変配列へ書いても
+// 取り出した配列は変わらない（観測可能な契約。コピーするかどうかは実装戦略）。
 let sum(xs: Array[Int32]): Int32 = run h {
   let acc = Ref.new(0)                        // Ref[h, Int32] @ Heap[h]
   Array.each(xs, fn(x) => Ref.set(acc, Ref.get(acc) + x))
   Ref.get(acc)
 }
-// sum の型は (Array[Int32]) => Int32 @ {}。
+// sum の型は (Array[Int32]) => Int32 で、行は空。
 // 外から見て純粋、中は命令型。だから下の par_map に渡せる。
 // run が消すのは Heap[h] だけなので、他のエフェクトは通り抜ける。
+
+// 中で組み立てて外に出すときは freeze する
+let doubled(xs: Array[Int32]): Array[Int32] = run h {
+  let out = MutableArray.new(Array.length(xs), 0)
+  let i = Ref.new(0)
+  Array.each(xs, fn(x) => {
+    MutableArray.set(out, Ref.get(i), x * 2)
+    Ref.set(i, Ref.get(i) + 1)
+  })
+  MutableArray.freeze(out)
+}
+// 不変配列に set は無く、可変配列は h を型に持つのでリージョンの外から受け取れない。
+// したがって `run h { MutableArray.set(a, 0, 42) }` の a を引数にする関数は書けない。
 
 // ============================================================
 // 11. 並行性・並列性
