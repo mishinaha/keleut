@@ -764,13 +764,19 @@ let big_sum(): MyBigInt = BigInt.parse("123") + BigInt.parse("456")
 // TODO: newtype の表現をパッケージ内で隠す手段。pub だけではモジュール境界で抽象化できない。
 // TODO: Chan の標準ライブラリ側シグネチャ。§11 の channel / send / recv は署名の形しか示していない。
 // TODO: モジュールの入れ子。名前解決と可視性の規則（外側の pub でない束縛が内側から見えるか）が未定。
-// TODO: Ord[Float64] と NaN。IEEE 754 に従うと lt / le / gt / ge は NaN を含めば偽になり、
-//       Ord は全順序ではなくなる（反射律も成り立たない。derive structural の Eq[Float64] も同じ）。
-//       全順序が要る場面をどう書くかは未定で、将来の課題とする。案は 2 つある。
-//       (1) newtype で包んだ TotalFloat64 だけが Ord を実装する（§6 の TotalFloat64 はこの案の見本）。
+// TODO: Ord[Float64] / Eq[Float64] と NaN。IEEE 754 に従うと eq / lt / le / gt / ge は NaN を含めば偽になり、
+//       Ord は全順序でなく、Eq は同値関係でなくなる（どちらも反射律が破れる）。
+//       derive structural の Eq も同じで、Float64 のフィールドを 1 つ持つだけでレコードの Eq が反射律を失う。
+//       全順序と同値関係が要る場面をどう書くかは未定で、将来の課題とする。案は 2 つある。
+//       (1) newtype で包んだ TotalFloat64 だけが Ord と Eq を実装する（§6 の TotalFloat64 はこの案の見本）。
 //       (2) Ord とは別に、全順序の compare を用意する（Julia の isless に近い。以前の自作言語ではこちらを採った）。
 // TODO: 非有限値（NaN、無限大）のリテラルを足すか。現状は文字列化の字面 `nan` / `inf` を読み戻せない。
 // TODO: 整数算術の桁あふれ。現状は wrap-around だが、実行時エラーにする案も残っている（§2）。
 // TODO: 不変配列の生成手段。現状は MutableArray.freeze だけで、リテラルも Array.new も無い（§10）。
+// TODO: リージョンに専用のカインド（Region）を入れるか。現状の h はカインド Type なので、
+//       値の型の位置に `h` と書けてしまう（値を作る手段は無いので実行には届かない）。
 // TODO: 非 pub の let で「本体は純粋、呼び出しはどの行からでも可」を注釈で書く手段。
 //       現状は `@ {}` が呼び出し側の行も空に縛り、省略は推論になる（§9）。
+// TODO: 型パラメータのカインドを注記する構文。エイリアスには `type Request: EffectRow` があるが（§1 / §9）、
+//       型パラメータには無く、カインドは宣言群の中の型の本体での使われ方からしか決まらない（§6）。
+//       使われ方の無いパラメータは Type に既定化されるので、行カインドの phantom パラメータは書けない。
