@@ -460,7 +460,9 @@ let println(message: String): Unit @ Print = perform print(message + "\n")
 // 同じエフェクトを二重に積むと、非修飾でも修飾でも内側にしか届かない。copy が src を読んでから dst を開くのはそのためである。
 //
 // ランタイムが実装を持つエフェクト（Console、Async、Fs）はユーザの handle の対象にできない。
-// perform はできる。出力先を差し替えたいときは Print のような自前のエフェクトをハンドルする
+// 「ランタイムが実装を持つ」は 2 通りある。操作の実装をランタイムが持つ（Console の write、Async の yield_ と sleep）か、
+// 操作を持たず、ランタイムのプリミティブだけがそのラベルを行に載せる（Fs と、§9 の `__open` / `__read` / `__write` / `__close` の 4 本）か。
+// perform はできる（Fs は操作を持たないので perform できる操作が無い）。出力先を差し替えたいときは Print のような自前のエフェクトをハンドルする
 // （下の capture が見本）。印は設けず、この 3 つを名前で定める。標準ライブラリが宣言していても、
 // Fail や Nursery のように実装が言語の中にあるものはユーザがハンドルできる。
 //
@@ -576,7 +578,9 @@ pub let handle_request(r: Req): Resp @ {Request, Db, Async} = {
   Db.query(r.query)
 }
 
-// トップレベルに残せるエフェクトはランタイムが提供するもの（Console、Async、Fs、Blocking）だけ
+// トップレベルに残せるエフェクトはランタイムが提供するもの（Console、Async、Fs、Blocking）だけ。
+// Heap がこの 4 つに無いのは、Heap[h] がリージョン変数を引数に取るラベルで、トップレベルには渡せる h が無いためである。
+// h を導入するのは run だけで、run はその Heap[h] を自分で消す（§10）。
 perform write(capture(fn() => println("test")).output)
 
 // ============================================================
