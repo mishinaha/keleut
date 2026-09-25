@@ -23,6 +23,8 @@ Use an opam switch with OCaml >= 5.2. Run these commands inside `diktor/`:
 - `dune runtest` — run the Cram golden tests.
 - `dune exec diktor -- path/to/program.kel` — execute a Keleut file; add `--type-check` before the path to check types only.
 - `awk -f tools/weave.awk lib/unify.ml > /tmp/unify.md` — render a literate source chapter as Markdown.
+- `python3 tools/litwrap.py lib/unify.ml` — wrap long lines in literate article blocks after Japanese commas.
+- `python3 tools/litcheck.py` — after comment-only edits, confirm that the code tokens still match `HEAD` and that the comments keep the literate conventions (no `"` or unpaired `(*`, block indentation, line width).
 
 ## Coding Style & Naming Conventions
 
