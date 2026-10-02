@@ -51,9 +51,9 @@ BOM（U+FEFF）は、文字列とコメントの中を除き、どの位置に�
 次の語は予約語であり、レコードのラベルを含め、識別子を書く位置には使えない。
 
 ```text
-and case class effect extends extern false fn handle if instance
-let match module newtype perform pub rec resume run true type
-val with
+and case class effect extends extern false fn from handle if import
+instance let match module newtype perform pub rec resume run true
+type val with
 ```
 
 `return`、`cancel`、`Type`、`EffectRow` は予約語ではなく、特定の文脈でだけ特別な意味を持つ。
@@ -66,11 +66,11 @@ val with
 空行や余分なセミコロンを置いてもよい。
 
 文を終えられるトークンは、識別子、リテラル、閉じ括弧、`???` である。
-次の行が二項演算子、`.`、`\`、`match`、`handle`、`and`、`extends`、`|`、`case` で始まる場合、その改行は区切りにならず、前の行の文が続く。
+次の行が二項演算子、`.`、`\`、`match`、`handle`、`and`、`extends`、`|`、`case`、`import` で始まる場合、その改行は区切りにならず、前の行の文が続く。
 行頭の `(` は、前の行に続く関数呼び出しとは読まず、新しい文の始まりとする。
 負数で新しい文を始めるときは、前の文との間にセミコロンを置く。
 
-丸括弧、角括弧、レコード、レコード型、エフェクト行の中では、改行を文の区切りにしない。
+丸括弧、角括弧、レコード、レコード型、エフェクト行、`import` の直後の波括弧の中では、改行を文の区切りにしない。
 ただし、それらの中にさらにブロックを書いた場合、そのブロックの中では上の規則で改行を区切る。
 `case` のパターンやガードの途中で改行しても、文は区切られない。
 
