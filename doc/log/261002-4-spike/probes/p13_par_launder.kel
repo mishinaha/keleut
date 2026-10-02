@@ -1,0 +1,5 @@
+let par_map[A, B](xs: Array[A], f: (A) => B @ {}): Array[B] = ???
+let arr(): Array[Int32] = run h { MutableArray.freeze(MutableArray.new(2, 1)) }
+let noisy(x: Int32): Int32 @ {} = x
+let ys = par_map(arr(), fn(x) => noisy(x))
+let z = par_map(arr(), noisy)

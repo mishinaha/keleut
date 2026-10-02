@@ -1,0 +1,3 @@
+type class C[A] { val cm: (A) => A @ {} }
+let idf[A](x: A): A = x
+type instance C[Int32] { let cm = idf(fn(x: Int32) => x) }

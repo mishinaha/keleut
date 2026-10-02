@@ -1,0 +1,4 @@
+let rec a(n: Int32): Int32 @ Console = { echo("a"); b(n) }
+and b(n) = n
+let use(): Int32 @ {Console} = a(1)
+echoln(show(use()))

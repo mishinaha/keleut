@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let g(): Int32 @ {} = 2
+let store = Some(g)
+let use(): Int32 @ Ask = store match { case Some(h) => h() + perform ask() case None => 0 }
+echoln(show(use() handle { case ask() => resume(1) }))

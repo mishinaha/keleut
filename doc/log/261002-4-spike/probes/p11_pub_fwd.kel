@@ -1,0 +1,6 @@
+let use(): Int32 @ Console = { echo("u "); M.k(1) + M.kf(2) }
+module M {
+  pub let k: (Int32) => Int32 @ {} = fn(x) => x
+  pub let kf(x: Int32): Int32 @ {} = x
+}
+echoln(show(use()))

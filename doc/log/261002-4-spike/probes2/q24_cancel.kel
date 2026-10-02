@@ -1,0 +1,5 @@
+effect Fail = { fail: () => Unit }
+let cleanup(): Unit @ {} = ()
+let body(): Int32 @ {Fail, Console} = { echo("b "); perform fail(); 1 }
+let r = body() handle { case fail() => 0 case cancel => cleanup() }
+echoln(show(r))

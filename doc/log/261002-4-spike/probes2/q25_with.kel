@@ -1,0 +1,8 @@
+let call[A, E](x: Int32, k: (Int32) => A @ E): A @ E = k(x)
+let pure2(x: Int32): Int32 @ {} = x * 2
+let use(): Int32 @ Console = {
+  with y = call(3)
+  echo("w ")
+  pure2(y)
+}
+echoln(show(use()))

@@ -1,0 +1,6 @@
+let use(): Int32 @ Console = { echo("z "); M.ev(4) }
+module M {
+  pub let rec ev(n: Int32): Int32 = n match { case 0 => 1 case _ => od(n - 1) }
+  and od(n: Int32): Int32 = n match { case 0 => 0 case _ => ev(n - 1) }
+}
+echoln(show(use()))

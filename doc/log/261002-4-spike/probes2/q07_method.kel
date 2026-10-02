@@ -1,0 +1,5 @@
+type class Sz[A] { val sz: (A) => Int32 @ {} }
+newtype W = W(Int32)
+type instance Sz[W] { let sz(w) = w match { case W(n) => n } }
+let use(): Int32 @ Console = { echo("m "); sz(W(4)) }
+echoln(show(use()))

@@ -1,0 +1,3 @@
+let rec k: (Int32) => Int32 @ {} = fn(n) => n match { case 0 => 0 case _ => k(n - 1) }
+let use(): Int32 @ Console = { echo("v "); k(2) }
+echoln(show(use()))

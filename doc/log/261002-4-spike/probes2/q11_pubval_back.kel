@@ -1,0 +1,3 @@
+module M { pub let k: (Int32) => Int32 @ {} = fn(x) => x + 1 }
+let use(): Int32 @ Console = { echo("p "); M.k(1) }
+echoln(show(use()))

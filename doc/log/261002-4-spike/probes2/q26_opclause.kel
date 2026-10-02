@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32 }
+let base(): Int32 @ {} = 40
+let r = (perform ask() + 1) handle { case ask() => resume(base() + 1) }
+echoln(show(r))

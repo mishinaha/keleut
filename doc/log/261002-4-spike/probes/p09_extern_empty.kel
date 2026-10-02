@@ -1,0 +1,4 @@
+extern "C" let cos(x: Float64): Float64 @ {}
+let loud(x: Float64): Float64 @ Console = { echo("c "); cos(x) }
+pub let w(x: Float64): Float64 = cos(x)
+echoln(show(loud(0.0) + w(0.0)))

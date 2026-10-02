@@ -1,0 +1,2 @@
+effect Ask = { ask: () => Int32 }
+let f(): Int32 @ Console = { echo("x"); perform ask() }

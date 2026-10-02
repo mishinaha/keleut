@@ -1,0 +1,3 @@
+let loud(x: Float64): Float64 @ Console = { echo("c "); cos(x) }
+extern "C" let cos(x: Float64): Float64 @ {}
+echoln(show(loud(0.0)))

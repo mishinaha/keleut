@@ -1,0 +1,2 @@
+effect Ask = { ask: () => Int32 }
+module M { pub let k: () => Int32 @ {} = fn() => perform ask() }

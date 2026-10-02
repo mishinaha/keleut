@@ -1,0 +1,8 @@
+let main(): Int32 = run h {
+  let slot = Ref.new(fn(x: Int32) => x)
+  let g: (Int32) => Int32 @ {} = Ref.get(slot)
+  let cell = Ref.new(41)
+  let _ = Ref.set(slot, fn(x) => Ref.get(cell) + x)
+  Ref.get(slot)(1)
+}
+echoln(show(main()))

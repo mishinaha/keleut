@@ -1,0 +1,114 @@
+diff --git a/lib/elab.ml b/lib/elab.ml
+index 797bd26..2930fb9 100644
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -230,6 +230,21 @@ let rec irrefutable_pat ((_, p) : T.pat) =
+    pub の規則を名指しして案内するため *)
+ let pub_pure_rows : (oid, unit) Hashtbl.t = Hashtbl.create 8
+ 
++(* pub の @ 省略の本体の行。空の行へのリンクを持つセルで、意味は TRowEmpty と同じ。
++   セルの同一性を、pub の規則を名指しする言い換えの印に使う *)
++let pub_pure_cells : tvar ref list ref = ref []
++
++let new_pub_pure_row () =
++  let r = ref (Link TRowEmpty) in
++  pub_pure_cells := r :: !pub_pure_cells;
++  TVar r
++
++let is_pub_pure_row eff =
++  (match eff with TVar r -> List.memq r !pub_pure_cells | _ -> false)
++  ||
++  let _, tail = row_fields eff in
++  match repr tail with TVar r -> ( match !r with Rigid i -> Hashtbl.mem pub_pure_rows i.vid | _ -> false) | _ -> false
++
+ (* 失敗が行の単一化に由来するかどうか(エラー文言を言い換えるかどうかの判定)。
+    引数の型の不一致まで、仕様 §9 の行の話にしないために使う。
+    pub の言い換え(§11.12、§11.28)、入れ子の省略 @ の言い換え(§11.12、§11.18)、
+@@ -1527,12 +1542,7 @@ and elab_exp' env level eff node e =
+          (* pub の @ 省略は純粋を意味する。エフェクトつき関数の呼び出しが Rigid の行と
+             衝突する形は perform よりよく起きるのに、一般的な文言「行型ではありません: ς1」では
+             原因にたどり着けない。そこで perform の側(§11.15)と同じ言い換えをここにも置く *)
+-         let pub_pure =
+-           let _, tail = row_fields eff in
+-           match repr tail with
+-           | TVar r -> ( match !r with Rigid i -> Hashtbl.mem pub_pure_rows i.vid | _ -> false)
+-           | _ -> false
+-         in
++         let pub_pure = is_pub_pure_row eff in
+          if pub_pure && row_failure msg then
+            type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")")
+          else if row_failure msg && callee_pure then
+@@ -1703,12 +1713,7 @@ and elab_exp' env level eff node e =
+          (* pub で @ を省略した宣言の本体の行は、純粋を表す Rigid である。その行と
+             衝突したときだけ、規則を名指しで案内する(一般の文言
+             「行型ではありません: ς1」では原因に結びつかない) *)
+-         let pub_pure =
+-           let _, tail = row_fields eff in
+-           match repr tail with
+-           | TVar r -> ( match !r with Rigid i -> Hashtbl.mem pub_pure_rows i.vid | _ -> false)
+-           | _ -> false
+-         in
++         let pub_pure = is_pub_pure_row eff in
+          if pub_pure then type_error "pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください)"
+          else type_error ("エフェクト " ^ name_of eff_name ^ " をここでは実行できません(" ^ msg ^ ")"));
+       op_ret
+@@ -2860,7 +2865,7 @@ and elab_binding env level eff ((_, b) as node : T.let_binding) : env =
+         let fn_eff, eff_rigids =
+           match b.T.lb_eff with
+           | Some e -> (elab_eff env_ty lvl e, [])
+-          | None when b.T.lb_pub -> (TRowEmpty, [])
++          | None when b.T.lb_pub -> (new_pub_pure_row (), [])
+           | None -> (new_row_var lvl, [])
+         in
+         extra_rigids := eff_rigids @ !extra_rigids;
+@@ -3073,6 +3078,8 @@ and elab_rec_bindings env level eff bs : env =
+   in
+   let rec_arg_queue = ref [] in
+   let published = ref [] in
++  (* 検査し終えて公開の型が決まった束縛は、後続の本体からその型で見せる *)
++  let env_now = ref env_rec in
+   let pub_pure_row lvl =
+     match !shared_pub_row with
+     | Some (t, r) -> (t, [ ("", t, r) ])
+@@ -3083,14 +3090,14 @@ and elab_rec_bindings env level eff bs : env =
+         (TVar r, [ ("", TVar r, r) ])
+   in
+   List.iter2
+-    (fun ((_, b) as bnode) (_, pre) ->
++    (fun ((_, b) as bnode) (x, pre) ->
+       at_node bnode @@ fun () ->
+       (* pub の完全注釈検査と、関数束縛の @ の省略を純粋と読む規則は、let(§11.28)と同じ。
+          ただし完全注釈検査では値束縛の頭を最外として扱わない(値束縛に pub の省略 @ の
+          分岐が無いため。§11.29) *)
+       (if b.T.lb_pub then check_pub_annots ~value_head_outer:false ~params:b.T.lb_params ~ret:b.T.lb_ret);
+       let rigids = make_rigids lvl b.T.lb_tparams in
+-      let env_ty = { env_rec with types = List.fold_left (fun m (n, t, _) -> SMap.add n t m) env_rec.types rigids } in
++      let env_ty = { !env_now with types = List.fold_left (fun m (n, t, _) -> SMap.add n t m) !env_now.types rigids } in
+       let extra_rigids = ref [] in
+       let fn_ty =
+         match b.T.lb_params with
+@@ -3101,7 +3108,7 @@ and elab_rec_bindings env level eff bs : env =
+             let fn_eff, eff_rigids =
+               match b.T.lb_eff with
+               | Some e -> (elab_eff env_ty lvl e, [])
+-              | None when b.T.lb_pub -> ignore pub_pure_row; (TRowEmpty, [])
++              | None when b.T.lb_pub -> ignore pub_pure_row; (new_pub_pure_row (), [])
+               | None -> (new_row_var lvl, [])
+             in
+             extra_rigids := eff_rigids;
+@@ -3136,6 +3143,7 @@ and elab_rec_bindings env level eff bs : env =
+               let t', rig = publish_open lvl fn_ty in
+               extra_rigids := rig @ !extra_rigids;
+               published := (bnode, t') :: !published;
++              env_now := { !env_now with values = SMap.add x t' !env_now.values };
+               t'
+           | _ -> fn_ty)
+         else fn_ty
+@@ -4733,6 +4741,7 @@ let type_check_decls ?(prelude = []) decls =
+   Unify.reset ();
+   Exhaust.reset ();
+   Hashtbl.reset pub_pure_rows;
++  pub_pure_cells := [];
+   let out = current_out in
+   out := [];
+   (* 先頭に積んで最後に反転する。末尾に @ で連結すると、宣言数の二乗の時間がかかる *)

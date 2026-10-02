@@ -1,0 +1,5 @@
+effect Async = { yield_: () => Unit, sleep: (Int64) => Unit }
+type F = (Int32) => Int32 @ Console
+let g: F = fn(x) => { echo("v"); x }
+let k(x: Int32): Int32 @ Console = g(x)
+let m(x: Int32): Int32 @ {Console, Async} = g(x)

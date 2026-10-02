@@ -1,0 +1,3 @@
+module M { pub let f(x: Int32): Int32 = x * 2 }
+let use(): Int32 @ Console = { echo("q "); M.f(1) }
+echoln(show(use()))

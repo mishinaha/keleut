@@ -1,0 +1,5 @@
+effect Async = { yield_: () => Unit, sleep: (Int64) => Unit }
+let idf[A](x: A): A = x
+let h = idf(fn() => echoln("x"))
+let use1(): Unit @ {Console, Async} = h()
+use1() handle { case yield_() => resume(()) case sleep(n) => resume(()) }

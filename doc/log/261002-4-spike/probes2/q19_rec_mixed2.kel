@@ -1,0 +1,3 @@
+let rec b(n) = a(n)
+and a(n: Int32): Int32 @ Console = { echo("a"); n }
+echoln(show(b(2)))

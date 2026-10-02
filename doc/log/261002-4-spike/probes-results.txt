@@ -1,0 +1,313 @@
+##### p01_inst_nonvalue.kel
+--- diktor-m43 tc
+idf : (A) => A
+rc=0
+--- diktor-m43 run
+rc=0
+--- diktor-gate tc
+idf : (A) => A
+! p01_inst_nonvalue.kel:3:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド cm の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=1
+--- diktor-gate run
+! p01_inst_nonvalue.kel:3:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド cm の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=0
+##### p02_inst_nonvalue_print.kel
+--- diktor-m43 tc
+idf : (A) => A
+! p02_inst_nonvalue_print.kel:4:30: 型エラー: インスタンスメソッド cm がクラス宣言の型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+rc=1
+--- diktor-m43 run
+! p02_inst_nonvalue_print.kel:4:30: 型エラー: インスタンスメソッド cm がクラス宣言の型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+rc=0
+--- diktor-gate tc
+idf : (A) => A
+! p02_inst_nonvalue_print.kel:4:30: 型エラー: インスタンスメソッド cm がクラス宣言の型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+rc=1
+--- diktor-gate run
+! p02_inst_nonvalue_print.kel:4:30: 型エラー: インスタンスメソッド cm がクラス宣言の型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+rc=0
+##### p03_leak_open_empty.kel
+--- diktor-m43 tc
+g : () => {} @ {Console extends R1}
+! p03_leak_open_empty.kel:2:22: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p03_leak_open_empty.kel:2:22: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+g : () => {} @ {Console extends R1}
+! p03_leak_open_empty.kel:2:22: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-gate run
+! p03_leak_open_empty.kel:2:22: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+##### p04_region_fn.kel
+--- diktor-m43 tc
+! p04_region_fn.kel:1:29: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=1
+--- diktor-m43 run
+! p04_region_fn.kel:1:29: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=0
+--- diktor-gate tc
+! p04_region_fn.kel:1:29: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=1
+--- diktor-gate run
+! p04_region_fn.kel:1:29: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=0
+##### p05_region_val.kel
+--- diktor-m43 tc
+! p05_region_val.kel:1:27: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=1
+--- diktor-m43 run
+! p05_region_val.kel:1:27: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=0
+--- diktor-gate tc
+! p05_region_val.kel:1:27: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=1
+--- diktor-gate run
+! p05_region_val.kel:1:27: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=0
+##### p06_valres_wrap.kel
+--- diktor-m43 tc
+! p06_valres_wrap.kel:2:21: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+rc=1
+--- diktor-m43 run
+! p06_valres_wrap.kel:2:21: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+rc=0
+--- diktor-gate tc
+wrap : (() => Int32 @ {Console}) => () => Int32 @ {Console extends R1}
+h1 : () => Int32 @ {Console extends R1}
+h2 : () => Int32 @ {Console, Async extends R1}
+_ : {}
+! p06_valres_wrap.kel:6:18: 型エラー: ラベル Async がありません(行は閉じています)
+rc=1
+--- diktor-gate run
+! p06_valres_wrap.kel:6:18: 型エラー: ラベル Async がありません(行は閉じています)
+rc=0
+##### p07_nested_shared.kel
+--- diktor-m43 tc
+! p07_nested_shared.kel:2:48: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+rc=1
+--- diktor-m43 run
+! p07_nested_shared.kel:2:48: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+rc=0
+--- diktor-gate tc
+f : (() => {} @ {Print2}) => {} @ {Print2 extends R1}
+pg : () => {} @ {Print2 extends R1}
+use : () => {} @ {Print2, Console extends R1}
+rc=0
+--- diktor-gate run
+rc=0
+##### p08_val_weak_ref.kel
+--- diktor-m43 tc
+! p08_val_weak_ref.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p08_val_weak_ref.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+! p08_val_weak_ref.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-gate run
+! p08_val_weak_ref.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+##### p09_extern_empty.kel
+--- diktor-m43 tc
+cos : (Float64) => Float64
+! p09_extern_empty.kel:2:57: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p09_extern_empty.kel:2:57: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+cos : (Float64) => Float64
+loud : (Float64) => Float64 @ {Console extends R1}
+w : (Float64) => Float64
+_ : {}
+rc=0
+--- diktor-gate run
+c 2.0
+rc=0
+##### p10b_fwd_order.kel
+--- diktor-m43 tc
+k : (Int32) => Int32
+kf : (Int32) => Int32
+! p10b_fwd_order.kel:3:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p10b_fwd_order.kel:3:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+k : (Int32) => Int32
+kf : (Int32) => Int32
+use : () => Int32 @ {Console extends R1}
+_ : {}
+rc=0
+--- diktor-gate run
+u 3
+rc=0
+##### p10_fwd_order.kel
+--- diktor-m43 tc
+! p10_fwd_order.kel:1:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p10_fwd_order.kel:1:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+use : () => Int32 @ {Console extends R1}
+k : (Int32) => Int32
+kf : (Int32) => Int32
+_ : {}
+rc=0
+--- diktor-gate run
+u 3
+rc=0
+##### p11_pub_fwd.kel
+--- diktor-m43 tc
+! p11_pub_fwd.kel:1:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p11_pub_fwd.kel:1:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+use : () => Int32 @ {Console extends R1}
+M.k : (Int32) => Int32
+M.kf : (Int32) => Int32
+_ : {}
+rc=0
+--- diktor-gate run
+u 3
+rc=0
+##### p12_handle_dup.kel
+--- diktor-m43 tc
+inner : () => Int32 @ {Ask extends R1}
+pureish : () => Int32
+! p12_handle_dup.kel:4:29: 型エラー: ラベル Ask がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p12_handle_dup.kel:4:29: 型エラー: ラベル Ask がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+inner : () => Int32 @ {Ask extends R1}
+pureish : () => Int32
+t : () => Int32
+_ : {}
+rc=0
+--- diktor-gate run
+15
+rc=0
+##### p13_par_launder.kel
+--- diktor-m43 tc
+par_map : (Array[A], (A) => B) => Array[B]
+arr : () => Array[Int32]
+noisy : (Int32) => Int32
+ys : Array[Int32]
+z : Array[Int32]
+rc=0
+--- diktor-m43 run
+実行時エラー: ??? に到達しました
+rc=0
+--- diktor-gate tc
+par_map : (Array[A], (A) => B) => Array[B]
+arr : () => Array[Int32]
+noisy : (Int32) => Int32
+ys : Array[Int32]
+z : Array[Int32]
+rc=0
+--- diktor-gate run
+実行時エラー: ??? に到達しました
+rc=0
+##### p14_closed_call_in_body.kel
+--- diktor-m43 tc
+g : (Int32) => Int32 @ {Console}
+! p14_closed_call_in_body.kel:4:36: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+rc=1
+--- diktor-m43 run
+! p14_closed_call_in_body.kel:4:36: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+rc=0
+--- diktor-gate tc
+g : (Int32) => Int32 @ {Console}
+k : (Int32) => Int32 @ {Console extends R1}
+! p14_closed_call_in_body.kel:5:45: 型エラー: ラベル Async がありません(行は閉じています)
+rc=1
+--- diktor-gate run
+! p14_closed_call_in_body.kel:5:45: 型エラー: ラベル Async がありません(行は閉じています)
+rc=0
+##### p15_rec_selfcall.kel
+--- diktor-m43 tc
+loop : (Int32) => Int32
+! p15_rec_selfcall.kel:2:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p15_rec_selfcall.kel:2:44: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+loop : (Int32) => Int32
+use : () => Int32 @ {Console extends R1}
+_ : {}
+rc=0
+--- diktor-gate run
+l 0
+rc=0
+##### p16_runreturn_fn_open.kel
+--- diktor-m43 tc
+mk : () => (Int32) => Int32
+! p16_runreturn_fn_open.kel:2:48: 型エラー: ラベル Heap がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p16_runreturn_fn_open.kel:2:48: 型エラー: ラベル Heap がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+mk : () => (Int32) => Int32
+! p16_runreturn_fn_open.kel:2:48: 型エラー: ラベル Heap がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-gate run
+! p16_runreturn_fn_open.kel:2:48: 型エラー: ラベル Heap がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+##### p17_inferred_closed_reopen_nongen.kel
+--- diktor-m43 tc
+idf : (A) => A
+h : () => {} @ {Console extends _R1}
+! p17_inferred_closed_reopen_nongen.kel:4:39: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=1
+--- diktor-m43 run
+! p17_inferred_closed_reopen_nongen.kel:4:39: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+rc=0
+--- diktor-gate tc
+idf : (A) => A
+h : () => {} @ {Console extends _R1}
+use1 : () => {} @ {Console, Async extends R1}
+rc=0
+--- diktor-gate run
+rc=0
+##### p18_run_inside_reopen.kel
+--- diktor-m43 tc
+! p18_run_inside_reopen.kel:6:3: 型エラー: ラベル Heap がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=1
+--- diktor-m43 run
+! p18_run_inside_reopen.kel:6:3: 型エラー: ラベル Heap がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+rc=0
+--- diktor-gate tc
+f : () => Int32
+_ : {}
+rc=0
+--- diktor-gate run
+1
+rc=0
+##### p19_handler_order.kel
+--- diktor-m43 tc
+a : () => Int32 @ {Ask extends R1}
+t : () => Int32
+_ : {}
+rc=0
+--- diktor-m43 run
+101
+rc=0
+--- diktor-gate tc
+a : () => Int32 @ {Ask extends R1}
+t : () => Int32
+_ : {}
+rc=0
+--- diktor-gate run
+101
+rc=0

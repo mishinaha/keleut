@@ -1,0 +1,1 @@
+let f(): () => Int32 @ {} = run h { let r = Ref.new(1); fn() => Ref.get(r) }

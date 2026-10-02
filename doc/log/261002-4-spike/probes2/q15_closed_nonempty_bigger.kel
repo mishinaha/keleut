@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32 }
+let say(): Unit @ Console = echo("s ")
+let both(): Int32 @ {Console, Ask} = { say(); perform ask() }
+echoln(show(both() handle { case ask() => resume(7) }))
