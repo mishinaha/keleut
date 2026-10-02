@@ -51,12 +51,12 @@ BOM（U+FEFF）は、文字列とコメントの中を除き、どの位置に�
 次の語は予約語であり、レコードのラベルを含め、識別子を書く位置には使えない。
 
 ```text
-and case class derive effect extends extern false fn handle if
-instance let match module newtype perform pub rec resume run
-true type val with
+and case class effect extends extern false fn handle if instance
+let match module newtype perform pub rec resume run true type
+val with
 ```
 
-`return`、`cancel`、`structural`、`Type`、`EffectRow` は予約語ではなく、特定の文脈でだけ特別な意味を持つ。
+`return`、`cancel`、`Type`、`EffectRow` は予約語ではなく、特定の文脈でだけ特別な意味を持つ。
 ただし `return` と `cancel` はハンドラの節の名前と重なるため、エフェクトの操作名には使えない。
 
 ### 2.3. 文の区切り
@@ -899,8 +899,8 @@ type instance Functor[List[_]] {
 名目的な型を比較するには、利用者がその型の `Eq` のインスタンスを定義する。
 構造の中に名目的な型があれば、その型の `Eq` のインスタンスで比較する。
 
-`derive structural` は、この組み込みの導出を有効にする指定である。
-利用者が新しく定義したクラスに、独自の構造的な導出を付けることはできない。
+構造的な導出を持つのは、標準環境の `Eq` だけである。
+利用者が定義したクラスに構造的な導出を与える構文はない。
 
 ## 13. エフェクト
 
