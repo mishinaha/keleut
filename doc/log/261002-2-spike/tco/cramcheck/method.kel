@@ -1,0 +1,4 @@
+type class Step[A] { val step: (A, Int32) => Int32 }
+newtype W = W(Int32)
+type instance Step[W] { let step(w, n) = (n == 0) match { case true => 0 case false => step(w, n - 1) } }
+echoln(show(step(W(1), 100000)))

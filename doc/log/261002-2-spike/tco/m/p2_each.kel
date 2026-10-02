@@ -1,0 +1,5 @@
+let one = run h { let a = MutableArray.new(1, 0); MutableArray.freeze(a) }
+let rec loop(n: Int32): Unit =
+  (n == 0) match { case true => () case false => Array.each(one, fn(x) => loop(n - 1)) }
+loop(N)
+echoln("ok")

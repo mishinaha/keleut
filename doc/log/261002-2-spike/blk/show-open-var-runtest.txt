@@ -1,0 +1,1471 @@
+File "test/parallel.t", line 1, characters 0-0:
+diff --git a/_build/default/test/parallel.t b/_build/default/test/parallel.t.corrected
+index d7db500..57527c3 100644
+--- a/_build/default/test/parallel.t
++++ b/_build/default/test/parallel.t.corrected
+@@ -37,7 +37,7 @@ par / par_map の組み込み登録(M16 / H2、D45)。逐次実装だが、
+   > let _ = par_map(mk(), fn(x) => { echo("no"); x })
+   > KEL
+   $ diktor --type-check parbad.kel
+-  mk : () => Array[Int32]
++  mk : () => Array[Int32] @ R1
+   ! parbad.kel:2:34: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+File "test/typecheck_sample.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_sample.t b/_build/default/test/typecheck_sample.t.corrected
+index 9d3c492..dee717d 100644
+--- a/_build/default/test/typecheck_sample.t
++++ b/_build/default/test/typecheck_sample.t.corrected
+@@ -5,70 +5,70 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+ 変更時は dune promote で更新し、必ず目視レビューすること。
+ 
+   $ diktor --type-check sample/stubs.kel sample/sample.kel
+-  Db.query : (String) => Resp
+-  sqrt : (Float64) => Float64
+-  each : (List[A], (A) => {}) => {}
+-  heavy : (Int32) => Int32
+-  audit_log : ({query: String}, Resp) => {}
++  Db.query : (String) => Resp @ R1
++  sqrt : (Float64) => Float64 @ R1
++  each : (List[A], (A) => {} @ R1) => {} @ R1
++  heavy : (Int32) => Int32 @ R1
++  audit_log : ({query: String}, Resp) => {} @ R1
+   handle_client : (Conn) => {} @ {Async extends R1}
+   a : Int32
+   b : Int64
+   c : Int64
+   d : Int32
+   e : Float64
+-  sum_xy : ({x: Float64, y: Float64 extends R1}) => Float64
+-  with_z : ({extends R1}) => {z: Float64 extends R1}
+-  move_x : ({x: Float64 extends R1}, Float64) => {x: Float64 extends R1}
+-  outer_x : () => Float64
+-  make_point : (Float64, Float64) => {x: Float64, y: Float64}
+-  swap : ((A, B)) => (B, A)
+-  fst : ({_item: A extends R1}) => A
+-  describe : (#Even | #Odd | R1) => String
+-  report : (#NotFound(String) | #Denied(String) | #Syntax((Int32, Int32))) => String
+-  some_one : () => Option[Int32]
+-  get_or : (Option[A], A) => A
+-  list_length : (List[A]) => Int32
+-  twice_sum_xy : ({x: Float64, y: Float64}) => Float64
+-  dist : ({x: Float64, y: Float64}) => Float64
+-  head_and_rest : ({_item: A extends R1}) => A
+-  inc_all : (List[Int32]) => List[Int32]
+-  count_if : (List[A], (A) => Boolean) => Int32
+-  is_even : (Int32) => Boolean
+-  is_odd : (Int32) => Boolean
+-  fma : [A: Add + Mul] (A, A, A) => A
+-  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean
+-  same_pair : ((Int32, String), (Int32, String)) => Boolean
++  sum_xy : ({x: Float64, y: Float64 extends R1}) => Float64 @ R2
++  with_z : ({extends R1}) => {z: Float64 extends R1} @ R2
++  move_x : ({x: Float64 extends R1}, Float64) => {x: Float64 extends R1} @ R2
++  outer_x : () => Float64 @ R1
++  make_point : (Float64, Float64) => {x: Float64, y: Float64} @ R1
++  swap : ((A, B)) => (B, A) @ R1
++  fst : ({_item: A extends R1}) => A @ R2
++  describe : (#Even | #Odd | R1) => String @ R2
++  report : (#NotFound(String) | #Denied(String) | #Syntax((Int32, Int32))) => String @ R1
++  some_one : () => Option[Int32] @ R1
++  get_or : (Option[A], A) => A @ R1
++  list_length : (List[A]) => Int32 @ R1
++  twice_sum_xy : ({x: Float64, y: Float64}) => Float64 @ R1
++  dist : ({x: Float64, y: Float64}) => Float64 @ R1
++  head_and_rest : ({_item: A extends R1}) => A @ R2
++  inc_all : (List[Int32]) => List[Int32] @ R1
++  count_if : (List[A], (A) => Boolean @ R1) => Int32 @ R1
++  is_even : (Int32) => Boolean @ R1
++  is_odd : (Int32) => Boolean @ R1
++  fma : [A: Add + Mul] (A, A, A) => A @ R1
++  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean @ R1
++  same_pair : ((Int32, String), (Int32, String)) => Boolean @ R1
+   user_names : (List[{id: String, name: String}]) => List[String] @ {Print extends R1}
+   println : (String) => {} @ {Print extends R1}
+   _ : {}
+-  capture : (() => A @ {Print extends R1}) => {value: A, output: String}
+-  try_ : (() => A @ {Fail extends R1}) => #Ok(A) | #Err(String)
++  capture : (() => A @ {Print extends R1}) => {value: A, output: String} @ R1
++  try_ : (() => A @ {Fail extends R1}) => #Ok(A) | #Err(String) @ R1
+   with_file : (String, () => A @ {File, Fs extends R1}) => A @ {Fs extends R1}
+   copy : (String, String) => {} @ {Console, Fs extends R1}
+-  Parser.bind : (Parser.Parser[A], (A) => Parser.Parser[B]) => Parser.Parser[B]
+-  Parser.pure : (A) => Parser.Parser[A]
+-  Parser.token : (String) => Parser.Parser[String]
+-  parens : () => Parser.Parser[(String, String)]
++  Parser.bind : (Parser.Parser[A], (A) => Parser.Parser[B] @ R1) => Parser.Parser[B] @ R1
++  Parser.pure : (A) => Parser.Parser[A] @ R1
++  Parser.token : (String) => Parser.Parser[String] @ R1
++  parens : () => Parser.Parser[(String, String)] @ R1
+   handle_request : ({query: String}) => Resp @ {ReqId, Logger, Tracer, Db, Async extends R1}
+   _ : {}
+-  sum : (Array[Int32]) => Int32
+-  doubled : (Array[Int32]) => Array[Int32]
+-  par_map : (Array[A], (A) => B) => Array[B]
+-  par : (() => A, () => B) => (A, B)
++  sum : (Array[Int32]) => Int32 @ R1
++  doubled : (Array[Int32]) => Array[Int32] @ R1
++  par_map : (Array[A], (A) => B) => Array[B] @ R1
++  par : (() => A, () => B) => (A, B) @ R1
+   scope : (() => A @ {Nursery, Async extends R1}) => A @ {Async extends R1}
+   serve : (List[Conn]) => {} @ {Async extends R1}
+   with_timeout : (Int64, () => A @ {Deadline extends R1}) => Option[A] @ {Async extends R1}
+   handle_audited : ({query: String}) => Resp @ {ReqId, Logger, Tracer, Db, Background, Async extends R1}
+   crunch : (Array[Int32]) => Int32 @ {Async extends R1}
+-  channel : (Int32) => Chan[A]
++  channel : (Int32) => Chan[A] @ R1
+   send : (Chan[A], A) => {} @ {Async extends R1}
+   recv : (Chan[A]) => A @ {Async extends R1}
+-  sin : (Float64) => Float64
++  sin : (Float64) => Float64 @ R1
+   sqlite_step : (Stmt) => Int32 @ {Blocking extends R1}
+-  pinned : (() => A @ {Blocking extends R1}) => A
+-  BigInt.parse : (String) => BigInt.BigInt
+-  BigInt.normalize : (BigInt.BigInt) => BigInt.BigInt
+-  big_sum : () => BigInt.BigInt
++  pinned : (() => A @ {Blocking extends R1}) => A @ R1
++  BigInt.parse : (String) => BigInt.BigInt @ R1
++  BigInt.normalize : (BigInt.BigInt) => BigInt.BigInt @ R1
++  big_sum : () => BigInt.BigInt @ R1
+ 
+ 実行(トップレベル式文: sample.kel:548 の handle と :660 の capture):
+ 
+File "test/spec_gaps.t", line 1, characters 0-0:
+diff --git a/_build/default/test/spec_gaps.t b/_build/default/test/spec_gaps.t.corrected
+index 963c98f..95b9c79 100644
+--- a/_build/default/test/spec_gaps.t
++++ b/_build/default/test/spec_gaps.t.corrected
+@@ -35,7 +35,7 @@ module の入れ子(:860)、Ord[Float64] / Eq[Float64] と NaN(:861-866)は cram
+   > let pure_ok(xs: Array[Int32]): Int32 @ {} = sum(xs)
+   > KEL
+   $ diktor --type-check sumgen.kel
+-  sum : (Array[Int32]) => Int32
++  sum : (Array[Int32]) => Int32 @ R1
+   effectful : (Array[Int32]) => Int32 @ {Console extends R1}
+   pure_ok : (Array[Int32]) => Int32
+ 
+File "test/runtime_effects.t", line 1, characters 0-0:
+diff --git a/_build/default/test/runtime_effects.t b/_build/default/test/runtime_effects.t.corrected
+index 755992a..2dc4aa5 100644
+--- a/_build/default/test/runtime_effects.t
++++ b/_build/default/test/runtime_effects.t.corrected
+@@ -53,7 +53,7 @@ Console / Async / Fs の 3 つを名指しで定めた(Async は :726 にも明
+   >   }
+   > KEL
+   $ diktor --type-check --no-prelude ownconsole.kel
+-  quiet : (() => A @ {Console extends R1}) => A
++  quiet : (() => A @ {Console extends R1}) => A @ R1
+ 
+ Console はハンドル候補からも外れるので、File のつもりの case write(s)
+ 1 本は Console に黙って解決されず、意図の取り違えが診断になる:
+@@ -108,7 +108,7 @@ perform は禁止しない(sample.kel:660 がトップレベルの perform write
+   > let n = quiet(fn() => { perform write("x"); 7 })
+   > KEL
+   $ diktor --type-check --no-prelude npok.kel
+-  quiet : (() => A @ {Console extends R1}) => A
++  quiet : (() => A @ {Console extends R1}) => A @ R1
+   n : Int32
+ 
+ --no-prelude で自前の Fs(操作つき)を自前でハンドルする形は従来どおり通る
+@@ -124,5 +124,5 @@ perform は禁止しない(sample.kel:660 がトップレベルの perform write
+   > let n = with_fs(fn() => perform touch("x"))
+   > KEL
+   $ diktor --type-check --no-prelude ownfs.kel
+-  with_fs : (() => A @ {Fs extends R1}) => A
++  with_fs : (() => A @ {Fs extends R1}) => A @ R1
+   n : Int32
+File "test/trailing_comma.t", line 1, characters 0-0:
+diff --git a/_build/default/test/trailing_comma.t b/_build/default/test/trailing_comma.t.corrected
+index f911a68..11525f6 100644
+--- a/_build/default/test/trailing_comma.t
++++ b/_build/default/test/trailing_comma.t.corrected
+@@ -10,8 +10,8 @@
+   > KEL
+   $ diktor --type-check tc.kel
+   a : List[Int32]
+-  f : (A) => A
+-  m : (Int32) => Int32
++  f : (A) => A @ R1
++  m : (Int32) => Int32 @ R1
+ 
+ ty_args は instance の型引数とエフェクト行のラベル引数でも同じ規則:
+ 
+@@ -55,13 +55,13 @@ effect の操作・コンストラクタのフィールド)。§0 の「どの
+   > let er(k: () => {} @ {Ev, Console,}): Int32 = 1
+   > KEL
+   $ diktor --type-check tc3.kel
+-  f : (Int32, Int32) => Int32
+-  g : () => Int32
++  f : (Int32, Int32) => Int32 @ R1
++  g : () => Int32 @ R1
+   r : {a: Int32, b: Int32}
+   t : (Int32, Int32)
+-  pm : (C) => Int32
+-  pt : ((Int32, Int32)) => Int32
+-  er : (() => {} @ {Ev, Console}) => Int32
++  pm : (C) => Int32 @ R1
++  pt : ((Int32, Int32)) => Int32 @ R1
++  er : (() => {} @ {Ev, Console}) => Int32 @ R1
+ 
+ 終端子 extends の後にもカンマは置けない(型・式の両方。既存の ...rest と
+ 同じ境界):
+@@ -85,7 +85,7 @@ effect の操作・コンストラクタのフィールド)。§0 の「どの
+ 
+   $ printf 'let f[R](p: {x: Int32, extends R}): Int32 = p.x\n' > term5.kel
+   $ diktor --type-check term5.kel
+-  f : ({x: Int32 extends R1}) => Int32
++  f : ({x: Int32 extends R1}) => Int32 @ R2
+ 
+ D56 の帰結: 単一フィールドのパンニングが {x,} で書ける({x} はブロック):
+ 
+File "test/typecheck_m5.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m5.t b/_build/default/test/typecheck_m5.t.corrected
+index b3b8bdb..048690b 100644
+--- a/_build/default/test/typecheck_m5.t
++++ b/_build/default/test/typecheck_m5.t.corrected
+@@ -22,8 +22,8 @@ newtype 一式(sample.kel §6)と MiniLang §16-2(let rec とデータ宣言):
+   > let labeled = Cons(1, tail = Nil)
+   > EOF
+   $ diktor --type-check --no-prelude data.kel
+-  length : (List[A]) => Int32
+-  map2 : ((A) => B, List[A]) => List[B]
++  length : (List[A]) => Int32 @ R1
++  map2 : ((A) => B @ R1, List[A]) => List[B] @ R1
+   lst : List[Int32]
+   opt : Option[Int32]
+   uid : UserId
+@@ -50,13 +50,13 @@ MiniLang §16-3(網羅性検査 — 宣言された型は注釈が要らない):
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude exh.kel
+-  partial : (Option[A]) => A
++  partial : (Option[A]) => A @ R1
+   ⚠ match が非網羅的です。例えば None が漏れています
+-  deep : (Option[Option[Int32]]) => Int32
++  deep : (Option[Option[Int32]]) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば Some(None) が漏れています
+-  bools : (Boolean, Boolean) => Int32
++  bools : (Boolean, Boolean) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば (false, false) が漏れています
+-  redundant : (Boolean, Boolean) => Int32
++  redundant : (Boolean, Boolean) => Int32 @ R1
+   ⚠ 第 4 節は到達不能です(冗長)
+ 
+ --strict-exhaustive で警告がエラー化(exit 1):
+@@ -87,11 +87,11 @@ MiniLang §16-3(網羅性検査 — 宣言された型は注釈が要らない):
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude variant.kel
+-  flip : (#Even | #Odd) => #Even | #Odd
+-  closed : (#Lft(Int32) | #Rgt(A)) => Int32
+-  open_default : (#Lft(Int32) | R1) => Int32
++  flip : (#Even | #Odd) => #Even | #Odd @ R1
++  closed : (#Lft(Int32) | #Rgt(A)) => Int32 @ R1
++  open_default : (#Lft(Int32) | R1) => Int32 @ R2
+   payload : #Point((Int32, Int32)) | R1
+-  guard : (#Val(Int32)) => Int32
++  guard : (#Val(Int32)) => Int32 @ R1
+ 
+ ヴァリアント和のエイリアスと網羅性(case _ 不要。sample.kel §5):
+ 
+@@ -106,7 +106,7 @@ MiniLang §16-3(網羅性検査 — 宣言された型は注釈が要らない):
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude union.kel
+-  report : (#NotFound | #Denied | #Unexpected) => Int32
++  report : (#NotFound | #Denied | #Unexpected) => Int32 @ R1
+ 
+ Never は節ゼロの match で網羅(§7.5):
+ 
+@@ -114,7 +114,7 @@ Never は節ゼロの match で網羅(§7.5):
+   > let absurd[A](n: Never): A = n match {}
+   > EOF
+   $ diktor --type-check --no-prelude never.kel
+-  absurd : (Never) => A
++  absurd : (Never) => A @ R1
+ 
+ パターン束縛の網羅性警告(§6.4)とラベル指定パターンの _ 補完:
+ 
+@@ -127,9 +127,9 @@ Never は節ゼロの match で網羅(§7.5):
+   > let g = fn(xs) => xs match { case Cons(tail = t) => t case Nil => Nil }
+   > EOF
+   $ diktor --type-check --no-prelude patlet.kel
+-  f : (List[A]) => A
++  f : (List[A]) => A @ R1
+   ⚠ match が非網羅的です。例えば Nil が漏れています
+-  g : (List[A]) => List[A]
++  g : (List[A]) => List[A] @ R1
+ 
+ コンストラクタのエラー経路:
+ 
+@@ -182,6 +182,6 @@ Never は節ゼロの match で網羅(§7.5):
+   実行時エラー: match のどの節にも一致しません: ()
+   [3]
+   $ diktor --type-check tup0.kel
+-  f : ({}) => Int32
++  f : ({}) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば () が漏れています
+   _ : {}
+File "test/extern_c.t", line 1, characters 0-0:
+diff --git a/_build/default/test/extern_c.t b/_build/default/test/extern_c.t.corrected
+index 6d1f503..cb6ecc8 100644
+--- a/_build/default/test/extern_c.t
++++ b/_build/default/test/extern_c.t.corrected
+@@ -83,7 +83,7 @@ module に包んだ既知名 FFI は実装に届く(かつては Math.sqrt が
+ 
+   $ printf 'extern "C" let sqrt(x: Float64): Float64\nextern "C" let sqrt(x: Float64): Float64\n' > dd.kel
+   $ diktor --type-check dd.kel
+-  sqrt : (Float64) => Float64
++  sqrt : (Float64) => Float64 @ R1
+   ! dd.kel:2:1: 型エラー: extern sqrt が二重に宣言されています
+   [1]
+ 
+File "test/fs_effect.t", line 1, characters 0-0:
+diff --git a/_build/default/test/fs_effect.t b/_build/default/test/fs_effect.t.corrected
+index c095fed..173a083 100644
+--- a/_build/default/test/fs_effect.t
++++ b/_build/default/test/fs_effect.t.corrected
+@@ -48,7 +48,7 @@ V15 の穴が閉じた — par / par_map の @ {} コールバックから触れ
+   > let _ = par_map(arr(), fn(x) => __open("secret"))
+   > KEL
+   $ diktor --type-check par_fs.kel
+-  arr : () => Array[Int32]
++  arr : () => Array[Int32] @ R1
+   ! par_fs.kel:2:33: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+   $ printf 'let p = par(fn() => __open("a"), fn() => 1)\n' > par2.kel
+@@ -150,8 +150,8 @@ newtype のフィールドを経由して Fs を洗う形(V14)も、M26 で入
+   > echoln("read back: [" + back + "]")
+   > KEL
+   $ diktor --type-check v14.kel
+-  run_cb : (Cb) => Int32
+-  arr : () => Array[Int32]
++  run_cb : (Cb) => Int32 @ R1
++  arr : () => Array[Int32] @ R1
+   ! v14.kel:4:46: 型エラー: ラベル Fs がありません(行は閉じています)(コンストラクタ Cb のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+File "test/nonfeatures.t", line 1, characters 0-0:
+diff --git a/_build/default/test/nonfeatures.t b/_build/default/test/nonfeatures.t.corrected
+index 519feeb..17f2f69 100644
+--- a/_build/default/test/nonfeatures.t
++++ b/_build/default/test/nonfeatures.t.corrected
+@@ -88,10 +88,10 @@ test/parallel.t が固定している):
+ 
+   $ printf 'let f[a](x: a): a = x\n' > case7.kel
+   $ diktor --type-check case7.kel
+-  f : (A) => A
++  f : (A) => A @ R1
+   $ printf 'let f[A](x: A): A = x\n' > case7b.kel
+   $ diktor --type-check case7b.kel
+-  f : (A) => A
++  f : (A) => A @ R1
+   $ printf 'let use[h, A](r: Ref[h, A]): A @ Heap[h] = Ref.get(r)\n' > case7c.kel
+   $ diktor --type-check case7c.kel
+   use : (Ref[A, B]) => B @ {Heap[A] extends R1}
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub.t b/_build/default/test/pub.t.corrected
+index 73a29de..6b79164 100644
+--- a/_build/default/test/pub.t
++++ b/_build/default/test/pub.t.corrected
+@@ -49,7 +49,7 @@ sample.kel:655 と同形 — この形が通ることが H6 の受け入れ条
+   > }
+   > KEL
+   $ diktor --type-check pub4.kel
+-  Db.query : (String) => Resp
++  Db.query : (String) => Resp @ R1
+   handle_req : (String) => Resp @ {ReqId, Logger extends R1}
+ 
+   $ cat > pub5.kel <<'KEL'
+File "test/premise.t", line 1, characters 0-0:
+diff --git a/_build/default/test/premise.t b/_build/default/test/premise.t.corrected
+index e9e9842..965a0de 100644
+--- a/_build/default/test/premise.t
++++ b/_build/default/test/premise.t.corrected
+@@ -17,7 +17,7 @@
+   > let b = Cons(1i32, Cons(2i32, Nil)) == Cons(1i32, Nil)
+   > EOF
+   $ diktor --type-check --no-prelude pr.kel
+-  same : [A: Eq] (List[A], List[A]) => Boolean
++  same : [A: Eq] (List[A], List[A]) => Boolean @ R1
+   b : Boolean
+ 
+ 前提が引数へ伝播する(unify.ml §8.4 の TCon 枝がここで初めて実際に走る):
+@@ -54,7 +54,7 @@
+   > let ng(p: {xs: List[Opaque]}, q: {xs: List[Opaque]}): Boolean = p == q
+   > EOF
+   $ diktor --type-check --no-prelude pr3.kel
+-  ok : ({xs: List[Int32]}, {xs: List[Int32]}) => Boolean
++  ok : ({xs: List[Int32]}, {xs: List[Int32]}) => Boolean @ R1
+   ! pr3.kel:11:65: 型エラー: Opaque は Eq のインスタンスではありません
+   [1]
+ 
+@@ -211,7 +211,7 @@ AST ダンプ(束縛子があるときだけ tparams が出る):
+   > let z(p: A): A = p
+   > EOF
+   $ diktor --type-check --no-prelude pr21.kel
+-  z : (A) => A
++  z : (A) => A @ R1
+ 
+ 束縛子は頭の穴を束縛する。穴に対応する位置の片方だけを具体型で注釈すると、
+ クラス宣言の側のスコープ付きの型と合わずに落ちる(D94):
+@@ -301,12 +301,12 @@ module 越しの前提つきインスタンス(頭は修飾名 M.L[_]):
+   > let ng1(p: Pair[Int32, Opaque], q: Pair[Int32, Opaque]): Boolean = p == q
+   > EOF
+   $ diktor --type-check --no-prelude pr17.kel
+-  ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean
++  ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean @ R1
+   ! pr17.kel:9:68: 型エラー: Opaque は Sh のインスタンスではありません
+   [1]
+   $ sed 's/Pair\[Int32, Opaque\]/Pair[Opaque, Int32]/g; s/ng1/ng2/' pr17.kel > pr18.kel
+   $ diktor --type-check --no-prelude pr18.kel
+-  ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean
++  ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean @ R1
+   ! pr18.kel:9:68: 型エラー: Opaque は Eq のインスタンスではありません
+   [1]
+ 
+@@ -324,6 +324,6 @@ module 越しの前提つきインスタンス(頭は修飾名 M.L[_]):
+   > let use2(p: P2[Opaque, Int32]): P2[Opaque, Int32] = map(p, fn(x) => x)
+   > EOF
+   $ diktor --type-check --no-prelude pr19.kel
+-  use1 : (P2[Int32, Int32]) => P2[Int32, Int32]
++  use1 : (P2[Int32, Int32]) => P2[Int32, Int32] @ R1
+   ! pr19.kel:8:57: 型エラー: Opaque は Eq のインスタンスではありません
+   [1]
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index e73699c..6cace6c 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -60,8 +60,8 @@ copy の perform write は行の最左の File に解決される(この例で
+   > EOF
+   $ diktor --type-check --no-prelude eff9.kel
+   println : (String) => {} @ {Print extends R1}
+-  capture : (() => A @ {Print extends R1}) => {value: A, output: String}
+-  try_ : (() => A @ {Fail extends R1}) => #Ok(A) | #Err(String)
++  capture : (() => A @ {Print extends R1}) => {value: A, output: String} @ R1
++  try_ : (() => A @ {Fail extends R1}) => #Ok(A) | #Err(String) @ R1
+   __open : (String) => Int32 @ {Fs extends R1}
+   __read : (Int32) => String @ {Fs extends R1}
+   __write : (Int32, String) => {} @ {Fs extends R1}
+@@ -145,7 +145,7 @@ handle の節の修飾(仕様 §9、sample.kel:528-529。D119)。操作節は修
+   > EOF
+   $ diktor --type-check --no-prelude qual1.kel
+   prog : () => String @ {File extends R1}
+-  h : () => String
++  h : () => String @ R1
+ 
+ 修飾が後ろの節にあっても同じ。Sink は write と flush を宣言していて、先に
+ 書いた非修飾の write もその網羅に数えられている:
+@@ -162,7 +162,7 @@ handle の節の修飾(仕様 §9、sample.kel:528-529。D119)。操作節は修
+   > EOF
+   $ diktor --type-check --no-prelude qual2.kel
+   prog : () => {} @ {Sink extends R1}
+-  h : () => {}
++  h : () => {} @ R1
+ 
+ 修飾先が 2 つ以上に割れたらエラー:
+ 
+@@ -425,7 +425,7 @@ Scoped Labels と同じ)。開いた行でも閉じた行でも順序違いは
+   $ diktor --type-check --no-prelude roworder.kel
+   a : (() => {} @ {E1, E2 extends R1}) => {} @ {E1, E2 extends R1}
+   b : (() => {} @ {E2, E1 extends R1}) => {} @ {E1, E2 extends R1}
+-  mk : (() => {} @ {E2, E1}) => Cb
++  mk : (() => {} @ {E2, E1}) => Cb @ R1
+ 
+ 同じエフェクトを二重に積むと、非修飾でも修飾でも内側にしか届かない(§9。
+ 仕様の copy が src を読んでから dst を開くのはこのため):
+@@ -463,4 +463,4 @@ M26 より前は g の @ 省略だけで「未束縛の変数: helper」だっ
+   > KEL
+   $ diktor --type-check fwdsig.kel
+   user : () => Int32 @ {Console extends R1}
+-  helper : (() => {}, (Int32) => Int32) => Int32 @ {Console extends R1}
++  helper : (() => {} @ R1, (Int32) => Int32) => Int32 @ {Console extends R1}
+File "test/region.t", line 1, characters 0-0:
+diff --git a/_build/default/test/region.t b/_build/default/test/region.t.corrected
+index c6956f0..de92001 100644
+--- a/_build/default/test/region.t
++++ b/_build/default/test/region.t.corrected
+@@ -12,8 +12,8 @@
+   > let walk(a: Array[Int32]): {} @ {} = Array.each(a, g)
+   > KEL
+   $ diktor --type-check read.kel
+-  peek : (Array[Int32]) => Int32
+-  len : (Array[Int32]) => Int32
++  peek : (Array[Int32]) => Int32 @ R1
++  len : (Array[Int32]) => Int32 @ R1
+   g : (Int32) => {}
+   walk : (Array[Int32]) => {}
+ 
+@@ -106,9 +106,9 @@ freeze で不変配列にすれば出せる(仕様 §10 の doubled):
+   > echoln(show(sum(doubled(mk()))))
+   > KEL
+   $ diktor --type-check doubled.kel
+-  doubled : (Array[Int32]) => Array[Int32]
+-  sum : (Array[Int32]) => Int32
+-  mk : () => Array[Int32]
++  doubled : (Array[Int32]) => Array[Int32] @ R1
++  sum : (Array[Int32]) => Int32 @ R1
++  mk : () => Array[Int32] @ R1
+   _ : {}
+   $ diktor doubled.kel
+   12
+@@ -155,7 +155,7 @@ inner へ書いた 99 が、frozen 越しに読める:
+   [1]
+   $ printf 'let flat(): Array[Int32] = run h { MutableArray.freeze(MutableArray.new(1, 0)) }\n' > flat.kel
+   $ diktor --type-check flat.kel
+-  flat : () => Array[Int32]
++  flat : () => Array[Int32] @ R1
+ 
+ MutableArray[h, A] は型注釈として書ける。仕様 §10 の署名一覧が断る「ここだけの
+ 表記」(sample.kel:677)はパラメータの並びの話であって、型式を禁じてはいない
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 4a5c8d3..251b5ac 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -12,7 +12,7 @@ MiniLang §16-9(曖昧性検査)。read : Str -> a は v0 ではクラスとし
+   > let s = show(read_("1"))
+   > KEL
+   $ diktor --type-check --no-prelude ml9b.kel
+-  read_ : [A: Show] (String) => A
++  read_ : [A: Show] (String) => A @ R1
+   ! ml9b.kel:2:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+ 
+@@ -24,9 +24,9 @@ MiniLang §16-9(曖昧性検査)。read : Str -> a は v0 ではクラスとし
+   > let wrapper2() = { let m = read_("2"); m + 1i32 }
+   > KEL
+   $ diktor --type-check --no-prelude ml9c.kel
+-  read_ : [A: Show] (String) => A
++  read_ : [A: Show] (String) => A @ R1
+   n : Int32
+-  wrapper2 : () => Int32
++  wrapper2 : () => Int32 @ R1
+ 
+ 入れ子の let も一般化点の直前で見る(all=false 経路):
+ 
+@@ -35,7 +35,7 @@ MiniLang §16-9(曖昧性検査)。read : Str -> a は v0 ではクラスとし
+   > let wrapper() = { let v = show(read_("2")); v }
+   > KEL
+   $ diktor --type-check --no-prelude ml9d.kel
+-  read_ : [A: Show] (String) => A
++  read_ : [A: Show] (String) => A @ R1
+   ! ml9d.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+ 
+@@ -47,8 +47,8 @@ MiniLang §16-9(曖昧性検査)。read : Str -> a は v0 ではクラスとし
+   > let weak = idf(show)
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+-  idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  idf : (A) => A @ R1
++  weak : [_A: Show] (_A) => String @ _R1
+ 
+ 予約述語が乗った変数は既定化で決まるので曖昧にしない(D8 / D48):
+ 
+@@ -65,7 +65,7 @@ MiniLang より厳しくなる点):
+ 
+   $ printf 'let read_[A: Show](s: String): A = ???\nlet f() = { show; "x" }\n' > ml9g.kel
+   $ diktor --type-check --no-prelude ml9g.kel
+-  read_ : [A: Show] (String) => A
++  read_ : [A: Show] (String) => A @ R1
+   ! ml9g.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+ 
+@@ -125,7 +125,7 @@ subst_params 経路が台帳をすり抜け、Empty 由来の Show だけ素通
+   > let g(): String = { let e = idf(Empty); "x" }
+   > KEL
+   $ diktor --type-check --no-prelude fn1.kel
+-  idf : (A) => A
++  idf : (A) => A @ R1
+   ! fn1.kel:3:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+ 
+@@ -139,8 +139,8 @@ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証。値制
+   > type instance C[Int32] { let cm = { show(read_("z")); idf(fn(x: Int32) => x) } }
+   > KEL
+   $ diktor --type-check --no-prelude inam.kel
+-  read_ : [A: Show] (String) => A
+-  idf : (A) => A
++  read_ : [A: Show] (String) => A @ R1
++  idf : (A) => A @ R1
+   ! inam.kel:4:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+ 
+@@ -179,7 +179,7 @@ Generic を扱えず、満たしていても落ちた):
+ 
+   $ printf 'let f[A: Eq + Ord](x: A, y: A): Boolean = x == y && x < y\n' > ordeq2.kel
+   $ diktor --type-check ordeq2.kel
+-  f : [A: Eq + Ord] (A, A) => Boolean
++  f : [A: Eq + Ord] (A, A) => Boolean @ R1
+ 
+ 型クラスのメソッドの最外の @ 省略は「実装は純粋・公開は行多相」(§9 / D77)。
+ 引数の矢印の @ を省略したメソッドも、純粋な実装なら書ける(入れ子の省略 @ は
+File "test/numeric.t", line 1, characters 0-0:
+diff --git a/_build/default/test/numeric.t b/_build/default/test/numeric.t.corrected
+index 8ab8c62..3a3c443 100644
+--- a/_build/default/test/numeric.t
++++ b/_build/default/test/numeric.t.corrected
+@@ -216,7 +216,7 @@ Int64 の 16 進リテラルは値で区別される(A10。63 ビットの int_o
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude radix.kel
+-  g : (Int32) => Int32
++  g : (Int32) => Int32 @ R1
+   ⚠ 第 2 節は到達不能です(冗長)
+ 
+ 反例は具体的な値を出す(A6。文字列は空文字列から、浮動小数は 0.0 から
+@@ -240,13 +240,13 @@ Int64 の 16 進リテラルは値で区別される(A10。63 ビットの int_o
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude cx.kel
+-  g : (String) => Int32
++  g : (String) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば "" が漏れています
+-  h : (Float64) => Int32
++  h : (Float64) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば 2.0 が漏れています
+-  k : (Int32) => Int32
++  k : (Int32) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば 2 が漏れています
+-  e : (String) => Int32
++  e : (String) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば "a" が漏れています
+ 
+ 未対応の接尾辞は書いたとおりの字面で報告する(A5。かつて桁あふれは
+@@ -323,7 +323,7 @@ Int64 の 16 進リテラルは値で区別される(A10。63 ビットの int_o
+   > }
+   > KEL
+   $ diktor --type-check wit.kel
+-  h : (Float64) => Int32
++  h : (Float64) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば 2.0 が漏れています
+ 
+ 残る変換 3 本(__i32_to_i64 / __i32_to_f64 / __i64_to_f64)。値を作れない
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index c2db5ab..15a06e1 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -41,13 +41,13 @@ Add / Eq は組み込みと同名なので「照合の上で受理」される(
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude cls.kel
+-  __int32_add : (Int32, Int32) => Int32
+-  __int32_mul : (Int32, Int32) => Int32
+-  __string_concat : (String, String) => String
+-  fma : [A: Add + Mul] (A, A, A) => A
+-  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean
++  __int32_add : (Int32, Int32) => Int32 @ R1
++  __int32_mul : (Int32, Int32) => Int32 @ R1
++  __string_concat : (String, String) => String @ R1
++  fma : [A: Add + Mul] (A, A, A) => A @ R1
++  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean @ R1
+   use_myshow : String
+-  generic_show : [A: MyShow] (A) => String
++  generic_show : [A: MyShow] (A) => String @ R1
+ 
+ MiniLang §16-9(クラス制約、注釈なし。read 系は v1 の曖昧性検査待ちで除外):
+ 
+@@ -59,9 +59,9 @@ MiniLang §16-9(クラス制約、注釈なし。read 系は v1 の曖昧性検
+   > EOF
+   $ diktor --type-check --no-prelude ml9.kel
+   s : String
+-  f : [A: Show] (A) => String
+-  cmp : [A: Ord] (A) => Boolean
+-  ! ml9.kel:4:16: 型エラー: (_A) => _A は Show のインスタンスではありません
++  f : [A: Show] (A) => String @ R1
++  cmp : [A: Ord] (A) => Boolean @ R1
++  ! ml9.kel:4:16: 型エラー: (_A) => _A @ _R1 は Show のインスタンスではありません
+   [1]
+ 
+ エラー経路(コヒーレンス / v0 出現位置制約 / 型不一致 / 網羅 / 多パラメータ / 予約述語):
+@@ -149,7 +149,7 @@ MiniLang §16-9(クラス制約、注釈なし。read 系は v1 の曖昧性検
+   > type class Later2[A] { val lm2: (A) => A }
+   > KEL
+   $ diktor --type-check --no-prelude c11.kel
+-  uses2 : [A: Later2] (A) => A
++  uses2 : [A: Later2] (A) => A @ R1
+ 
+ 予約述語は残りの入口でも拒否される(260829-5 検証修正。--prelude の
+ ユーザ製プレリュード・型パラメータ制約・クラスメソッドの制約):
+@@ -281,8 +281,8 @@ module の値の非修飾名が曖昧なとき、修飾名を案内する(D39 
+   > echoln(show(down(3)))
+   > EOF2
+   $ diktor --type-check vamb.kel
+-  A.down : (Int32) => Int32
+-  B.down : (Int32) => Int32
++  A.down : (Int32) => Int32 @ R1
++  B.down : (Int32) => Int32 @ R1
+   ! vamb.kel:3:13: 型エラー: 未束縛の変数: down(A.down か B.down と修飾してください)
+   [1]
+ 
+@@ -294,8 +294,8 @@ default へ降りる。M19 / G3a の sig_complete):
+   > let allwild = fn(b: Boolean) => b match { case _ => 0 }
+   > KEL
+   $ diktor --type-check --no-prelude sigc.kel
+-  absurd : (Never) => A
+-  allwild : (Boolean) => Int32
++  absurd : (Never) => A @ R1
++  allwild : (Boolean) => Int32 @ R1
+ 
+ 網羅性警告は宣言をまたいでソース順に並ぶ(§10.13 の遅延キュー。
+ M19 / G3b。1 宣言の中では引数パターンの警告が本体の後に出る — §10.13):
+@@ -307,13 +307,13 @@ M19 / G3b。1 宣言の中では引数パターンの警告が本体の後に出
+   > let d = fn(x: Boolean) => x match { case true => 1  case false => 2  case _ => 3 }
+   > KEL
+   $ diktor --type-check --no-prelude warnorder.kel
+-  a : (Boolean) => Int32
++  a : (Boolean) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば false が漏れています
+-  b : ((Boolean, Boolean)) => Int32
++  b : ((Boolean, Boolean)) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば (true, false) が漏れています
+-  c : (Int32) => Int32
++  c : (Int32) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば 2 が漏れています
+-  d : (Boolean) => Int32
++  d : (Boolean) => Int32 @ R1
+   ⚠ 第 3 節は到達不能です(冗長)
+ 
+ 反例の組み立て(CData / CRecord の両方が rebuild の split_at を通る。
+@@ -328,7 +328,7 @@ M19 / G3c / G3d / G7c):
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude rebuild.kel
+-  f : (Shape) => Int32
++  f : (Shape) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば Seg(false, true) が漏れています
+ 
+ 反駁可能な関数引数・return 節のパターンも網羅性検査に乗る(M19 / V10。
+@@ -340,9 +340,9 @@ M19 / G3c / G3d / G7c):
+   > let h = fn(0) => 1
+   > KEL
+   $ diktor --type-check --no-prelude v10.kel
+-  g : (Boolean) => Int32
++  g : (Boolean) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば false が漏れています
+-  h : (Int32) => Int32
++  h : (Int32) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば 1 が漏れています
+ 
+   $ cat > v10b.kel <<'KEL'
+@@ -350,7 +350,7 @@ M19 / G3c / G3d / G7c):
+   > let f(P(true, b): Pair): Boolean = b
+   > KEL
+   $ diktor --type-check --no-prelude v10b.kel
+-  f : (Pair) => Boolean
++  f : (Pair) => Boolean @ R1
+   ⚠ match が非網羅的です。例えば P(false, true) が漏れています
+ 
+   $ cat > v10c.kel <<'KEL'
+@@ -373,7 +373,7 @@ M19 / G3c / G3d / G7c):
+   > let r = apply2(fn(true) => 1, false)
+   > KEL
+   $ diktor --type-check v10d.kel
+-  apply2 : ((Boolean) => Int32, Boolean) => Int32
++  apply2 : ((Boolean) => Int32, Boolean) => Int32 @ R1
+   r : Int32
+   ⚠ match が非網羅的です。例えば false が漏れています
+ 
+@@ -387,9 +387,9 @@ M19 / G3c / G3d / G7c):
+   > and h(v) = { let z = f(v); g(v) }
+   > KEL
+   $ diktor --type-check --no-prelude v10e.kel
+-  g : (#A | #B | #C) => Int32
+-  f : (#A | #B | #C) => Int32
+-  h : (#A | #B | #C) => Int32
++  g : (#A | #B | #C) => Int32 @ R1
++  f : (#A | #B | #C) => Int32 @ R1
++  h : (#A | #B | #C) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば #B(_) が漏れています
+ 
+   $ cat > v10f.kel <<'KEL'
+@@ -401,8 +401,8 @@ M19 / G3c / G3d / G7c):
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude v10f.kel
+-  g : (#A | #B | #C) => Int32
+-  f : (#A | #B | #C) => Int32
++  g : (#A | #B | #C) => Int32 @ R1
++  f : (#A | #B | #C) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば #B(_) が漏れています
+ 
+ 単一パターンのエントリには「節」が無いので節番号を出さない:
+@@ -413,7 +413,7 @@ M19 / G3c / G3d / G7c):
+   > let f(Sm(x): Opt2[Empt]) = 1
+   > KEL
+   $ diktor --type-check --no-prelude v10g.kel
+-  f : (Opt2[Empt]) => Int32
++  f : (Opt2[Empt]) => Int32 @ R1
+   ⚠ match が非網羅的です。例えば Nn が漏れています
+   ⚠ このパターンには一致する値がありません
+ 
+@@ -428,7 +428,7 @@ M19 / G3c / G3d / G7c):
+   > let g = fn(MkA(n)) => 2
+   > KEL
+   $ diktor --type-check --no-prelude v10h.kel
+-  f : (Absurd) => Int32
++  f : (Absurd) => Int32 @ R1
+   ⚠ このパターンには一致する値がありません
+-  g : (Absurd) => Int32
++  g : (Absurd) => Int32 @ R1
+   ⚠ このパターンには一致する値がありません
+File "test/tokens.t", line 1, characters 0-0:
+diff --git a/_build/default/test/tokens.t b/_build/default/test/tokens.t.corrected
+index 3d5ae0c..5b09876 100644
+--- a/_build/default/test/tokens.t
++++ b/_build/default/test/tokens.t.corrected
+@@ -764,7 +764,7 @@ sample.kel 全文のトークン化(2741 トークン。スパイク 260829-1 
+      5  }
+      6  <EOF>
+   $ diktor --type-check guardfn.kel
+-  ! guardfn.kel:1:12: 型エラー: 型が一致しません: ((_A) => _B) => _B と Boolean
++  ! guardfn.kel:1:12: 型エラー: 型が一致しません: ((_A) => _B @ _R1) => _B @ _R1 と Boolean
+   [1]
+ 
+ 壊れた入力(fn の矢印が来ないまま節が終わる)でも、閉じ括弧が RClause を
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck.t b/_build/default/test/typecheck.t.corrected
+index 632fe50..b6d2337 100644
+--- a/_build/default/test/typecheck.t
++++ b/_build/default/test/typecheck.t.corrected
+@@ -24,8 +24,8 @@ sample.kel §1(型エイリアス)・§2(述語つきリテラル)・§3(レコ
+   f : Float64
+   s : String
+   big : Int64
+-  point : (Float64, Float64) => {x: Float64, y: Float64}
+-  dist2 : ({x: Float64, y: Float64}) => Float64
++  point : (Float64, Float64) => {x: Float64, y: Float64} @ R1
++  dist2 : ({x: Float64, y: Float64}) => Float64 @ R1
+   pair : (Int32, String)
+   first : Int32
+   second : String
+@@ -44,11 +44,11 @@ sample.kel §1(型エイリアス)・§2(述語つきリテラル)・§3(レコ
+   > let update = fn(p) => {p with x = 1.5}
+   > EOF
+   $ diktor --type-check --no-prelude rows.kel
+-  getx : ({x: Int32 extends R1}) => Int32
++  getx : ({x: Int32 extends R1}) => Int32 @ R2
+   shadow : {outer: String, inner: Int32}
+-  fst2 : ({_item: A extends R1}) => A
+-  swap : ((A, B)) => (B, A)
+-  update : ({x: A extends R1}) => {x: Float64 extends R1}
++  fst2 : ({_item: A extends R1}) => A @ R2
++  swap : ((A, B)) => (B, A) @ R1
++  update : ({x: A extends R1}) => {x: Float64 extends R1} @ R2
+ 
+ 演算子とクラス制約(sample.kel §8 の組み込み表。M4 は decls 直登録):
+ 
+@@ -59,8 +59,8 @@ sample.kel §1(型エイリアス)・§2(述語つきリテラル)・§3(レコ
+   > let logic = true && !false || 1 == 1
+   > EOF
+   $ diktor --type-check --no-prelude ops.kel
+-  fma : [A: Add + Mul] (A, A, A) => A
+-  lt3 : [A: Ord] (A) => Boolean
++  fma : [A: Add + Mul] (A, A, A) => A @ R1
++  lt3 : [A: Ord] (A) => Boolean @ R1
+   ne : Boolean
+   logic : Boolean
+ 
+@@ -91,8 +91,8 @@ MiniLang §16-8(値制限。runST の2例は M6 で追加):
+   > let weak = (fn(x) => x)(fn(y) => y)
+   > EOF
+   $ diktor --type-check --no-prelude ml8.kel
+-  idf : (A) => A
+-  weak : (_A) => _A
++  idf : (A) => A @ R1
++  weak : (_A) => _A @ _R1
+ 
+ MiniLang §16-5(型注釈と skolem 化):
+ 
+@@ -100,7 +100,7 @@ MiniLang §16-5(型注釈と skolem 化):
+   > let polyid[A](x: A): A = x
+   > EOF
+   $ diktor --type-check --no-prelude ml5.kel
+-  polyid : (A) => A
++  polyid : (A) => A @ R1
+ 
+   $ cat > ml5b.kel <<'EOF'
+   > let bad[A](x: A): A = x + 1
+@@ -130,8 +130,8 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > let helper(y: Int32): Int32 @ {} = y + 1
+   > EOF
+   $ diktor --type-check --no-prelude rec.kel
+-  even : (Int32) => Boolean
+-  odd : (Int32) => Boolean
++  even : (Int32) => Boolean @ R1
++  odd : (Int32) => Boolean @ R1
+   forward : (Int32) => Int32
+   helper : (Int32) => Int32
+ 
+@@ -151,7 +151,7 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > let pure_fn(x: Int32): Int32 @ {} = x + 1
+   > EOF
+   $ diktor --type-check --no-prelude eff.kel
+-  compose : ((A) => B, (B) => C) => (A) => C
++  compose : ((A) => B @ R1, (B) => C @ R1) => (A) => C @ R1 @ R2
+   pure_fn : (Int32) => Int32
+ 
+ 構造的 Eq の導出(閉じた行のみ。sample.kel:391-395):
+@@ -162,8 +162,8 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > let same_pair(p: (Int32, String), q: (Int32, String)): Boolean = p == q
+   > EOF
+   $ diktor --type-check --no-prelude eq.kel
+-  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean
+-  same_pair : ((Int32, String), (Int32, String)) => Boolean
++  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean @ R1
++  same_pair : ((Int32, String), (Int32, String)) => Boolean @ R1
+ 
+   $ cat > eqbad.kel <<'EOF'
+   > let same[R](p: {x: Int32 extends R}, q: {x: Int32 extends R}): Boolean = p == q
+@@ -336,14 +336,14 @@ Int32 がプレリュードの List を黙って奪った):
+   > EOF2
+   $ printf 'type Rec = {y: String, x: Int32}\ntype Par = #Odd | #Even\nlet main(): Int32 = 1\n' > al1.kel
+   $ diktor --prelude alias_pre.kel --type-check al1.kel
+-  main : () => Int32
++  main : () => Int32 @ R1
+   $ printf 'type Cap[G] = (G, G)\nlet main(): Int32 = 1\n' > al2.kel
+   $ diktor --prelude alias_pre.kel --type-check al2.kel
+   ! al2.kel:1:1: 型エラー: 型エイリアス Cap の宣言がプレリュードの宣言と一致しません(本体が違います)
+   [1]
+   $ printf 'type Cap[B] = (B, G)\nlet main(): Int32 = 1\n' > al3.kel
+   $ diktor --prelude alias_pre.kel --type-check al3.kel
+-  main : () => Int32
++  main : () => Int32 @ R1
+ 
+ Never の照合不一致はコンストラクタゼロを明示する:
+ 
+@@ -390,8 +390,8 @@ M19 / G4b — かつては ^ の右辺が先に評価され R2 → R1 の逆順
+   > let h = fn(r) => (r.x.y, r.p.q)
+   > KEL
+   $ diktor --type-check --no-prelude rowname.kel
+-  g : ({x: {y: A extends R1} extends R2}) => A
+-  h : ({x: {y: A extends R1}, p: {q: B extends R2} extends R3}) => (A, B)
++  g : ({x: {y: A extends R1} extends R2}) => A @ R3
++  h : ({x: {y: A extends R1}, p: {q: B extends R2} extends R3}) => (A, B) @ R4
+ 
+ 剛定数の制約は角括弧の前置に出さない(§9.2: ς はユーザが書ける名前では
+ ない。M19 / G4c — かつては [ς1: Add] ς1 と出た):
+@@ -408,8 +408,8 @@ M19 / G4b — かつては ^ の右辺が先に評価され R2 → R1 の逆順
+ 
+   $ printf 'let idf2[F[_], A](x: F[A]): F[A] = x\nlet use3 = fn(w) => idf2(w)\n' > tapp.kel
+   $ diktor --type-check --no-prelude tapp.kel
+-  idf2 : (F[A]) => F[A]
+-  use3 : (F[A]) => F[A]
++  idf2 : (F[A]) => F[A] @ R1
++  use3 : (F[A]) => F[A] @ R1
+ 
+ タプルの再糖衣化は 3 形(§4。2 要素以上は (A, B)、1 要素は (A,)、空行は {}。
+ 開いた行は戻さない):
+@@ -424,7 +424,7 @@ M19 / G4b — かつては ^ の右辺が先に評価され R2 → R1 の逆順
+   one : (Int32,)
+   two : (Int32, String)
+   empty : {}
+-  opened : ({_item: A extends R1}) => A
++  opened : ({_item: A extends R1}) => A @ R2
+ 
+ エラーメッセージの表示にも同じ規則が及ぶ:
+ 
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index bc1c5f2..0213153 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -13,8 +13,8 @@
+   > echoln(show(M.g(1)))
+   > KEL
+   $ diktor --type-check vis1.kel
+-  M.f : (Int32) => Int32
+-  M.g : (Int32) => Int32
++  M.f : (Int32) => Int32 @ R1
++  M.g : (Int32) => Int32 @ R1
+   ! vis1.kel:5:13: 型エラー: M.g は module M の外からは参照できません(pub を付けてください)
+   [1]
+ 
+@@ -69,7 +69,7 @@ pub なら候補として案内される:
+   > let x = P(1)
+   > KEL
+   $ diktor --type-check vis5.kel
+-  M.mk : (Int32) => M.Priv
++  M.mk : (Int32) => M.Priv @ R1
+   ! vis5.kel:5:9: 型エラー: コンストラクタ P は module M の外からは参照できません(newtype M.Priv に pub を付けてください)
+   [1]
+ 
+@@ -85,8 +85,8 @@ pub なら候補として案内される:
+   > let v(): MyBig = Big.mk(1)
+   > KEL
+   $ diktor --type-check vis6.kel
+-  Big.mk : (Int32) => Big.Big
+-  v : () => Big.Big
++  Big.mk : (Int32) => Big.Big @ R1
++  v : () => Big.Big @ R1
+ 
+ module の中では非 pub の名前が修飾でも非修飾でも見える(実行も一致):
+ 
+@@ -142,7 +142,7 @@ pub エイリアスは、その型の素性を作者の選択として外へ見
+   > let f(x: M.Pub): Int32 = 1
+   > KEL
+   $ diktor --type-check vis10.kel
+-  f : (M.Priv) => Int32
++  f : (M.Priv) => Int32 @ R1
+ 
+ module の中で宣言した EffectRow エイリアスは、同じ module の中から修飾せずに、
+ @ の後ろ、行の要素、extends の右、行を取る型引数、EffectRow エイリアスの右辺に
+@@ -167,7 +167,7 @@ module の中で宣言した EffectRow エイリアスは、同じ module の中
+   M.at : (Int32) => Int32 @ {Print extends R1}
+   M.elem : (Int32) => Int32 @ {Print, Console extends R1}
+   M.tail : (Int32) => Int32 @ {Console, Print extends R1}
+-  M.arg : (Cb[{Print}]) => Int32
++  M.arg : (Cb[{Print}]) => Int32 @ R1
+   M.rhs : (Int32) => Int32 @ {Print extends R1}
+   M.say : (String) => {} @ {Print extends R1}
+   _ : {}
+@@ -464,7 +464,7 @@ newtype の型名とコンストラクタは可視性を共有する(§13。pub
+   > KEL
+   $ diktor --type-check vispub.kel
+   x : M.Pub
+-  y : (M.Pub) => Int32
++  y : (M.Pub) => Int32 @ R1
+ 
+   $ printf 'module M { newtype Priv = P(Int32) }\nlet f(v: M.Priv): Int32 = 1\n' > vispriv.kel
+   $ diktor --type-check vispriv.kel
+@@ -492,10 +492,10 @@ module 名そのものは予約しない。組み込みに無い綴りを同じ
+ 
+   $ printf 'module Array { pub let sum(a: Array[Int32]): Int32 = 0 }\n' > visbi3.kel
+   $ diktor --type-check visbi3.kel
+-  Array.sum : (Array[Int32]) => Int32
++  Array.sum : (Array[Int32]) => Int32 @ R1
+   $ printf 'module Ref { pub let swap[A](a: Ref[A, Int32]): Int32 = 0 }\n' > visbi4.kel
+   $ diktor --type-check visbi4.kel
+-  Ref.swap : (Ref[A, Int32]) => Int32
++  Ref.swap : (Ref[A, Int32]) => Int32 @ R1
+ 
+ --prelude で差し替えたプレリュードも、ユーザのプログラムと同じに拒否される。
+ 平坦化は in_prelude のフラグが立つ前に走るので、プレリュードだからという免除が
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 9d03fee..8149038 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -15,8 +15,8 @@
+   > let mk_a(): Unit @ A = perform opa()
+   > KEL
+   $ diktor --type-check --no-prelude nested1.kel
+-  call_pure : (() => {}) => {}
+-  call_a : (() => {}) => {}
++  call_pure : (() => {}) => {} @ R1
++  call_a : (() => {} @ R1) => {} @ R1
+   mk_a : () => {} @ {A extends R1}
+ 
+   $ cat > nested2.kel <<'KEL'
+@@ -26,7 +26,7 @@
+   > let bad(): Unit @ A = call_pure(fn() => perform opa())
+   > KEL
+   $ diktor --type-check --no-prelude nested2.kel
+-  call_pure : (() => {}) => {}
++  call_pure : (() => {}) => {} @ R1
+   ! nested2.kel:4:41: 型エラー: エフェクト A をここでは実行できません(ラベル A がありません(行は閉じています))
+   [1]
+ 
+@@ -40,17 +40,17 @@
+   > let mkt(): (() => Unit @ Console, Int32) = (fn() => echoln("hi"), 1)
+   > KEL
+   $ diktor --type-check nestrec.kel
+-  use : ({go: () => {}}) => {}
+-  pair : ((() => {}, Int32)) => Int32
+-  mk : () => {go: () => {} @ {Console}}
+-  mkt : () => (() => {} @ {Console}, Int32)
++  use : ({go: () => {}}) => {} @ R1
++  pair : ((() => {}, Int32)) => Int32 @ R1
++  mk : () => {go: () => {} @ {Console}} @ R1
++  mkt : () => (() => {} @ {Console}, Int32) @ R1
+ 
+   $ cat > nestrec2.kel <<'KEL'
+   > let use(r: {go: () => Unit}): Unit = r.go()
+   > let main(): Unit @ Console = use({go = fn() => echoln("x")})
+   > KEL
+   $ diktor --type-check nestrec2.kel
+-  use : ({go: () => {}}) => {}
++  use : ({go: () => {}}) => {} @ R1
+   ! nestrec2.kel:2:48: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -62,7 +62,7 @@
+   > let main(): Int32 @ Console = pair((fn() => echoln("x"), 1))
+   > KEL
+   $ diktor --type-check nestrec3.kel
+-  pair : ((() => {}, Int32)) => Int32
++  pair : ((() => {}, Int32)) => Int32 @ R1
+   ! nestrec3.kel:2:45: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -87,7 +87,7 @@
+   > let bad(): Thunk = fn() => perform opa()
+   > KEL
+   $ diktor --type-check --no-prelude alias.kel
+-  pure_ok : (() => {}) => {}
++  pure_ok : (() => {}) => {} @ R1
+   ! alias.kel:5:5: 型エラー: 注釈された返り値型を満たしません(ラベル A がありません(行は閉じています))
+   [1]
+ 
+@@ -139,8 +139,8 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > fire(make(fn() => echo("fired\n")))
+   > KEL
+   $ diktor --type-check spec9.kel
+-  make : (() => {}) => Callback[R1]
+-  fire : (Callback[R1]) => {}
++  make : (() => {} @ R1) => Callback[R1] @ R2
++  fire : (Callback[R1]) => {} @ R1
+   _ : {}
+   $ diktor spec9.kel
+   fired
+@@ -153,7 +153,7 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > let use(): Int32 @ Console = k(1)
+   > KEL
+   $ diktor --type-check val2.kel
+-  k : (Int32) => Int32
++  k : (Int32) => Int32 @ R1
+   use : () => Int32 @ {Console extends R1}
+ 
+   $ cat > val1.kel <<'KEL'
+@@ -260,7 +260,7 @@ let rec も同じ(群のうち @ を書いた束縛と pub は対象外):
+   > let r(): Int32 @ Console = loop(fn(x) => x, 3)
+   > KEL
+   $ diktor --type-check rec2.kel
+-  loop : ((Int32) => Int32, Int32) => Int32
++  loop : ((Int32) => Int32, Int32) => Int32 @ R1
+   r : () => Int32 @ {Console extends R1}
+ 
+ 値束縛の注釈の頭の矢印も束縛の最外として読む(§9 / D116)。ラベル付きの行を書いたら
+@@ -343,7 +343,7 @@ pub な値束縛も最外の @ を省略できる。公開される型は行多
+   > let use(): Int32 @ Console = { echo("p"); M.k(1) }
+   > KEL
+   $ diktor --type-check pubval.kel
+-  M.k : (Int32) => Int32
++  M.k : (Int32) => Int32 @ R1
+   use : () => Int32 @ {Console extends R1}
+ 
+ パス 1c が pub の値束縛にも署名を作るので、この形も宣言順に依存しない。module M の
+@@ -357,7 +357,7 @@ pub な値束縛も最外の @ を省略できる。公開される型は行多
+   > KEL
+   $ diktor --type-check pubvalfwd.kel
+   use : () => Int32 @ {Console extends R1}
+-  M.k : (Int32) => Int32
++  M.k : (Int32) => Int32 @ R1
+ 
+ 省略したとき純粋を要求されるのは頭の矢印の本体、つまり fn の中身である。破ると
+ pub の規則を名指しして落ちる:
+@@ -383,7 +383,7 @@ pub の規則を名指しして落ちる:
+   > with_stdout(fn() => use())
+   > KEL
+   $ diktor --type-check pubvalinit.kel
+-  M.g : () => Int32
++  M.g : () => Int32 @ R1
+   use : () => Int32 @ {Console extends R1}
+   _ : Int32
+   $ diktor pubvalinit.kel
+@@ -464,8 +464,8 @@ let rec の値束縛も頭を最外として読む。pub の省略 @ の枝だ
+   > and g(y) = y
+   > KEL
+   $ diktor --type-check recandtp.kel
+-  f : (A) => A
+-  g : (A) => A
++  f : (A) => A @ R1
++  g : (A) => A @ R1
+ 
+ 相手へ入り込んでいない剛定数は、従来どおり束縛ごとに解放する(§11.29)。注釈つきの
+ 先行束縛を後続が多相に使う形がその側で、f は A のまま一般化されて後から String でも
+@@ -477,8 +477,8 @@ let rec の値束縛も頭を最外として読む。pub の省略 @ の枝だ
+   > let s: String = f("s")
+   > KEL
+   $ diktor --type-check recandpoly.kel
+-  f : (A) => A
+-  g : (Int32) => Int32
++  f : (A) => A @ R1
++  g : (Int32) => Int32 @ R1
+   s : String
+   $ cat > recandeff.kel <<'KEL'
+   > let rec a(n: Int32): Int32 @ Console = { echo("a"); n }
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index aba1cee..582dba9 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -23,11 +23,11 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+   > let print_cb(): Callback[{Print}] = Callback(fn() => println("x"))
+   > EOF
+   $ diktor --type-check --no-prelude cb.kel
+-  mk : (() => {}) => Callback[R1]
+-  run_cb : (Callback[R1]) => {}
++  mk : (() => {} @ R1) => Callback[R1] @ R2
++  run_cb : (Callback[R1]) => {} @ R1
+   println : (String) => {} @ {Print extends R1}
+-  pure_cb : () => Callback[{}]
+-  print_cb : () => Callback[{Print}]
++  pure_cb : () => Callback[{}] @ R1
++  print_cb : () => Callback[{Print}] @ R1
+ 
+ 行変数を含む行も書ける。pub でも完全注釈になる(仕様 §13):
+ 
+@@ -39,9 +39,9 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+   > let with_ext[E](c: Callback[{Print extends E}]): Callback[{Print extends E}] = c
+   > EOF
+   $ diktor --type-check cbext.kel
+-  mk : (() => {}) => Callback[R1]
+-  open_ : (Callback[R1]) => () => {}
+-  with_ext : (Callback[{Print extends R1}]) => Callback[{Print extends R1}]
++  mk : (() => {} @ R1) => Callback[R1] @ R2
++  open_ : (Callback[R1]) => () => {} @ R1 @ R2
++  with_ext : (Callback[{Print extends R1}]) => Callback[{Print extends R1}] @ R2
+ 
+ 実行も通る(構築・分解・handle 越しの呼び出し):
+ 
+@@ -70,7 +70,7 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+   > let ok(): Phantom[Int32] = Phantom(0)
+   > EOF
+   $ diktor --type-check --no-prelude phantom.kel
+-  ok : () => Phantom[Int32]
++  ok : () => Phantom[Int32] @ R1
+ 
+ カインドを決める「使われ方」は自分の宣言の本体に限らない(D129)。宣言群の中の
+ 型の本体が材料になるので、自分の本体では Int32 しか使っていないパラメータでも、
+@@ -86,7 +86,7 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+   > let f(x: Ph[{Print}]): Int32 = 0
+   > EOF
+   $ diktor --type-check --no-prelude phantomrow.kel
+-  f : (Ph[{Print}]) => Int32
++  f : (Ph[{Print}]) => Int32 @ R1
+ 
+ 同じ形から、行として使う側(上の N と Callback)を消すと Type に既定化され、
+ 型引数の {Print} は型として読まれる:
+@@ -105,7 +105,7 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+ 
+   $ printf 'newtype X[A] = ???\nlet f[A](x: X[A]): X[A] = x\n' > hole.kel
+   $ diktor --type-check --no-prelude hole.kel
+-  f : (X[A]) => X[A]
++  f : (X[A]) => X[A] @ R1
+ 
+ Type のパラメータに行を渡すと宣言の時点で落ちる(かつては構築点まで
+ 「カインドが一致しません」が出なかった。D82):
+@@ -156,7 +156,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: A2[E]): A2[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude mutual.kel
+-  f : (A2[R1]) => A2[R1]
++  f : (A2[R1]) => A2[R1] @ R2
+   $ cat > mutual2.kel <<'EOF'
+   > type Unit = {}
+   > newtype B3[E] = MkB3(() => Unit @ E)
+@@ -164,7 +164,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: A3[E]): A3[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude mutual2.kel
+-  f : (A3[R1]) => A3[R1]
++  f : (A3[R1]) => A3[R1] @ R2
+ 
+ 行カインドのパラメータへ具体的な行を前方参照つきで渡す形も、相手の本体の投機が
+ そのパラメータのカインドに届く限り宣言順に依存しない(D132。1b の前に newtype の
+@@ -179,7 +179,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: A4[E]): A4[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude fwdrow.kel
+-  f : (A4[R1]) => A4[R1]
++  f : (A4[R1]) => A4[R1] @ R2
+   $ cat > fwdrow2.kel <<'EOF'
+   > type Unit = {}
+   > effect Print = { print: (String) => Unit }
+@@ -188,7 +188,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: A5[E]): A5[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude fwdrow2.kel
+-  f : (A5[R1]) => A5[R1]
++  f : (A5[R1]) => A5[R1] @ R2
+ 
+ 連鎖と module の中でも同じ(投機は宣言順に 1 周するだけだが、深さ 2 は届く):
+ 
+@@ -201,7 +201,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: A7[E]): A7[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude fwdrow3.kel
+-  f : (A7[R1]) => A7[R1]
++  f : (A7[R1]) => A7[R1] @ R2
+   $ cat > fwdrowmod.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+   > module M {
+@@ -211,7 +211,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: M.A6[E]): M.A6[E] = x
+   > EOF
+   $ diktor --type-check fwdrowmod.kel
+-  f : (M.A6[R1]) => M.A6[R1]
++  f : (M.A6[R1]) => M.A6[R1] @ R2
+ 
+ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_module で包んでいるか
+ を見張るのはこの形で、上の fwdrowmod は B6 の投機だけで通るため包みを外しても
+@@ -227,7 +227,7 @@ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_mo
+   > let f[E](x: M.A9[E]): M.A9[E] = x
+   > EOF
+   $ diktor --type-check fwdrowmod2.kel
+-  f : (M.A9[R1]) => M.A9[R1]
++  f : (M.A9[R1]) => M.A9[R1] @ R2
+ 
+ 投機は effect の操作の登録(1b)より前に走るので、同じ宣言群のエフェクトラベルは
+ 投機の時点ではすべて未知で、() => Unit @ {Log} のようなフィールドは投機の中で
+@@ -243,7 +243,7 @@ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_mo
+   > let f(x: A10): A10 = x
+   > EOF
+   $ diktor --type-check --no-prelude specfield.kel
+-  f : (A10) => A10
++  f : (A10) => A10 @ R1
+   $ cat > specfield2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -252,7 +252,7 @@ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_mo
+   > let f(x: A11): A11 = x
+   > EOF
+   $ diktor --type-check --no-prelude specfield2.kel
+-  f : (A11) => A11
++  f : (A11) => A11 @ R1
+ 
+ 1 つのフィールドの中で投機が先にラベルへ当たる形では、そのフィールドは丸ごと
+ 落ちる(タプルやレコードの要素は右から読むので、右端の {Log} で落ちて左の E に
+@@ -268,7 +268,7 @@ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_mo
+   > let f(x: A12): A12 = x
+   > EOF
+   $ diktor --type-check --no-prelude specinner.kel
+-  f : (A12) => A12
++  f : (A12) => A12 @ R1
+   $ cat > specinner2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -277,7 +277,7 @@ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_mo
+   > let f[E](x: A13[E]): A13[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude specinner2.kel
+-  f : (A13[R1]) => A13[R1]
++  f : (A13[R1]) => A13[R1] @ R2
+ 
+ 前方参照でも同じで、相手の手前のフィールドが投機で落ちても、後続のフィールドから
+ 連鎖でカインドが決まれば通る(B14 の第 1 フィールドは投機で落ちるが、第 2 の
+@@ -292,7 +292,7 @@ C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそ
+   > let f[E](x: A14[E]): A14[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude specfwd.kel
+-  f : (A14[R1]) => A14[R1]
++  f : (A14[R1]) => A14[R1] @ R2
+ 
+ 前方参照の型引数が {}(空の波括弧)の形も、飛ばす読みで通る(台帳 V22 の主たる
+ 形)。残るのは、相手の投機がそのパラメータのカインドを決められず、かつ型引数が
+@@ -306,7 +306,7 @@ C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそ
+   > let f[E](x: A15[E]): A15[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude specunit.kel
+-  f : (A15[R1]) => A15[R1]
++  f : (A15[R1]) => A15[R1] @ R2
+   $ cat > specunit2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -339,7 +339,7 @@ C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそ
+   > let f[E](x: A18[E]): A18[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude speclab2.kel
+-  f : (A18[R1]) => A18[R1]
++  f : (A18[R1]) => A18[R1] @ R2
+ 
+ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾名で引く):
+ 
+@@ -352,8 +352,8 @@ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾
+   > let g(c: Cb.Callback[{Print}]): Int32 = 0
+   > EOF
+   $ diktor --type-check modcb.kel
+-  Cb.mk : (() => {}) => Cb.Callback[R1]
+-  g : (Cb.Callback[{Print}]) => Int32
++  Cb.mk : (() => {} @ R1) => Cb.Callback[R1] @ R2
++  g : (Cb.Callback[{Print}]) => Int32 @ R1
+ 
+ プレリュード所有名の再宣言はプレリュードが決めたカインドを引き継ぐ(D80。
+ 別のセルを作ると構造照合で KVar と KStar が食い違う):
+@@ -361,7 +361,7 @@ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾
+   $ printf 'type Unit = {}\nnewtype Callback[E] = Callback(() => Unit @ E)\n' > tinypre.kel
+   $ printf 'newtype Callback[E] = Callback(() => Unit @ E)\nlet f[E](c: Callback[E]): Callback[E] = c\n' > redecl.kel
+   $ diktor --prelude tinypre.kel --type-check redecl.kel
+-  f : (Callback[R1]) => Callback[R1]
++  f : (Callback[R1]) => Callback[R1] @ R2
+   $ printf 'newtype Callback[E] = Callback(E)\n' > redecl2.kel
+   $ diktor --prelude tinypre.kel --type-check redecl2.kel
+   ! redecl2.kel:1:32: 型エラー: コンストラクタ Callback のフィールドの型のカインドが Type ではありません: R1 :: Row
+@@ -441,8 +441,8 @@ newtype を透過に包むエイリアスに、行変数でも具体的な行で
+   > let g(c: Cb[{Print}]): Int32 = 0
+   > EOF
+   $ diktor --type-check --no-prelude alias.kel
+-  f : (Callback[R1]) => Callback[R1]
+-  g : (Callback[{Print}]) => Int32
++  f : (Callback[R1]) => Callback[R1] @ R2
++  g : (Callback[{Print}]) => Int32 @ R1
+ 
+ 型引数の位置は、宣言されたパラメータのカインドで読み方が変わる(D82。仕様 §6、
+ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行として読むので、{} は
+@@ -460,10 +460,10 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+   > let e(): Box[{}] = Box({})
+   > EOF
+   $ diktor --type-check --no-prelude rowarg.kel
+-  a : () => Callback[{}]
+-  b : (Callback[{Print}]) => Callback[{Print}]
+-  d : (Box[{}]) => Box[{}]
+-  e : () => Box[{}]
++  a : () => Callback[{}] @ R1
++  b : (Callback[{Print}]) => Callback[{Print}] @ R1
++  d : (Box[{}]) => Box[{}] @ R1
++  e : () => Box[{}] @ R1
+ 
+ 同じ {} が位置で別の意味になるが、印字はどちらも {} で見分けが付かない。Type の
+ 位置の {} が空レコード(= Unit)であることは、値を入れると見える:
+@@ -484,7 +484,7 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check aliasorder.kel
+-  g : (Callback[{Print}]) => Int32
++  g : (Callback[{Print}]) => Int32 @ R1
+ 
+ エイリアス経由で newtype のパラメータのカインドが決まる形。既定化を投機より
+ 後に置いたので、X が先に Type に固定されない(D81 / D84):
+@@ -499,8 +499,8 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+   > let g(x: A6[{Print}]): Int32 = 0
+   > EOF
+   $ diktor --type-check --no-prelude aliasfwd.kel
+-  f : (A6[R1]) => A6[R1]
+-  g : (A6[{Print}]) => Int32
++  f : (A6[R1]) => A6[R1] @ R2
++  g : (A6[{Print}]) => Int32 @ R1
+ 
+ 行カインドのパラメータに型を渡すと、エイリアスの側の診断で落ちる:
+ 
+@@ -584,7 +584,7 @@ Type のパラメータの制約は従来どおり言及時に効く(規則 3):
+ 
+   $ printf 'type P[A: Show] = (A, A)\nlet f(x: P[Int32]): Int32 = 0\n' > tyconstr.kel
+   $ diktor --type-check tyconstr.kel
+-  f : ((Int32, Int32)) => Int32
++  f : ((Int32, Int32)) => Int32 @ R1
+ 
+ 高階カインドの型変数への適用も定義域を照合する(D86)。F[_] の定義域は Type
+ なので F[E] が E を Type に確定させ、次の @ E で落ちる。診断の位置が 2 番目の
+@@ -616,8 +616,8 @@ Functor の正常系は変わらない:
+   > let g(xs: List[Int32]): List[Int32] = f(xs)
+   > EOF
+   $ diktor --type-check hktok.kel
+-  f : (F[A]) => F[A]
+-  g : (List[Int32]) => List[Int32]
++  f : (F[A]) => F[A] @ R1
++  g : (List[Int32]) => List[Int32] @ R1
+ 
+ 値の型の位置(矢印の引数と返り値、レコードのフィールド、タプルの要素、
+ ヴァリアントの積載)は、読んだ型のカインドが Type でなければならない
+@@ -885,4 +885,4 @@ sample.kel:668)。行の位置(@ h)には書けない:
+   > }
+   > EOF
+   $ diktor --type-check regionkind2.kel
+-  f : () => Int32
++  f : () => Int32 @ R1

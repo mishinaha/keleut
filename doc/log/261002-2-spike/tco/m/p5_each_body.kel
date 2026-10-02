@@ -1,0 +1,4 @@
+let big = run h { let a = MutableArray.new(N, 0); MutableArray.freeze(a) }
+let rec spin(n: Int32): Unit = (n == 0) match { case true => () case false => spin(n - 1) }
+Array.each(big, fn(x) => spin(3))
+echoln("ok")

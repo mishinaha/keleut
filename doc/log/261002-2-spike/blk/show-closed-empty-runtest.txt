@@ -1,0 +1,275 @@
+File "test/typecheck_sample.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_sample.t b/_build/default/test/typecheck_sample.t.corrected
+index 9d3c492..796267c 100644
+--- a/_build/default/test/typecheck_sample.t
++++ b/_build/default/test/typecheck_sample.t.corrected
+@@ -53,8 +53,8 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+   _ : {}
+   sum : (Array[Int32]) => Int32
+   doubled : (Array[Int32]) => Array[Int32]
+-  par_map : (Array[A], (A) => B) => Array[B]
+-  par : (() => A, () => B) => (A, B)
++  par_map : (Array[A], (A) => B @ {}) => Array[B]
++  par : (() => A @ {}, () => B @ {}) => (A, B)
+   scope : (() => A @ {Nursery, Async extends R1}) => A @ {Async extends R1}
+   serve : (List[Conn]) => {} @ {Async extends R1}
+   with_timeout : (Int64, () => A @ {Deadline extends R1}) => Option[A] @ {Async extends R1}
+File "test/blocking_top.t", line 1, characters 0-0:
+diff --git a/_build/default/test/blocking_top.t b/_build/default/test/blocking_top.t.corrected
+index bd12e77..6dc9a43 100644
+--- a/_build/default/test/blocking_top.t
++++ b/_build/default/test/blocking_top.t.corrected
+@@ -20,7 +20,7 @@ pinned で落とすこともできる(仕様 §12)。落とさずに純粋な行
+   > KEL
+   $ diktor --type-check bpure.kel
+   sqrt : (Float64) => Float64 @ {Blocking extends R1}
+-  pure_sqrt : (Float64) => Float64
++  pure_sqrt : (Float64) => Float64 @ {}
+   ! bpure.kel:3:37: 型エラー: ラベル Blocking がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+File "test/spec_gaps.t", line 1, characters 0-0:
+diff --git a/_build/default/test/spec_gaps.t b/_build/default/test/spec_gaps.t.corrected
+index 963c98f..29d3c16 100644
+--- a/_build/default/test/spec_gaps.t
++++ b/_build/default/test/spec_gaps.t.corrected
+@@ -37,14 +37,14 @@ module の入れ子(:860)、Ord[Float64] / Eq[Float64] と NaN(:861-866)は cram
+   $ diktor --type-check sumgen.kel
+   sum : (Array[Int32]) => Int32
+   effectful : (Array[Int32]) => Int32 @ {Console extends R1}
+-  pure_ok : (Array[Int32]) => Int32
++  pure_ok : (Array[Int32]) => Int32 @ {}
+ 
+   $ cat > sumclosed.kel <<'KEL'
+   > let sum2(xs: Array[Int32]): Int32 @ {} = 1
+   > let effectful(xs: Array[Int32]): Int32 @ {Console} = { echoln("go"); sum2(xs) }
+   > KEL
+   $ diktor --type-check sumclosed.kel
+-  sum2 : (Array[Int32]) => Int32
++  sum2 : (Array[Int32]) => Int32 @ {}
+   ! sumclosed.kel:2:70: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index e73699c..e589916 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -406,7 +406,7 @@ H4 / D23-a — @ {} は正確に空で、エフェクトのある文脈から呼
+   > let impure(x: Int32): Int32 @ {Logger} = { perform log("hi"); pure_f(x) }
+   > KEL
+   $ diktor --type-check noSub.kel
+-  pure_f : (Int32) => Int32
++  pure_f : (Int32) => Int32 @ {}
+   ! noSub.kel:3:63: 型エラー: ラベル Logger がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -463,4 +463,4 @@ M26 より前は g の @ 省略だけで「未束縛の変数: helper」だっ
+   > KEL
+   $ diktor --type-check fwdsig.kel
+   user : () => Int32 @ {Console extends R1}
+-  helper : (() => {}, (Int32) => Int32) => Int32 @ {Console extends R1}
++  helper : (() => {}, (Int32) => Int32 @ {}) => Int32 @ {Console extends R1}
+File "test/region.t", line 1, characters 0-0:
+diff --git a/_build/default/test/region.t b/_build/default/test/region.t.corrected
+index c6956f0..9f845fd 100644
+--- a/_build/default/test/region.t
++++ b/_build/default/test/region.t.corrected
+@@ -14,8 +14,8 @@
+   $ diktor --type-check read.kel
+   peek : (Array[Int32]) => Int32
+   len : (Array[Int32]) => Int32
+-  g : (Int32) => {}
+-  walk : (Array[Int32]) => {}
++  g : (Int32) => {} @ {}
++  walk : (Array[Int32]) => {} @ {}
+ 
+ 可変配列は h を型に持つので、引数を破壊する関数は純粋として型付かない
+ (仕様 §10「bump が書けない」):
+@@ -219,7 +219,7 @@ pub の「@ を省略した宣言は純粋」も同じ経路で守られる(M20
+   > let use(xs: Array[Int32]): {} = run h { Array.each(xs, g) }
+   > KEL
+   $ diktor --type-check eachclosed.kel
+-  g : (Int32) => {}
++  g : (Int32) => {} @ {}
+   ! eachclosed.kel:2:56: 型エラー: ラベル Heap がありません(行は閉じています)
+   [1]
+ 
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index c2db5ab..43e248e 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -361,7 +361,7 @@ M19 / G3c / G3d / G7c):
+   > }
+   > KEL
+   $ diktor --type-check v10c.kel
+-  f : () => Int32
++  f : () => Int32 @ {}
+   ⚠ match が非網羅的です。例えば false が漏れています
+ 
+ 検査モード(注釈のある高階関数の引数位置)のラムダも V10 の対象
+@@ -373,7 +373,7 @@ M19 / G3c / G3d / G7c):
+   > let r = apply2(fn(true) => 1, false)
+   > KEL
+   $ diktor --type-check v10d.kel
+-  apply2 : ((Boolean) => Int32, Boolean) => Int32
++  apply2 : ((Boolean) => Int32 @ {}, Boolean) => Int32
+   r : Int32
+   ⚠ match が非網羅的です。例えば false が漏れています
+ 
+File "test/tokens.t", line 1, characters 0-0:
+diff --git a/_build/default/test/tokens.t b/_build/default/test/tokens.t.corrected
+index 3d5ae0c..59b2fe7 100644
+--- a/_build/default/test/tokens.t
++++ b/_build/default/test/tokens.t.corrected
+@@ -622,7 +622,7 @@ Uchar.of_int 0xD800 は Invalid_argument を投げるので、is_valid で先に
+      6  {rec
+   $ diktor --type-check --no-prelude effbrace.kel
+   p : (String) => {} @ {Print extends R1}
+-  z : () => {}
++  z : () => {} @ {}
+ 
+ 3 文脈は、分類がどれになっても行の途中の改行で切れない(裁定 D114)。下の
+ effect 宣言の本体(1 行目)・EffectRow のエイリアスの右辺(4 行目)・@ の直後
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck.t b/_build/default/test/typecheck.t.corrected
+index 632fe50..fbd66a6 100644
+--- a/_build/default/test/typecheck.t
++++ b/_build/default/test/typecheck.t.corrected
+@@ -132,8 +132,8 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   $ diktor --type-check --no-prelude rec.kel
+   even : (Int32) => Boolean
+   odd : (Int32) => Boolean
+-  forward : (Int32) => Int32
+-  helper : (Int32) => Int32
++  forward : (Int32) => Int32 @ {}
++  helper : (Int32) => Int32 @ {}
+ 
+   $ cat > fwdbad.kel <<'EOF'
+   > let forward(x: Int32): Int32 = helper(x)
+@@ -152,7 +152,7 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > EOF
+   $ diktor --type-check --no-prelude eff.kel
+   compose : ((A) => B, (B) => C) => (A) => C
+-  pure_fn : (Int32) => Int32
++  pure_fn : (Int32) => Int32 @ {}
+ 
+ 構造的 Eq の導出(閉じた行のみ。sample.kel:391-395):
+ 
+@@ -378,7 +378,7 @@ Never の照合不一致はコンストラクタゼロを明示する:
+   > let esc = run h { Ref.new(0) }
+   > KEL
+   $ diktor --type-check rigids.kel
+-  ann : [A: Add] (A) => A
++  ann : [A: Add] (A) => A @ {}
+   ! rigids.kel:2:11: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+   [1]
+ 
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 9d03fee..c96f7ac 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -15,7 +15,7 @@
+   > let mk_a(): Unit @ A = perform opa()
+   > KEL
+   $ diktor --type-check --no-prelude nested1.kel
+-  call_pure : (() => {}) => {}
++  call_pure : (() => {} @ {}) => {}
+   call_a : (() => {}) => {}
+   mk_a : () => {} @ {A extends R1}
+ 
+@@ -26,7 +26,7 @@
+   > let bad(): Unit @ A = call_pure(fn() => perform opa())
+   > KEL
+   $ diktor --type-check --no-prelude nested2.kel
+-  call_pure : (() => {}) => {}
++  call_pure : (() => {} @ {}) => {}
+   ! nested2.kel:4:41: 型エラー: エフェクト A をここでは実行できません(ラベル A がありません(行は閉じています))
+   [1]
+ 
+@@ -40,8 +40,8 @@
+   > let mkt(): (() => Unit @ Console, Int32) = (fn() => echoln("hi"), 1)
+   > KEL
+   $ diktor --type-check nestrec.kel
+-  use : ({go: () => {}}) => {}
+-  pair : ((() => {}, Int32)) => Int32
++  use : ({go: () => {} @ {}}) => {}
++  pair : ((() => {} @ {}, Int32)) => Int32
+   mk : () => {go: () => {} @ {Console}}
+   mkt : () => (() => {} @ {Console}, Int32)
+ 
+@@ -50,7 +50,7 @@
+   > let main(): Unit @ Console = use({go = fn() => echoln("x")})
+   > KEL
+   $ diktor --type-check nestrec2.kel
+-  use : ({go: () => {}}) => {}
++  use : ({go: () => {} @ {}}) => {}
+   ! nestrec2.kel:2:48: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -62,7 +62,7 @@
+   > let main(): Int32 @ Console = pair((fn() => echoln("x"), 1))
+   > KEL
+   $ diktor --type-check nestrec3.kel
+-  pair : ((() => {}, Int32)) => Int32
++  pair : ((() => {} @ {}, Int32)) => Int32
+   ! nestrec3.kel:2:45: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -87,7 +87,7 @@
+   > let bad(): Thunk = fn() => perform opa()
+   > KEL
+   $ diktor --type-check --no-prelude alias.kel
+-  pure_ok : (() => {}) => {}
++  pure_ok : (() => {} @ {}) => {}
+   ! alias.kel:5:5: 型エラー: 注釈された返り値型を満たしません(ラベル A がありません(行は閉じています))
+   [1]
+ 
+@@ -161,7 +161,7 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > let use(): Int32 @ Console = k(1)
+   > KEL
+   $ diktor --type-check val1.kel
+-  k : (Int32) => Int32
++  k : (Int32) => Int32 @ {}
+   ! val1.kel:2:30: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -176,7 +176,7 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > let user(): Int32 @ Console = k(1)
+   > KEL
+   $ diktor --type-check alval.kel
+-  k : (Int32) => Int32
++  k : (Int32) => Int32 @ {}
+   ! alval.kel:3:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+   $ cat > alval2.kel <<'KEL'
+@@ -193,15 +193,15 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > let pure_use(): Int32 @ {} = k(1)
+   > KEL
+   $ diktor --type-check alval3.kel
+-  k : (Int32) => Int32
+-  pure_use : () => Int32
++  k : (Int32) => Int32 @ {}
++  pure_use : () => Int32 @ {}
+   $ cat > alval4.kel <<'KEL'
+   > type G = (Int32) => Int32 @ {}
+   > let k: G = fn(x) => x
+   > let user(): Int32 @ Console = k(1)
+   > KEL
+   $ diktor --type-check alval4.kel
+-  k : (Int32) => Int32
++  k : (Int32) => Int32 @ {}
+   ! alval4.kel:3:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+@@ -260,7 +260,7 @@ let rec も同じ(群のうち @ を書いた束縛と pub は対象外):
+   > let r(): Int32 @ Console = loop(fn(x) => x, 3)
+   > KEL
+   $ diktor --type-check rec2.kel
+-  loop : ((Int32) => Int32, Int32) => Int32
++  loop : ((Int32) => Int32 @ {}, Int32) => Int32
+   r : () => Int32 @ {Console extends R1}
+ 
+ 値束縛の注釈の頭の矢印も束縛の最外として読む(§9 / D116)。ラベル付きの行を書いたら

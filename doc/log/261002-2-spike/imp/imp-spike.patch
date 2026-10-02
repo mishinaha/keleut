@@ -1,0 +1,299 @@
+--- a/lib/lexer.ml	2026-10-02 19:06:02.035114268 +0900
++++ b/lib/lexer.ml	2026-10-02 19:06:16.059214663 +0900
+@@ -240,8 +240,10 @@
+     | "extern" -> EXTERN
+     | "false" -> BOOL false
+     | "fn" -> FN
++    | "from" -> FROM
+     | "handle" -> HANDLE
+     | "if" -> IF
++    | "import" -> IMPORT
+     | "instance" -> INSTANCE
+     | "let" -> LET
+     | "match" -> MATCH
+@@ -705,6 +707,8 @@
+   (* §2.9 の表。t1 は `{` の次、t2 はその次の有意トークン(NL は飛ばす) *)
+   let classify_brace t =
+     let t1 = (peek_sig t 0).tok in
++    if t.prev = Some IMPORT then LBRACE_RECORD
++    else
+     match t1 with
+     | RBRACE | EXTENDS -> LBRACE_RECORD
+     | _ when is_ident_tok t1 -> (
+@@ -834,7 +838,7 @@
+   (* NL の後で文を始められるトークン。AND / CASE / MATCH / HANDLE / DOT / BACKSLASH /
+      EXTENDS / VERTICAL / 二項演算子は、前の行の続きにするために除いている *)
+   let can_begin_statement = function
+-    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | DERIVE | WITH | PERFORM | RESUME | RUN | FN
++    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | DERIVE | WITH | PERFORM | RESUME | RUN | FN | FROM
+     | LOWER_IDENTIFIER _ | UPPER_IDENTIFIER _ | HASH_IDENT _ | NUMBER _ | TEXT _ | BOOL _ | HOLE | EXCLAMATION
+     | LBRACE_BLOCK | LBRACE_RECORD | LBRACE_TYPE | LPAREN ->
+         true
+@@ -952,6 +956,7 @@
+     | EXTENDS -> "extends"
+     | EXTERN -> "extern"
+     | FN -> "fn"
++    | FROM -> "from"
+     | GREATER -> ">"
+     | GREATER_EQ -> ">="
+     | HANDLE -> "handle"
+@@ -959,6 +964,7 @@
+     | HOLE -> "???"
+     | HYPHEN -> "-"
+     | IF -> "if"
++    | IMPORT -> "import"
+     | INSTANCE -> "instance"
+     | LBRACE_BLOCK -> "{blk"
+     | LBRACE_RECORD -> "{rec"
+--- a/lib/parser.mly	2026-10-02 19:06:02.035170505 +0900
++++ b/lib/parser.mly	2026-10-02 19:09:50.526293427 +0900
+@@ -302,6 +302,8 @@
+       match block_of_items sloc rest with
+       | (_, Seq es) -> mk sloc (Seq (e :: es))
+       | r -> mk sloc (Seq [ e; r ]))
++  | (_, DLet (_, b)) :: _ when b.lb_pub -> raise (Syntax_error "SPIKE: ブロックの中の let に pub")
++  | (_, DLetRec bs) :: _ when List.exists (fun (_, b) -> b.lb_pub) bs -> raise (Syntax_error "SPIKE: ブロックの中の let rec に pub")
+   | (d, DLet b) :: rest -> (d, Let (b, block_of_items sloc rest))
+   | (d, DLetRec bs) :: rest -> (d, LetRec (bs, block_of_items sloc rest))
+   | _ :: _ -> raise (Syntax_error "この宣言はブロック内では使えません(let / let rec / 式のみ)")
+@@ -438,6 +440,7 @@
+ %token LBRACE_BLOCK LBRACE_RECORD LBRACE_TYPE RBRACE
+ %token BACKSLASH DOTDOTDOT LESS_EQ GREATER_EQ HOLE
+ %token CLASS INSTANCE DERIVE EXTENDS EXTERN NEWTYPE PERFORM PUB RESUME RUN
++%token FROM IMPORT
+ %token <string> HASH_IDENT
+ 
+ (* ## 3.12 開始記号の型と、`Error` という名前の衝突
+@@ -461,7 +464,7 @@
+    そのため、字句エラーは `Lex_error` という別の名前にしてある。
+    第16章(driver.ml)はこの 2 つと、意味アクションが投げる `Syntax_error` の 3 種類を別々に捕まえ、
+    字句エラーと構文エラーを区別して報告したうえで、どちらも終了コード 2 にそろえる。 *)
+-%start <Syntax.Make(Data).decl list> program
++%start <Syntax.import_decl list * Syntax.Make(Data).decl list> program
+ 
+ (* ## 3.13 `--strict` で conflict 0 を保つ
+ 
+@@ -552,7 +555,48 @@
+    ASI が `and` の前の改行を落とすので、そのまま並べるだけで足りる。
+    `semi?` を足すと shift/reduce になる。 *)
+ 
+-program: items EOF { $1 }
++program: header EOF { $1 }
++
++(* import はファイルの先頭にだけ書ける。items はブロックや module の本体と共有なので、
++   先頭の並びを program の階層の別の非終端で受ける *)
++header:
++  | items                    { ([], $1) }
++  | import_decl              { ([ $1 ], []) }
++  | import_decl semis header_after { let is, ds = $3 in ($1 :: is, ds) }
++
++(* import の後ろの区切りは semis がまとめて読む。header_after は先頭の区切りを読まない
++   ので、items の semi items と同じ区切りを 2 通りに読む曖昧さが無い *)
++header_after:
++  | items_head                     { ([], $1) }
++  | import_decl                    { ([ $1 ], []) }
++  | import_decl semis header_after { let is, ds = $3 in ($1 :: is, ds) }
++
++semis: semi { () } | semi semis { () }
++
++items_head:
++  |                            { [] }
++  | item                       { [ $1 ] }
++  | item semi items            { $1 :: $3 }
++  | WITH pat EQ exp            { [ mk $sloc (DExp (with_splice $sloc $2 $4 (mk $sloc RecordEmpty))) ] }
++  | WITH pat EQ exp semi items { [ mk $sloc (DExp (with_splice $sloc $2 $4 (block_of_items $sloc $6))) ] }
++
++import_decl:
++  | FROM TEXT IMPORT import_name
++      { { im_source = $2; im_names = [ $4 ]; im_loc = { Location.start = $startpos; Location.finish = $endpos } } }
++  | FROM TEXT IMPORT LBRACE_RECORD import_name_list RBRACE
++      { { im_source = $2; im_names = $5; im_loc = { Location.start = $startpos; Location.finish = $endpos } } }
++
++import_name_list:
++  | import_name                          { [ $1 ] }
++  | import_name COMMA                    { [ $1 ] }
++  | import_name COMMA import_name_list   { $1 :: $3 }
++
++(* 2 段まで。D.E.f は 2 個目の DOT で構文エラーになる *)
++import_name:
++  | import_head                { { in_path = [ $1 ]; in_loc = { Location.start = $startpos; Location.finish = $endpos } } }
++  | upper_id DOT import_head   { { in_path = [ $1; $3 ]; in_loc = { Location.start = $startpos; Location.finish = $endpos } } }
++
++import_head: upper_id { $1 } | lower_id { $1 }
+ 
+ items:
+   |                            { [] }
+--- a/lib/syntax.ml	2026-10-02 19:06:02.035276426 +0900
++++ b/lib/syntax.ml	2026-10-02 19:06:16.058894716 +0900
+@@ -121,6 +121,10 @@
+ 
+ exception Syntax_error of string
+ 
++(* import 文 1 個。im_names の各要素は [A] か [A; b] の 2 段まで *)
++type import_name = { in_path : string list; in_loc : Location.span }
++type import_decl = { im_source : string; im_names : import_name list; im_loc : Location.span }
++
+ let long_id components = LongId components
+ 
+ let show_long_id (LongId components) = String.concat "." components
+--- a/lib/driver.ml	2026-10-02 19:06:02.034830890 +0900
++++ b/lib/driver.ml	2026-10-02 19:08:50.411624917 +0900
+@@ -92,9 +92,10 @@
+   o_no_prelude : bool;
+   o_strict_exhaustive : bool;
+   o_files : string list;
++  o_import_path : string list; (* 試作: --import-path DIR。指定順 *)
+ }
+ 
+-let default_options = { o_mode = Run; o_prelude = None; o_no_prelude = false; o_strict_exhaustive = false; o_files = [] }
++let default_options = { o_mode = Run; o_prelude = None; o_no_prelude = false; o_strict_exhaustive = false; o_files = []; o_import_path = [] }
+ 
+ (* ## 16.2 引数解析
+ 
+@@ -134,6 +135,8 @@
+     | "--prelude" :: path :: rest -> go { opts with o_prelude = Some path } rest
+     | "--prelude" :: [] -> Error "--prelude requires a path"
+     | "--strict-exhaustive" :: rest -> go { opts with o_strict_exhaustive = true } rest
++    | "--import-path" :: dir :: rest -> go { opts with o_import_path = opts.o_import_path @ [ dir ] } rest
++    | "--import-path" :: [] -> Error "--import-path requires a directory"
+     | arg :: _ when String.length arg > 0 && arg.[0] = '-' -> Error ("unknown option: " ^ arg)
+     | file :: rest -> go { opts with o_files = file :: opts.o_files } rest
+   in
+@@ -241,7 +244,7 @@
+    字句解析器の `Lexer.Lex_error` はここでは受けず、§16.8 の受け皿がそのまま受ける。
+    種類ごとに区別して報告したくなったときは、この関数で分ければよい。
+    分岐点を 1 か所に集めてあるのはそのためである。 *)
+-let parse_with lexer =
++let parse_unit_with lexer =
+   try Lexer'.parse Parser'.program lexer with
+   | Sedlexing.MalFormed ->
+       (* 位置は失われているが、ファイル名は分かる。複数のファイルを渡したときに
+@@ -252,6 +255,13 @@
+   | Syntax.Syntax_error msg ->
+       raise (Parse_error (Printf.sprintf "%s: 構文エラー: %s" (show_pos lexer.Lexer'.last_sp) msg))
+ 
++(* 試作: import を扱わない経路は、import があれば構文エラーにする *)
++let parse_with lexer =
++  match parse_unit_with lexer with
++  | [], ds -> ds
++  | im :: _, _ ->
++      raise (Parse_error (Printf.sprintf "%s: 構文エラー: import はこの経路では使えません" (show_pos im.Syntax.im_loc.Location.start)))
++
+ (* パースの駆動全体を with_input で包む。
+    ディレクトリを渡したときの EISDIR などの読み取りエラーは、
+    open ではなく読み取りの段で起きるからである *)
+@@ -270,6 +280,91 @@
+   Sedlexing.set_filename lexbuf filename;
+   parse_with (Lexer'.from_sedlex lexbuf)
+ 
++
++(* ---- 試作: import の読み込み ----
++   可視性と名前空間は実装していない。依存の単位を帰りがけ順に 1 回ずつ並べ、
++   import を除いた宣言を連結して、従来の 1 プログラムとして型検査と評価に渡す。
++   測るのは、パスの解決、循環の検出、初期化の順と回数だけである。 *)
++exception Import_error of Location.span * string
++
++let import_error loc msg = raise (Import_error (loc, msg))
++
++(* パスの形の検査。成分の列と、相対(Some 上る段数)か検索パス(None)かを返す *)
++let split_import_path loc src =
++  if src = "" then import_error loc "import のパスが空です";
++  if String.contains src ':' then import_error loc ("import のパスにコロンは書けません(\"kel:\" などの前置は予約されています): " ^ src);
++  if String.contains src '\\' then import_error loc ("import のパスの区切りは / です: " ^ src);
++  if src.[0] = '/' then import_error loc ("import のパスに絶対パスは書けません: " ^ src);
++  if Filename.check_suffix src ".kel" then import_error loc ("import のパスに拡張子 .kel は書きません: " ^ src);
++  let comps = String.split_on_char '/' src in
++  let rec lead ups = function
++    | "." :: rest when ups = 0 -> (Some 0, rest)
++    | ".." :: rest -> lead (ups + 1) rest
++    | rest -> if ups > 0 then (Some ups, rest) else (None, rest)
++  in
++  let rel, rest = lead 0 comps in
++  (match comps with "." :: ".." :: _ -> import_error loc ("import のパスの ./ と ../ は混ぜられません: " ^ src) | _ -> ());
++  if rest = [] then import_error loc ("import のパスにファイル名がありません: " ^ src);
++  List.iter
++    (fun c -> if c = "" || c = "." || c = ".." then import_error loc ("import のパスの成分が不正です: " ^ src))
++    rest;
++  (rel, rest)
++
++let resolve_import ~import_path ~from_dir loc src =
++  let rel, comps = split_import_path loc src in
++  let file = String.concat "/" comps ^ ".kel" in
++  match rel with
++  | Some ups ->
++      let rec up d n = if n = 0 then d else up (Filename.dirname d) (n - 1) in
++      let cand = Filename.concat (up from_dir ups) file in
++      if Sys.file_exists cand then Unix.realpath cand
++      else import_error loc (Printf.sprintf "import 先が見つかりません: %s(%s)" src cand)
++  | None -> (
++      let cands = List.filter Sys.file_exists (List.map (fun d -> Filename.concat d file) import_path) in
++      match List.sort_uniq compare (List.map Unix.realpath cands) with
++      | [ p ] -> p
++      | [] -> import_error loc (Printf.sprintf "import 先が検索パスに見つかりません: %s" src)
++      | ps -> import_error loc (Printf.sprintf "import 先が検索パスに複数あります: %s(%s)" src (String.concat "、" ps)))
++
++let show_rel p = let cwd = Sys.getcwd () ^ "/" in
++  if String.starts_with ~prefix:cwd p then String.sub p (String.length cwd) (String.length p - String.length cwd) else p
++
++(* 起点(CLI のファイルの連結)から深さ優先でたどり、帰りがけ順の単位の列を返す。
++   起点は列の最後に来る *)
++let load_units options =
++  let parse_unit file = with_input (fun () -> parse_unit_with (Lexer'.from_filename file)) in
++  let roots = List.map (fun f -> (f, parse_unit f)) options.o_files in
++  let root_ids = List.map (fun (f, _) -> with_input (fun () -> Unix.realpath f)) roots in
++  let done_ : (string, unit) Hashtbl.t = Hashtbl.create 8 in
++  let order = ref [] in
++  let rec visit stack (path, (imports, decls)) =
++    let from_dir = Filename.dirname path in
++    List.iter
++      (fun (im : Syntax.import_decl) ->
++        let dep = resolve_import ~import_path:options.o_import_path ~from_dir im.Syntax.im_loc im.Syntax.im_source in
++        if List.mem dep stack then (
++          let rec from = function [] -> [] | p :: rest -> if p = dep then p :: rest else from rest in
++          let cyc = from (List.rev stack) @ [ dep ] in
++          import_error im.Syntax.im_loc ("import が循環しています: " ^ String.concat " → " (List.map show_rel cyc)));
++        if List.mem dep root_ids then
++          import_error im.Syntax.im_loc ("コマンド行で連結したファイルは import できません: " ^ im.Syntax.im_source);
++        if not (Hashtbl.mem done_ dep) then (
++          visit (dep :: stack) (dep, parse_unit dep);
++          Hashtbl.replace done_ dep ()))
++      imports;
++    order := (path, decls) :: !order
++  in
++  (* 起点の各ファイルの import を順にたどる。起点の宣言は最後にまとめて置く *)
++  let root_decls = ref [] in
++  List.iter2
++    (fun (f, (imports, decls)) rid ->
++      visit [ rid ] (rid, (imports, []));
++      order := List.tl !order;
++      ignore f;
++      root_decls := !root_decls @ decls)
++    roots root_ids;
++  List.rev !order @ [ ("<root>", !root_decls) ]
++
+ (* ## 16.4 プレリュードの読み込み
+ 
+    第15章(prelude.kel)は、ビルド時に OCaml の文字列定数へ埋め込まれ、`Prelude_embed.source` になる。
+@@ -442,7 +537,11 @@
+     | NotImplemented feat -> report { Elab.e_loc = None; e_word = "未実装"; e_exit = 4; e_msg = feat }
+   in
+   let prelude = flatten (load_prelude options) in
+-  let decls = flatten (List.concat_map parse_file options.o_files) in
++  let units =
++    try load_units options
++    with Import_error (loc, msg) -> report { Elab.e_loc = Some loc; e_word = "import エラー"; e_exit = 1; e_msg = msg }
++  in
++  let decls = flatten (List.concat_map snd units) in
+   let put l =
+     if quiet then (
+       match l with
+--- a/lib/dune	2026-10-02 19:06:02.034889722 +0900
++++ b/lib/dune	2026-10-02 19:08:39.604509188 +0900
+@@ -1,6 +1,6 @@
+ (library
+  (public_name diktor)
+- (libraries sedlex menhirLib)
++ (libraries sedlex menhirLib unix)
+  (modules lexer parser syntax tree aux location dump prims decls unify show
+    exhaust elab value builtin interp prelude_embed driver)
+  (preprocess

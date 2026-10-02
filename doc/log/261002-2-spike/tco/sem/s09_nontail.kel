@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let r = { perform ask() + perform ask() } handle {
+  case ask() => { let u = resume(3); echoln("after resume " + show(u)); u * 2 }
+}
+echoln(show(r))

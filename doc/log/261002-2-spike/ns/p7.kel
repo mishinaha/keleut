@@ -1,0 +1,3 @@
+extern "prim" let __int32_add(x: Int32, y: Int32): Int32
+let q(): Int32 = __int32_add(1, 2)
+echoln(show(q()))

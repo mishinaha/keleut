@@ -1,0 +1,14 @@
+File "test/resolved_names.t", line 1, characters 0-0:
+--- test/resolved_names.t	2026-10-02 19:51:00.679596194 +0900
++++ test/resolved_names.t.corrected	2026-10-02 19:51:00.739221306 +0900
+@@ -27,8 +27,8 @@
+   _ : {}
+   _ : {}
+   $ diktor --prelude pmpre.kel pmuse.kel
+-  2
+-  user
++  実行時エラー: String ではありません: 1
++  [3]
+ 
+ 同名の再束縛では、それより前に定義した関数は前の束縛を、後に定義した関数は新しい束縛を指す:
+ 

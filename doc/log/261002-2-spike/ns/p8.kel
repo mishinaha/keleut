@@ -1,0 +1,6 @@
+let g(): Int32 @ Console = z()
+let z(): Int32 @ Console = 1
+let gz(): Int32 = g()
+let z(): Int32 @ Console = 2
+echoln(show(gz()))
+echoln(show(z()))

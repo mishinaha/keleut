@@ -1,0 +1,10 @@
+let rec loop(n: Int32): Unit = {
+  let m = n - 1
+  (n == 0) match {
+    case true => ()
+    case false if m >= 0 => loop(m)
+    case false => ()
+  }
+}
+loop(N)
+echoln("ok")

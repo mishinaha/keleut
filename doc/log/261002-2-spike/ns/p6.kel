@@ -1,0 +1,6 @@
+let s1(): String = show(1)
+let show(x: Int32): String = "mine"
+let s2(): String = show(1)
+echoln(s1())
+echoln(s2())
+echoln(Show.show(2))

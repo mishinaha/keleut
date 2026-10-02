@@ -1,0 +1,4 @@
+effect Print2 = { p2: (String) => Unit }
+let f(g: () => Unit @ Print2): Unit @ Print2 = g()
+let pg(): Unit @ Print2 = perform p2("a")
+let use(): Unit @ {Print2, Console} = { echo("c"); f(pg) }

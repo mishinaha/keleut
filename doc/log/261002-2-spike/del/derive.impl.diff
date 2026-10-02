@@ -1,0 +1,143 @@
+diff --git a/lib/dump.ml b/lib/dump.ml
+index 142d60f..8c09587 100644
+--- a/lib/dump.ml
++++ b/lib/dump.ml
+@@ -370,8 +370,7 @@ let rec sexp_of_decl (_, d) =
+             L (vb @ [ A ":"; sexp_of_ty v.cv_ty ]))
+           c.cls_vals
+       in
+-      let derives = List.map (fun d -> L [ A "derive"; A d ]) c.cls_derives in
+-      L (base @ vals @ derives)
++      L (base @ vals)
+   | DInstance i ->
+       (* 束縛子があるときだけ tparams のリストを先に出す。既定値を出さないという
+          本章の方針に従う *)
+diff --git a/lib/elab.ml b/lib/elab.ml
+index 808894d..3896c10 100644
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -3716,31 +3716,6 @@ let register_class env (c : T.class_decl') =
+        "クラスパラメータに制約は書けません(スーパークラスは入れない裁定です。両方が要るときは [A: Eq + Ord] のように並べて書いてください)");
+   let pinfo = { vid = new_oid (); vlevel = 0; vkind = param_kind; vcls = [ cls ] } in
+   let pvar = TVar (ref (Generic pinfo)) in
+-  List.iter
+-    (fun d -> if d <> "structural" then type_error ("未知の導出規則: " ^ d ^ "(v0 は derive structural のみ)"))
+-    c.T.cls_derives;
+-  (* derive structural は、利用者が新しく宣言するクラスには書けない。sample.kel:383 は
+-     「利用者には書かせない。コヒーレンスを守るため、組み込みの自動導出だけがインスタンスを与える」
+-     と定める。受理すると、elab は任意のクラスで閉じた行に構造的導出を認めるのに、
+-     実行時の構造的フォールバック(§14.7)は Eq.eq に決め打ちなので、
+-     型検査を通ったプログラムが実行時に落ちる。
+-     クラス表に既にある名前の宣言は、ここでは弾かない。組み込み表が登録したクラスの
+-     再宣言なら、導出の指定が一致するかを add_class_decl が照合し、それ以外の名前なら
+-     add_class_decl が二重宣言として拒否する。この検査はカインドの検査より先に置く。
+-     逆の順だと、新しいクラスに、カインドを直せという直しようのない案内が出る
+-     (直すと、今度はこちらの検査に当たる) *)
+-  (if List.mem "structural" c.T.cls_derives && (not !Decls.in_prelude) && not (Hashtbl.mem Decls.classes cls) then
+-     type_error "derive structural はユーザ宣言のクラスには書けません(構造的な型へのインスタンスは組み込みの自動導出のみが与えます)");
+-  (* derive structural のカインドの検査。sample.kel:397-399 は、derive structural を
+-     書けるのはパラメータのカインドが Type のクラスだけで、カインドで判別できるので宣言の
+-     時点でエラーにする、と定める。構造的導出はレコードやヴァリアントの各フィールドへ制約を
+-     配る規則なので、Type のクラスにしか意味が無い。上の全面的な拒否があるので、この検査が
+-     単独で効くのは、プレリュード(--prelude で差し替えたものを含む)を処理している間と、
+-     クラス表に既にある名前でクラスを宣言したときだけ *)
+-  (if List.mem "structural" c.T.cls_derives && not (same_kind param_kind KStar) then
+-     type_error
+-       ("derive structural は Type のクラスにしか付けられません(" ^ c.T.cls_name ^ " のパラメータは "
+-      ^ show_kind param_kind ^ " です)"));
+   let methods =
+     List.map
+       (fun (v : T.class_val) ->
+@@ -3819,7 +3794,7 @@ let register_class env (c : T.class_decl') =
+         Decls.ci_name = cls;
+         ci_param = pinfo;
+         ci_param_kind = param_kind;
+-        ci_derive_structural = List.mem "structural" c.T.cls_derives;
++        ci_derive_structural = false;
+         ci_builtin = false;
+         ci_methods = methods;
+       };
+diff --git a/lib/lexer.ml b/lib/lexer.ml
+index 9d3db5e..a4da1e1 100644
+--- a/lib/lexer.ml
++++ b/lib/lexer.ml
+@@ -234,7 +234,6 @@ module Make (Data : Syntax.Data) = struct
+     | "and" -> AND
+     | "case" -> CASE
+     | "class" -> CLASS
+-    | "derive" -> DERIVE
+     | "effect" -> EFFECT
+     | "extends" -> EXTENDS
+     | "extern" -> EXTERN
+@@ -834,7 +833,7 @@ module Make (Data : Syntax.Data) = struct
+   (* NL の後で文を始められるトークン。AND / CASE / MATCH / HANDLE / DOT / BACKSLASH /
+      EXTENDS / VERTICAL / 二項演算子は、前の行の続きにするために除いている *)
+   let can_begin_statement = function
+-    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | DERIVE | WITH | PERFORM | RESUME | RUN | FN
++    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | WITH | PERFORM | RESUME | RUN | FN
+     | LOWER_IDENTIFIER _ | UPPER_IDENTIFIER _ | HASH_IDENT _ | NUMBER _ | TEXT _ | BOOL _ | HOLE | EXCLAMATION
+     | LBRACE_BLOCK | LBRACE_RECORD | LBRACE_TYPE | LPAREN ->
+         true
+@@ -940,7 +939,6 @@ module Make (Data : Syntax.Data) = struct
+     | CLASS -> "class"
+     | COLON -> ":"
+     | COMMA -> ","
+-    | DERIVE -> "derive"
+     | DOT -> "."
+     | DOTDOTDOT -> "..."
+     | EFFECT -> "effect"
+diff --git a/lib/parser.mly b/lib/parser.mly
+index 0d6685f..8ce1c39 100644
+--- a/lib/parser.mly
++++ b/lib/parser.mly
+@@ -437,7 +437,7 @@ type nt_rhs_raw = RhsNone | RhsShort of field_decl list | RhsCtors of ctor_decl
+ 
+ %token LBRACE_BLOCK LBRACE_RECORD LBRACE_TYPE RBRACE
+ %token BACKSLASH DOTDOTDOT LESS_EQ GREATER_EQ HOLE
+-%token CLASS INSTANCE DERIVE EXTENDS EXTERN NEWTYPE PERFORM PUB RESUME RUN
++%token CLASS INSTANCE EXTENDS EXTERN NEWTYPE PERFORM PUB RESUME RUN
+ %token <string> HASH_IDENT
+ 
+ (* ## 3.12 開始記号の型と、`Error` という名前の衝突
+@@ -573,8 +573,7 @@ decl_body:
+   | TYPE upper_id typarams_opt kind_annot_opt EQ ty
+       { DType { ta_pub = false; ta_name = $2; ta_params = $3; ta_kind = $4; ta_body = $6 } }
+   | TYPE CLASS upper_id typarams class_body
+-      { let vals, derives = $5 in
+-        DClass { cls_pub = false; cls_name = $3; cls_params = $4; cls_vals = vals; cls_derives = derives } }
++      { DClass { cls_pub = false; cls_name = $3; cls_params = $4; cls_vals = $5 } }
+   | TYPE INSTANCE typarams_opt upper_id LBRACKET ty_args RBRACKET instance_body
+       { DInstance { ins_tparams = $3; ins_class = $4; ins_args = $6; ins_body = $8 } }
+   | NEWTYPE upper_id typarams_opt newtype_rhs
+@@ -705,15 +704,12 @@ instance_body: lbrace items RBRACE { $2 }
+ 
+ class_body: lbrace class_items RBRACE { $2 }
+ class_items:
+-  |                             { ([], []) }
++  |                             { [] }
+   | semi class_items            { $2 }
+-  | class_item                  { (match $1 with Either.Left v -> ([ v ], []) | Either.Right d -> ([], [ d ])) }
+-  | class_item semi class_items
+-      { let vals, derives = $3 in
+-        match $1 with Either.Left v -> (v :: vals, derives) | Either.Right d -> (vals, d :: derives) }
++  | class_item                  { [ $1 ] }
++  | class_item semi class_items { $1 :: $3 }
+ class_item:
+-  | VAL lower_id typarams_opt COLON ty { Either.Left { cv_name = $2; cv_tparams = $3; cv_ty = $5 } }
+-  | DERIVE lower_id                    { Either.Right $2 }
++  | VAL lower_id typarams_opt COLON ty { { cv_name = $2; cv_tparams = $3; cv_ty = $5 } }
+ 
+ newtype_rhs:
+   |                           { RhsNone }
+diff --git a/lib/syntax.ml b/lib/syntax.ml
+index 9469a60..7db5ecb 100644
+--- a/lib/syntax.ml
++++ b/lib/syntax.ml
+@@ -1068,7 +1068,6 @@ module Make (Data : Data) = struct
+     cls_name : string;
+     cls_params : type_param list; (* 1 個であることは elab が検査する *)
+     cls_vals : class_val list;
+-    cls_derives : string list; (* derive structural *)
+   }
+ 
+   type extern_decl' = {

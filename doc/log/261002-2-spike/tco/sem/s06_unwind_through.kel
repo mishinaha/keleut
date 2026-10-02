@@ -1,0 +1,10 @@
+effect Tick = { tick: () => Unit }
+effect Abort = { abort: (Int32) => Unit }
+let r = {
+  { perform tick(); echoln("resumed"); perform abort(7); echoln("unreachable"); 0 } handle {
+    case tick() => { echoln("clause"); resume() }
+    case return(x) => { echoln("return tick"); x }
+    case cancel => echoln("cancel tick")
+  }
+} handle { case abort(n) => n case cancel => echoln("cancel abort") }
+echoln(show(r))

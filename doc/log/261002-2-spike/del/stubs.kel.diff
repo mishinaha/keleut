@@ -1,0 +1,21 @@
+--- /home/sumito3478/repo/keleut/diktor/test/sample/stubs.kel	2026-08-29 08:07:45.120058553 +0900
++++ /tmp/claude-1000/-home-sumito3478-repo-keleut/8fd1dfd3-6874-4981-8f61-9d2478ad4a92/scratchpad/del/stubs.new.kel	2026-10-02 19:10:22.586541516 +0900
+@@ -3,13 +3,13 @@
+ //   diktor --type-check stubs.kel sample.kel
+ // の形で全体回帰を走らせる。Db はエフェクトラベルと Db.query の両方で
+ // 使われるため、effect と module の両方を宣言する。
+-newtype Instant = ???
+-newtype Conn = ???
+-newtype Stmt = ???
+-newtype Chan[A] = ???
++newtype Instant
++newtype Conn
++newtype Stmt
++newtype Chan[A]
+ type User = {id: String, name: String}
+ type Req = {query: String}
+-newtype Resp = ???
++newtype Resp
+ effect Db = { db_op: (String) => Unit }
+ module Db { pub let query(q: String): Resp = ??? }
+ let sqrt(x: Float64): Float64 = ???

@@ -1,0 +1,3 @@
+let early(): Int32 @ Console = late()
+let v: Int32 = early()
+let late(): Int32 @ Console = 3

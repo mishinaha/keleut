@@ -1,0 +1,116 @@
+diff --git a/lib/builtin.ml b/lib/builtin.ml
+index 27d5a0d..91aa15f 100644
+--- a/lib/builtin.ml
++++ b/lib/builtin.ml
+@@ -135,22 +135,6 @@ let as_bool = function VBool b -> b | v -> runtime_error ("Boolean ではあり
+    ハンドル番号が実行の回数に依存する。
+    ハンドル番号は、1 回の実行の中では単調に増え、実行ごとに 0 に戻るのが正しい。 *)
+ 
+-  (* ---- テスト用のメモリ上のダミーのファイルシステム ---- *)
+-
+-let fs : (string, string) Hashtbl.t = Hashtbl.create 8
+-
+-let handles : (int32, string) Hashtbl.t = Hashtbl.create 8
+-
+-let next_handle = ref 0l
+-
+-(* 実行のたびにダミーのファイルシステムを空にする。3 つをまとめて戻すのは、
+-   呼び出し側の戻し忘れを防ぐため。next_handle を戻さないと、再入 API で
+-   ハンドル番号が実行の回数に依存する *)
+-let reset_fs () =
+-  Hashtbl.reset fs;
+-  Hashtbl.reset handles;
+-  next_handle := 0l
+-
+ (* ## 13.4 プリミティブ表
+ 
+    表の作りは単純である。
+@@ -323,27 +307,6 @@ let prims : (string * (t -> t)) list =
+     ("__f64_to_i64", fun v -> VInt64 (Int64.of_float (f64_to_int "__f64_to_i64" (Int64.to_float Int64.min_int) (as_f64 (arg1 v)))));
+     ("__show_int32", fun v -> VText (Int32.to_string (as_i32 (arg1 v))));
+     ("__panic", fun v -> runtime_error ("panic: " ^ as_text (arg1 v)));
+-    ( "__open",
+-      fun v ->
+-        let path = as_text (arg1 v) in
+-        next_handle := Int32.add !next_handle 1l;
+-        Hashtbl.replace handles !next_handle path;
+-        VInt32 !next_handle );
+-    ( "__read",
+-      fun v ->
+-        let h = as_i32 (arg1 v) in
+-        let path = try Hashtbl.find handles h with Not_found -> runtime_error "__read: 無効なハンドルです" in
+-        VText (Option.value ~default:"" (Hashtbl.find_opt fs path)) );
+-    ( "__write",
+-      fun v ->
+-        let h, s = arg2 v in
+-        let path = try Hashtbl.find handles (as_i32 h) with Not_found -> runtime_error "__write: 無効なハンドルです" in
+-        Hashtbl.replace fs path (Option.value ~default:"" (Hashtbl.find_opt fs path) ^ as_text s);
+-        unit );
+-    ( "__close",
+-      fun v ->
+-        Hashtbl.remove handles (as_i32 (arg1 v));
+-        unit );
+   ]
+ 
+ (* extern C の既知名の表。Diktor は本物の C FFI を実装していない。
+diff --git a/lib/elab.ml b/lib/elab.ml
+index d3ff2ea..54a4a29 100644
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -2268,8 +2268,6 @@ and elab_handle env level eff clauses body =
+     match name_of e with
+     | "Console" ->
+         "エフェクト Console はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:464, :536)。出力先を変えたいときは Print をハンドルしてください(プレリュードの with_stdout が Print を Console へ翻訳します)"
+-    | "Fs" ->
+-        "エフェクト Fs はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:465, :536)。ファイル操作を差し替えたいときは File のような自前のエフェクトをハンドルしてください(仕様 sample.kel:602 の with_file が見本)"
+     | n -> "エフェクト " ^ n ^ " はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:726。スケジューラは書けません)"
+   in
+   let target =
+diff --git a/lib/interp.ml b/lib/interp.ml
+index 56dc9cd..e3265d4 100644
+--- a/lib/interp.ml
++++ b/lib/interp.ml
+@@ -1346,7 +1346,6 @@ let run ~sink decls =
+   Hashtbl.reset user_instances;
+   Hashtbl.reset resolution_cache;
+   Hashtbl.reset positions_cache;
+-  Builtin.reset_fs ();
+   let globals = Hashtbl.create 512 in
+   register_builtin_values globals;
+   register_class_methods globals;
+diff --git a/lib/prelude.kel b/lib/prelude.kel
+index d444c79..69cc36c 100644
+--- a/lib/prelude.kel
++++ b/lib/prelude.kel
+@@ -225,7 +225,6 @@ newtype List[A] = Nil | Cons(head: A, tail: List[A])
+ effect Console = { write: (String) => Unit }
+ effect Print   = { print: (String) => Unit }
+ effect Async   = { yield_: () => Unit, sleep: (Int64) => Unit }
+-effect Fs      = {}
+ 
+ // ## 15.5 extern の型と実装
+ //
+@@ -341,10 +340,6 @@ extern "prim" let __i64_to_f64(x: Int64): Float64
+ extern "prim" let __f64_to_i32(x: Float64): Int32
+ extern "prim" let __f64_to_i64(x: Float64): Int64
+ extern "prim" let __panic[A](message: String): A
+-extern "prim" let __open(path: String): Int32 @ Fs
+-extern "prim" let __read(h: Int32): String @ Fs
+-extern "prim" let __write(h: Int32, s: String): Unit @ Fs
+-extern "prim" let __close(h: Int32): Unit @ Fs
+ 
+ // 比較の残り 9 本と `__show_int32`。実装表のすべての名前に型を与える(§15.5)
+ extern "prim" let __int64_le(x: Int64, y: Int64): Boolean
+diff --git a/lib/prims.ml b/lib/prims.ml
+index 6c4b6fe..2008340 100644
+--- a/lib/prims.ml
++++ b/lib/prims.ml
+@@ -241,7 +241,7 @@ let show_bin_op = function
+    `toplevel_effects` を `runtime_effects` との連結で定義しているのは、
+    この包含を構造で保つためである。 *)
+ 
+-let runtime_effects = [ "Console"; "Async"; "Fs" ]
++let runtime_effects = [ "Console"; "Async" ]
+ 
+ (* 上の名簿に Blocking を足したもの。包含 runtime_effects ⊆ toplevel_effects を
+    構造で保つために連結で定義する *)

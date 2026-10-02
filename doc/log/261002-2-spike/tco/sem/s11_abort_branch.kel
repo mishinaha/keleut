@@ -1,0 +1,7 @@
+effect Ask = { ask: (Int32) => Int32 }
+let r = { perform ask(1) + perform ask(0) } handle {
+  case ask(x) => (x == 0) match { case true => { echoln("abort"); -1 } case false => { echoln("go"); resume(x) } }
+  case return(v) => { echoln("ret"); v }
+  case cancel => echoln("cancel self")
+}
+echoln(show(r))

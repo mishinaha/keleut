@@ -1,0 +1,63 @@
+diff --git a/lib/decls.ml b/lib/decls.ml
+index 5c9e818..f437da9 100644
+--- a/lib/decls.ml
++++ b/lib/decls.ml
+@@ -912,15 +912,8 @@ let register_ref_array () =
+    - 本体を `run h { … }` で包むと、`Heap[h]` が行にある文脈で `@ {}` の関数を呼ぶことになり、
+      「ラベル Heap がありません」で落ちる。 *)
+ let register_parallel () =
+-  let arr_oid = intern "Array" in
+   let arrow args ret eff = Type.TArrow (Type.TRecord (closed_args_row args), ret, eff) in
+   let def name ty = builtin_ops := !builtin_ops @ [ (name, ty) ] in
+-  (* par_map : [A, B] (Array[A], (A) => B @ {}) => Array[B] @ ρ *)
+-  (let a = generic () and b = generic () and e = generic ~kind:Type.KRow () in
+-   def "par_map" (arrow [ Type.TCon (arr_oid, [ a ]); arrow [ a ] b Type.TRowEmpty ] (Type.TCon (arr_oid, [ b ])) e));
+-  (* par : [A, B] (() => A @ {}, () => B @ {}) => (A, B) @ ρ *)
+-  (let a = generic () and b = generic () and e = generic ~kind:Type.KRow () in
+-   def "par" (arrow [ arrow [] a Type.TRowEmpty; arrow [] b Type.TRowEmpty ] (Type.TRecord (closed_args_row [ a; b ])) e));
+   (* pinned : [A, E] (() => A @ {Blocking extends E}) => A @ E。
+      Blocking は操作を持たない組み込みのラベル(§6.11)なので、Blocking を行から
+      落とすのは型の上だけの操作である。run が実行時には恒等写像である(§14.4)のと
+diff --git a/lib/interp.ml b/lib/interp.ml
+index d2fa5e5..1aed172 100644
+--- a/lib/interp.ml
++++ b/lib/interp.ml
+@@ -1079,38 +1079,6 @@ let register_builtin_values globals =
+       match Builtin.arg1 args with
+       | VMutArray a -> VArray (Array.copy a)
+       | _ -> runtime_error "MutableArray ではありません");
+-  (* par と par_map。逐次実装が並列実行と観測上同値である根拠は、スケジューラが
+-     無いことではなく、コールバックの行が @ {} に閉じていることにある。コールバックは
+-     Heap も Console も Async も起こせないので、実行順序を観測できない(§6.11b)。
+-     並列に実行した場合と違うのは 1 点だけで、コールバックが例外で脱出したとき、
+-     逐次実装では後続を評価しない(素の OCaml と同じ)。
+-     par_map の返り値は不変の Array[B] で、可変配列とは型が違う。
+-     決定性は型が守り、その根拠は次の 3 つである。可変配列は h を型に持つので、
+-     @ {} のコールバックからは触れない。入れ子の矢印で @ を省略すると @ {} と読むので、
+-     高階の位置でエフェクトを隠す形が書けない(test/annot_rows.t の launder)。
+-     ファイルを扱うプリミティブは @ Fs を持つ(test/fs_effect.t) *)
+-  reg "par_map" (fun args ->
+-      match Builtin.arg_values args with
+-      | [ VArray a; f ] ->
+-          (* 適用の順序は添字 0 から明示的に固定し、Array.map の適用順に任せない。
+-             par の左から右と同じく、逐次実装の意味論は順序も含めて固定する(規約 2) *)
+-          let n = Array.length a in
+-          if n = 0 then VArray [||]
+-          else (
+-            let out = Array.make n unit in
+-            for i = 0 to n - 1 do
+-              out.(i) <- apply f (VRecord [ (Type.l_item, a.(i)) ])
+-            done;
+-            VArray out)
+-      | _ -> runtime_error "par_map の引数が不正です");
+-  reg "par" (fun args ->
+-      match Builtin.arg_values args with
+-      | [ fa; fb ] ->
+-          (* 左から評価する。OCaml の未規定の評価順に任せない(規約 2) *)
+-          let va = apply fa unit in
+-          let vb = apply fb unit in
+-          VRecord [ (Type.l_item, va); (Type.l_item, vb) ]
+-      | _ -> runtime_error "par の引数が不正です");
+   (* pinned は恒等関数として実装する。Diktor が Blocking について守る観測できる
+      契約は、並列度を減らさないことと、キャンセルの配送点にならないことの 2 つである。
+      Diktor はタスクを 1 つしか持たず(Async の操作はすぐに継続を再開する)、配送点は

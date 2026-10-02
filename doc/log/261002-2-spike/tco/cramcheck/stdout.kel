@@ -1,0 +1,3 @@
+let rec loop(n: Int32): Unit @ Print = (n == 0) match { case true => () case false => { perform print(""); loop(n - 1) } }
+with_stdout(fn() => loop(100000))
+echoln("ok")

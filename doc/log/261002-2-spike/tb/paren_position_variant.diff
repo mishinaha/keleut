@@ -1,0 +1,11 @@
+--- diktor/lib/parser.mly	2026-10-02 19:06:28.796753358 +0900
++++ diktor-paren/lib/parser.mly	2026-10-02 19:06:41.765987052 +0900
+@@ -863,6 +863,8 @@
+   | postfix_exp LPAREN call_args RPAREN record_exp { trailing_record $startpos($5) }
+   | postfix_exp DOT lower_id record_exp            { trailing_record $startpos($4) }
+   | lower_id record_exp                            { trailing_record $startpos($2) }
++  | paren_exp trailing_block
++      { trailing_call $sloc $1 [] ($startpos($2), $endpos($1), $2) }
+   | tb_call trailing_block
+       { raise (Syntax_error_at ($startpos($2), "末尾ブロックは 1 つの呼び出しに 1 個までです")) }
+ 

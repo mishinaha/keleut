@@ -1,0 +1,7 @@
+effect Async = { yield_: () => Unit, sleep: (Int64) => Unit }
+let sched[A, E](body: () => A @ {Async extends E}): A @ E =
+  body() handle {
+    case yield_() => resume({})
+    case sleep(ms) => resume({})
+  }
+echoln(show(sched(fn() => { perform yield_(); 1 })))

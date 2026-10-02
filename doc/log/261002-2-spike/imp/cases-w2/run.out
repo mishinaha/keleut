@@ -1,0 +1,84 @@
+$ diktor main.kel
+init leaf
+init left
+init right
+init main
+23
+exit: 0
+$ diktor cyc_a.kel
+! cyc_c.kel:1:1: import エラー: import が循環しています: cyc_a.kel → cyc_b.kel → cyc_c.kel → cyc_a.kel
+exit: 1
+$ diktor nf.kel
+! nf.kel:1:1: import エラー: import 先が見つかりません: ./nothere(nothere.kel)
+exit: 1
+$ diktor sp.kel
+! sp.kel:1:1: import エラー: import 先が検索パスに見つかりません: std/list
+exit: 1
+$ diktor col.kel
+! col.kel:1:1: import エラー: import のパスにコロンは書けません("kel:" などの前置は予約されています): C:/x
+exit: 1
+$ diktor abs.kel
+! abs.kel:1:1: import エラー: import のパスに絶対パスは書けません: /etc/x
+exit: 1
+$ diktor ext.kel
+! ext.kel:1:1: import エラー: import のパスに拡張子 .kel は書きません: ./lib/leaf.kel
+exit: 1
+$ diktor deep.kel
+deep.kel:1:29: パースエラー(付近のトークンを確認してください)
+exit: 2
+$ diktor late.kel
+late.kel:2:1: パースエラー(付近のトークンを確認してください)
+exit: 2
+$ diktor semis.kel
+init leaf
+init left
+exit: 0
+$ diktor semis2.kel
+init leaf
+init left
+11
+exit: 0
+$ diktor nl.kel
+nl.kel:3:3: パースエラー(付近のトークンを確認してください)
+exit: 2
+$ diktor nl2.kel
+init leaf
+exit: 0
+$ diktor empty.kel
+empty.kel:1:27: パースエラー(付近のトークンを確認してください)
+exit: 2
+$ diktor split.kel
+init leaf
+10
+exit: 0
+$ diktor wth.kel
+wth.kel:2:1: パースエラー(付近のトークンを確認してください)
+exit: 2
+$ diktor cyc_self.kel
+! cyc_self.kel:1:1: import エラー: import が循環しています: cyc_self.kel → cyc_self.kel
+exit: 1
+$ diktor kw.kel
+kw.kel:1:5: パースエラー(付近のトークンを確認してください)
+exit: 2
+$ diktor only.kel
+init leaf
+exit: 0
+$ diktor --import-path . --type-check sp.kel
+x : Int32
+exit: 0
+$ diktor --import-path . --import-path alt sp.kel
+! sp.kel:1:1: import エラー: import 先が検索パスに複数あります: std/list(alt/std/list.kel、std/list.kel)
+exit: 1
+$ (cd hl2 && diktor --type-check main.kel; diktor main.kel)
+get : () => Int32
+helper : () => Int32
+helper : () => String
+_ : {}
+11
+exit: 0
+$ diktor ca.kel cb.kel
+! cb.kel:1:1: import エラー: コマンド行で連結したファイルは import できません: ./ca
+exit: 1
+$ diktor ct2a.kel ct2b.kel
+! ct2b.kel:1:1: 型エラー: コンストラクタ Leaf が二重に宣言されています(コンストラクタ名は大域一意)
+exit: 1

@@ -1,0 +1,307 @@
+File "test/blocking_top.t", line 1, characters 0-0:
+diff --git a/_build/default/test/blocking_top.t b/_build/default/test/blocking_top.t.corrected
+index bd12e77..750e922 100644
+--- a/_build/default/test/blocking_top.t
++++ b/_build/default/test/blocking_top.t.corrected
+@@ -32,7 +32,7 @@ pinned で落とすこともできる(仕様 §12)。落とさずに純粋な行
+   > KEL
+   $ diktor --type-check bann.kel
+   sqrt : (Float64) => Float64 @ {Blocking extends R1}
+-  ! bann.kel:2:53: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Blocking を足せません(注釈側に Blocking を(必要なら引数つきで)書き足してください)
++  ! bann.kel:2:53: 型エラー: ラベル Blocking がありません(行は閉じています)
+   [1]
+ 
+ Blocking は操作を持たないので handle の対象にできない(禁止の名指しでは
+File "test/spec_gaps.t", line 1, characters 0-0:
+diff --git a/_build/default/test/spec_gaps.t b/_build/default/test/spec_gaps.t.corrected
+index 963c98f..8481c58 100644
+--- a/_build/default/test/spec_gaps.t
++++ b/_build/default/test/spec_gaps.t.corrected
+@@ -45,8 +45,7 @@ module の入れ子(:860)、Ord[Float64] / Eq[Float64] と NaN(:861-866)は cram
+   > KEL
+   $ diktor --type-check sumclosed.kel
+   sum2 : (Array[Int32]) => Int32
+-  ! sumclosed.kel:2:70: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+-  [1]
++  effectful : (Array[Int32]) => Int32 @ {Console extends R1}
+ 
+ 非有限値(NaN、無限大)のリテラル(§14:867、§2)。現状は無く、文字列化の字面
+ nan / inf は読み戻せない(表示側は test/numeric.t の infnan):
+File "test/fs_effect.t", line 1, characters 0-0:
+diff --git a/_build/default/test/fs_effect.t b/_build/default/test/fs_effect.t.corrected
+index c095fed..92429b0 100644
+--- a/_build/default/test/fs_effect.t
++++ b/_build/default/test/fs_effect.t.corrected
+@@ -38,7 +38,7 @@ pub の省略 @(純粋)も同じ:
+ 
+   $ printf 'pub let f(): Int32 = __open("x")\n' > pub.kel
+   $ diktor --type-check pub.kel
+-  ! pub.kel:1:22: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Fs を足せません(注釈側に Fs を(必要なら引数つきで)書き足してください))
++  ! pub.kel:1:22: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+ V15 の穴が閉じた — par / par_map の @ {} コールバックから触れない:
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub.t b/_build/default/test/pub.t.corrected
+index 73a29de..ce06880 100644
+--- a/_build/default/test/pub.t
++++ b/_build/default/test/pub.t.corrected
+@@ -25,14 +25,14 @@ pub の完全注釈検査と「@ 省略 = 純粋」(M16 / H6、D44)。
+   > pub let f(x: Int32): Int32 = { perform log("no"); x }
+   > KEL
+   $ diktor --type-check pub3.kel
+-  ! pub3.kel:2:32: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください)
++  ! pub3.kel:2:32: 型エラー: エフェクト Logger をここでは実行できません(ラベル Logger がありません(行は閉じています))
+   [1]
+   $ cat > pub9.kel <<'KEL'
+   > effect Logger = { log: (String) => Unit }
+   > pub let rec f(n: Int32): Int32 = { perform log("x"); n }
+   > KEL
+   $ diktor --type-check pub9.kel
+-  ! pub9.kel:2:36: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください)
++  ! pub9.kel:2:36: 型エラー: エフェクト Logger をここでは実行できません(ラベル Logger がありません(行は閉じています))
+   [1]
+ 
+ @ 省略の pub はどんな行の文脈からでも呼べる(公開スキーマは Generic。
+@@ -106,15 +106,14 @@ pub let rec の相互再帰(@ 省略)は群で 1 本の Rigid 行を共有して
+ 
+   $ printf 'pub let f(x: Int32): Int32 = { echoln("hi"); x }\n' > pub14.kel
+   $ diktor --type-check pub14.kel
+-  ! pub14.kel:1:32: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側に Console を(必要なら引数つきで)書き足してください))
++  ! pub14.kel:1:32: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+   $ cat > pub15.kel <<'KEL'
+   > let (helper, k) = (fn(x: Int32) => x, 0)
+   > pub let go(n: Int32): Int32 = helper(n)
+   > KEL
+   $ diktor --type-check pub15.kel
+-  ! pub15.kel:2:31: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています)
+-  [1]
++  go : (Int32) => Int32
+ 
+ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省略の意味は @ {} に
+ 決まっているが、公開 API では意図と書き忘れを読み分けられなければならない):
+File "test/region.t", line 1, characters 0-0:
+diff --git a/_build/default/test/region.t b/_build/default/test/region.t.corrected
+index c6956f0..75973b4 100644
+--- a/_build/default/test/region.t
++++ b/_build/default/test/region.t.corrected
+@@ -56,11 +56,11 @@ par_map の @ {} コールバックで観測する(署名から Heap を外し
+ 
+   $ printf 'pub let mlen[h](a: MutableArray[h, Int32]): Int32 = MutableArray.length(a)\n' > publen.kel
+   $ diktor --type-check publen.kel
+-  ! publen.kel:1:53: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Heap を足せません(注釈側に Heap を(必要なら引数つきで)書き足してください))
++  ! publen.kel:1:53: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+   $ printf 'pub let mget[h](a: MutableArray[h, Int32]): Int32 = MutableArray.get(a, 0)\n' > pubget.kel
+   $ diktor --type-check pubget.kel
+-  ! pubget.kel:1:53: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Heap を足せません(注釈側に Heap を(必要なら引数つきで)書き足してください))
++  ! pubget.kel:1:53: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+   $ cat > parget.kel <<'KEL'
+   > let bad[h](a: MutableArray[h, Int32], xs: Array[Int32]): Array[Int32] =
+@@ -220,8 +220,7 @@ pub の「@ を省略した宣言は純粋」も同じ経路で守られる(M20
+   > KEL
+   $ diktor --type-check eachclosed.kel
+   g : (Int32) => {}
+-  ! eachclosed.kel:2:56: 型エラー: ラベル Heap がありません(行は閉じています)
+-  [1]
++  use : (Array[Int32]) => {}
+ 
+ newtype のフィールドを経由して死んだリージョンの可変配列を書く形も、入れ子の
+ 矢印の省略 @ が @ {} になった(M26 / D75)ので閉じた — 分離(M24)だけでは
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index e73699c..14a9e75 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -407,8 +407,7 @@ H4 / D23-a — @ {} は正確に空で、エフェクトのある文脈から呼
+   > KEL
+   $ diktor --type-check noSub.kel
+   pure_f : (Int32) => Int32
+-  ! noSub.kel:3:63: 型エラー: ラベル Logger がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+-  [1]
++  impure : (Int32) => Int32 @ {Logger extends R1}
+ 
+ 行の並びは操作名の解決にだけ使い、型の等価性では順序を問わない(§9 / §3 の
+ Scoped Labels と同じ)。開いた行でも閉じた行でも順序違いは単一化する:
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 4a5c8d3..330e374 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -141,7 +141,7 @@ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証。値制
+   $ diktor --type-check --no-prelude inam.kel
+   read_ : [A: Show] (String) => A
+   idf : (A) => A
+-  ! inam.kel:4:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
++  ! inam.kel:4:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド cm の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+   [1]
+ 
+ 制約つきエイリアスは宣言スキーマの位置(newtype フィールド・クラス
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 9d03fee..4ccc709 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -74,8 +74,7 @@
+   > let call(f: () => Unit @ A): Unit @ A = f()
+   > KEL
+   $ diktor --type-check --no-prelude nested3.kel
+-  ! nested3.kel:3:41: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+-  [1]
++  call : (() => {} @ {A}) => {} @ {A extends R1}
+ 
+ 型エイリアスが展開する矢印も入れ子(§9。§11.5 の規則 4):
+ 
+@@ -162,8 +161,7 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > KEL
+   $ diktor --type-check val1.kel
+   k : (Int32) => Int32
+-  ! val1.kel:2:30: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+-  [1]
++  use : () => Int32 @ {Console extends R1}
+ 
+ 注釈の頭が型エイリアスの値束縛は開き直さない — 展開先の矢印は入れ子(D75)なので
+ 省略は @ {}、書かれた @ {} は両方向。パス 1c の署名(§11.37)も同じ閉じた行を
+@@ -251,7 +249,7 @@ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。
+   > let use(b: Box): Int32 = size(b)
+   > KEL
+   $ diktor --type-check --no-prelude clsalias3ok.kel
+-  use : (Box) => Int32 @ {Print}
++  use : (Box) => Int32 @ {Print extends R1}
+ 
+ let rec も同じ(群のうち @ を書いた束縛と pub は対象外):
+ 
+@@ -313,8 +311,7 @@ let rec も同じ(群のうち @ を書いた束縛と pub は対象外):
+   > KEL
+   $ diktor --type-check valclosed.kel
+   g : (Int32) => Int32 @ {Console}
+-  ! valclosed.kel:3:5: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+-  [1]
++  k : (Int32) => Int32 @ {Console extends R1}
+   $ cat > valclosedfn.kel <<'KEL'
+   > type F = (Int32) => Int32 @ Console
+   > let g: F = fn(x) => { echo("v"); x }
+@@ -322,8 +319,7 @@ let rec も同じ(群のうち @ を書いた束縛と pub は対象外):
+   > KEL
+   $ diktor --type-check valclosedfn.kel
+   g : (Int32) => Int32 @ {Console}
+-  ! valclosedfn.kel:3:37: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+-  [1]
++  kf : (Int32) => Int32 @ {Console extends R1}
+   $ cat > valclosedok.kel <<'KEL'
+   > type F = (Int32) => Int32 @ Console
+   > let g: F = fn(x) => { echo("v"); x }
+@@ -368,7 +364,7 @@ pub の規則を名指しして落ちる:
+   > }
+   > KEL
+   $ diktor --type-check pubvalerr.kel
+-  ! pubvalerr.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側に Console を(必要なら引数つきで)書き足してください))
++  ! pubvalerr.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+   [1]
+ 
+ 初期化式そのものは束縛の外側の行で評価されるので、そこに書いたエフェクトは
+@@ -485,8 +481,8 @@ let rec の値束縛も頭を最外として読む。pub の省略 @ の枝だ
+   > and b(n: Int32): Int32 @ {Console, Print} = a(n)
+   > KEL
+   $ diktor --type-check recandeff.kel
+-  a : (Int32) => Int32 @ {Console extends R1}
+-  b : (Int32) => Int32 @ {Console, Print extends R1}
++  ! recandeff.kel:2:45: 型エラー: ラベル Print がありません(行は閉じています)
++  [1]
+ 
+ 群の 2 本以上が最外の矢印に @ をリテラルで書き、先行する束縛が後続を呼ぶと通らない。
+ 診断が名指しする 2 つの行(ς1 と ς2)が別々の剛定数だからで、値束縛でも関数束縛でも
+@@ -497,15 +493,15 @@ let rec の値束縛も頭を最外として読む。pub の省略 @ の枝だ
+   > and g: (Int32) => Int32 @ Console = fn(x) => f(x)
+   > KEL
+   $ diktor --type-check recandboth.kel
+-  ! recandboth.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+-  [1]
++  f : (Int32) => Int32 @ {Console extends R1}
++  g : (Int32) => Int32 @ {Console extends R1}
+   $ cat > recandbothfn.kel <<'KEL'
+   > let rec a(n: Int32): Int32 @ Console = b(n)
+   > and b(n: Int32): Int32 @ Console = a(n)
+   > KEL
+   $ diktor --type-check recandbothfn.kel
+-  ! recandbothfn.kel:2:36: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+-  [1]
++  a : (Int32) => Int32 @ {Console extends R1}
++  b : (Int32) => Int32 @ {Console extends R1}
+ 
+ 決めるのは呼ぶ向きで、互いを呼び合うことではない。先行が後続を呼ぶだけの形も落ち、
+ 同じ 2 本で後続が先行を呼ぶだけの形は通る(M33 の検証):
+@@ -515,15 +511,15 @@ let rec の値束縛も頭を最外として読む。pub の省略 @ の枝だ
+   > and b: (Int32) => Int32 @ Console = fn(n) => { echo("b"); n }
+   > KEL
+   $ diktor --type-check recandfwd.kel
+-  ! recandfwd.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+-  [1]
++  a : (Int32) => Int32 @ {Console extends R1}
++  b : (Int32) => Int32 @ {Console extends R1}
+   $ cat > recandfwdfn.kel <<'KEL'
+   > let rec a(n: Int32): Int32 @ Console = b(n)
+   > and b(n: Int32): Int32 @ Console = { echo("b"); n }
+   > KEL
+   $ diktor --type-check recandfwdfn.kel
+-  ! recandfwdfn.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+-  [1]
++  a : (Int32) => Int32 @ {Console extends R1}
++  b : (Int32) => Int32 @ {Console extends R1}
+   $ cat > recandback.kel <<'KEL'
+   > let rec a: (Int32) => Int32 @ Console = fn(n) => { echo("a"); n }
+   > and b: (Int32) => Int32 @ Console = fn(n) => a(n)
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index b741c99..3e9ae52 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -56,7 +56,7 @@ main の行に Ask を足せないという型エラーになる:
+   > main()
+   > EOF
+   $ diktor vrgen.kel
+-  ! vrgen.kel:6:12: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Ask を足せません(注釈側に Ask を(必要なら引数つきで)書き足してください)
++  ! vrgen.kel:6:12: 型エラー: ラベル Ask がありません(行は閉じています)
+   [1]
+ 
+ 同じプログラムで g の本体だけを無名関数(値)に替えると、2 つの文脈から呼べる:
+@@ -114,7 +114,7 @@ run の外へ返せない(LangSpec §14.1):
+   > echoln(show(escaped()(1)))
+   > EOF
+   $ diktor vrleak.kel
+-  ! vrleak.kel:3:7: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
++  ! vrleak.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)
+   [1]
+ 
+ 同じ形で Ask を起こす閉包を Ref に入れ、Ask の無い行の関数 bad から呼ぶプログラムも、
+@@ -131,7 +131,7 @@ g の束縛で型エラーになる:
+   > echoln(show(bad()))
+   > EOF
+   $ diktor vrleak2.kel
+-  ! vrleak2.kel:4:7: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
++  ! vrleak2.kel:5:34: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+   [1]
+ 
+ Ref を使わない形でも、同じ束縛は型エラーになる。f の注釈の無い引数 z を、本体が値でない
+@@ -148,7 +148,7 @@ Ref を使わない形でも、同じ束縛は型エラーになる。f の注
+   > main()
+   > EOF
+   $ diktor vrleak3.kel
+-  ! vrleak3.kel:4:7: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
++  ! vrleak3.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+   [1]
+ 
+ 先に f の本体で呼んだ単相の束縛 h を、本体が値でない束縛 g の注釈 @ {Console} に通す形も、
+@@ -165,8 +165,8 @@ Ref を使わない形でも、同じ束縛は型エラーになる。f の注
+   > f()
+   > EOF
+   $ diktor vrleak4.kel
+-  ! vrleak4.kel:5:7: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+-  [1]
++  x
++  x
+ 
+ 本体が値でない値束縛の注釈の頭の矢印に閉じた行を書いた g は、同じ行の文脈から 2 回呼べる:
+ 

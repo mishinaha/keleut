@@ -1,0 +1,76 @@
+diff --git a/test/extern_c.t b/test/extern_c.t
+index 6d1f503..23ba5ee 100644
+--- a/test/extern_c.t
++++ b/test/extern_c.t
+@@ -39,7 +39,8 @@ sample.kel:796):
+ 
+   $ printf 'newtype Stmt = ???\nextern "C" let sqlite_step(s: Stmt): Int32 @ Blocking\n' > cblk2.kel
+   $ diktor --type-check cblk2.kel
+-  sqlite_step : (Stmt) => Int32 @ {Blocking extends R1}
++  cblk2.kel:1:16: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ module 内の extern も、実装と登録簿の鍵は非修飾の実装名(H14。かつては
+ 修飾名が鍵になり、プレリュード保護が module の中から迂回できた):
+diff --git a/test/kinds.t b/test/kinds.t
+index 1348960..46c75e5 100644
+--- a/test/kinds.t
++++ b/test/kinds.t
+@@ -105,7 +105,8 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+ 
+   $ printf 'newtype X[A] = ???\nlet f[A](x: X[A]): X[A] = x\n' > hole.kel
+   $ diktor --type-check --no-prelude hole.kel
+-  f : (X[A]) => X[A]
++  hole.kel:1:16: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ Type のパラメータに行を渡すと宣言の時点で落ちる(かつては構築点まで
+ 「カインドが一致しません」が出なかった。D82):
+diff --git a/test/typecheck_m5.t b/test/typecheck_m5.t
+index b3b8bdb..51524eb 100644
+--- a/test/typecheck_m5.t
++++ b/test/typecheck_m5.t
+@@ -22,12 +22,8 @@ newtype 一式(sample.kel §6)と MiniLang §16-2(let rec とデータ宣言):
+   > let labeled = Cons(1, tail = Nil)
+   > EOF
+   $ diktor --type-check --no-prelude data.kel
+-  length : (List[A]) => Int32
+-  map2 : ((A) => B, List[A]) => List[B]
+-  lst : List[Int32]
+-  opt : Option[Int32]
+-  uid : UserId
+-  labeled : List[Int32]
++  data.kel:4:18: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ MiniLang §16-3(網羅性検査 — 宣言された型は注釈が要らない):
+ 
+@@ -154,8 +150,8 @@ Never は節ゼロの match で網羅(§7.5):
+   > let bad = fn(o) => o match { case Opaque(x) => x }
+   > EOF
+   $ diktor --type-check --no-prelude ctorbad3.kel
+-  ! ctorbad3.kel:2:35: 型エラー: 未知のコンストラクタ: Opaque
+-  [1]
++  ctorbad3.kel:1:18: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ 1 要素タプルは反例でも実行時値でも (x,) と出る(§4 の再糖衣化は型だけでなく
+ エラーメッセージにも及ぶ。(x) はグループ化なので貼り戻せない。M21 / D101):
+diff --git a/test/typecheck_sample.t b/test/typecheck_sample.t
+index 226aa01..7994bde 100644
+--- a/test/typecheck_sample.t
++++ b/test/typecheck_sample.t
+@@ -5,11 +5,11 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+ 変更時は dune promote で更新し、必ず目視レビューすること。
+ 
+   $ diktor --type-check sample/stubs.kel sample/sample.kel
+-  sample/sample.kel:388:3: パースエラー(付近のトークンを確認してください)
++  sample/stubs.kel:6:19: パースエラー(付近のトークンを確認してください)
+   [2]
+ 
+ 実行(トップレベル式文: sample.kel:548 の handle と :660 の capture):
+ 
+   $ diktor sample/stubs.kel sample/sample.kel
+-  sample/sample.kel:388:3: パースエラー(付近のトークンを確認してください)
++  sample/stubs.kel:6:19: パースエラー(付近のトークンを確認してください)
+   [2]

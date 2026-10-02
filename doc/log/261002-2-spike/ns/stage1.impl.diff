@@ -1,0 +1,404 @@
+diff -ruN '--exclude=_build' '--exclude=.git' head/lib/decls.ml diktor/lib/decls.ml
+--- head/lib/decls.ml	2026-09-26 13:26:19.602233059 +0900
++++ diktor/lib/decls.ml	2026-10-02 19:37:11.056095246 +0900
+@@ -1388,14 +1388,19 @@
+    表がモジュールの状態なので、この副作用を伴う初期化が要る。
+    第16章(driver.ml)が何かをする前に、組み込みはすでに表に載っている。 *)
+ 
+-let builtin_values () =
++(* 名前、型、実体の 3 つ組。クラスメソッドは非修飾名も修飾名も同じ実体 GMethod Cls.m を指す *)
++let builtin_value_refs () =
+   Hashtbl.fold
+     (fun _ ci acc ->
+       List.fold_left
+-        (fun acc (m, ty) -> (m, ty) :: (Type.name_of ci.ci_name ^ "." ^ m, ty) :: acc)
++        (fun acc (m, ty) ->
++          let q = Type.name_of ci.ci_name ^ "." ^ m in
++          (m, ty, Tree.GMethod q) :: (q, ty, Tree.GMethod q) :: acc)
+         acc ci.ci_methods)
+     classes []
+-  @ !builtin_ops
++  @ List.map (fun (n, ty) -> (n, ty, Tree.GBuiltin n)) !builtin_ops
++
++let builtin_values () = List.map (fun (n, ty, _) -> (n, ty)) (builtin_value_refs ())
+ 
+ (* 組み込みが値環境に置く名前かどうか(修飾名 Ref.new / MutableArray.set と、
+    クラスメソッドの Show.show / show の両方を含む)。
+diff -ruN '--exclude=_build' '--exclude=.git' head/lib/elab.ml diktor/lib/elab.ml
+--- head/lib/elab.ml	2026-09-26 13:27:49.878110920 +0900
++++ diktor/lib/elab.ml	2026-10-02 19:38:18.262738449 +0900
+@@ -113,8 +113,15 @@
+   values : ty SMap.t;
+   types : ty SMap.t; (* 型パラメータの束縛(リージョン変数 h を含む) *)
+   resume_ty : (ty * ty) option; (* (操作の返り値型, handle 式全体の型)。操作節の中でだけ Some *)
++  tops : Tree.gref SMap.t; (* values のうちトップレベルの実体を指す名前 → 実体。局所束縛は取り除く *)
+ }
+ 
++(* 局所束縛を足す。同名のトップレベルの実体は覆われる *)
++let add_local env x t = { env with values = SMap.add x t env.values; tops = SMap.remove x env.tops }
++
++(* トップレベルの実体を足す *)
++let add_top env x t g = { env with values = SMap.add x t env.values; tops = SMap.add x g env.tops }
++
+ let warnings : string list ref = ref []
+ 
+ let warnings_count = ref 0
+@@ -1234,6 +1241,15 @@
+ 
+    `elab_pat` は、式のノードと同じく、すべてのパターンのノードに期待型を `set_ty` で書き込む。 *)
+ 
++let rec pat_var_names ((_, p) : T.pat) =
++  match p with
++  | T.PVar x -> [ x ]
++  | T.PAnnot (q, _) -> pat_var_names q
++  | T.PRecord (fs, tail) -> List.concat_map (fun (_, q) -> pat_var_names q) fs @ Option.fold ~none:[] ~some:pat_var_names tail
++  | T.PCtor (_, args) -> List.concat_map (fun a -> pat_var_names a.T.cap_pat) args
++  | T.PVariant (_, q) -> pat_var_names q
++  | T.PWildcard | T.PBool _ | T.PNumber _ | T.PText _ -> []
++
+ let rec elab_pat env level seen expected ((_, p) as node : T.pat) : env =
+   Tree.set_ty node expected;
+   at_node node @@ fun () ->
+@@ -1243,7 +1259,7 @@
+       if List.mem x !seen then type_error ("同じパターン内で変数 " ^ x ^ " が重複しています")
+       else (
+         seen := x :: !seen;
+-        { env with values = SMap.add x expected env.values })
++        add_local env x expected)
+   | T.PAnnot (sub, te) ->
+       Unify.unify expected (elab_value_type env level "型注釈" te);
+       elab_pat env level seen expected sub
+@@ -1435,6 +1451,7 @@
+              綴りによる免除は要らない。綴りで免除すると、同名のクラスを 1 行宣言するだけで、
+              任意の非 pub の値を外から呼べてしまう *)
+           Decls.check_value_visible (intern name);
++          (match SMap.find_opt name env.tops with Some g -> Tree.set_resolved node (Tree.RVar g) | None -> ());
+           Unify.instantiate level sch
+       | None -> (
+           (* 環境に無かったときだけ、module スコープの値の同義語を引く。フォールバック専用
+@@ -1447,7 +1464,12 @@
+             | None -> None
+           in
+           match Option.bind scoped (fun q -> SMap.find_opt (name_of q) env.values) with
+-          | Some sch -> Unify.instantiate level sch
++          | Some sch ->
++              (* 同義語の先は module の中のトップレベルの値で、局所束縛にはならない *)
++              (match Option.bind scoped (fun q -> SMap.find_opt (name_of q) env.tops) with
++              | Some g -> Tree.set_resolved node (Tree.RVar g)
++              | None -> bug ("同義語の先が実体を持ちません: " ^ name));
++              Unify.instantiate level sch
+           | None -> (
+               match li with
+               | LongId comps when comps <> [] && String.length (List.nth comps (List.length comps - 1)) > 0 ->
+@@ -2935,7 +2957,7 @@
+         Unify.generalize level fn_ty)
+       else Unify.lower_levels ~since:mark level fn_ty;
+       release_rigids rigids;
+-      { env with values = SMap.add x fn_ty env.values }
++      add_local env x fn_ty
+   | T.PWildcard ->
+       List.iter warn (Exhaust.drain ());
+       if gen then (
+@@ -3040,7 +3062,7 @@
+    recandfwd / recandfwdfn が先行が後続を呼ぶだけの形を、
+    recandeff / recandback が通る向きを確かめる。 *)
+ 
+-and elab_rec_bindings env level eff bs : env =
++and elab_rec_bindings ?(top = false) env level eff bs : env =
+   (* 事前に割り当てた単相の変数で束縛 → 本体を推論 → unify → 一般化。多相再帰はできない *)
+   let lvl = level + 1 in
+   let names =
+@@ -3056,7 +3078,13 @@
+         | _ -> type_error "let rec の束縛はパターンにできません")
+       bs
+   in
+-  let env_rec = { env with values = List.fold_left (fun m (x, t) -> SMap.add x t m) env.values names } in
++  (* トップレベルの let rec の自己参照と相互参照は、トップレベルの実体を指す *)
++  let bind_names env names =
++    List.fold_left2
++      (fun env bn (x, t) -> if top then add_top env x t (Tree.GDecl (Tree.oid_of bn, x)) else add_local env x t)
++      env bs names
++  in
++  let env_rec = bind_names env names in
+   (* pub の @ 省略の Rigid の行は、群で 1 本を共有する。束縛ごとに別の Rigid を
+      作ると、相互再帰の呼び出しが 2 本の Rigid を単一化しようとして
+      「スコープ付きの型が一致しません: R1 と ς1」で落ちる。pub を外せば通る、
+@@ -3174,7 +3202,7 @@
+      到達できればよい *)
+   Unify.check_ambiguity ~all:false ~level (List.map snd names);
+   List.iter (fun (_, t) -> Unify.generalize level t) names;
+-  { env with values = List.fold_left (fun m (x, t) -> SMap.add x t m) env.values names }
++  bind_names env names
+ 
+ (* ## 11.30 トップレベルで許されるエフェクト
+ 
+@@ -3234,10 +3262,12 @@
+     Prims.toplevel_effects TRowEmpty
+ 
+ let initial_env () =
++  let refs = Decls.builtin_value_refs () in
+   {
+-    values = List.fold_left (fun m (n, t) -> SMap.add n t m) SMap.empty (Decls.builtin_values ());
++    values = List.fold_left (fun m (n, t, _) -> SMap.add n t m) SMap.empty refs;
+     types = SMap.empty;
+     resume_ty = None;
++    tops = List.fold_left (fun m (n, _, g) -> SMap.add n g m) SMap.empty refs;
+   }
+ 
+ (* ## 11.31 newtype の登録
+@@ -4521,8 +4551,17 @@
+             env
+         | T.DClass c ->
+             let methods = register_class env c in
++            let tops =
++              List.fold_left
++                (fun m (mn, _) ->
++                  let q = c.T.cls_name ^ "." ^ mn in
++                  let m = SMap.add q (Tree.GMethod q) m in
++                  if SMap.mem mn env.values then m else SMap.add mn (Tree.GMethod q) m)
++                env.tops methods
++            in
+             {
+               env with
++              tops;
+               values =
+                 (* 非修飾名は先勝ち(既存の束縛は上書きしない)。実行時は、プレリュードの
+                    let / extern の再束縛が register_class_methods のラッパを版複製で覆う
+@@ -4614,20 +4653,20 @@
+         | T.DInstance i ->
+             register_instance i;
+             env
+-        | T.DLet (_, b) -> (
++        | T.DLet ((_, b) as bn) -> (
+             (* 先勝ち: 既に環境にある名前(先行する 1c の署名、クラスメソッド、プレリュードの
+                束縛)は上書きしない。実行時の版複製(§14.13)は、再束縛より前に作られた閉包に
+                古い実体を見せるので、前方参照の勝者も、最初にその名前を持った側になる。
+                後勝ちにすると、前方参照する関数だけ型検査と実行が別の実体を選び、同名の
+                let 2 つと前方参照を含むプログラムが、黙って別の型の値を返す *)
+             match (binding_name b, signature_of_binding env b) with
+-            | Some x, Some ty when not (SMap.mem x env.values) -> { env with values = SMap.add x ty env.values }
++            | Some x, Some ty when not (SMap.mem x env.values) -> add_top env x ty (Tree.GDecl (Tree.oid_of bn, x))
+             | _ -> env)
+         | T.DLetRec bs ->
+             List.fold_left
+-              (fun env ((_, b) : T.let_binding) ->
++              (fun env ((_, b) as bn : T.let_binding) ->
+                 match (binding_name b, signature_of_binding env b) with
+-                | Some x, Some ty when not (SMap.mem x env.values) -> { env with values = SMap.add x ty env.values }
++                | Some x, Some ty when not (SMap.mem x env.values) -> add_top env x ty (Tree.GDecl (Tree.oid_of bn, x))
+                 | _ -> env)
+               env bs
+         | _ -> env)
+@@ -4688,6 +4727,12 @@
+           env
+       | T.DLet b ->
+           let env' = elab_binding env 0 eff0 b in
++          (* トップレベルの束縛子は、束縛ノードと名前の組を実体にする *)
++          let env' =
++            List.fold_left
++              (fun e x -> { e with tops = SMap.add x (Tree.GDecl (Tree.oid_of b, x)) e.tops })
++              env' (pat_var_names (snd b).T.lb_name)
++          in
+           (* 宣言の終わりの曖昧性検査(all=true。宣言の型から到達できない制約は、誰にも
+              決められない)。既定化の直前に行う。逆の順だと、述語つきの変数が先に消えて
+              免除の判定が要らなくなる代わりに、Eq / Show だけが乗った変数の検出が遅れる *)
+@@ -4696,7 +4741,7 @@
+           show_binding env' b;
+           env'
+       | T.DLetRec bs ->
+-          let env' = elab_rec_bindings env 0 eff0 bs in
++          let env' = elab_rec_bindings ~top:true env 0 eff0 bs in
+           Unify.check_ambiguity ~all:true ~level:0 (List.map Tree.get_ty bs);
+           Unify.default_numerics ();
+           List.iter (show_binding env') bs;
+@@ -4745,7 +4790,7 @@
+           Unify.generalize 0 ty;
+           release_rigids (rigids @ eff_rigids);
+           emit (Binding (ex.T.ex_name ^ " : " ^ Show.show ty));
+-          { env with values = SMap.add ex.T.ex_name ty env.values }
++          add_top env ex.T.ex_name ty (Tree.GDecl (Tree.oid_of node, ex.T.ex_name))
+       | T.DNewtype _ -> env (* パス 1 で登録済み。フィールド型の検査も登録時に済んでいる *)
+       | T.DEffect _ -> env (* パス 1 で登録済み *)
+       | T.DClass _ -> env (* パス 1 で登録済み *)
+diff -ruN '--exclude=_build' '--exclude=.git' head/lib/interp.ml diktor/lib/interp.ml
+--- head/lib/interp.ml	2026-09-26 13:27:49.878957047 +0900
++++ diktor/lib/interp.ml	2026-10-02 19:37:48.361325587 +0900
+@@ -293,24 +293,14 @@
+       match SMap.find_opt name env.locals with
+       | Some v -> v
+       | None -> (
+-          match Hashtbl.find_opt env.globals name with
+-          | Some v -> v
+-          | None -> (
+-              (* module スコープの値同義語。elab と同じく、見つからなかったときだけの
+-                 フォールバックで、引けるのはこの閉包が属する module の同義語だけ *)
+-              match
+-                Option.bind
+-                  (match env.mod_scope with
+-                  | Some m -> Hashtbl.find_opt Decls.module_val_synonyms (m, Type.intern name)
+-                  | None -> None)
+-                  (fun q -> Hashtbl.find_opt env.globals (Type.name_of q))
+-              with
++          match Tree.get_resolved node with
++          | Some (Tree.RVar g) -> (
++              match Hashtbl.find_opt env.globals g with
+               | Some v -> v
+-              | None -> (
+-                  (* 裸の引数なしコンストラクタ *)
+-                  match Tree.get_resolved node with
+-                  | Some (Tree.RCtor (d, c, _)) -> VData { d_type = d; d_ctor = c; d_fields = [||] }
+-                  | _ -> runtime_error ("未束縛の変数: " ^ name)))))
++              | None -> runtime_error ("未束縛の変数: " ^ name))
++          (* 裸の引数なしコンストラクタ *)
++          | Some (Tree.RCtor (d, c, _)) -> VData { d_type = d; d_ctor = c; d_fields = [||] }
++          | _ -> bug ("Ident が解決されていません: " ^ name)))
+   | T.Lambda { l_params; l_body } -> VClosure { c_env = env; c_params = l_params; c_body = l_body }
+   | T.Apply (f, arg) ->
+       (* 左から右に評価する。OCaml の未規定の評価順に任せない(規約 2) *)
+@@ -1024,7 +1014,7 @@
+    組み込み関数をエフェクトが通り抜けられるようにするための特別な仕掛けは要らない。 *)
+ 
+ let register_builtin_values globals =
+-  let reg n f = Hashtbl.replace globals n (VPrim { p_name = n; p_fn = f }) in
++  let reg n f = Hashtbl.replace globals (Tree.GBuiltin n) (VPrim { p_name = n; p_fn = f }) in
+   reg "Ref.new" (fun args -> VRef (ref (Builtin.arg1 args)));
+   reg "Ref.get" (fun args -> match Builtin.arg1 args with VRef r -> !r | v -> runtime_error ("Ref ではありません: " ^ show v));
+   reg "Ref.set" (fun args ->
+@@ -1159,8 +1149,7 @@
+          List.iter
+            (fun (m, _) ->
+              let wrapper = VPrim { p_name = cls_name ^ "." ^ m; p_fn = (fun args -> dispatch cls_name m args) } in
+-             Hashtbl.replace globals m wrapper;
+-             Hashtbl.replace globals (cls_name ^ "." ^ m) wrapper)
++             Hashtbl.replace globals (Tree.GMethod (cls_name ^ "." ^ m)) wrapper)
+            ci.Decls.ci_methods)
+ 
+ (* ## 14.13 宣言の実行
+@@ -1211,57 +1200,31 @@
+    パス 1c で署名を登録した前方参照は、古い閉包からも見えるべきだからである。
+    複製は再束縛のときだけ走るので、再束縛の無いプログラムでは一度も起きない。
+    その代わり、病的な入力では、再束縛 K 回と新しい名前 N 個に対して O(K × N) の時間とメモリを使う *)
+-let bind_globals versions env names_values =
+-  let env =
+-    if List.exists (fun (n, _) -> Hashtbl.mem env.globals n) names_values then (
+-      let t2 = Hashtbl.copy env.globals in
+-      versions := t2 :: !versions;
+-      { env with globals = t2 })
+-    else env
+-  in
+-  List.iter
+-    (fun (n, v) ->
+-      if Hashtbl.mem env.globals n then Hashtbl.replace env.globals n v
+-      else List.iter (fun t -> Hashtbl.replace t n v) !versions)
+-    names_values;
++let bind_globals env names_values =
++  List.iter (fun (g, v) -> Hashtbl.replace env.globals g v) names_values;
+   env
+ 
+-let exec_decl versions env ((_, d) as node : T.decl) =
++let exec_decl env ((_, d) as node : T.decl) =
+   (* 宣言の出身 module を環境に立てる。この宣言から作られる閉包が mod_scope を
+      捕まえるので、実行時の非修飾名の解決が elab の current_module と同じスコープの
+      規則になる。インスタンスの頭の resolve_con も同じスコープで引くので、
+      Decls 側の current_module も一時的に立てる *)
+-  let env = { env with mod_scope = Hashtbl.find_opt Decls.decl_module (Tree.oid_of node) } in
+   let saved = !Decls.current_module in
+-  Decls.current_module := env.mod_scope;
++  Decls.current_module := Hashtbl.find_opt Decls.decl_module (Tree.oid_of node);
+   Fun.protect ~finally:(fun () -> Decls.current_module := saved) @@ fun () ->
+   match d with
+   | T.DLet ((_, b) as bnode) ->
+       let v = eval_binding_value env bnode in
+       let bound = bind_pat_exn SMap.empty b.T.lb_name v in
+-      bind_globals versions env (SMap.bindings bound)
++      bind_globals env (List.map (fun (n, v) -> (Tree.GDecl (Tree.oid_of bnode, n), v)) (SMap.bindings bound))
+   | T.DLetRec bs ->
+       (* 再束縛があるなら、本体を評価する前に表を差し替える。閉包が新しい表を
+          捕まえないと、自己再帰が古い実体を呼ぶ *)
+-      let names =
+-        List.map
+-          (fun ((_, b) : T.let_binding) ->
+-            match snd b.T.lb_name with T.PVar x -> x | _ -> runtime_error "let rec は名前束縛のみです")
+-          bs
+-      in
+-      let env =
+-        if List.exists (fun n -> Hashtbl.mem env.globals n) names then (
+-          let t2 = Hashtbl.copy env.globals in
+-          versions := t2 :: !versions;
+-          { env with globals = t2 })
+-        else env
+-      in
+-      List.iter2
+-        (fun ((_, _) as bnode : T.let_binding) x ->
+-          let v = eval_binding_value env bnode in
+-          if Hashtbl.mem env.globals x then Hashtbl.replace env.globals x v
+-          else List.iter (fun t -> Hashtbl.replace t x v) !versions)
+-        bs names;
++      List.iter
++        (fun ((_, b) as bnode : T.let_binding) ->
++          let x = match snd b.T.lb_name with T.PVar x -> x | _ -> runtime_error "let rec は名前束縛のみです" in
++          Hashtbl.replace env.globals (Tree.GDecl (Tree.oid_of bnode, x)) (eval_binding_value env bnode))
++        bs;
+       env
+   | T.DExp e ->
+       ignore (eval env e);
+@@ -1320,7 +1283,7 @@
+                 ("未実装のプリミティブ: " ^ ex.T.ex_name
+                 ^ if ex.T.ex_name = ex.T.ex_prim then "" else "(実装名 " ^ ex.T.ex_prim ^ " が見つかりません)")
+       in
+-      bind_globals versions env [ (ex.T.ex_name, VPrim { p_name = ex.T.ex_name; p_fn = impl }) ]
++      bind_globals env [ (Tree.GDecl (Tree.oid_of node, ex.T.ex_name), VPrim { p_name = ex.T.ex_name; p_fn = impl }) ]
+   | T.DType _ | T.DNewtype _ | T.DEffect _ | T.DClass _ -> env
+   | T.DModule _ -> runtime_error "module の評価は未実装です(M10)"
+ 
+@@ -1350,11 +1313,10 @@
+   let globals = Hashtbl.create 512 in
+   register_builtin_values globals;
+   register_class_methods globals;
+-  let env = { globals; locals = SMap.empty; resume = None; mod_scope = None } in
+-  let versions = ref [ globals ] in
++  let env = { globals; locals = SMap.empty; resume = None } in
+   ignore
+     (Builtin.with_runtime ~sink (fun () ->
+-         ignore (List.fold_left (exec_decl versions) env decls);
++         ignore (List.fold_left exec_decl env decls);
+          unit))
+ 
+ (* ## 14.15 本章の限界
+diff -ruN '--exclude=_build' '--exclude=.git' head/lib/tree.ml diktor/lib/tree.ml
+--- head/lib/tree.ml	2026-09-25 23:54:39.017102866 +0900
++++ diktor/lib/tree.ml	2026-10-02 19:37:03.271351437 +0900
+@@ -122,7 +122,15 @@
+    向きが違うのは、使い方が違うからでもある。
+    式の評価は引数を順にたどり、各引数の格納先を表で引く。
+    パターンの照合はフィールドを順にたどり、各フィールドの部分パターンを表で引く。 *)
++(* トップレベルの値の実体。組み込みの値は名前で、クラスメソッドは修飾名で、
++   宣言した値は束縛ノードの oid と束縛した名前の組で指す *)
++type gref =
++  | GBuiltin of string
++  | GMethod of string (* Cls.m *)
++  | GDecl of oid * string
++
+ type resolved =
++  | RVar of gref (* Ident。トップレベルの値の参照 *)
+   | ROp of oid (* perform と handle の操作節。Console.write のような完全な操作名の oid *)
+   | RReturnClause (* handle の return 節 *)
+   | RCancelClause (* handle の cancel 節 *)
+diff -ruN '--exclude=_build' '--exclude=.git' head/lib/value.ml diktor/lib/value.ml
+--- head/lib/value.ml	2026-09-26 13:26:19.606913269 +0900
++++ diktor/lib/value.ml	2026-10-02 19:37:03.271514507 +0900
+@@ -151,13 +151,9 @@
+    深い再帰ではわずかに遅いが、クロージャによる環境の捕獲を O(1) で正しく行える。 *)
+ 
+ and env = {
+-  globals : (string, t) Hashtbl.t;
++  globals : (Tree.gref, t) Hashtbl.t;
+   locals : t SMap.t;
+   resume : resume option;
+-  (* 出身の module。module 内の宣言から作ったクロージャはこれを覚えておき、
+-     非修飾名が globals に無かったとき、module スコープの値同義語を引く。
+-     第6章(decls.ml)の current_module に対応する評価器の側の情報 *)
+-  mod_scope : string option;
+ }
+ 
+ (* ## 12.4 `resume` が値でない理由

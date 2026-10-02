@@ -1,0 +1,1 @@
+newtype Box[A: Show] = Box(A)

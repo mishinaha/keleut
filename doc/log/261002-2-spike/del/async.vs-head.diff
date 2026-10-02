@@ -1,0 +1,49 @@
+diff --git a/lib/builtin.ml b/lib/builtin.ml
+index 27d5a0d..a33a318 100644
+--- a/lib/builtin.ml
++++ b/lib/builtin.ml
+@@ -547,10 +547,6 @@ let builtin_method cls con meth : (t -> t) option = Hashtbl.find_opt builtin_met
+ 
+ let op_console_write = Type.intern "Console.write"
+ 
+-let op_async_yield = Type.intern "Async.yield_"
+-
+-let op_async_sleep = Type.intern "Async.sleep"
+-
+ let with_runtime ~(sink : string -> unit) (f : unit -> t) : t =
+   Effect.Deep.match_with f ()
+     {
+@@ -568,8 +564,5 @@ let with_runtime ~(sink : string -> unit) (f : unit -> t) : t =
+                   match sink (as_text (arg1 args)) with
+                   | () -> Effect.Deep.continue k unit
+                   | exception ex -> Effect.Deep.discontinue k ex)
+-          | Op (op, _) when op = op_async_yield || op = op_async_sleep ->
+-              (* 型は本物で、実行時には何もしない *)
+-              Some (fun k -> Effect.Deep.continue k unit)
+           | _ -> None);
+     }
+diff --git a/lib/prelude.kel b/lib/prelude.kel
+index d444c79..2334791 100644
+--- a/lib/prelude.kel
++++ b/lib/prelude.kel
+@@ -224,7 +224,6 @@ newtype List[A] = Nil | Cons(head: A, tail: List[A])
+ // ランタイムが提供する Console / Async / Fs(仕様 sample.kel:464, :465, :731)と、ユーザ層の Print
+ effect Console = { write: (String) => Unit }
+ effect Print   = { print: (String) => Unit }
+-effect Async   = { yield_: () => Unit, sleep: (Int64) => Unit }
+ effect Fs      = {}
+ 
+ // ## 15.5 extern の型と実装
+diff --git a/lib/prims.ml b/lib/prims.ml
+index 6c4b6fe..ef8996a 100644
+--- a/lib/prims.ml
++++ b/lib/prims.ml
+@@ -241,7 +241,7 @@ let show_bin_op = function
+    `toplevel_effects` を `runtime_effects` との連結で定義しているのは、
+    この包含を構造で保つためである。 *)
+ 
+-let runtime_effects = [ "Console"; "Async"; "Fs" ]
++let runtime_effects = [ "Console"; "Fs" ]
+ 
+ (* 上の名簿に Blocking を足したもの。包含 runtime_effects ⊆ toplevel_effects を
+    構造で保つために連結で定義する *)

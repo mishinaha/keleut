@@ -1,0 +1,2 @@
+let mk(): Array[Int32] = run h { MutableArray.freeze(MutableArray.new(1, 0)) }
+let q = par_map(mk(), fn(x) => x)

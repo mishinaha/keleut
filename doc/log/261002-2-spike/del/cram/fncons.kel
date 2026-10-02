@@ -1,0 +1,4 @@
+let twice[A: Show](x: A): String = show(x) + show(x)
+newtype Box[A] = Box(A)
+let f[A: Show](b: Box[A]): String = b match { case Box(x) => show(x) }
+echoln(twice(1) + f(Box(2)))

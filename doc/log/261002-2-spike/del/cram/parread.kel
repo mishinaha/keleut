@@ -1,0 +1,3 @@
+let pmap[A, B](xs: Array[A], f: (A) => B @ {}): Array[B] = ???
+let mk(): Array[Int32] = run h { MutableArray.freeze(MutableArray.new(2, 5)) }
+let f(xs: Array[Int32]): Array[Int32] = pmap(xs, fn(x) => x + Array.get(xs, 0))

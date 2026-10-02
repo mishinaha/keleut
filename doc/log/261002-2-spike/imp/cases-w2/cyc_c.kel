@@ -1,0 +1,2 @@
+from "./cyc_a" import a
+pub let c: Int32 = 1

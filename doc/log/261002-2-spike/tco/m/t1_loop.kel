@@ -1,0 +1,6 @@
+let rec loop(n: Int32, acc: Int32): Int32 =
+  (n == 0) match {
+    case true => acc
+    case false => loop(n - 1, acc + 1)
+  }
+echoln(show(loop(N, 0)))

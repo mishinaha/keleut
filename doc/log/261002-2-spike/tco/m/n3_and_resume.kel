@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Boolean }
+let rec loop(n: Int32): Boolean @ Ask =
+  (n == 0) match { case true => true case false => perform ask() && loop(n - 1) }
+let r = loop(N) handle { case ask() => { let t = true; t && resume(true) } }
+echoln(show(r))

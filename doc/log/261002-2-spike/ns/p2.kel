@@ -1,0 +1,6 @@
+let h(): Int32 @ Console = y()
+let y(): Int32 @ Console = 10
+let y(): Int32 @ Console = 20
+let k(): Int32 @ Console = y()
+echoln(show(h()))
+echoln(show(k()))

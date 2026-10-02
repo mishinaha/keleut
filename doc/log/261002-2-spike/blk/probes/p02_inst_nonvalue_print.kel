@@ -1,0 +1,4 @@
+effect Print2 = { p2: (String) => Unit }
+type class C[A] { val cm: (A) => A @ Print2 }
+let idf[A](x: A): A = x
+type instance C[Int32] { let cm = idf(fn(x: Int32) => x) }

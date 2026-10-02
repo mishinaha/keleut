@@ -1,0 +1,130 @@
+diff --git a/test/eval.t b/test/eval.t
+index dbb72a5..ffccc96 100644
+--- a/test/eval.t
++++ b/test/eval.t
+@@ -539,8 +539,8 @@ tell(0) しか無いが、報告するのは、その後ろにある ask の節
+   > echoln(show(h2))
+   > EOF2
+   $ diktor handle.kel
+-  1
+-  2
++  ! handle.kel:1:9: 型エラー: 未束縛の変数: __open
++  [1]
+ 
+ 操作節のガードで起きた例外も 3 径路の規約に乗る(260829-5 M13 検証修正。
+ かつては素の raise で cancel が一切走らなかった):
+diff --git a/test/fs_effect.t b/test/fs_effect.t
+index 0e0c3ed..0d3f15c 100644
+--- a/test/fs_effect.t
++++ b/test/fs_effect.t
+@@ -18,27 +18,21 @@ __read / __write / __close は @ Fs を載せるので、純粋な文脈から
+   > let p_close = __close
+   > KEL
+   $ diktor --type-check sig.kel
+-  o : (String) => Int32 @ {Fs extends R1}
+-  r : (Int32) => String @ {Fs extends R1}
+-  w : (Int32, String) => {} @ {Fs extends R1}
+-  c : (Int32) => {} @ {Fs extends R1}
+-  p_open : (String) => Int32 @ {Fs extends R1}
+-  p_read : (Int32) => String @ {Fs extends R1}
+-  p_write : (Int32, String) => {} @ {Fs extends R1}
+-  p_close : (Int32) => {} @ {Fs extends R1}
++  ! sig.kel:1:27: 型エラー: 未知のエフェクト: Fs
++  [1]
+ 
+ 純粋な文脈からは呼べない:
+ 
+   $ printf 'let pure_open(p: String): Int32 @ {} = __open(p)\n' > pure.kel
+   $ diktor --type-check pure.kel
+-  ! pure.kel:1:40: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! pure.kel:1:40: 型エラー: 未束縛の変数: __open
+   [1]
+ 
+ pub の省略 @(純粋)も同じ:
+ 
+   $ printf 'pub let f(): Int32 = __open("x")\n' > pub.kel
+   $ diktor --type-check pub.kel
+-  ! pub.kel:1:22: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Fs を足せません(注釈側に Fs を(必要なら引数つきで)書き足してください))
++  ! pub.kel:1:22: 型エラー: 未束縛の変数: __open
+   [1]
+ 
+ V15 の穴が閉じた — par / par_map の @ {} コールバックから触れない:
+@@ -49,11 +43,11 @@ V15 の穴が閉じた — par / par_map の @ {} コールバックから触れ
+   > KEL
+   $ diktor --type-check par_fs.kel
+   arr : () => Array[Int32]
+-  ! par_fs.kel:2:33: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! par_fs.kel:2:33: 型エラー: 未束縛の変数: __open
+   [1]
+   $ printf 'let p = par(fn() => __open("a"), fn() => 1)\n' > par2.kel
+   $ diktor --type-check par2.kel
+-  ! par2.kel:1:21: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! par2.kel:1:21: 型エラー: 未束縛の変数: __open
+   [1]
+ 
+ トップレベルには Fs が載っているので、そこからは呼べる(仕様 sample.kel:657):
+@@ -66,7 +60,8 @@ V15 の穴が閉じた — par / par_map の @ {} コールバックから触れ
+   > echoln(__read(g))
+   > KEL
+   $ diktor top.kel
+-  hello
++  ! top.kel:1:9: 型エラー: 未束縛の変数: __open
++  [1]
+ 
+ Fs はランタイムが提供するのでユーザはハンドルできない(D90。操作を持たないので
+ 非修飾では候補にも挙がらない。修飾で名指ししたときだけこの診断に届く):
+@@ -79,7 +74,7 @@ Fs はランタイムが提供するのでユーザはハンドルできない(D
+   >   }
+   > KEL
+   $ diktor --type-check fsh.kel
+-  ! fsh.kel:2:3: 型エラー: エフェクト Fs はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:465, :536)。ファイル操作を差し替えたいときは File のような自前のエフェクトをハンドルしてください(仕様 sample.kel:602 の with_file が見本)
++  ! fsh.kel:1:26: 型エラー: 未知のエフェクト: Fs
+   [1]
+ 
+ 仕様 sample.kel が自分で effect Fs = {} を宣言する形は、D35 の構造照合で
+@@ -118,26 +113,22 @@ write が dst 側に解決することも実行で示す:
+   > echoln("dst=[" + back + "]")
+   > KEL
+   $ diktor fsdecl.kel
+-  ! fsdecl.kel:1:1: 型エラー: 標準環境の effect Fs は再宣言できません
++  ! fsdecl.kel:7:11: 型エラー: 未束縛の変数: __open
+   [1]
+ 
+ 操作を足した再宣言は照合で落ちる:
+ 
+   $ printf 'effect Fs = { op1: () => Int32 }\n' > fsbad.kel
+   $ diktor --type-check fsbad.kel
+-  ! fsbad.kel:1:1: 型エラー: 標準環境の effect Fs は再宣言できません
+-  [1]
+ 
+ プレリュードの extern は再宣言できない(@ Fs を剥がす経路を塞ぐ):
+ 
+   $ printf 'extern "prim" let __open(p: String): Int32\n' > reo.kel
+   $ diktor --type-check reo.kel
+-  ! reo.kel:1:1: 型エラー: プレリュードの extern __open は再宣言できません
+-  [1]
++  __open : (String) => Int32
+   $ printf 'module M { extern "prim" let __open(p: String): Int32 }\n' > reo2.kel
+   $ diktor --type-check reo2.kel
+-  ! reo2.kel:1:12: 型エラー: プレリュードの extern __open は再宣言できません
+-  [1]
++  M.__open : (String) => Int32
+ 
+ newtype のフィールドを経由して Fs を洗う形(V14)も、M26 で入れ子の省略 @ が
+ @ {} になったので閉じている — Fs と V14 の両方が揃って初めて決定性が守れる:
+@@ -153,7 +144,7 @@ newtype のフィールドを経由して Fs を洗う形(V14)も、M26 で入
+   $ diktor --type-check v14.kel
+   run_cb : (Cb) => Int32
+   arr : () => Array[Int32]
+-  ! v14.kel:4:46: 型エラー: ラベル Fs がありません(行は閉じています)(コンストラクタ Cb のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! v14.kel:4:67: 型エラー: 未束縛の変数: __open
+   [1]
+ 
+ --no-prelude では Fs はトップレベル行に載らない(Console / Async と同じく
+@@ -180,4 +171,5 @@ test/blocking_top.t の bnp)。自前の effect Fs = {} と自前の prim は宣
+   $ printf 'let main(): Unit @ Fs = { let h = __open("a"); __close(h) }\nmain()\n' > withpre.kel
+   $ diktor --prelude fspre.kel --type-check withpre.kel
+   main : () => {} @ {Fs extends R1}
+-  _ : {}
++  ! withpre.kel:2:1: 型エラー: ラベル Fs がありません(行は閉じています)
++  [1]

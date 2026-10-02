@@ -1,0 +1,28 @@
+File "test/extern_c.t", line 1, characters 0-0:
+diff --git a/_build/default/test/extern_c.t b/_build/default/test/extern_c.t.corrected
+index 6d1f503..00cb5e8 100644
+--- a/_build/default/test/extern_c.t
++++ b/_build/default/test/extern_c.t.corrected
+@@ -83,7 +83,7 @@ module に包んだ既知名 FFI は実装に届く(かつては Math.sqrt が
+ 
+   $ printf 'extern "C" let sqrt(x: Float64): Float64\nextern "C" let sqrt(x: Float64): Float64\n' > dd.kel
+   $ diktor --type-check dd.kel
+-  sqrt : (Float64) => Float64
++  sqrt : (Float64) => Float64 @ {Blocking extends R1}
+   ! dd.kel:2:1: 型エラー: extern sqrt が二重に宣言されています
+   [1]
+ 
+File "test/typecheck_sample.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_sample.t b/_build/default/test/typecheck_sample.t.corrected
+index 9d3c492..bc1f360 100644
+--- a/_build/default/test/typecheck_sample.t
++++ b/_build/default/test/typecheck_sample.t.corrected
+@@ -63,7 +63,7 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+   channel : (Int32) => Chan[A]
+   send : (Chan[A], A) => {} @ {Async extends R1}
+   recv : (Chan[A]) => A @ {Async extends R1}
+-  sin : (Float64) => Float64
++  sin : (Float64) => Float64 @ {Blocking extends R1}
+   sqlite_step : (Stmt) => Int32 @ {Blocking extends R1}
+   pinned : (() => A @ {Blocking extends R1}) => A
+   BigInt.parse : (String) => BigInt.BigInt

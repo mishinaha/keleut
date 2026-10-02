@@ -1,0 +1,5 @@
+let wrap(g) = { let k: () => Int32 @ Console = g; k }
+let h1(): Int32 @ Console = { echo("h1 "); 1 }
+let h2(): Int32 @ {Console, Async} = { echo("h2 "); 2 }
+echoln(show(wrap(h1)()))
+echoln(show(wrap(h2)()))

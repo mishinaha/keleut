@@ -1,0 +1,9 @@
+let f(): Int32 = run h {
+  let r = Ref.new(0)
+  let g(): Unit @ {} = {}
+  let k(x: Int32): Int32 @ Console = { echo("k"); x }
+  Ref.set(r, 1)
+  g()
+  Ref.get(r)
+}
+echoln(show(f()))

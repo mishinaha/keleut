@@ -1,0 +1,109 @@
+annot_rows.t:547: $ diktor --type-check ophead.kel
+    -> ! ophead.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+== annot_rows.t: 1 blocks (of 97)
+blocking_top.t:55: $ diktor --type-check bbad.kel
+    -> ! bbad.kel:1:1: 型エラー: 標準環境の effect Blocking は再宣言できません
+== blocking_top.t: 1 blocks (of 13)
+eval.t:235: $ diktor dispatch.kel
+    -> ! dispatch.kel:2:1: 型エラー: 標準環境の type class Add は再宣言できません
+== eval.t: 1 blocks (of 76)
+fs_effect.t:120: $ diktor fsdecl.kel
+    -> ! fsdecl.kel:1:1: 型エラー: 標準環境の effect Fs は再宣言できません
+fs_effect.t:126: $ diktor --type-check fsbad.kel
+    -> ! fsbad.kel:1:1: 型エラー: 標準環境の effect Fs は再宣言できません
+== fs_effect.t: 2 blocks (of 30)
+kinds.t:41: $ diktor --type-check cbext.kel
+    -> ! cbext.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:61: $ diktor cbrun.kel
+    -> ! cbrun.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:144: $ diktor --type-check fieldalias.kel
+    -> ! fieldalias.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:213: $ diktor --type-check fwdrowmod.kel
+    -> ! fwdrowmod.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:229: $ diktor --type-check fwdrowmod2.kel
+    -> ! fwdrowmod2.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:354: $ diktor --type-check modcb.kel
+    -> ! modcb.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:363: $ diktor --prelude tinypre.kel --type-check redecl.kel
+    -> ! redecl.kel:1:1: 型エラー: 標準環境の newtype Callback は再宣言できません
+kinds.t:366: $ diktor --prelude tinypre.kel --type-check redecl2.kel
+    -> ! redecl2.kel:1:1: 型エラー: 標準環境の newtype Callback は再宣言できません
+kinds.t:486: $ diktor --type-check aliasorder.kel
+    -> ! aliasorder.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:631: $ diktor --type-check valkind.kel
+    -> ! valkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:639: $ diktor --type-check valkind2.kel
+    -> ! valkind2.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:647: $ diktor --type-check valkind3.kel
+    -> ! valkind3.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:655: $ diktor --type-check valkind4.kel
+    -> ! valkind4.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:663: $ diktor --type-check valkind5.kel
+    -> ! valkind5.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:671: $ diktor --type-check valkind6.kel
+    -> ! valkind6.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:683: $ diktor --type-check sumkind.kel
+    -> ! sumkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:695: $ diktor --type-check annotkind.kel
+    -> ! annotkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:703: $ diktor --type-check annotkind2.kel
+    -> ! annotkind2.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:711: $ diktor --type-check annotkind3.kel
+    -> ! annotkind3.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:724: $ diktor --type-check extkind.kel
+    -> ! extkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:732: $ diktor --type-check reckind.kel
+    -> ! reckind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+kinds.t:742: $ diktor --type-check instkind.kel
+    -> ! instkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+== kinds.t: 22 blocks (of 162)
+premise.t:174: $ diktor pr10.kel
+    -> ! pr10.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+== premise.t: 1 blocks (of 59)
+typecheck.t:223: $ diktor --type-check d1.kel
+    -> ! d1.kel:1:1: 型エラー: 標準環境の newtype Option は再宣言できません
+typecheck.t:228: $ diktor --type-check d3.kel
+    -> ! d3.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+typecheck.t:233: $ diktor --type-check d4.kel
+    -> ! d4.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+typecheck.t:238: $ diktor --type-check d5.kel
+    -> ! d5.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+typecheck.t:243: $ diktor --type-check d6.kel
+    -> ! d6.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+typecheck.t:248: $ diktor --type-check d7.kel
+    -> ! d7.kel:1:1: 型エラー: 標準環境の effect Console は再宣言できません
+typecheck.t:253: $ diktor --type-check d8.kel
+    -> ! d8.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+typecheck.t:269: $ diktor d9.kel
+    -> ! d9.kel:1:1: 型エラー: 標準環境の newtype Option は再宣言できません
+typecheck.t:319: $ diktor --type-check rd1.kel
+    -> ! rd1.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+typecheck.t:323: $ diktor --type-check rd2.kel
+    -> ! rd2.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+typecheck.t:338: $ diktor --prelude alias_pre.kel --type-check al1.kel
+    -> ! al1.kel:1:1: 型エラー: 標準環境の型エイリアス Rec は再宣言できません
+typecheck.t:341: $ diktor --prelude alias_pre.kel --type-check al2.kel
+    -> ! al2.kel:1:1: 型エラー: 標準環境の型エイリアス Cap は再宣言できません
+typecheck.t:345: $ diktor --prelude alias_pre.kel --type-check al3.kel
+    -> ! al3.kel:1:1: 型エラー: 標準環境の型エイリアス Cap は再宣言できません
+typecheck.t:351: $ diktor --type-check nv1.kel
+    -> ! nv1.kel:1:1: 型エラー: 標準環境の newtype Never は再宣言できません
+== typecheck.t: 14 blocks (of 95)
+typecheck_m7.t:43: $ diktor --type-check --no-prelude cls.kel
+    -> ! cls.kel:7:1: 型エラー: 標準環境の type class Add は再宣言できません
+typecheck_m7.t:202: $ diktor --type-check c17.kel
+    -> ! c17.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+== typecheck_m7.t: 2 blocks (of 77)
+typecheck_sample.t:7: $ diktor --type-check sample/stubs.kel sample/sample.kel
+    -> ! sample/sample.kel:59:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+typecheck_sample.t:75: $ diktor sample/stubs.kel sample/sample.kel
+    -> ! sample/sample.kel:59:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+== typecheck_sample.t: 2 blocks (of 2)
+verify_fixes.t:230: $ diktor coh.kel
+    -> ! coh.kel:1:1: 型エラー: 標準環境のインスタンス Add[Int32] は再宣言できません
+verify_fixes.t:466: $ diktor readd.kel
+    -> ! readd.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+verify_fixes.t:610: $ diktor --type-check dupinst.kel
+    -> ! dupinst.kel:1:1: 型エラー: 標準環境のインスタンス Add[Int32] は再宣言できません
+== verify_fixes.t: 3 blocks (of 141)
+TOTAL 49

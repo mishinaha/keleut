@@ -1,0 +1,17 @@
+extern_c.t:41: $ diktor --type-check cblk2.kel
+    -> cblk2.kel:1:16: パースエラー(付近のトークンを確認してください)
+== extern_c.t: 1 blocks (of 24)
+kinds.t:107: $ diktor --type-check --no-prelude hole.kel
+    -> hole.kel:1:16: パースエラー(付近のトークンを確認してください)
+== kinds.t: 1 blocks (of 162)
+typecheck_m5.t:24: $ diktor --type-check --no-prelude data.kel
+    -> data.kel:4:18: パースエラー(付近のトークンを確認してください)
+typecheck_m5.t:156: $ diktor --type-check --no-prelude ctorbad3.kel
+    -> ctorbad3.kel:1:18: パースエラー(付近のトークンを確認してください)
+== typecheck_m5.t: 2 blocks (of 24)
+typecheck_sample.t:7: $ diktor --type-check sample/stubs.kel sample/sample.kel
+    -> sample/stubs.kel:6:19: パースエラー(付近のトークンを確認してください)
+typecheck_sample.t:13: $ diktor sample/stubs.kel sample/sample.kel
+    -> sample/stubs.kel:6:19: パースエラー(付近のトークンを確認してください)
+== typecheck_sample.t: 2 blocks (of 2)
+TOTAL 6

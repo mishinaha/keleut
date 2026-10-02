@@ -1,0 +1,13 @@
+module M {
+  let foo: Int32 = 5
+  let rec loop(n: Int32): Int32 = n match { case 0 => foo case _ => loop(n - 1) }
+  pub let get(): Int32 = loop(3)
+}
+let (a, b) = (M.get(), 7)
+let rec ev(n: Int32): Boolean = n match { case 0 => true case _ => od(n - 1) }
+and od(n: Int32): Boolean = n match { case 0 => false case _ => ev(n - 1) }
+let w(x: Int32): Int32 = { let a = x * 2; a + b }
+echoln(show(a))
+echoln(show(b))
+echoln(show(ev(10)))
+echoln(show(w(1)))

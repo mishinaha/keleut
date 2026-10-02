@@ -1,0 +1,24 @@
+classes.t:84: $ diktor --type-check --no-prelude alc.kel
+    -> ! alc.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+classes.t:91: $ diktor --type-check --no-prelude alc2.kel
+    -> ! alc2.kel:2:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+classes.t:127: $ diktor --type-check --no-prelude fn1.kel
+    -> ! fn1.kel:1:1: 型エラー: newtype の型パラメータ A には型クラスの制約を書けません
+classes.t:157: $ diktor --type-check --no-prelude alg.kel
+    -> ! alg.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+classes.t:160: $ diktor --type-check --no-prelude alg2.kel
+    -> ! alg2.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+== classes.t: 5 blocks (of 72)
+kinds.t:579: $ diktor --type-check rowconstr.kel
+    -> ! rowconstr.kel:1:1: 型エラー: 型エイリアス の型パラメータ E には型クラスの制約を書けません
+kinds.t:583: $ diktor --type-check rowconstr2.kel
+    -> ! rowconstr2.kel:1:1: 型エラー: newtype の型パラメータ E には型クラスの制約を書けません
+kinds.t:590: $ diktor --type-check tyconstr.kel
+    -> ! tyconstr.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+== kinds.t: 3 blocks (of 162)
+typecheck_m7.t:189: $ diktor --type-check --no-prelude c16.kel
+    -> ! c16.kel:1:1: 型エラー: newtype の型パラメータ A には型クラスの制約を書けません
+typecheck_m7.t:197: $ diktor --type-check c17.kel
+    -> ! c17.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+== typecheck_m7.t: 2 blocks (of 77)
+TOTAL 10

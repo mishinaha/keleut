@@ -1,0 +1,5 @@
+effect Ask = { ask: (Int32) => Int32 }
+let rec loop(n: Int32, acc: Int32): Int32 @ Ask =
+  (n == 0) match { case true => acc case false => loop(n - 1, acc + perform ask(n)) }
+let r = loop(N, 0) handle { case ask(x) => (x > 0) match { case true => resume(1) case false => resume(0) } }
+echoln(show(r))

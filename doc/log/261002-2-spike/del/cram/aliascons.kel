@@ -1,0 +1,1 @@
+type P[A: Show] = (A, A)

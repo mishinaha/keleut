@@ -1,0 +1,52 @@
+t10_gen.kel N=100000 l=l=10k: exit=0 time=0.12s maxrss=12MB out=704982704
+t10_gen.kel N=1000000 l=-: exit=0 time=1.13s maxrss=12MB out=1783293664
+t11_run_loop.kel N=100000 l=l=10k: exit=0 time=0.08s maxrss=12MB out=ok
+t11_run_loop.kel N=1000000 l=-: exit=0 time=0.83s maxrss=12MB out=ok
+t12_dispatch.kel N=100000 l=l=10k: exit=0 time=0.08s maxrss=12MB out=0
+t12_dispatch.kel N=1000000 l=-: exit=0 time=0.68s maxrss=12MB out=0
+t13_retc.kel N=100000 l=l=10k: exit=0 time=0.06s maxrss=12MB out=ok
+t13_retc.kel N=1000000 l=-: exit=0 time=0.68s maxrss=12MB out=ok
+t14_resume_match.kel N=100000 l=l=10k: exit=0 time=0.12s maxrss=12MB out=100000
+t14_resume_match.kel N=1000000 l=-: exit=0 time=1.17s maxrss=12MB out=1000000
+t15_hof.kel N=100000 l=l=10k: exit=0 time=0.07s maxrss=12MB out=ok
+t15_hof.kel N=1000000 l=-: exit=0 time=0.68s maxrss=12MB out=ok
+t16_abort_tail.kel N=100000 l=l=10k: exit=3 time=0.01s maxrss=12MB out=実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+t16_abort_tail.kel N=1000000 l=-: exit=0 time=9.80s maxrss=1328MB out=ok
+t17_console.kel N=100000 l=l=10k: exit=0 time=0.07s maxrss=12MB out=ok
+t17_console.kel N=1000000 l=-: exit=0 time=0.79s maxrss=11MB out=ok
+t1_loop.kel N=100000 l=l=10k: exit=0 time=0.08s maxrss=12MB out=100000
+t1_loop.kel N=1000000 l=-: exit=0 time=0.77s maxrss=12MB out=1000000
+t2_evenodd.kel N=100000 l=l=10k: exit=0 time=0.06s maxrss=12MB out=true
+t2_evenodd.kel N=1000000 l=-: exit=0 time=0.49s maxrss=12MB out=true
+t4_block_if.kel N=100000 l=l=10k: exit=0 time=0.08s maxrss=12MB out=ok
+t4_block_if.kel N=1000000 l=-: exit=0 time=0.75s maxrss=12MB out=ok
+t5_with.kel N=100000 l=l=10k: exit=0 time=0.09s maxrss=12MB out=ok
+t5_with.kel N=1000000 l=-: exit=0 time=0.78s maxrss=12MB out=ok
+t6_handle_inside.kel N=100000 l=l=10k: exit=0 time=0.06s maxrss=12MB out=ok
+t6_handle_inside.kel N=1000000 l=-: exit=0 time=0.59s maxrss=12MB out=ok
+t7_resume_nontrivial.kel N=100000 l=l=10k: exit=0 time=0.07s maxrss=12MB out=ok
+t7_resume_nontrivial.kel N=1000000 l=-: exit=0 time=0.56s maxrss=12MB out=ok
+t8_handle_in_loop.kel N=100000 l=l=10k: exit=0 time=0.06s maxrss=12MB out=ok
+t8_handle_in_loop.kel N=1000000 l=-: exit=0 time=0.60s maxrss=12MB out=ok
+p2_each.kel N=100000 l=l=10k: exit=3 time=0.01s maxrss=12MB out=実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+p2_each.kel N=1000000 l=-: exit=0 time=7.82s maxrss=270MB out=ok
+p3_par.kel N=100000 l=l=10k: exit=3 time=0.01s maxrss=12MB out=実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+p3_par.kel N=1000000 l=-: exit=0 time=12.90s maxrss=283MB out=0
+p4_parmap.kel N=100000 l=l=10k: exit=3 time=0.00s maxrss=12MB out=実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+p4_parmap.kel N=1000000 l=-: exit=0 time=14.11s maxrss=445MB out=0
+p5_each_body.kel N=100000 l=l=10k: exit=0 time=0.18s maxrss=12MB out=ok
+p5_each_body.kel N=1000000 l=-: exit=0 time=1.82s maxrss=23MB out=ok
+p6_stdout_loop.kel N=100000 l=l=10k: exit=0 time=0.07s maxrss=12MB out=ok
+p6_stdout_loop.kel N=1000000 l=-: exit=0 time=0.71s maxrss=12MB out=ok
+p7_stdout_each_iter.kel N=100000 l=l=10k: exit=0 time=0.10s maxrss=12MB out=ok
+p7_stdout_each_iter.kel N=1000000 l=-: exit=0 time=0.94s maxrss=12MB out=ok
+p9_println.kel N=100000 l=l=10k: exit=0 time=0.10s maxrss=12MB out=ok
+p9_println.kel N=1000000 l=-: exit=0 time=0.99s maxrss=12MB out=ok
+n1_nontail_resume.kel N=100000 l=l=10k: exit=3 time=0.00s maxrss=12MB out=実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+n1_nontail_resume.kel N=1000000 l=-: exit=0 time=10.70s maxrss=343MB out=ok
+n2_run_resume.kel N=100000 l=l=10k: exit=0 time=0.09s maxrss=12MB out=ok
+n2_run_resume.kel N=1000000 l=-: exit=0 time=0.80s maxrss=12MB out=ok
+n3_and_resume.kel N=100000 l=l=10k: exit=0 time=0.07s maxrss=12MB out=true
+n3_and_resume.kel N=1000000 l=-: exit=0 time=0.61s maxrss=12MB out=true
+c_nontail.kel N=100000 l=l=10k: exit=3 time=0.01s maxrss=12MB out=実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+c_nontail.kel N=1000000 l=-: exit=0 time=4.81s maxrss=103MB out=1784293664

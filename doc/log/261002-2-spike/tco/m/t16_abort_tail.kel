@@ -1,0 +1,8 @@
+effect Fail = { fail: () => Unit }
+let rec loop(n: Int32): Unit =
+  (n == 0) match {
+    case true => ()
+    case false => { perform fail() } handle { case fail() => loop(n - 1) }
+  }
+loop(N)
+echoln("ok")

@@ -1,0 +1,84 @@
+diff --git a/test/fs_effect.t b/test/fs_effect.t
+index 0e0c3ed..c551198 100644
+--- a/test/fs_effect.t
++++ b/test/fs_effect.t
+@@ -49,11 +49,11 @@ V15 の穴が閉じた — par / par_map の @ {} コールバックから触れ
+   > KEL
+   $ diktor --type-check par_fs.kel
+   arr : () => Array[Int32]
+-  ! par_fs.kel:2:33: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! par_fs.kel:2:9: 型エラー: 未束縛の変数: par_map
+   [1]
+   $ printf 'let p = par(fn() => __open("a"), fn() => 1)\n' > par2.kel
+   $ diktor --type-check par2.kel
+-  ! par2.kel:1:21: 型エラー: ラベル Fs がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! par2.kel:1:9: 型エラー: 未束縛の変数: par
+   [1]
+ 
+ トップレベルには Fs が載っているので、そこからは呼べる(仕様 sample.kel:657):
+@@ -153,7 +153,7 @@ newtype のフィールドを経由して Fs を洗う形(V14)も、M26 で入
+   $ diktor --type-check v14.kel
+   run_cb : (Cb) => Int32
+   arr : () => Array[Int32]
+-  ! v14.kel:4:46: 型エラー: ラベル Fs がありません(行は閉じています)(コンストラクタ Cb のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! v14.kel:4:15: 型エラー: 未束縛の変数: par_map
+   [1]
+ 
+ --no-prelude では Fs はトップレベル行に載らない(Console / Async と同じく
+diff --git a/test/parallel.t b/test/parallel.t
+index d7db500..2789036 100644
+--- a/test/parallel.t
++++ b/test/parallel.t
+@@ -23,9 +23,8 @@ par / par_map の組み込み登録(M16 / H2、D45)。逐次実装だが、
+   > echoln(p._1)
+   > KEL
+   $ diktor par.kel
+-  12
+-  3
+-  ok
++  ! par.kel:14:19: 型エラー: 未束縛の変数: par_map
++  [1]
+ 
+ コールバックの純粋性は型で守られる(仕様 sample.kel:722 の決定性の根拠)。
+ 根拠は 3 つの別々の設計変更 — 配列の分離(M24。可変配列は h を型に持つ)、
+@@ -38,7 +37,7 @@ par / par_map の組み込み登録(M16 / H2、D45)。逐次実装だが、
+   > KEL
+   $ diktor --type-check parbad.kel
+   mk : () => Array[Int32]
+-  ! parbad.kel:2:34: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! parbad.kel:2:9: 型エラー: 未束縛の変数: par_map
+   [1]
+ 
+ sample.kel 自身の let par_map = ??? / let par = ??? は組み込みを覆うので
+diff --git a/test/region.t b/test/region.t
+index c6956f0..00ab209 100644
+--- a/test/region.t
++++ b/test/region.t
+@@ -67,7 +67,7 @@ par_map の @ {} コールバックで観測する(署名から Heap を外し
+   >   par_map(xs, fn(x) => MutableArray.get(a, 0) + x)
+   > KEL
+   $ diktor --type-check parget.kel
+-  ! parget.kel:2:24: 型エラー: ラベル Heap がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! parget.kel:2:3: 型エラー: 未束縛の変数: par_map
+   [1]
+ 
+ 可変配列は run の外に出せない:
+@@ -188,7 +188,7 @@ run で包めば書けた — M20 の動機 (a)):
+   >   par_map(xs, fn(x) => run h2 { MutableArray.set(a, 0, x); x })
+   > KEL
+   $ diktor --type-check pardet.kel
+-  ! pardet.kel:2:50: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! pardet.kel:2:3: 型エラー: 未束縛の変数: par_map
+   [1]
+ 
+ 不変配列は par_map のコールバックから読める:
+@@ -199,7 +199,8 @@ run で包めば書けた — M20 の動機 (a)):
+   > echoln(show(Array.get(f(mk()), 1)))
+   > KEL
+   $ diktor parread.kel
+-  10
++  ! parread.kel:2:41: 型エラー: 未束縛の変数: par_map
++  [1]
+ 
+ pub の「@ を省略した宣言は純粋」も同じ経路で守られる(M20 の動機 (b)):
+ 

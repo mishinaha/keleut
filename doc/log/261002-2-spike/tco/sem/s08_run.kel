@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let r = { perform ask() + perform ask() } handle {
+  case ask() => run h { let c = Ref.new(20); Ref.set(c, Ref.get(c) + 1); resume(Ref.get(c)) }
+}
+echoln(show(r))

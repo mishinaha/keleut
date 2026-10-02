@@ -1,0 +1,3 @@
+newtype Hidden
+let make(): Hidden = ???
+let use(h: Hidden): Int32 = h match {}

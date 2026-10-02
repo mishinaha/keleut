@@ -1,0 +1,31 @@
+eval.t:541: $ diktor handle.kel
+    -> ! handle.kel:1:9: 型エラー: 未束縛の変数: __open
+== eval.t: 1 blocks (of 76)
+fs_effect.t:20: $ diktor --type-check sig.kel
+    -> ! sig.kel:1:27: 型エラー: 未知のエフェクト: Fs
+fs_effect.t:33: $ diktor --type-check pure.kel
+    -> ! pure.kel:1:40: 型エラー: 未束縛の変数: __open
+fs_effect.t:40: $ diktor --type-check pub.kel
+    -> ! pub.kel:1:22: 型エラー: 未束縛の変数: __open
+fs_effect.t:50: $ diktor --type-check par_fs.kel
+    -> arr : () => Array[Int32]
+fs_effect.t:55: $ diktor --type-check par2.kel
+    -> ! par2.kel:1:21: 型エラー: 未束縛の変数: __open
+fs_effect.t:68: $ diktor top.kel
+    -> ! top.kel:1:9: 型エラー: 未束縛の変数: __open
+fs_effect.t:81: $ diktor --type-check fsh.kel
+    -> ! fsh.kel:1:26: 型エラー: 未知のエフェクト: Fs
+fs_effect.t:120: $ diktor fsdecl.kel
+    -> ! fsdecl.kel:7:11: 型エラー: 未束縛の変数: __open
+fs_effect.t:127: $ diktor --type-check fsbad.kel
+    -> (出力なし)
+fs_effect.t:134: $ diktor --type-check reo.kel
+    -> __open : (String) => Int32
+fs_effect.t:138: $ diktor --type-check reo2.kel
+    -> M.__open : (String) => Int32
+fs_effect.t:153: $ diktor --type-check v14.kel
+    -> run_cb : (Cb) => Int32
+fs_effect.t:181: $ diktor --prelude fspre.kel --type-check withpre.kel
+    -> main : () => {} @ {Fs extends R1}
+== fs_effect.t: 13 blocks (of 30)
+TOTAL 14

@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let r = { perform ask() * 2 } handle {
+  case ask() => { let rec f(n: Int32): Int32 = (n == 0) match { case true => 0 case false => 1 + f(n - 1) }; let k = f(4); resume(k) }
+}
+echoln(show(r))

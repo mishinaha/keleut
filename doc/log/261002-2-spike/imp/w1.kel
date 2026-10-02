@@ -1,0 +1,4 @@
+let h[E](k: (Int32) => Unit @ {Console extends E}): Unit @ {Console extends E} = k(1)
+with x = h()
+pub let y: Int32 = x + 1
+echoln(show(y))

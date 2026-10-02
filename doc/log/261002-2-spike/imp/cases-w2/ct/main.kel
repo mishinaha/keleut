@@ -1,0 +1,3 @@
+from "./lib/a" import T
+newtype U = Leaf2
+let t: T = Leaf

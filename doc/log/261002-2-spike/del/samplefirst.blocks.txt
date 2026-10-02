@@ -1,0 +1,12 @@
+ast.t:159: $ diktor --dump-ast sample/sample.kel | wc -l
+    -> 351
+ast.t:161: $ diktor --dump-ast sample/sample.kel | sed -n '1,3p'
+    -> (type MyInt = Int32)
+== ast.t: 2 blocks (of 20)
+tokens.t:665: $ diktor --dump-tokens sample/sample.kel | wc -l
+    -> 2594
+== tokens.t: 1 blocks (of 85)
+typecheck_sample.t:7: $ diktor --type-check sample/stubs.kel sample/sample.kel
+    -> Db.query : (String) => Resp
+== typecheck_sample.t: 1 blocks (of 2)
+TOTAL 4

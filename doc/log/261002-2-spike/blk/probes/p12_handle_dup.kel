@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let inner(): Int32 @ Ask = perform ask()
+let pureish(): Int32 @ {} = 5
+let t(): Int32 = (inner() + pureish()) handle { case ask() => resume(10) }
+echoln(show(t()))

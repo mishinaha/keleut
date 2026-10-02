@@ -1,0 +1,5 @@
+from "./lib/leaf" import {
+  base
+  Foo.bar
+}
+echoln(show(base))

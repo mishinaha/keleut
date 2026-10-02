@@ -1,0 +1,95 @@
+diff --git a/test/classes.t b/test/classes.t
+index 3b22b23..ed36a2c 100644
+--- a/test/classes.t
++++ b/test/classes.t
+@@ -82,14 +82,15 @@ MiniLang より厳しくなる点):
+ 
+   $ printf 'type P[A: Show] = (A, A)\nlet ok: P[Int32] = (1i32, 2i32)\n' > alc.kel
+   $ diktor --type-check --no-prelude alc.kel
+-  ok : (Int32, Int32)
++  ! alc.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
++  [1]
+   $ cat > alc2.kel <<'KEL'
+   > newtype NoShow = MkNoShow
+   > type P[A: Show] = (A, A)
+   > let bad: P[NoShow] = (MkNoShow, MkNoShow)
+   > KEL
+   $ diktor --type-check --no-prelude alc2.kel
+-  ! alc2.kel:3:10: 型エラー: NoShow は Show のインスタンスではありません
++  ! alc2.kel:2:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+   [1]
+ 
+ derive structural はユーザの新クラスでは全面拒否(M15)。カインド検査
+@@ -125,8 +126,7 @@ subst_params 経路が台帳をすり抜け、Empty 由来の Show だけ素通
+   > let g(): String = { let e = idf(Empty); "x" }
+   > KEL
+   $ diktor --type-check --no-prelude fn1.kel
+-  idf : (A) => A
+-  ! fn1.kel:3:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
++  ! fn1.kel:1:1: 型エラー: newtype の型パラメータ A には型クラスの制約を書けません
+   [1]
+ 
+ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証。値制限で
+@@ -155,10 +155,11 @@ Generic を扱えず、満たしていても落ちた):
+   > let w = Wrap((1i32, 2i32))
+   > KEL
+   $ diktor --type-check --no-prelude alg.kel
+-  w : Wrap[Int32]
++  ! alg.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
++  [1]
+   $ printf 'type P[A: Show] = (A, A)\nnewtype Wrap[B] = Wrap(P[B])\n' > alg2.kel
+   $ diktor --type-check --no-prelude alg2.kel
+-  ! alg2.kel:2:24: 型エラー: 型パラメータ A は Show のインスタンスではありません。[A: Show] のように制約を書いてください
++  ! alg2.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+   [1]
+ 
+ スーパークラスは入れない裁定(§8 / D98)。クラスパラメータの制約は宣言時に
+diff --git a/test/kinds.t b/test/kinds.t
+index 1348960..0340c72 100644
+--- a/test/kinds.t
++++ b/test/kinds.t
+@@ -577,18 +577,19 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+ 
+   $ printf 'type R[E: Show]: EffectRow = {Console extends E}\n' > rowconstr.kel
+   $ diktor --type-check rowconstr.kel
+-  ! rowconstr.kel:1:1: 型エラー: 型パラメータ E は行カインドなので、型クラス Show の制約は書けません(型クラスは Type のクラス)
++  ! rowconstr.kel:1:1: 型エラー: 型エイリアス の型パラメータ E には型クラスの制約を書けません
+   [1]
+   $ printf 'newtype N[E: Show] = N(() => Unit @ E)\n' > rowconstr2.kel
+   $ diktor --type-check rowconstr2.kel
+-  ! rowconstr2.kel:1:1: 型エラー: 型パラメータ E は行カインドなので、型クラス Show の制約は書けません(型クラスは Type のクラス)
++  ! rowconstr2.kel:1:1: 型エラー: newtype の型パラメータ E には型クラスの制約を書けません
+   [1]
+ 
+ Type のパラメータの制約は従来どおり言及時に効く(規則 3):
+ 
+   $ printf 'type P[A: Show] = (A, A)\nlet f(x: P[Int32]): Int32 = 0\n' > tyconstr.kel
+   $ diktor --type-check tyconstr.kel
+-  f : ((Int32, Int32)) => Int32
++  ! tyconstr.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
++  [1]
+ 
+ 高階カインドの型変数への適用も定義域を照合する(D86)。F[_] の定義域は Type
+ なので F[E] が E を Type に確定させ、次の @ E で落ちる。診断の位置が 2 番目の
+diff --git a/test/typecheck_m7.t b/test/typecheck_m7.t
+index 73f702f..e1cb550 100644
+--- a/test/typecheck_m7.t
++++ b/test/typecheck_m7.t
+@@ -187,7 +187,7 @@ newtype の型パラメータ制約も検証される(D6 の残り):
+ 
+   $ printf 'newtype Box[A: Bogus] = Box(A)\n' > c16.kel
+   $ diktor --type-check --no-prelude c16.kel
+-  ! c16.kel:1:1: 型エラー: 未知のクラス: Bogus
++  ! c16.kel:1:1: 型エラー: newtype の型パラメータ A には型クラスの制約を書けません
+   [1]
+ 
+ プレリュード所有のエイリアス名の再宣言は黙って捨てられない(C1 の構造
+@@ -195,7 +195,7 @@ newtype の型パラメータ制約も検証される(D6 の残り):
+ 
+   $ printf 'type Unit[A: Bogus] = A\n' > c17.kel
+   $ diktor --type-check c17.kel
+-  ! c17.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
++  ! c17.kel:1:1: 型エラー: 型エイリアス の型パラメータ A には型クラスの制約を書けません
+   [1]
+ 
+ module 内 let の相互参照と自己再帰(C5a / D39。値の同義語のフォール

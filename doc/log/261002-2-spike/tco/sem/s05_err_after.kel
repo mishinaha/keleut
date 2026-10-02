@@ -1,0 +1,9 @@
+effect Tick = { tick: () => Unit }
+effect Nop = { nop: () => Unit }
+let r = {
+  { { perform tick(); echoln("resumed"); ??? } handle { case nop() => resume() case cancel => echoln("cancel inner") } } handle {
+    case tick() => { echoln("clause"); resume() }
+    case cancel => echoln("cancel tick")
+  }
+} handle { case nop() => resume() case cancel => echoln("cancel outer") }
+echoln("end")

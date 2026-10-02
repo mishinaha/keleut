@@ -1,0 +1,3 @@
+module M { pub newtype Option = Opt(Int32) }
+let v: M.Option = Opt(1)
+echoln("ok")

@@ -1,0 +1,141 @@
+annot_rows.t:129: $ diktor --type-check launder.kel
+    -> pmap : (Array[A], (A) => B) => Array[B]
+== annot_rows.t: 1 blocks (of 97)
+ast.t:136: $ diktor --dump-ast decls.kel
+    -> (type Pair = (row (_item: Int32) (_item: String)))
+ast.t:159: $ diktor --dump-ast sample/sample.kel | wc -l
+    -> 351
+ast.t:161: $ diktor --dump-ast sample/sample.kel | sed -n '1,3p'
+    -> (type MyInt = Int32)
+== ast.t: 3 blocks (of 20)
+blocking_top.t:55: $ diktor --type-check bbad.kel
+    -> ! bbad.kel:1:1: 型エラー: 標準環境の effect Blocking は再宣言できません
+== blocking_top.t: 1 blocks (of 13)
+classes.t:84: $ diktor --type-check --no-prelude alc.kel
+    -> ! alc.kel:1:1: 型エラー: 型エイリアス P の型パラメータ A には型クラスの制約を書けません
+classes.t:91: $ diktor --type-check --no-prelude alc2.kel
+    -> ! alc2.kel:2:1: 型エラー: 型エイリアス P の型パラメータ A には型クラスの制約を書けません
+classes.t:106: $ diktor --type-check --no-prelude c14.kel
+    -> c14.kel:3:3: パースエラー(付近のトークンを確認してください)
+classes.t:115: $ diktor --type-check c14b.kel
+    -> c14b.kel:3:3: パースエラー(付近のトークンを確認してください)
+classes.t:127: $ diktor --type-check --no-prelude fn1.kel
+    -> ! fn1.kel:1:1: 型エラー: newtype Box の型パラメータ A には型クラスの制約を書けません
+classes.t:157: $ diktor --type-check --no-prelude alg.kel
+    -> ! alg.kel:1:1: 型エラー: 型エイリアス P の型パラメータ A には型クラスの制約を書けません
+classes.t:160: $ diktor --type-check --no-prelude alg2.kel
+    -> ! alg2.kel:1:1: 型エラー: 型エイリアス P の型パラメータ A には型クラスの制約を書けません
+== classes.t: 7 blocks (of 72)
+eval.t:541: $ diktor handle.kel
+    -> ! handle.kel:1:9: 型エラー: 未束縛の変数: __open
+== eval.t: 1 blocks (of 76)
+== extern_c.t: 0 blocks (of 24)
+== fs_effect.t: 0 blocks (of 30)
+kinds.t:107: $ diktor --type-check --no-prelude hole.kel
+    -> hole.kel:1:16: パースエラー(付近のトークンを確認してください)
+kinds.t:144: $ diktor --type-check fieldalias.kel
+    -> ! fieldalias.kel:2:15: 型エラー: コンストラクタ X のフィールドの型のカインドが Type ではありません: {Print} :: Row
+kinds.t:363: $ diktor --prelude tinypre.kel --type-check redecl.kel
+    -> ! redecl.kel:1:1: 型エラー: 標準環境の newtype Callback は再宣言できません
+kinds.t:366: $ diktor --prelude tinypre.kel --type-check redecl2.kel
+    -> ! redecl2.kel:1:1: 型エラー: 標準環境の newtype Callback は再宣言できません
+kinds.t:575: $ diktor --type-check rowconstr.kel
+    -> ! rowconstr.kel:1:1: 型エラー: 型エイリアス R の型パラメータ E には型クラスの制約を書けません
+kinds.t:579: $ diktor --type-check rowconstr2.kel
+    -> ! rowconstr2.kel:1:1: 型エラー: newtype N の型パラメータ E には型クラスの制約を書けません
+kinds.t:586: $ diktor --type-check tyconstr.kel
+    -> ! tyconstr.kel:1:1: 型エラー: 型エイリアス P の型パラメータ A には型クラスの制約を書けません
+kinds.t:631: $ diktor --type-check valkind.kel
+    -> ! valkind.kel:2:11: 型エラー: タプルの要素の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:639: $ diktor --type-check valkind2.kel
+    -> ! valkind2.kel:2:14: 型エラー: レコードのフィールド a の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:647: $ diktor --type-check valkind3.kel
+    -> ! valkind3.kel:2:11: 型エラー: 矢印の引数の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:655: $ diktor --type-check valkind4.kel
+    -> ! valkind4.kel:2:16: 型エラー: 矢印の返り値の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:663: $ diktor --type-check valkind5.kel
+    -> ! valkind5.kel:2:13: 型エラー: ヴァリアント #T の積載の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:671: $ diktor --type-check valkind6.kel
+    -> ! valkind6.kel:2:34: 型エラー: 矢印の返り値の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:683: $ diktor --type-check sumkind.kel
+    -> ! sumkind.kel:2:25: 型エラー: ヴァリアント #T の積載の型のカインドが Type ではありません: {Print} :: Row
+kinds.t:695: $ diktor --type-check annotkind.kel
+    -> ! annotkind.kel:2:10: 型エラー: 型注釈のカインドが Type ではありません: {Print} :: Row
+kinds.t:703: $ diktor --type-check annotkind2.kel
+    -> ! annotkind2.kel:2:10: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
+kinds.t:711: $ diktor --type-check annotkind3.kel
+    -> ! annotkind3.kel:2:8: 型エラー: 型注釈のカインドが Type ではありません: {Print} :: Row
+kinds.t:724: $ diktor --type-check extkind.kel
+    -> ! extkind.kel:2:36: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
+kinds.t:732: $ diktor --type-check reckind.kel
+    -> ! reckind.kel:2:22: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
+kinds.t:742: $ diktor --type-check instkind.kel
+    -> ! instkind.kel:4:34: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
+== kinds.t: 20 blocks (of 162)
+== nonfeatures.t: 0 blocks (of 35)
+== parallel.t: 0 blocks (of 5)
+== premise.t: 0 blocks (of 59)
+region.t:69: $ diktor --type-check parget.kel
+    -> pmap : (Array[A], (A) => B) => Array[B]
+region.t:190: $ diktor --type-check pardet.kel
+    -> pmap : (Array[A], (A) => B) => Array[B]
+region.t:201: $ diktor parread.kel
+    -> pmap : (Array[A], (A) => B) => Array[B]
+== region.t: 3 blocks (of 50)
+runtime_effects.t:40: $ diktor --type-check sched.kel
+    -> ! sched.kel:1:33: 型エラー: 未知のエフェクト: Async
+== runtime_effects.t: 1 blocks (of 21)
+== std_names.t: 0 blocks (of 0)
+tokens.t:665: $ diktor --dump-tokens sample/sample.kel | wc -l
+    -> 2594
+== tokens.t: 1 blocks (of 85)
+typecheck.t:223: $ diktor --type-check d1.kel
+    -> ! d1.kel:1:1: 型エラー: 標準環境の newtype Option は再宣言できません
+typecheck.t:228: $ diktor --type-check d3.kel
+    -> ! d3.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+typecheck.t:233: $ diktor --type-check d4.kel
+    -> ! d4.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+typecheck.t:238: $ diktor --type-check d5.kel
+    -> ! d5.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+typecheck.t:243: $ diktor --type-check d6.kel
+    -> ! d6.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+typecheck.t:248: $ diktor --type-check d7.kel
+    -> ! d7.kel:1:1: 型エラー: 標準環境の effect Console は再宣言できません
+typecheck.t:253: $ diktor --type-check d8.kel
+    -> ! d8.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+typecheck.t:269: $ diktor d9.kel
+    -> ! d9.kel:1:1: 型エラー: 標準環境の newtype Option は再宣言できません
+typecheck.t:290: $ diktor --type-check ds1.kel
+    -> ds1.kel:3:3: パースエラー(付近のトークンを確認してください)
+typecheck.t:319: $ diktor --type-check rd1.kel
+    -> ! rd1.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+typecheck.t:323: $ diktor --type-check rd2.kel
+    -> ! rd2.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+typecheck.t:338: $ diktor --prelude alias_pre.kel --type-check al1.kel
+    -> ! al1.kel:1:1: 型エラー: 標準環境の型エイリアス Rec は再宣言できません
+typecheck.t:341: $ diktor --prelude alias_pre.kel --type-check al2.kel
+    -> ! al2.kel:1:1: 型エラー: 標準環境の型エイリアス Cap は再宣言できません
+typecheck.t:345: $ diktor --prelude alias_pre.kel --type-check al3.kel
+    -> ! al3.kel:1:1: 型エラー: 標準環境の型エイリアス Cap は再宣言できません
+typecheck.t:351: $ diktor --type-check nv1.kel
+    -> ! nv1.kel:1:1: 型エラー: 標準環境の newtype Never は再宣言できません
+== typecheck.t: 15 blocks (of 95)
+typecheck_m5.t:156: $ diktor --type-check --no-prelude ctorbad3.kel
+    -> ctorbad3.kel:1:18: パースエラー(付近のトークンを確認してください)
+== typecheck_m5.t: 1 blocks (of 24)
+typecheck_m7.t:194: $ diktor --type-check --no-prelude c16.kel
+    -> ! c16.kel:1:1: 型エラー: newtype Box の型パラメータ A には型クラスの制約を書けません
+typecheck_m7.t:202: $ diktor --type-check c17.kel
+    -> ! c17.kel:1:1: 型エラー: 型エイリアス Unit の型パラメータ A には型クラスの制約を書けません
+== typecheck_m7.t: 2 blocks (of 77)
+typecheck_sample.t:7: $ diktor --type-check sample/stubs.kel sample/sample.kel
+    -> Db.query : (String) => Resp
+== typecheck_sample.t: 1 blocks (of 2)
+verify_fixes.t:230: $ diktor coh.kel
+    -> ! coh.kel:1:1: 型エラー: 標準環境のインスタンス Add[Int32] は再宣言できません
+verify_fixes.t:466: $ diktor readd.kel
+    -> ! readd.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+verify_fixes.t:610: $ diktor --type-check dupinst.kel
+    -> ! dupinst.kel:1:1: 型エラー: 標準環境のインスタンス Add[Int32] は再宣言できません
+== verify_fixes.t: 3 blocks (of 141)
+TOTAL 60

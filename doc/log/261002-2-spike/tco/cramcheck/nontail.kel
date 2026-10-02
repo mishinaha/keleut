@@ -1,0 +1,2 @@
+let rec sum(n: Int32): Int32 = (n == 0) match { case true => 0 case false => n + sum(n - 1) }
+echoln(show(sum(100000)))

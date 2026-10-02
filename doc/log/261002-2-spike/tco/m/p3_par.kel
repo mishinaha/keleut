@@ -1,0 +1,3 @@
+let rec loop(n: Int32): Int32 =
+  (n == 0) match { case true => 0 case false => { let (a, b) = par(fn() => 0, fn() => loop(n - 1)); b } }
+echoln(show(loop(N)))

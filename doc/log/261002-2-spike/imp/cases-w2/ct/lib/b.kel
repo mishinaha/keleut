@@ -1,0 +1,2 @@
+newtype V = Leaf
+let v: V = Leaf

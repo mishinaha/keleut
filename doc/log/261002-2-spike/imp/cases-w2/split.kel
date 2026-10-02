@@ -1,0 +1,3 @@
+from "./lib/leaf"
+import base
+echoln(show(base))

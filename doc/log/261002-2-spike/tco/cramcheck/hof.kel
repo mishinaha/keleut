@@ -1,0 +1,4 @@
+let apply_to[A, B, E](f: (A) => B @ E, x: A): B @ E = f(x)
+let rec loop(n: Int32): Unit = (n == 0) match { case true => () case false => apply_to(loop, n - 1) }
+loop(100000)
+echoln("ok")

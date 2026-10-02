@@ -1,0 +1,4 @@
+from "./lib/leaf" import base;
+
+;from "./lib/left" import l;;
+echoln(show(l))

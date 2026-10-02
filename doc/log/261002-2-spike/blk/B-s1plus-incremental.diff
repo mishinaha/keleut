@@ -1,0 +1,17 @@
+diff --git a/lib/elab.ml b/lib/elab.ml
+index 5a2340f..6ced37b 100644
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -253,7 +253,11 @@ let row_failure msg =
+    (仕様 §9「@ {} だけは両方向に効く」)。
+    矢印そのものを組み直すので、Tree.set_ty より前に呼ぶ *)
+ let reopen_pure_row level ty =
+-  match repr ty with TArrow (a, r, e) when repr e = TRowEmpty -> TArrow (a, r, new_row_var level) | _ -> ty
++  match repr ty with
++  | TArrow (a, r, e) -> (
++      let _, tail = row_fields e in
++      match repr tail with TRowEmpty -> TArrow (a, r, row_append e (new_row_var level)) | _ -> ty)
++  | _ -> ty
+ 
+ (* 最外の @ が書かれているか(reopen_pure_row で開き直すかどうかの判定)。
+    関数束縛は lb_eff を見る。値束縛は、注釈の頭が矢印リテラルならその @ を見る。

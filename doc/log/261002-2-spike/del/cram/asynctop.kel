@@ -1,0 +1,2 @@
+effect Async = { yield_: () => Unit, sleep: (Int64) => Unit }
+perform yield_()

@@ -1,0 +1,2 @@
+pub let get[E](): Int32 @ E = helper()
+let helper[E](): Int32 @ E = 1

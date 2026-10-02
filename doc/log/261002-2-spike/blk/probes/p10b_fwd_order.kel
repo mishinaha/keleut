@@ -1,0 +1,4 @@
+let k: (Int32) => Int32 @ {} = fn(x) => x
+let kf(x: Int32): Int32 @ {} = x
+let use(): Int32 @ Console = { echo("u "); k(1) + kf(2) }
+echoln(show(use()))

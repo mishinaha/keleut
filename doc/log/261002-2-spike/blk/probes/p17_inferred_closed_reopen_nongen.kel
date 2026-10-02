@@ -1,0 +1,3 @@
+let idf[A](x: A): A = x
+let h = idf(fn() => echoln("x"))
+let use1(): Unit @ {Console, Async} = h()

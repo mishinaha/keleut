@@ -1,0 +1,3 @@
+from "./leaf" import base
+echoln("init left")
+pub let l: Int32 = base + 1

@@ -1,0 +1,11 @@
+newtype Meters(Int32)
+type instance Add[Meters] {
+  let add(a, b) = (a, b) match { case (Meters(x), Meters(y)) => Meters(x + y) }
+}
+let m = Meters(3) + Meters(4)
+echoln(m match { case Meters(v) => show(v) })
+type class MyShow[A] { val myshow: (A) => String }
+type instance MyShow[Meters] {
+  let myshow(m) = m match { case Meters(v) => show(v) + "m" }
+}
+echoln(myshow(Meters(7)))

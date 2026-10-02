@@ -1,0 +1,82 @@
+=== s01_order.kel
+body start
+clause 1
+after1 10
+clause 2
+after2 20
+return 30
+1030
+[exit 0]
+=== s02_cancel_arg.kel
+r1 clause a
+cancel r1
+cancel outer
+実行時エラー: ??? に到達しました
+[exit 3]
+=== s03_second.kel
+実行時エラー: resume は高々1回しか呼べません(アフィン)
+[exit 3]
+=== s04b_nested_arg_fast.kel
+実行時エラー: resume は高々1回しか呼べません(アフィン)
+[exit 3]
+=== s04_nested_arg.kel
+clause
+got 1
+実行時エラー: resume は高々1回しか呼べません(アフィン)
+[exit 3]
+=== s05_err_after.kel
+clause
+resumed
+cancel inner
+cancel tick
+cancel outer
+実行時エラー: ??? に到達しました
+[exit 3]
+=== s06_unwind_through.kel
+clause
+resumed
+cancel tick
+7
+[exit 0]
+=== s07_match_guard.kel
+one
+1110
+[exit 0]
+=== s08_run.kel
+42
+[exit 0]
+=== s09_nontail.kel
+after resume 6
+after resume 12
+24
+[exit 0]
+=== s10_nested_handle.kel
+in clause
+6
+[exit 0]
+=== s11_abort_branch.kel
+go
+abort
+-1
+[exit 0]
+=== s12_and.kel
+ask 1
+ask 2
+true
+ask 1
+false
+[exit 0]
+=== s13_letrec.kel
+8
+[exit 0]
+=== s14_nomatch.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+c
+cancel
+実行時エラー: match のどの節にも一致しません: 2
+[exit 3]
+=== s15_guard_err.kel
+c
+cancel inner
+実行時エラー: ??? に到達しました
+[exit 3]

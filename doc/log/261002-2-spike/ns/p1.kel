@@ -1,0 +1,6 @@
+let x: Int32 = 1
+let f(): Int32 = x
+let x: Int32 = 2
+let g(): Int32 = x
+echoln(show(f()))
+echoln(show(g()))

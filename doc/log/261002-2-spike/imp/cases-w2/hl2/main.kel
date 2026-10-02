@@ -1,0 +1,3 @@
+from "./lib/a" import get
+let helper(): String = "two"
+echoln(show(get() + 10))

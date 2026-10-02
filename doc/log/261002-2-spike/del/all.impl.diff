@@ -1,0 +1,950 @@
+diff --git a/lib/builtin.ml b/lib/builtin.ml
+index 27d5a0d..79c5454 100644
+--- a/lib/builtin.ml
++++ b/lib/builtin.ml
+@@ -135,22 +135,6 @@ let as_bool = function VBool b -> b | v -> runtime_error ("Boolean ではあり
+    ハンドル番号が実行の回数に依存する。
+    ハンドル番号は、1 回の実行の中では単調に増え、実行ごとに 0 に戻るのが正しい。 *)
+ 
+-  (* ---- テスト用のメモリ上のダミーのファイルシステム ---- *)
+-
+-let fs : (string, string) Hashtbl.t = Hashtbl.create 8
+-
+-let handles : (int32, string) Hashtbl.t = Hashtbl.create 8
+-
+-let next_handle = ref 0l
+-
+-(* 実行のたびにダミーのファイルシステムを空にする。3 つをまとめて戻すのは、
+-   呼び出し側の戻し忘れを防ぐため。next_handle を戻さないと、再入 API で
+-   ハンドル番号が実行の回数に依存する *)
+-let reset_fs () =
+-  Hashtbl.reset fs;
+-  Hashtbl.reset handles;
+-  next_handle := 0l
+-
+ (* ## 13.4 プリミティブ表
+ 
+    表の作りは単純である。
+@@ -323,27 +307,6 @@ let prims : (string * (t -> t)) list =
+     ("__f64_to_i64", fun v -> VInt64 (Int64.of_float (f64_to_int "__f64_to_i64" (Int64.to_float Int64.min_int) (as_f64 (arg1 v)))));
+     ("__show_int32", fun v -> VText (Int32.to_string (as_i32 (arg1 v))));
+     ("__panic", fun v -> runtime_error ("panic: " ^ as_text (arg1 v)));
+-    ( "__open",
+-      fun v ->
+-        let path = as_text (arg1 v) in
+-        next_handle := Int32.add !next_handle 1l;
+-        Hashtbl.replace handles !next_handle path;
+-        VInt32 !next_handle );
+-    ( "__read",
+-      fun v ->
+-        let h = as_i32 (arg1 v) in
+-        let path = try Hashtbl.find handles h with Not_found -> runtime_error "__read: 無効なハンドルです" in
+-        VText (Option.value ~default:"" (Hashtbl.find_opt fs path)) );
+-    ( "__write",
+-      fun v ->
+-        let h, s = arg2 v in
+-        let path = try Hashtbl.find handles (as_i32 h) with Not_found -> runtime_error "__write: 無効なハンドルです" in
+-        Hashtbl.replace fs path (Option.value ~default:"" (Hashtbl.find_opt fs path) ^ as_text s);
+-        unit );
+-    ( "__close",
+-      fun v ->
+-        Hashtbl.remove handles (as_i32 (arg1 v));
+-        unit );
+   ]
+ 
+ (* extern C の既知名の表。Diktor は本物の C FFI を実装していない。
+@@ -547,10 +510,6 @@ let builtin_method cls con meth : (t -> t) option = Hashtbl.find_opt builtin_met
+ 
+ let op_console_write = Type.intern "Console.write"
+ 
+-let op_async_yield = Type.intern "Async.yield_"
+-
+-let op_async_sleep = Type.intern "Async.sleep"
+-
+ let with_runtime ~(sink : string -> unit) (f : unit -> t) : t =
+   Effect.Deep.match_with f ()
+     {
+@@ -568,8 +527,5 @@ let with_runtime ~(sink : string -> unit) (f : unit -> t) : t =
+                   match sink (as_text (arg1 args)) with
+                   | () -> Effect.Deep.continue k unit
+                   | exception ex -> Effect.Deep.discontinue k ex)
+-          | Op (op, _) when op = op_async_yield || op = op_async_sleep ->
+-              (* 型は本物で、実行時には何もしない *)
+-              Some (fun k -> Effect.Deep.continue k unit)
+           | _ -> None);
+     }
+diff --git a/lib/decls.ml b/lib/decls.ml
+index b00144b..f437da9 100644
+--- a/lib/decls.ml
++++ b/lib/decls.ml
+@@ -126,18 +126,6 @@ let claim_type_name kind name =
+       type_error (Type.name_of name ^ " は既に " ^ prev_kind ^ " として宣言されています(" ^ kind ^ " では再宣言できません)")
+   | _ -> Hashtbl.replace type_namespace name kind
+ 
+-(* プレリュード所有名の照合の上での受理は、1 つのプログラムにつき 1 回までである。
+-   2 つ目からは利用者の宣言どうしの重複なので拒否する。
+-   この表が無いと、プレリュード所有名だけは、何度宣言しても「二重に宣言されています」が出なくなる。
+-   インスタンス側の builtin_redecls(§6.9)と同じ理屈である *)
+-let user_type_redecls : (string * oid, unit) Hashtbl.t = Hashtbl.create 16
+-
+-let note_user_redecl kind name what =
+-  if not !in_prelude then
+-    if Hashtbl.mem user_type_redecls (kind, name) then
+-      type_error (what ^ " " ^ Type.name_of name ^ " が二重に宣言されています")
+-    else Hashtbl.add user_type_redecls (kind, name) ()
+-
+ (* ## 6.2 extern 登録簿
+ 
+    `extern` はプリミティブに型を与える宣言である。
+@@ -416,193 +404,6 @@ let check_ctor_visible ctor owner =
+    部分適用できるエイリアスは実質的に型レベルの λ である。
+    これを許すと単一化の結果が一意に決まらなくなり(mgu が一意でない)、主要型が失われる。 *)
+ 
+-(* ## 6.4b 構造照合
+-
+-   本節の関数は、照合の上で受理するときの照合を実装する。
+-   名前の一致だけで受理すると、プレリュード所有名の再宣言は、宣言ごと黙って捨てられる。
+-   コンストラクタの集合が違う newtype も、本体の違う型エイリアスも、操作の型が違う effect も、
+-   終了コード 0 で警告も無く受理され、以後はプレリュード側の定義だけが使われる。
+-   標準ライブラリの中身を示すための宣言が本物と食い違っていても、誰も気づけない。
+-
+-   照合するのは、Keleut のプログラムから観測できるものだけである。
+-
+-   - **newtype**：コンストラクタ名の集合、各コンストラクタのフィールドの数とラベルと型(α 同値)、
+-     型パラメータの個数とカインドと制約、`???`(不透明)かどうか。
+-     コンストラクタの宣言の順序は照合しない。
+-     Keleut にはコンストラクタの序数が無く、順序を観測できないからである。
+-   - **型エイリアス**：種別(`: Type` / `: EffectRow`)、パラメータ、本体の型式。
+-     パラメータ名は位置で読み替えるので、`[A] = (A, A)` と `[B] = (B, B)` は同じ宣言である。
+-   - **effect**：操作名の集合と、各操作のスキーマ(α 同値)。
+-   - **type class**：パラメータのカインド、`derive structural` の有無、
+-     メソッド名の集合の完全な一致、各メソッドの型(α 同値)。
+-     メソッドの部分集合は認めない。
+-     newtype や effect と同じく、宣言を部分的な記述ではなく完全な記述として読む。
+-   - **インスタンス**：組み込み(§6.12)が登録したインスタンスと同じキーなら、
+-     キーの一致だけを見る(本体は第11章が独立に検査する)。
+-     プレリュードが宣言したインスタンス(`Show[List[_]]` など)と同じキーの宣言は、
+-     照合せずにコヒーレンス違反として拒否する(§6.1)。
+-   - **extern**：照合せずに拒否する(§6.2。照合すべき実体が処理系の側に無い)。
+-
+-   型は α 同値で比べる。
+-   Generic 変数は双方向の全単射で対応づけ、行はラベルごとに列を分けて突き合わせる。
+-   同じラベルの中の順序は保ち、異なるラベルの間の順序は無視する(Scoped Labels の規則)。
+-   カインドは、副作用の無い `kind_equiv` で比べる。
+-   `same_kind` は KVar を破壊的に張るので、照合に使うと宣言の順序で結果が変わってしまう。 *)
+-
+-let rec kind_equiv a b =
+-  match (Type.kind_repr a, Type.kind_repr b) with
+-  | Type.KStar, Type.KStar | Type.KRow, Type.KRow -> true
+-  | Type.KArrow (a1, a2), Type.KArrow (b1, b2) -> kind_equiv a1 b1 && kind_equiv a2 b2
+-  | Type.KVar _, Type.KVar _ -> true (* 未確定どうしは等しいとみなす(張らない) *)
+-  | _ -> false
+-
+-(* α 同値の判定。
+-   m / rev は Generic / Unbound 変数の vid の双方向の対応で、宣言ごとに共有する
+-   (同じパラメータは全フィールドで同じ相手に写る) *)
+-let ty_equiv_with (m : (oid, oid) Hashtbl.t) (rev : (oid, oid) Hashtbl.t) a b =
+-  let var_pair (ia : Type.var_info) (ib : Type.var_info) =
+-    match (Hashtbl.find_opt m ia.Type.vid, Hashtbl.find_opt rev ib.Type.vid) with
+-    | Some x, Some y -> x = ib.Type.vid && y = ia.Type.vid
+-    | None, None ->
+-        Hashtbl.replace m ia.Type.vid ib.Type.vid;
+-        Hashtbl.replace rev ib.Type.vid ia.Type.vid;
+-        true
+-    | _ -> false
+-  in
+-  let rec go a b =
+-    match (Type.repr a, Type.repr b) with
+-    | Type.TCon (ca, aa), Type.TCon (cb, ab) -> ca = cb && List.length aa = List.length ab && List.for_all2 go aa ab
+-    | Type.TApp (fa, xa), Type.TApp (fb, xb) -> go fa fb && go xa xb
+-    | Type.TArrow (pa, ra, ea), Type.TArrow (pb, rb, eb) -> go pa pb && go ra rb && go ea eb
+-    | Type.TRecord ra, Type.TRecord rb | Type.TVariant ra, Type.TVariant rb -> row_equiv ra rb
+-    (* 空行どうしはここで打ち切る。row_equiv に回すと、尾部の比較が
+-       また空行どうしになって無限に再帰する *)
+-    | Type.TRowEmpty, Type.TRowEmpty -> true
+-    | Type.TRowExtend _, (Type.TRowEmpty | Type.TRowExtend _) | Type.TRowEmpty, Type.TRowExtend _ -> row_equiv a b
+-    | Type.TVar ra, Type.TVar rb -> (
+-        match (!ra, !rb) with
+-        | Type.Generic ia, Type.Generic ib | Type.Unbound ia, Type.Unbound ib ->
+-            var_pair ia ib
+-            && kind_equiv ia.Type.vkind ib.Type.vkind
+-            && List.sort compare ia.Type.vcls = List.sort compare ib.Type.vcls
+-        | _ -> false)
+-    | _ -> false
+-  and row_equiv ra rb =
+-    let fa, ta = Type.row_fields ra in
+-    let fb, tb = Type.row_fields rb in
+-    let group fs =
+-      List.fold_left
+-        (fun acc (l, t) ->
+-          let prev = Option.value ~default:[] (List.assoc_opt l acc) in
+-          (l, prev @ [ t ]) :: List.remove_assoc l acc)
+-        [] fs
+-    in
+-    let ga = group fa and gb = group fb in
+-    List.length ga = List.length gb
+-    && List.for_all
+-         (fun (l, ts) ->
+-           match List.assoc_opt l gb with
+-           | Some ts' -> List.length ts = List.length ts' && List.for_all2 go ts ts'
+-           | None -> false)
+-         ga
+-    && go ta tb
+-  in
+-  go a b
+-
+-let ty_equiv a b = ty_equiv_with (Hashtbl.create 8) (Hashtbl.create 8) a b
+-
+-(* パラメータを位置で対応づけ、全単射の最初の対応にする。
+-   パラメータの個数とカインドと制約も、ここで照合する *)
+-let params_match (prev_ps : Type.var_info list) (info_ps : Type.var_info list) m rev =
+-  List.length prev_ps = List.length info_ps
+-  && List.for_all2
+-       (fun (pa : Type.var_info) (pb : Type.var_info) ->
+-         Hashtbl.replace m pa.Type.vid pb.Type.vid;
+-         Hashtbl.replace rev pb.Type.vid pa.Type.vid;
+-         kind_equiv pa.Type.vkind pb.Type.vkind && List.sort compare pa.Type.vcls = List.sort compare pb.Type.vcls)
+-       prev_ps info_ps
+-
+-(* 型式(ソース上の型)の比較。
+-   エイリアスの本体は精緻化済みの型を持たないので、span を無視して構文を再帰的にたどる。
+-   パラメータ名は、位置で対応づけた表で読み替える。
+-
+-   読み替えは全単射でなければならない(ty_equiv_with の m / rev と同じ)。
+-   片方向の対応だけだと、宣言側のパラメータ名が相手側の自由な型名を捕獲する。
+-   たとえば、プレリュードの `type Cap[A] = (A, G)` と利用者の `type Cap[G] = (G, G)` を同じ宣言と誤って判定する。
+-   しかも表の実体はプレリュード側のままなので、利用者は自分の宣言が捨てられたことを知らされない。
+-   `na` が読み替えの表に無いときは、`nb` がどの読み替えの像でもないことを確かめてから、
+-   素の名前の比較に進む。
+-
+-   行とヴァリアントと制約は、順序を見ない(ty_equiv_with がラベルで揃えるのと同じ規律)。
+-   構文のまま List.for_all2 で突き合わせると、
+-   型としては同じ `{x: Int32, y: String}` と `{y: String, x: Int32}` を、
+-   「本体が違います」で誤って拒否する。
+-   そこで、ラベルで安定ソートしてから比べる。
+-   同名のラベルが重なるときは相対的な順序を保つので、遮蔽の順序は照合に残る *)
+-let rec type_exp_equiv (ren : (string * string) list) ((_, a) : T.type_exp) ((_, b) : T.type_exp) =
+-  let ren_of na = match List.assoc_opt na ren with Some x -> x | None -> na in
+-  let id_equiv (la : long_id) (lb : long_id) =
+-    match (la, lb) with
+-    | LongId [ na ], LongId [ nb ] -> (
+-        match List.assoc_opt na ren with
+-        | Some nb' -> nb = nb'
+-        | None -> (not (List.exists (fun (_, y) -> y = nb) ren)) && na = nb)
+-    | LongId xs, LongId ys -> xs = ys
+-  in
+-  (* 行の要素を並べ替えるための鍵。prev 側(第1引数)はラベルを読み替えてから
+-     比べるので、両側が同じ名前で揃う *)
+-  let bkey rename = function
+-    | T.BField (l, _) -> (0, l)
+-    | T.BLabel (LongId ids, _) -> (1, String.concat "." (List.map rename ids))
+-  in
+-  (* ヴァリアントのタグ名は型パラメータではないので読み替えない *)
+-  let usort xs =
+-    List.stable_sort
+-      (fun ((_, x) : T.type_exp) ((_, y) : T.type_exp) ->
+-        let k = function T.EVariantCase (n, _) -> (0, n) | _ -> (1, "") in
+-        compare (k x) (k y))
+-      xs
+-  in
+-  match (a, b) with
+-  | T.EIdent la, T.EIdent lb -> id_equiv la lb
+-  | T.EApply (fa, xa), T.EApply (fb, xb) ->
+-      type_exp_equiv ren fa fb && List.length xa = List.length xb && List.for_all2 (type_exp_equiv ren) xa xb
+-  | T.EArrow (pa, ra, ea), T.EArrow (pb, rb, eb) ->
+-      List.length pa = List.length pb
+-      && List.for_all2 (type_exp_equiv ren) pa pb
+-      && type_exp_equiv ren ra rb
+-      && (match (ea, eb) with
+-         | None, None -> true
+-         | Some x, Some y -> type_exp_equiv ren x y
+-         | _ -> false)
+-  | T.EBraceRow (ea, ta), T.EBraceRow (eb, tb) ->
+-      let sa = List.stable_sort (fun x y -> compare (bkey ren_of x) (bkey ren_of y)) ea in
+-      let sb = List.stable_sort (fun x y -> compare (bkey Fun.id x) (bkey Fun.id y)) eb in
+-      List.length sa = List.length sb
+-      && List.for_all2
+-           (fun x y ->
+-             match (x, y) with
+-             | T.BField (lx, tx), T.BField (ly, ty) -> lx = ly && type_exp_equiv ren tx ty
+-             | T.BLabel (lx, ax), T.BLabel (ly, ay) ->
+-                 id_equiv lx ly && List.length ax = List.length ay && List.for_all2 (type_exp_equiv ren) ax ay
+-             | _ -> false)
+-           sa sb
+-      && (match (ta, tb) with
+-         | None, None -> true
+-         | Some x, Some y -> type_exp_equiv ren x y
+-         | _ -> false)
+-  | T.EVariantCase (na, pa), T.EVariantCase (nb, pb) ->
+-      na = nb
+-      && (match (pa, pb) with
+-         | None, None -> true
+-         | Some x, Some y -> type_exp_equiv ren x y
+-         | _ -> false)
+-  | T.EUnion xs, T.EUnion ys ->
+-      let xs = usort xs and ys = usort ys in
+-      List.length xs = List.length ys && List.for_all2 (type_exp_equiv ren) xs ys
+-  | T.EHole, T.EHole -> true
+-  | _ -> false
+-
+ type alias_info = {
+   al_name : oid;
+   al_params : type_param list;
+@@ -625,30 +426,9 @@ let add_alias info =
+     type_error ("組み込み型 " ^ Type.name_of info.al_name ^ " は型エイリアスで再宣言できません")
+   else claim_type_name "型エイリアス" info.al_name;
+   if Hashtbl.mem aliases info.al_name then
+-    if not (prelude_owned "alias" info.al_name) then
+-      type_error ("型エイリアス " ^ Type.name_of info.al_name ^ " が二重に宣言されています")
+-    else (
+-      note_user_redecl "alias" info.al_name "型エイリアス";
+-      (* 照合の上で受理する。表の実体は差し替えない *)
+-      let prev = Hashtbl.find aliases info.al_name in
+-      let name = Type.name_of info.al_name in
+-      let fail why = type_error ("型エイリアス " ^ name ^ " の宣言がプレリュードの宣言と一致しません(" ^ why ^ ")") in
+-      if prev.al_kind <> info.al_kind then fail ": Type と : EffectRow が違います";
+-      if List.length prev.al_params <> List.length info.al_params then
+-        fail
+-          (Printf.sprintf "型パラメータの個数が違います: プレリュードは %d、宣言は %d" (List.length prev.al_params)
+-             (List.length info.al_params));
+-      if
+-        not
+-          (List.for_all2
+-             (fun (pa : type_param) (pb : type_param) ->
+-               (* 制約の並び順は照合しない(params_match が vcls をソート
+-                  するのと同じ規律) *)
+-               pa.tp_arity = pb.tp_arity && List.sort compare pa.tp_classes = List.sort compare pb.tp_classes)
+-             prev.al_params info.al_params)
+-      then fail "型パラメータが違います";
+-      let ren = List.map2 (fun (pa : type_param) (pb : type_param) -> (pa.tp_name, pb.tp_name)) prev.al_params info.al_params in
+-      if not (type_exp_equiv ren prev.al_body info.al_body) then fail "本体が違います")
++    if prelude_owned "alias" info.al_name then
++      type_error ("標準環境の型エイリアス " ^ Type.name_of info.al_name ^ " は再宣言できません")
++    else type_error ("型エイリアス " ^ Type.name_of info.al_name ^ " が二重に宣言されています")
+   else (
+     Hashtbl.add aliases info.al_name info;
+     mark "alias" info.al_name)
+@@ -717,55 +497,14 @@ let datas : (oid, data_info) Hashtbl.t = Hashtbl.create 64
+ 
+ let ctor_owner : (oid, oid) Hashtbl.t = Hashtbl.create 128 (* コンストラクタ名 → データ型名 *)
+ 
+-(* newtype の構造照合。
+-   コンストラクタ名の集合、フィールドの数とラベルと型、パラメータ、不透明かどうかを突き合わせる。
+-   どれも観測できるもので、観測できないコンストラクタの宣言の順序は照合しない *)
+-let data_match (prev : data_info) (info : data_info) =
+-  let name = Type.name_of info.dd_name in
+-  let fail why = type_error ("newtype " ^ name ^ " の宣言がプレリュードの宣言と一致しません(" ^ why ^ ")") in
+-  if prev.dd_opaque <> info.dd_opaque then fail "片方だけが ??? のホールです";
+-  if List.length prev.dd_params <> List.length info.dd_params then
+-    fail
+-      (Printf.sprintf "型パラメータの個数が違います: プレリュードは %d、宣言は %d" (List.length prev.dd_params)
+-         (List.length info.dd_params));
+-  let m = Hashtbl.create 8 and rev = Hashtbl.create 8 in
+-  if not (params_match prev.dd_params info.dd_params m rev) then fail "型パラメータのカインドか制約が違います";
+-  let names cs = List.sort compare (List.map (fun (c : ctor_info) -> c.ct_name) cs) in
+-  if names prev.dd_ctors <> names info.dd_ctors then
+-    fail
+-      (match prev.dd_ctors with
+-      | [] -> "コンストラクタが違います: プレリュードはコンストラクタを持ちません"
+-      | cs -> "コンストラクタが違います: プレリュードは " ^ String.concat ", " (List.map (fun c -> Type.name_of c.ct_name) cs));
+-  List.iter
+-    (fun (pc : ctor_info) ->
+-      let ic = List.find (fun (c : ctor_info) -> c.ct_name = pc.ct_name) info.dd_ctors in
+-      let cn = Type.name_of pc.ct_name in
+-      if List.length pc.ct_fields <> List.length ic.ct_fields then
+-        fail
+-          (Printf.sprintf "コンストラクタ %s のフィールド数が違います: プレリュードは %d、宣言は %d" cn (List.length pc.ct_fields)
+-             (List.length ic.ct_fields));
+-      List.iteri
+-        (fun i (pf, inf) ->
+-          let show_l = function Some l -> Type.name_of l | None -> "ラベルなし" in
+-          if pf.fi_label <> inf.fi_label then
+-            fail
+-              (Printf.sprintf "コンストラクタ %s の第%dフィールドのラベルが違います: プレリュードは %s、宣言は %s" cn (i + 1)
+-                 (show_l pf.fi_label) (show_l inf.fi_label));
+-          if not (ty_equiv_with m rev pf.fi_ty inf.fi_ty) then
+-            fail (Printf.sprintf "コンストラクタ %s の第%dフィールドの型が違います" cn (i + 1)))
+-        (List.combine pc.ct_fields ic.ct_fields))
+-    prev.dd_ctors
+-
+ let add_data info =
+   if Hashtbl.mem reserved_type_names info.dd_name && not !in_prelude then
+     type_error ("組み込み型 " ^ Type.name_of info.dd_name ^ " は newtype で再宣言できません")
+   else claim_type_name "newtype" info.dd_name;
+-  if Hashtbl.mem datas info.dd_name then (
+-    if not (prelude_owned "data" info.dd_name) then
+-      type_error ("newtype " ^ Type.name_of info.dd_name ^ " が二重に宣言されています")
+-    else (
+-      note_user_redecl "data" info.dd_name "newtype";
+-      data_match (Hashtbl.find datas info.dd_name) info))
++  if Hashtbl.mem datas info.dd_name then
++    if prelude_owned "data" info.dd_name then
++      type_error ("標準環境の newtype " ^ Type.name_of info.dd_name ^ " は再宣言できません")
++    else type_error ("newtype " ^ Type.name_of info.dd_name ^ " が二重に宣言されています")
+   else (
+     Hashtbl.add datas info.dd_name info;
+     mark "data" info.dd_name;
+@@ -833,26 +572,10 @@ let add_effect info =
+   if Hashtbl.mem reserved_type_names info.ef_name && not !in_prelude then
+     type_error ("組み込み型 " ^ Type.name_of info.ef_name ^ " は effect で再宣言できません")
+   else claim_type_name "effect" info.ef_name;
+-  if Hashtbl.mem effects info.ef_name then (
+-    if not (prelude_owned "effect" info.ef_name) then
+-      type_error ("effect " ^ Type.name_of info.ef_name ^ " が二重に宣言されています")
+-    else (
+-      note_user_redecl "effect" info.ef_name "effect";
+-      (* 照合の上で受理する。操作名の集合と、各スキーマの α 同値を見る *)
+-      let prev = Hashtbl.find effects info.ef_name in
+-      let name = Type.name_of info.ef_name in
+-      let fail why = type_error ("effect " ^ name ^ " の宣言がプレリュードの宣言と一致しません(" ^ why ^ ")") in
+-      let names ops = List.sort compare (List.map fst ops) in
+-      if names prev.ef_ops <> names info.ef_ops then
+-        fail
+-          (match prev.ef_ops with
+-          | [] -> "操作が違います: プレリュードは操作を持ちません"
+-          | ops -> "操作が違います: プレリュードは " ^ String.concat ", " (List.map (fun (o, _) -> Type.name_of o) ops));
+-      List.iter
+-        (fun (op, pty) ->
+-          let ity = List.assoc op info.ef_ops in
+-          if not (ty_equiv pty ity) then fail ("操作 " ^ Type.name_of op ^ " の型が違います"))
+-        prev.ef_ops))
++  if Hashtbl.mem effects info.ef_name then
++    if prelude_owned "effect" info.ef_name then
++      type_error ("標準環境の effect " ^ Type.name_of info.ef_name ^ " は再宣言できません")
++    else type_error ("effect " ^ Type.name_of info.ef_name ^ " が二重に宣言されています")
+   else (
+     Hashtbl.add effects info.ef_name info;
+     mark "effect" info.ef_name;
+@@ -913,29 +636,9 @@ let find_class c = Hashtbl.find_opt classes c
+ let add_class_decl info =
+   match Hashtbl.find_opt classes info.ci_name with
+   | Some prev when prev.ci_builtin ->
+-      (* 照合の上で受理する。メソッド名の集合は完全に一致しなければならない。
+-         クラス宣言の照合は、第11章ではなくここだけで行う *)
+-      let name = Type.name_of info.ci_name in
+-      note_user_redecl "class" info.ci_name "type class";
+-      let fail why = type_error ("type class " ^ name ^ " の宣言が組み込みの宣言と一致しません(" ^ why ^ ")") in
+-      if not (kind_equiv prev.ci_param_kind info.ci_param_kind) then fail "パラメータのカインドが違います";
+-      if prev.ci_derive_structural <> info.ci_derive_structural then fail "derive structural の有無が違います";
+-      let names ms = List.sort compare (List.map fst ms) in
+-      if names prev.ci_methods <> names info.ci_methods then
+-        fail ("メソッドが違います: 組み込みは " ^ String.concat ", " (List.map fst prev.ci_methods));
+-      let m = Hashtbl.create 8 and rev = Hashtbl.create 8 in
+-      Hashtbl.replace m prev.ci_param.Type.vid info.ci_param.Type.vid;
+-      Hashtbl.replace rev info.ci_param.Type.vid prev.ci_param.Type.vid;
+-      List.iter
+-        (fun (mn, pty) ->
+-          let ity = List.assoc mn info.ci_methods in
+-          if not (ty_equiv_with m rev pty ity) then fail ("メソッド " ^ mn ^ " の型が違います"))
+-        prev.ci_methods;
+-      `Builtin prev
++      type_error ("標準環境の type class " ^ Type.name_of info.ci_name ^ " は再宣言できません")
+   | Some _ -> type_error ("type class " ^ Type.name_of info.ci_name ^ " が二重に宣言されています")
+-  | None ->
+-      Hashtbl.add classes info.ci_name info;
+-      `Added
++  | None -> Hashtbl.add classes info.ci_name info
+ 
+ (* ## 6.9 インスタンス表とコヒーレンス
+ 
+@@ -991,12 +694,6 @@ type instance_info = {
+ 
+ let instances : (oid * oid, instance_info) Hashtbl.t = Hashtbl.create 256
+ 
+-(* 組み込みのキーを再宣言した利用者の宣言の記録。
+-   受理するが採用しないという扱いは 1 回までで、2 回目は普通のコヒーレンス違反として拒否する。
+-   この記録が無いと、同じキーを 2 度登録したらエラーにするという規則が、
+-   組み込みのキーにだけ効かない *)
+-let builtin_redecls : (oid * oid, unit) Hashtbl.t = Hashtbl.create 16
+-
+ (* 予約述語の名前の表。
+    予約の規則を持つのはこの表だけで、クラス宣言の側(第11章の register_class)と
+    インスタンス宣言の側(下の add_instance)がどちらもここを引く。
+@@ -1014,11 +711,8 @@ let add_instance ?(builtin = true) ?(methods = []) ~cls ~con premises =
+      type_error (Type.name_of cls ^ " は予約されたリテラル述語です(インスタンスは宣言できません、D8)"));
+   match Hashtbl.find_opt instances (cls, con) with
+   | Some prev when prev.ii_builtin && not builtin ->
+-      (* 実体は組み込みのまま。利用者の本体は第11章が検査する(受理は 1 回まで) *)
+-      if Hashtbl.mem builtin_redecls (cls, con) then
+-        type_error
+-          ("インスタンス " ^ Type.name_of cls ^ "[" ^ Type.name_of con ^ "] が二重に宣言されています(コヒーレンス違反)")
+-      else Hashtbl.add builtin_redecls (cls, con) ()
++      type_error
++        ("標準環境のインスタンス " ^ Type.name_of cls ^ "[" ^ Type.name_of con ^ "] は再宣言できません")
+   | Some _ ->
+       type_error
+         ("インスタンス " ^ Type.name_of cls ^ "[" ^ Type.name_of con ^ "] が二重に宣言されています(コヒーレンス違反)")
+@@ -1026,10 +720,6 @@ let add_instance ?(builtin = true) ?(methods = []) ~cls ~con premises =
+ 
+ let find_instance ~cls ~con = Hashtbl.find_opt instances (cls, con)
+ 
+-(* そのキーが組み込みインスタンスとして登録済みか(interp が実体を差し替えないため) *)
+-let builtin_instance_exists cls con =
+-  match Hashtbl.find_opt instances (cls, con) with Some { ii_builtin; _ } -> ii_builtin | None -> false
+-
+ (* ## 6.10 組み込み登録の補助関数
+ 
+    ここから下は、ソースに書けない宣言や、ソースに書かせたくない宣言を、
+@@ -1222,15 +912,8 @@ let register_ref_array () =
+    - 本体を `run h { … }` で包むと、`Heap[h]` が行にある文脈で `@ {}` の関数を呼ぶことになり、
+      「ラベル Heap がありません」で落ちる。 *)
+ let register_parallel () =
+-  let arr_oid = intern "Array" in
+   let arrow args ret eff = Type.TArrow (Type.TRecord (closed_args_row args), ret, eff) in
+   let def name ty = builtin_ops := !builtin_ops @ [ (name, ty) ] in
+-  (* par_map : [A, B] (Array[A], (A) => B @ {}) => Array[B] @ ρ *)
+-  (let a = generic () and b = generic () and e = generic ~kind:Type.KRow () in
+-   def "par_map" (arrow [ Type.TCon (arr_oid, [ a ]); arrow [ a ] b Type.TRowEmpty ] (Type.TCon (arr_oid, [ b ])) e));
+-  (* par : [A, B] (() => A @ {}, () => B @ {}) => (A, B) @ ρ *)
+-  (let a = generic () and b = generic () and e = generic ~kind:Type.KRow () in
+-   def "par" (arrow [ arrow [] a Type.TRowEmpty; arrow [] b Type.TRowEmpty ] (Type.TRecord (closed_args_row [ a; b ])) e));
+   (* pinned : [A, E] (() => A @ {Blocking extends E}) => A @ E。
+      Blocking は操作を持たない組み込みのラベル(§6.11)なので、Blocking を行から
+      落とすのは型の上だけの操作である。run が実行時には恒等写像である(§14.4)のと
+@@ -1408,7 +1091,6 @@ let reset () =
+   Hashtbl.reset aliases;
+   Hashtbl.reset classes;
+   Hashtbl.reset instances;
+-  Hashtbl.reset builtin_redecls;
+   Hashtbl.reset datas;
+   Hashtbl.reset ctor_owner;
+   Hashtbl.reset effects;
+@@ -1420,7 +1102,6 @@ let reset () =
+   Hashtbl.reset reserved_predicates;
+   Hashtbl.reset externs;
+   Hashtbl.reset type_namespace;
+-  Hashtbl.reset user_type_redecls;
+   Hashtbl.reset module_con_synonyms;
+   Hashtbl.reset module_val_synonyms;
+   Hashtbl.reset con_hints;
+diff --git a/lib/dump.ml b/lib/dump.ml
+index 142d60f..07afff9 100644
+--- a/lib/dump.ml
++++ b/lib/dump.ml
+@@ -353,7 +353,7 @@ let rec sexp_of_decl (_, d) =
+   | DNewtype n ->
+       let base = [ A (if n.nt_pub then "newtype-pub" else "newtype"); A n.nt_name ] in
+       let base = match n.nt_params with [] -> base | ps -> base @ [ L (List.map sexp_of_tparam ps) ] in
+-      let rhs = match n.nt_rhs with NtHole -> [ A "???" ] | NtCtors cs -> List.map sexp_of_ctor_decl cs in
++      let rhs = match n.nt_rhs with NtCtors cs -> List.map sexp_of_ctor_decl cs in
+       L (base @ rhs)
+   | DEffect e ->
+       let base = [ A (if e.ef_pub then "effect-pub" else "effect"); A e.ef_name ] in
+@@ -370,8 +370,7 @@ let rec sexp_of_decl (_, d) =
+             L (vb @ [ A ":"; sexp_of_ty v.cv_ty ]))
+           c.cls_vals
+       in
+-      let derives = List.map (fun d -> L [ A "derive"; A d ]) c.cls_derives in
+-      L (base @ vals @ derives)
++      L (base @ vals)
+   | DInstance i ->
+       (* 束縛子があるときだけ tparams のリストを先に出す。既定値を出さないという
+          本章の方針に従う *)
+diff --git a/lib/elab.ml b/lib/elab.ml
+index d3ff2ea..bcdffcb 100644
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -929,9 +929,6 @@ and expand_alias env level ~expanding info args =
+        展開後の型に制約の痕跡も残らないので、その場で調べるしかない。これは newtype より
+        早い時点である。newtype の制約は値の構築時に効くので、Box[NoShow] は型として
+        書けるが Box(v) で落ちる *)
+-    List.iter2
+-      (fun (tp : type_param) t -> List.iter (fun li -> Unify.add_class t (intern (show_long_id li))) tp.tp_classes)
+-      info.Decls.al_params arg_tys;
+     let types =
+       List.fold_left2 (fun m tp t -> SMap.add tp.tp_name t m) SMap.empty info.Decls.al_params arg_tys
+     in
+@@ -2268,8 +2265,6 @@ and elab_handle env level eff clauses body =
+     match name_of e with
+     | "Console" ->
+         "エフェクト Console はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:464, :536)。出力先を変えたいときは Print をハンドルしてください(プレリュードの with_stdout が Print を Console へ翻訳します)"
+-    | "Fs" ->
+-        "エフェクト Fs はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:465, :536)。ファイル操作を差し替えたいときは File のような自前のエフェクトをハンドルしてください(仕様 sample.kel:602 の with_file が見本)"
+     | n -> "エフェクト " ^ n ^ " はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:726。スケジューラは書けません)"
+   in
+   let target =
+@@ -3419,8 +3414,7 @@ let newtype_param_env env (n : T.newtype') =
+     List.map2
+       (fun (tp : type_param) hk ->
+         let kind = if tp.tp_arity > 0 then k_arrow tp.tp_arity else hk in
+-        let classes = List.map (fun li -> intern (show_long_id li)) tp.tp_classes in
+-        { vid = new_oid (); vlevel = 0; vkind = kind; vcls = classes })
++        { vid = new_oid (); vlevel = 0; vkind = kind; vcls = [] })
+       n.T.nt_params head_kinds
+   in
+   let types =
+@@ -3440,7 +3434,6 @@ let newtype_param_env env (n : T.newtype') =
+    §11.3 の読み分けが `{…}` を型として読む(`test/kinds.t` の fwdrow) *)
+ let speculate_newtype env (n : T.newtype') =
+   match n.T.nt_rhs with
+-  | T.NtHole -> ()
+   | T.NtCtors ctors ->
+       let _, env' = newtype_param_env env n in
+       (* 例外はフィールドごとに握り潰す。effect の操作の登録は 1b なので、投機の時点では
+@@ -3461,8 +3454,6 @@ let register_newtype env (n : T.newtype') =
+      F[_] と書いてあればその場で確定する。既定化は 1b の後始末で行う *)
+   let params, env' = newtype_param_env env n in
+   match n.T.nt_rhs with
+-  | T.NtHole ->
+-      Decls.add_data { Decls.dd_name = intern n.T.nt_name; dd_params = params; dd_ctors = []; dd_opaque = true }
+   | T.NtCtors ctors ->
+       let ctors =
+         List.map
+@@ -3716,31 +3707,6 @@ let register_class env (c : T.class_decl') =
+        "クラスパラメータに制約は書けません(スーパークラスは入れない裁定です。両方が要るときは [A: Eq + Ord] のように並べて書いてください)");
+   let pinfo = { vid = new_oid (); vlevel = 0; vkind = param_kind; vcls = [ cls ] } in
+   let pvar = TVar (ref (Generic pinfo)) in
+-  List.iter
+-    (fun d -> if d <> "structural" then type_error ("未知の導出規則: " ^ d ^ "(v0 は derive structural のみ)"))
+-    c.T.cls_derives;
+-  (* derive structural は、利用者が新しく宣言するクラスには書けない。sample.kel:383 は
+-     「利用者には書かせない。コヒーレンスを守るため、組み込みの自動導出だけがインスタンスを与える」
+-     と定める。受理すると、elab は任意のクラスで閉じた行に構造的導出を認めるのに、
+-     実行時の構造的フォールバック(§14.7)は Eq.eq に決め打ちなので、
+-     型検査を通ったプログラムが実行時に落ちる。
+-     クラス表に既にある名前の宣言は、ここでは弾かない。組み込み表が登録したクラスの
+-     再宣言なら、導出の指定が一致するかを add_class_decl が照合し、それ以外の名前なら
+-     add_class_decl が二重宣言として拒否する。この検査はカインドの検査より先に置く。
+-     逆の順だと、新しいクラスに、カインドを直せという直しようのない案内が出る
+-     (直すと、今度はこちらの検査に当たる) *)
+-  (if List.mem "structural" c.T.cls_derives && (not !Decls.in_prelude) && not (Hashtbl.mem Decls.classes cls) then
+-     type_error "derive structural はユーザ宣言のクラスには書けません(構造的な型へのインスタンスは組み込みの自動導出のみが与えます)");
+-  (* derive structural のカインドの検査。sample.kel:397-399 は、derive structural を
+-     書けるのはパラメータのカインドが Type のクラスだけで、カインドで判別できるので宣言の
+-     時点でエラーにする、と定める。構造的導出はレコードやヴァリアントの各フィールドへ制約を
+-     配る規則なので、Type のクラスにしか意味が無い。上の全面的な拒否があるので、この検査が
+-     単独で効くのは、プレリュード(--prelude で差し替えたものを含む)を処理している間と、
+-     クラス表に既にある名前でクラスを宣言したときだけ *)
+-  (if List.mem "structural" c.T.cls_derives && not (same_kind param_kind KStar) then
+-     type_error
+-       ("derive structural は Type のクラスにしか付けられません(" ^ c.T.cls_name ^ " のパラメータは "
+-      ^ show_kind param_kind ^ " です)"));
+   let methods =
+     List.map
+       (fun (v : T.class_val) ->
+@@ -3814,22 +3780,16 @@ let register_class env (c : T.class_decl') =
+              ^ " が既に宣言しています(非修飾名が衝突するため、v0 では同名メソッドを複数のクラスに宣言できません)"))
+         Decls.classes)
+     methods;
+-  match
+-    Decls.add_class_decl
++  Decls.add_class_decl
+       {
+         Decls.ci_name = cls;
+         ci_param = pinfo;
+         ci_param_kind = param_kind;
+-        ci_derive_structural = List.mem "structural" c.T.cls_derives;
++        ci_derive_structural = false;
+         ci_builtin = false;
+         ci_methods = methods;
+-      }
+-  with
+-  | `Added -> methods
+-  | `Builtin prev ->
+-      (* 組み込みと同名のクラス。構造の照合は第6章の add_class_decl が済ませている。
+-         実体は組み込みを使う *)
+-      prev.Decls.ci_methods
++      };
++  methods
+ 
+ (* ## 11.34 インスタンスの頭
+ 
+@@ -4439,23 +4399,12 @@ let with_decl_module node f =
+   Decls.current_module := Hashtbl.find_opt Decls.decl_module (Tree.oid_of node);
+   Fun.protect ~finally:(fun () -> Decls.current_module := saved) f
+ 
+-(* 行カインドのパラメータには、型クラスの制約を書けない。
+-   型クラスは Type のクラスなので、行に要求しても満たす手段が無い。
+-   宣言の位置で拒否しないと、エイリアスでは使用点ごとに落ち、
+-   newtype では構築点が行を見ないので素通りする。
+-   カインドが決まった後(1b の後始末の 2 周目)に、宣言の位置で確かめる *)
+-let check_row_constraints (tparams : type_param list) (kinds : kind list) =
+-  if List.length tparams = List.length kinds then
+-    List.iter2
+-      (fun (tp : type_param) k ->
+-        match kind_repr k with
+-        | KRow when tp.tp_classes <> [] ->
+-            type_error
+-              ("型パラメータ " ^ tp.tp_name ^ " は行カインドなので、型クラス "
+-              ^ String.concat ", " (List.map show_long_id tp.tp_classes)
+-              ^ " の制約は書けません(型クラスは Type のクラス)")
+-        | _ -> ())
+-      tparams kinds
++let no_param_constraints what name (tparams : type_param list) =
++  List.iter
++    (fun (tp : type_param) ->
++      if tp.tp_classes <> [] then
++        type_error (what ^ " " ^ name ^ " の型パラメータ " ^ tp.tp_name ^ " には型クラスの制約を書けません"))
++    tparams
+ 
+ let process_decls env ~emit decls =
+   let eff0 = toplevel_eff () in
+@@ -4466,6 +4415,7 @@ let process_decls env ~emit decls =
+       with_decl_module node @@ fun () ->
+       match d with
+       | T.DType t ->
++          no_param_constraints "型エイリアス" t.T.ta_name t.T.ta_params;
+           register_companion t.T.ta_name;
+           Decls.add_alias
+             {
+@@ -4482,12 +4432,14 @@ let process_decls env ~emit decls =
+               al_module = !Decls.current_module;
+             }
+       | T.DNewtype n ->
++          no_param_constraints "newtype" n.T.nt_name n.T.nt_params;
+           (* 型の名前空間の主張はここ(宣言順)で行う。add_data も add_effect も 1b なので、
+              種別の交差の検出を各 add に任せると、1a の add_alias が常に先回りし、後に
+              書かれたエイリアスが、先に書かれた newtype を再宣言として逆向きに咎める *)
+           Decls.claim_type_name "newtype" (intern n.T.nt_name);
+           register_companion n.T.nt_name;
+-          if not (Decls.prelude_owned "data" (intern n.T.nt_name)) || !Decls.in_prelude then
++          if Decls.prelude_owned "data" (intern n.T.nt_name) && not !Decls.in_prelude then
++            type_error ("標準環境の newtype " ^ n.T.nt_name ^ " は再宣言できません");
+             (* 頭のカインドは、パラメータごとにカインド変数を積む。1b の register_newtype が
+                このセルを剥がして dd_params の vkind に据えるので、本体で決まったカインドが
+                そのまま頭に反映される *)
+@@ -4550,12 +4502,10 @@ let process_decls env ~emit decls =
+       match d with
+       | T.DClass c ->
+           List.iter (fun (v : T.class_val) -> List.iter (fun tp -> ignore (class_names_of tp)) v.T.cv_tparams) c.T.cls_vals
+-      | T.DNewtype n -> List.iter (fun tp -> ignore (class_names_of tp)) n.T.nt_params
+       (* DType もここで確かめる。プレリュード所有名の再宣言は add_alias が黙って捨てるので、
+          パス 2 の make_rigids には AST が届かない。AST の側で確かめないと、
+          type Unit[A: Bogus] = A が素通りする *)
+       | T.DType t -> (
+-          List.iter (fun tp -> ignore (class_names_of tp)) t.T.ta_params;
+           (* エイリアス本体のカインドの推論。ここで一度、本体を投機的に精緻化し、
+              パラメータのカインドだけを決めて結果は捨てる。パス 2 の実在検査より前に
+              行わないと、エイリアスを先に使う宣言があったときに、カインドが宣言順で変わる。
+@@ -4593,14 +4543,12 @@ let process_decls env ~emit decls =
+           default_kind (Decls.con_kind (intern n.T.nt_name) (List.length n.T.nt_params));
+           match Hashtbl.find_opt Decls.datas (intern n.T.nt_name) with
+           | Some dd ->
+-              List.iter (fun (i : var_info) -> default_kind i.vkind) dd.Decls.dd_params;
+-              check_row_constraints n.T.nt_params (List.map (fun (i : var_info) -> i.vkind) dd.Decls.dd_params)
++              List.iter (fun (i : var_info) -> default_kind i.vkind) dd.Decls.dd_params
+           | None -> ())
+       | T.DType t -> (
+           match Hashtbl.find_opt Decls.aliases (intern t.T.ta_name) with
+           | Some info ->
+-              List.iter default_kind info.Decls.al_kinds;
+-              check_row_constraints t.T.ta_params info.Decls.al_kinds
++              List.iter default_kind info.Decls.al_kinds
+           | None -> ())
+       | _ -> ())
+     decls;
+diff --git a/lib/interp.ml b/lib/interp.ml
+index 56dc9cd..ccc2220 100644
+--- a/lib/interp.ml
++++ b/lib/interp.ml
+@@ -1079,38 +1079,6 @@ let register_builtin_values globals =
+       match Builtin.arg1 args with
+       | VMutArray a -> VArray (Array.copy a)
+       | _ -> runtime_error "MutableArray ではありません");
+-  (* par と par_map。逐次実装が並列実行と観測上同値である根拠は、スケジューラが
+-     無いことではなく、コールバックの行が @ {} に閉じていることにある。コールバックは
+-     Heap も Console も Async も起こせないので、実行順序を観測できない(§6.11b)。
+-     並列に実行した場合と違うのは 1 点だけで、コールバックが例外で脱出したとき、
+-     逐次実装では後続を評価しない(素の OCaml と同じ)。
+-     par_map の返り値は不変の Array[B] で、可変配列とは型が違う。
+-     決定性は型が守り、その根拠は次の 3 つである。可変配列は h を型に持つので、
+-     @ {} のコールバックからは触れない。入れ子の矢印で @ を省略すると @ {} と読むので、
+-     高階の位置でエフェクトを隠す形が書けない(test/annot_rows.t の launder)。
+-     ファイルを扱うプリミティブは @ Fs を持つ(test/fs_effect.t) *)
+-  reg "par_map" (fun args ->
+-      match Builtin.arg_values args with
+-      | [ VArray a; f ] ->
+-          (* 適用の順序は添字 0 から明示的に固定し、Array.map の適用順に任せない。
+-             par の左から右と同じく、逐次実装の意味論は順序も含めて固定する(規約 2) *)
+-          let n = Array.length a in
+-          if n = 0 then VArray [||]
+-          else (
+-            let out = Array.make n unit in
+-            for i = 0 to n - 1 do
+-              out.(i) <- apply f (VRecord [ (Type.l_item, a.(i)) ])
+-            done;
+-            VArray out)
+-      | _ -> runtime_error "par_map の引数が不正です");
+-  reg "par" (fun args ->
+-      match Builtin.arg_values args with
+-      | [ fa; fb ] ->
+-          (* 左から評価する。OCaml の未規定の評価順に任せない(規約 2) *)
+-          let va = apply fa unit in
+-          let vb = apply fb unit in
+-          VRecord [ (Type.l_item, va); (Type.l_item, vb) ]
+-      | _ -> runtime_error "par の引数が不正です");
+   (* pinned は恒等関数として実装する。Diktor が Blocking について守る観測できる
+      契約は、並列度を減らさないことと、キャンセルの配送点にならないことの 2 つである。
+      Diktor はタスクを 1 つしか持たず(Async の操作はすぐに継続を再開する)、配送点は
+@@ -1277,11 +1245,6 @@ let exec_decl versions env ((_, d) as node : T.decl) =
+         | [ (_, T.EApply ((_, T.EIdent (LongId comps)), _)) ] -> Decls.resolve_con (Type.intern (String.concat "." comps))
+         | _ -> bug "インスタンス頭が解決できません"
+       in
+-      if
+-        (match Decls.find_class cls with Some ci -> ci.Decls.ci_builtin | None -> false)
+-        && Decls.builtin_instance_exists cls con
+-      then env (* 組み込みインスタンスは差し替えない(elab と一致させる) *)
+-      else
+       let methods =
+         List.concat_map
+           (fun ((_, d) : T.decl) ->
+@@ -1346,7 +1309,6 @@ let run ~sink decls =
+   Hashtbl.reset user_instances;
+   Hashtbl.reset resolution_cache;
+   Hashtbl.reset positions_cache;
+-  Builtin.reset_fs ();
+   let globals = Hashtbl.create 512 in
+   register_builtin_values globals;
+   register_class_methods globals;
+diff --git a/lib/lexer.ml b/lib/lexer.ml
+index 9d3db5e..a4da1e1 100644
+--- a/lib/lexer.ml
++++ b/lib/lexer.ml
+@@ -234,7 +234,6 @@ module Make (Data : Syntax.Data) = struct
+     | "and" -> AND
+     | "case" -> CASE
+     | "class" -> CLASS
+-    | "derive" -> DERIVE
+     | "effect" -> EFFECT
+     | "extends" -> EXTENDS
+     | "extern" -> EXTERN
+@@ -834,7 +833,7 @@ module Make (Data : Syntax.Data) = struct
+   (* NL の後で文を始められるトークン。AND / CASE / MATCH / HANDLE / DOT / BACKSLASH /
+      EXTENDS / VERTICAL / 二項演算子は、前の行の続きにするために除いている *)
+   let can_begin_statement = function
+-    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | DERIVE | WITH | PERFORM | RESUME | RUN | FN
++    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | WITH | PERFORM | RESUME | RUN | FN
+     | LOWER_IDENTIFIER _ | UPPER_IDENTIFIER _ | HASH_IDENT _ | NUMBER _ | TEXT _ | BOOL _ | HOLE | EXCLAMATION
+     | LBRACE_BLOCK | LBRACE_RECORD | LBRACE_TYPE | LPAREN ->
+         true
+@@ -940,7 +939,6 @@ module Make (Data : Syntax.Data) = struct
+     | CLASS -> "class"
+     | COLON -> ":"
+     | COMMA -> ","
+-    | DERIVE -> "derive"
+     | DOT -> "."
+     | DOTDOTDOT -> "..."
+     | EFFECT -> "effect"
+diff --git a/lib/parser.mly b/lib/parser.mly
+index 0d6685f..e2138bd 100644
+--- a/lib/parser.mly
++++ b/lib/parser.mly
+@@ -413,7 +413,7 @@ let set_pub = function
+   | DInstance _ -> raise (Syntax_error "type instance に pub は付けられません")
+   | DExp _ -> raise (Syntax_error "式文に pub は付けられません")
+ 
+-type nt_rhs_raw = RhsNone | RhsShort of field_decl list | RhsCtors of ctor_decl list | RhsHole
++type nt_rhs_raw = RhsNone | RhsShort of field_decl list | RhsCtors of ctor_decl list
+ %}
+ 
+ (* ## 3.11 トークン表
+@@ -437,7 +437,7 @@ type nt_rhs_raw = RhsNone | RhsShort of field_decl list | RhsCtors of ctor_decl
+ 
+ %token LBRACE_BLOCK LBRACE_RECORD LBRACE_TYPE RBRACE
+ %token BACKSLASH DOTDOTDOT LESS_EQ GREATER_EQ HOLE
+-%token CLASS INSTANCE DERIVE EXTENDS EXTERN NEWTYPE PERFORM PUB RESUME RUN
++%token CLASS INSTANCE EXTENDS EXTERN NEWTYPE PERFORM PUB RESUME RUN
+ %token <string> HASH_IDENT
+ 
+ (* ## 3.12 開始記号の型と、`Error` という名前の衝突
+@@ -573,15 +573,13 @@ decl_body:
+   | TYPE upper_id typarams_opt kind_annot_opt EQ ty
+       { DType { ta_pub = false; ta_name = $2; ta_params = $3; ta_kind = $4; ta_body = $6 } }
+   | TYPE CLASS upper_id typarams class_body
+-      { let vals, derives = $5 in
+-        DClass { cls_pub = false; cls_name = $3; cls_params = $4; cls_vals = vals; cls_derives = derives } }
++      { DClass { cls_pub = false; cls_name = $3; cls_params = $4; cls_vals = $5 } }
+   | TYPE INSTANCE typarams_opt upper_id LBRACKET ty_args RBRACKET instance_body
+       { DInstance { ins_tparams = $3; ins_class = $4; ins_args = $6; ins_body = $8 } }
+   | NEWTYPE upper_id typarams_opt newtype_rhs
+       { let rhs =
+           match $4 with
+           | RhsNone -> NtCtors []
+-          | RhsHole -> NtHole
+           | RhsCtors cs -> NtCtors cs
+           (* newtype UserId(Int32) は newtype UserId = UserId(Int32) の略記 *)
+           | RhsShort fields -> NtCtors [ { cd_name = $2; cd_fields = fields } ]
+@@ -705,21 +703,17 @@ instance_body: lbrace items RBRACE { $2 }
+ 
+ class_body: lbrace class_items RBRACE { $2 }
+ class_items:
+-  |                             { ([], []) }
++  |                             { [] }
+   | semi class_items            { $2 }
+-  | class_item                  { (match $1 with Either.Left v -> ([ v ], []) | Either.Right d -> ([], [ d ])) }
+-  | class_item semi class_items
+-      { let vals, derives = $3 in
+-        match $1 with Either.Left v -> (v :: vals, derives) | Either.Right d -> (vals, d :: derives) }
++  | class_item                  { [ $1 ] }
++  | class_item semi class_items { $1 :: $3 }
+ class_item:
+-  | VAL lower_id typarams_opt COLON ty { Either.Left { cv_name = $2; cv_tparams = $3; cv_ty = $5 } }
+-  | DERIVE lower_id                    { Either.Right $2 }
++  | VAL lower_id typarams_opt COLON ty { { cv_name = $2; cv_tparams = $3; cv_ty = $5 } }
+ 
+ newtype_rhs:
+   |                           { RhsNone }
+   | LPAREN ctor_fields RPAREN { RhsShort $2 }
+   | EQ ctors                  { RhsCtors $2 }
+-  | EQ HOLE                   { RhsHole }
+ 
+ ctors: ctor { [ $1 ] } | ctor VERTICAL ctors { $1 :: $3 }
+ ctor:
+diff --git a/lib/prelude.kel b/lib/prelude.kel
+index d444c79..0719a9d 100644
+--- a/lib/prelude.kel
++++ b/lib/prelude.kel
+@@ -224,8 +224,6 @@ newtype List[A] = Nil | Cons(head: A, tail: List[A])
+ // ランタイムが提供する Console / Async / Fs(仕様 sample.kel:464, :465, :731)と、ユーザ層の Print
+ effect Console = { write: (String) => Unit }
+ effect Print   = { print: (String) => Unit }
+-effect Async   = { yield_: () => Unit, sleep: (Int64) => Unit }
+-effect Fs      = {}
+ 
+ // ## 15.5 extern の型と実装
+ //
+@@ -341,10 +339,6 @@ extern "prim" let __i64_to_f64(x: Int64): Float64
+ extern "prim" let __f64_to_i32(x: Float64): Int32
+ extern "prim" let __f64_to_i64(x: Float64): Int64
+ extern "prim" let __panic[A](message: String): A
+-extern "prim" let __open(path: String): Int32 @ Fs
+-extern "prim" let __read(h: Int32): String @ Fs
+-extern "prim" let __write(h: Int32, s: String): Unit @ Fs
+-extern "prim" let __close(h: Int32): Unit @ Fs
+ 
+ // 比較の残り 9 本と `__show_int32`。実装表のすべての名前に型を与える(§15.5)
+ extern "prim" let __int64_le(x: Int64, y: Int64): Boolean
+diff --git a/lib/prims.ml b/lib/prims.ml
+index 6c4b6fe..f63c247 100644
+--- a/lib/prims.ml
++++ b/lib/prims.ml
+@@ -241,7 +241,7 @@ let show_bin_op = function
+    `toplevel_effects` を `runtime_effects` との連結で定義しているのは、
+    この包含を構造で保つためである。 *)
+ 
+-let runtime_effects = [ "Console"; "Async"; "Fs" ]
++let runtime_effects = [ "Console" ]
+ 
+ (* 上の名簿に Blocking を足したもの。包含 runtime_effects ⊆ toplevel_effects を
+    構造で保つために連結で定義する *)
+diff --git a/lib/syntax.ml b/lib/syntax.ml
+index 9469a60..e7b70af 100644
+--- a/lib/syntax.ml
++++ b/lib/syntax.ml
+@@ -1050,7 +1050,7 @@ module Make (Data : Data) = struct
+ 
+   and field_decl = { fd_label : string option; fd_ty : type_exp }
+ 
+-  type newtype_rhs = NtCtors of ctor_decl list (* Never は [] *) | NtHole (* = ??? *)
++  type newtype_rhs = NtCtors of ctor_decl list (* Never は [] *)
+ 
+   type newtype' = { nt_pub : bool; nt_name : string; nt_params : type_param list; nt_rhs : newtype_rhs }
+ 
+@@ -1068,7 +1068,6 @@ module Make (Data : Data) = struct
+     cls_name : string;
+     cls_params : type_param list; (* 1 個であることは elab が検査する *)
+     cls_vals : class_val list;
+-    cls_derives : string list; (* derive structural *)
+   }
+ 
+   type extern_decl' = {

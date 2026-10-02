@@ -1,0 +1,3 @@
+let mk(): (Int32) => Int32 @ {} = run h { fn(x) => x + 1 }
+let u = run h { let r = Ref.new(0); Ref.set(r, mk()(1)); Ref.get(r) }
+echoln(show(u))

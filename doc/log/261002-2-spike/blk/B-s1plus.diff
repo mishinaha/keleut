@@ -1,0 +1,168 @@
+diff --git a/lib/elab.ml b/lib/elab.ml
+index d3ff2ea..6ced37b 100644
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -253,7 +253,11 @@ let row_failure msg =
+    (仕様 §9「@ {} だけは両方向に効く」)。
+    矢印そのものを組み直すので、Tree.set_ty より前に呼ぶ *)
+ let reopen_pure_row level ty =
+-  match repr ty with TArrow (a, r, e) when repr e = TRowEmpty -> TArrow (a, r, new_row_var level) | _ -> ty
++  match repr ty with
++  | TArrow (a, r, e) -> (
++      let _, tail = row_fields e in
++      match repr tail with TRowEmpty -> TArrow (a, r, row_append e (new_row_var level)) | _ -> ty)
++  | _ -> ty
+ 
+ (* 最外の @ が書かれているか(reopen_pure_row で開き直すかどうかの判定)。
+    関数束縛は lb_eff を見る。値束縛は、注釈の頭が矢印リテラルならその @ を見る。
+@@ -2684,13 +2688,21 @@ and make_rigids ?kinds level tparams =
+    注釈をエイリアスで書けば、入れ子の読みになって通る(`test/annot_rows.t` の valclosed / valclosedfn / valclosedok)。 *)
+ 
+ and open_explicit_eff lvl eff =
+-  let fields, tail = row_fields eff in
++  let _fields, tail = row_fields eff in
+   match repr tail with
+-  | TRowEmpty when fields <> [] ->
++  | TRowEmpty ->
+       let r = new_rigid_ref ~kind:KRow lvl in
+       (row_append eff (TVar r), [ ("", TVar r, r) ])
+   | _ -> (eff, [])
+ 
++(* S1 spike: the published type opens the closed outermost row *)
++and publish_open lvl ty =
++  match repr ty with
++  | TArrow (a, r, e) ->
++      let e', rig = open_explicit_eff lvl e in
++      (TArrow (a, r, e'), rig)
++  | _ -> (ty, [])
++
+ (* ## 11.27 剛定数の解放
+ 
+    束縛のスコープを出るとき、`release_rigids` はこの束縛が作った剛定数を Generic に書き換える。
+@@ -2857,16 +2869,8 @@ and elab_binding env level eff ((_, b) as node : T.let_binding) : env =
+         let env2 = List.fold_left2 (fun env p t -> elab_pat env lvl seen t p) env_ty params param_tys in
+         let fn_eff, eff_rigids =
+           match b.T.lb_eff with
+-          | Some e -> open_explicit_eff lvl (elab_eff env_ty lvl e)
+-          | None when b.T.lb_pub ->
+-              (* pub の @ 省略は純粋を表す。閉じた空の行にすると sample.kel 自身が
+-                 落ちる(Db.query が handle_request から呼べない)。本体には Rigid を
+-                 見せて perform を拒み、公開スキーマでは Generic に解放して、どんな
+-                 行の文脈からも呼べるようにする。open_explicit_eff が空でない行に
+-                 することを、空の行にもする形である *)
+-              let r = new_rigid_ref ~kind:KRow lvl in
+-              (match !r with Rigid i -> Hashtbl.replace pub_pure_rows i.vid () | _ -> ());
+-              (TVar r, [ ("", TVar r, r) ])
++          | Some e -> (elab_eff env_ty lvl e, [])
++          | None when b.T.lb_pub -> (TRowEmpty, [])
+           | None -> (new_row_var lvl, [])
+         in
+         extra_rigids := eff_rigids @ !extra_rigids;
+@@ -2878,7 +2882,12 @@ and elab_binding env level eff ((_, b) as node : T.let_binding) : env =
+         (try Unify.unify ret_ty body_ty
+          with Type_error msg when b.T.lb_ret <> None -> type_error ("注釈された返り値型を満たしません(" ^ msg ^ ")"));
+         List.iter2 (fun p t -> if not (irrefutable_pat p) then Exhaust.queue [ (p, false) ] t) params param_tys;
+-        TArrow (TRecord (closed_item_row param_tys), ret_ty, fn_eff)
++        let t = TArrow (TRecord (closed_item_row param_tys), ret_ty, fn_eff) in
++        if b.T.lb_eff <> None || b.T.lb_pub then (
++          let t', rig = publish_open lvl t in
++          extra_rigids := rig @ !extra_rigids;
++          t')
++        else t
+     | None ->
+         (* 値束縛の注釈の頭の矢印は、束縛の最外である。ラベルのある閉じた行を
+            書いたときは関数束縛と同じく、本体には Rigid を足して開き、公開
+@@ -2892,17 +2901,8 @@ and elab_binding env level eff ((_, b) as node : T.let_binding) : env =
+           | Some t -> (
+               let ty = elab_value_type_outer env_ty lvl "型注釈" t in
+               match (snd t, repr ty) with
+-              | T.EArrow (_, _, Some _), TArrow (a, r, e) ->
+-                  let e', eff_rigids = open_explicit_eff lvl e in
+-                  extra_rigids := eff_rigids @ !extra_rigids;
+-                  TArrow (a, r, e')
+-              | T.EArrow (_, _, None), TArrow (a, r, _) when b.T.lb_pub ->
+-                  (* pub の省略 @ は、本体は純粋、公開は行多相と読む(仕様 §13。
+-                     関数束縛の lb_eff = None と同じ扱い) *)
+-                  let rr = new_rigid_ref ~kind:KRow lvl in
+-                  (match !rr with Rigid i -> Hashtbl.replace pub_pure_rows i.vid () | _ -> ());
+-                  extra_rigids := ("", TVar rr, rr) :: !extra_rigids;
+-                  TArrow (a, r, TVar rr)
++              | T.EArrow (_, _, Some _), TArrow _ -> ty
++              | T.EArrow (_, _, None), TArrow (a, r, _) when b.T.lb_pub -> TArrow (a, r, TRowEmpty)
+               | _ -> ty)
+         in
+         (* 値束縛の初期化式は外側の eff で推論する *)
+@@ -2914,7 +2914,12 @@ and elab_binding env level eff ((_, b) as node : T.let_binding) : env =
+            if b.T.lb_pub && (not (outer_eff_written b)) && row_failure msg then
+              type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")")
+            else type_error ("注釈された型を満たしません(" ^ msg ^ ")"));
+-        vty
++        (match b.T.lb_ret with
++         | Some (_, T.EArrow (_, _, eff)) when eff <> None || b.T.lb_pub ->
++             let t', rig = publish_open lvl vty in
++             extra_rigids := rig @ !extra_rigids;
++             t'
++         | _ -> vty)
+   in
+   (* @ を省略した let の行が本体で空に固まったら、公開のときに開き直す
+      (§11.26)。明示の @ と pub(Rigid の経路)は対象外。値束縛は、注釈の頭の
+@@ -3077,6 +3082,7 @@ and elab_rec_bindings env level eff bs : env =
+     | TRowExtend (_, f, rest) -> mentions r f || mentions r rest
+   in
+   let rec_arg_queue = ref [] in
++  let published = ref [] in
+   let pub_pure_row lvl =
+     match !shared_pub_row with
+     | Some (t, r) -> (t, [ ("", t, r) ])
+@@ -3104,11 +3110,8 @@ and elab_rec_bindings env level eff bs : env =
+             let env2 = List.fold_left2 (fun env p t -> elab_pat env lvl seen t p) env_ty params param_tys in
+             let fn_eff, eff_rigids =
+               match b.T.lb_eff with
+-              | Some e -> open_explicit_eff lvl (elab_eff env_ty lvl e)
+-              | None when b.T.lb_pub ->
+-                  (* 共有 Rigid は群の終わりに解放するので、束縛ごとの
+-                     解放リストには入れない *)
+-                  (fst (pub_pure_row lvl), [])
++              | Some e -> (elab_eff env_ty lvl e, [])
++              | None when b.T.lb_pub -> ignore pub_pure_row; (TRowEmpty, [])
+               | None -> (new_row_var lvl, [])
+             in
+             extra_rigids := eff_rigids;
+@@ -3130,16 +3133,23 @@ and elab_rec_bindings env level eff bs : env =
+               | Some t -> (
+                   let ty = elab_value_type_outer env_ty lvl "型注釈" t in
+                   match (snd t, repr ty) with
+-                  | T.EArrow (_, _, Some _), TArrow (a, r, e) ->
+-                      let e', eff_rigids = open_explicit_eff lvl e in
+-                      extra_rigids := eff_rigids @ !extra_rigids;
+-                      TArrow (a, r, e')
+                   | _ -> ty)
+             in
+             Unify.unify vty (elab_exp env_ty lvl eff b.T.lb_body);
+             vty
+       in
+       Unify.unify pre fn_ty;
++      let fn_ty =
++        if outer_eff_written b || b.T.lb_pub then (
++          match (b.T.lb_params, b.T.lb_ret) with
++          | Some _, _ | None, Some (_, T.EArrow _) ->
++              let t', rig = publish_open lvl fn_ty in
++              extra_rigids := rig @ !extra_rigids;
++              published := (bnode, t') :: !published;
++              t'
++          | _ -> fn_ty)
++        else fn_ty
++      in
+       Tree.set_ty bnode fn_ty;
+       let shared, own =
+         List.partition
+@@ -3158,6 +3168,9 @@ and elab_rec_bindings env level eff bs : env =
+   let names =
+     List.map2
+       (fun (((_, b) as bnode) : T.let_binding) (x, t) ->
++        match List.assq_opt bnode !published with
++        | Some t' -> (x, t')
++        | None ->
+         if (not (outer_eff_written b)) && not b.T.lb_pub then (
+           let t' = reopen_pure_row lvl t in
+           if t' != t then Tree.set_ty bnode t';

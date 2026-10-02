@@ -1,0 +1,114 @@
+diff --git a/test/ast.t b/test/ast.t
+index 68b1bb3..38c5779 100644
+--- a/test/ast.t
++++ b/test/ast.t
+@@ -134,16 +134,8 @@ with 糖衣(§6.4: _ は0引数継続、それ以外は1引数継続。最内 Re
+   > pub newtype Parser[A] = ???
+   > EOF
+   $ diktor --dump-ast decls.kel
+-  (type Pair = (row (_item: Int32) (_item: String)))
+-  (type Req : EffectRow = (row ReqId Logger))
+-  (newtype UserId (UserId Int32))
+-  (newtype List (A) (Nil) (Cons A (tail: (tapp List A))))
+-  (effect Console (read: (=> () String)) (write: (=> (String) Unit)))
+-  (class Eq (A) (val eq : (=> (A A) Boolean)) (derive structural))
+-  (instance Eq (Point) (dlet (binding eq (params a b) = true)))
+-  (extern "prim" __int32_add (params (pannot x Int32) (pannot y Int32)) :
+-   Int32)
+-  (newtype-pub Parser (A) ???)
++  decls.kel:8:3: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ パースエラー(exit 2):
+ 
+@@ -157,11 +149,10 @@ with 糖衣(§6.4: _ は0引数継続、それ以外は1引数継続。最内 Re
+ sample.kel 全文がパースできること(M3 完了条件。行数は改訂後の写し — M25 で 332 から 368 に):
+ 
+   $ diktor --dump-ast sample/sample.kel | wc -l
+-  368
++  sample/sample.kel:388:3: パースエラー(付近のトークンを確認してください)
++  0
+   $ diktor --dump-ast sample/sample.kel | sed -n '1,3p'
+-  (type MyInt = Int32)
+-  (type Unit = (row))
+-  (type Point = (row (x: Float64) (y: Float64)))
++  sample/sample.kel:388:3: パースエラー(付近のトークンを確認してください)
+ 
+ 二項演算子の字面(第7章の表 1 枚から出る。M19 / G2。§4.2 / §7.2):
+ 
+diff --git a/test/classes.t b/test/classes.t
+index 4a5c8d3..3b22b23 100644
+--- a/test/classes.t
++++ b/test/classes.t
+@@ -104,8 +104,8 @@ derive structural はユーザの新クラスでは全面拒否(M15)。カイン
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude c14.kel
+-  ! c14.kel:1:1: 型エラー: derive structural はユーザ宣言のクラスには書けません(構造的な型へのインスタンスは組み込みの自動導出のみが与えます)
+-  [1]
++  c14.kel:3:3: パースエラー(付近のトークンを確認してください)
++  [2]
+   $ cat > c14b.kel <<'KEL'
+   > type class Eq[F[_]] {
+   >   val eq[A]: (F[A], F[A]) => Boolean
+@@ -113,8 +113,8 @@ derive structural はユーザの新クラスでは全面拒否(M15)。カイン
+   > }
+   > KEL
+   $ diktor --type-check c14b.kel
+-  ! c14b.kel:1:1: 型エラー: derive structural は Type のクラスにしか付けられません(Eq のパラメータは [_] Type です)
+-  [1]
++  c14b.kel:3:3: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ コンストラクタ由来の制約つき変数も台帳に載る(M17 検証。かつて
+ subst_params 経路が台帳をすり抜け、Empty 由来の Show だけ素通りした):
+diff --git a/test/typecheck.t b/test/typecheck.t
+index 083eae5..1bcb106 100644
+--- a/test/typecheck.t
++++ b/test/typecheck.t
+@@ -289,8 +289,8 @@ derive structural はユーザ宣言のクラスには書けない(sample.kel §
+   > echoln(show(myeq({}, {})))
+   > EOF2
+   $ diktor --type-check ds1.kel
+-  ! ds1.kel:1:1: 型エラー: derive structural はユーザ宣言のクラスには書けません(構造的な型へのインスタンスは組み込みの自動導出のみが与えます)
+-  [1]
++  ds1.kel:3:3: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ 型名の名前空間は newtype / 型エイリアス / effect で 1 つ(M15 検証。
+ かつて種別を替えた再宣言が種別ごとの検査をすり抜け、type List[A] =
+diff --git a/test/typecheck_m7.t b/test/typecheck_m7.t
+index 2f50a22..73f702f 100644
+--- a/test/typecheck_m7.t
++++ b/test/typecheck_m7.t
+@@ -41,8 +41,8 @@ Add / Eq は組み込みと同名なので「照合の上で受理」される(
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude cls.kel
+-  ! cls.kel:7:1: 型エラー: 標準環境の type class Add は再宣言できません
+-  [1]
++  cls.kel:15:3: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ MiniLang §16-9(クラス制約、注釈なし。read 系は v1 の曖昧性検査待ちで除外):
+ 
+diff --git a/test/typecheck_sample.t b/test/typecheck_sample.t
+index 33ba3bd..226aa01 100644
+--- a/test/typecheck_sample.t
++++ b/test/typecheck_sample.t
+@@ -5,11 +5,11 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+ 変更時は dune promote で更新し、必ず目視レビューすること。
+ 
+   $ diktor --type-check sample/stubs.kel sample/sample.kel
+-  ! sample/sample.kel:59:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+-  [1]
++  sample/sample.kel:388:3: パースエラー(付近のトークンを確認してください)
++  [2]
+ 
+ 実行(トップレベル式文: sample.kel:548 の handle と :660 の capture):
+ 
+   $ diktor sample/stubs.kel sample/sample.kel
+-  ! sample/sample.kel:59:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+-  [1]
++  sample/sample.kel:388:3: パースエラー(付近のトークンを確認してください)
++  [2]

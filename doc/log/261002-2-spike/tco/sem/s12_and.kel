@@ -1,0 +1,9 @@
+effect Ask = { ask: (Int32) => Boolean }
+let r = { perform ask(1) && perform ask(2) } handle {
+  case ask(x) => { echoln("ask " + show(x)); x > 0 && resume(x < 5) }
+}
+echoln(show(r))
+let r2 = { perform ask(1) } handle {
+  case ask(x) => { echoln("ask " + show(x)); x > 5 && resume(true) }
+}
+echoln(show(r2))

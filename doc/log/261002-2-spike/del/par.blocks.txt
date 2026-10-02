@@ -1,0 +1,20 @@
+fs_effect.t:50: $ diktor --type-check par_fs.kel
+    -> arr : () => Array[Int32]
+fs_effect.t:55: $ diktor --type-check par2.kel
+    -> ! par2.kel:1:9: 型エラー: 未束縛の変数: par
+fs_effect.t:153: $ diktor --type-check v14.kel
+    -> run_cb : (Cb) => Int32
+== fs_effect.t: 3 blocks (of 30)
+parallel.t:25: $ diktor par.kel
+    -> ! par.kel:14:19: 型エラー: 未束縛の変数: par_map
+parallel.t:39: $ diktor --type-check parbad.kel
+    -> mk : () => Array[Int32]
+== parallel.t: 2 blocks (of 5)
+region.t:69: $ diktor --type-check parget.kel
+    -> ! parget.kel:2:3: 型エラー: 未束縛の変数: par_map
+region.t:190: $ diktor --type-check pardet.kel
+    -> ! pardet.kel:2:3: 型エラー: 未束縛の変数: par_map
+region.t:201: $ diktor parread.kel
+    -> ! parread.kel:2:41: 型エラー: 未束縛の変数: par_map
+== region.t: 3 blocks (of 50)
+TOTAL 8

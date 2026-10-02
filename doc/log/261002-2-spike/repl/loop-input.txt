@@ -1,0 +1,2 @@
+let rec loop(n: Int32, acc: Int32): Int32 = n match { case 0 => acc case _ => loop(n - 1, acc + 1) }
+loop(10000000, 0)

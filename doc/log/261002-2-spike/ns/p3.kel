@@ -1,0 +1,9 @@
+type class C[A] { val cm: (A) => Int32 }
+type instance C[Int32] { let cm(x: Int32): Int32 = x + 1 }
+let a(): Int32 = cm(1)
+let cm(x: Int32): Int32 = 100
+let b(): Int32 = cm(1)
+let c(): Int32 = C.cm(1)
+echoln(show(a()))
+echoln(show(b()))
+echoln(show(c()))

@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+effect Nop = { nop: () => Unit }
+let r = { perform ask() + 1 } handle {
+  case ask() => { 1 } handle { case nop() => resume() case return(x) => resume(x) }
+}
+echoln(show(r))

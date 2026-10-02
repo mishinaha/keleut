@@ -1,0 +1,4 @@
+let rec loop(n: Int32): Unit =
+  (n == 0) match { case true => () case false => run h { let r = Ref.new(n - 1); loop(Ref.get(r)) } }
+loop(N)
+echoln("ok")

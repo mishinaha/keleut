@@ -1,0 +1,13 @@
+diff --git a/lib/show.ml b/lib/show.ml
+index a327e0a..384f05d 100644
+--- a/lib/show.ml
++++ b/lib/show.ml
+@@ -399,7 +399,7 @@ let show_all ts =
+     (* 空の行と裸の行変数は表示しない(§9.6) *)
+     match repr e with
+     | TRowEmpty -> ""
+-    | TVar _ -> ""
++    | TVar _ as v -> " @ " ^ go v
+     | row -> " @ " ^ eff_row row
+   in
+ 

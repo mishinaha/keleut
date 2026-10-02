@@ -1,0 +1,6 @@
+effect Tick = { tick: (Int32) => Int32 }
+let r = { echoln("body start"); let a = perform tick(1); echoln("after1 " + show(a)); let b = perform tick(2); echoln("after2 " + show(b)); a + b } handle {
+  case tick(x) => { echoln("clause " + show(x)); resume(x * 10) }
+  case return(v) => { echoln("return " + show(v)); v + 1000 }
+}
+echoln(show(r))

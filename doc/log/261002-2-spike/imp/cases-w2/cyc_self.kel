@@ -1,0 +1,2 @@
+from "./cyc_self" import x
+pub let x: Int32 = 1

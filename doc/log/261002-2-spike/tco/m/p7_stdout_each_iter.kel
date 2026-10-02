@@ -1,0 +1,4 @@
+let rec loop(n: Int32): Unit @ Console =
+  (n == 0) match { case true => () case false => { with_stdout(fn() => perform print("")); loop(n - 1) } }
+loop(N)
+echoln("ok")

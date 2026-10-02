@@ -1,0 +1,1 @@
+type instance Add[Int32] { let add(x, y) = __int32_sub(x, y) }

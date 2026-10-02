@@ -1,0 +1,4 @@
+effect Tick = { tick: () => Unit }
+let rec ticks(n: Int32): Unit @ Tick = (n == 0) match { case true => () case false => { perform tick(); ticks(n - 1) } }
+ticks(100000) handle { case tick() => { let u = resume(); u } }
+echoln("ok")

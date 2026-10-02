@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+effect Note = { note: (String) => Unit }
+let r = { perform ask() + 1 } handle {
+  case ask() => { perform note("in clause"); resume(5) } handle { case note(s) => { echoln(s); resume() } }
+}
+echoln(show(r))

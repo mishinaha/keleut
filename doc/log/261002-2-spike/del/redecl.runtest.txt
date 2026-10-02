@@ -1,0 +1,542 @@
+File "test/typecheck_sample.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_sample.t b/_build/default/test/typecheck_sample.t.corrected
+index 9d3c492..33ba3bd 100644
+--- a/_build/default/test/typecheck_sample.t
++++ b/_build/default/test/typecheck_sample.t.corrected
+@@ -5,73 +5,11 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+ 変更時は dune promote で更新し、必ず目視レビューすること。
+ 
+   $ diktor --type-check sample/stubs.kel sample/sample.kel
+-  Db.query : (String) => Resp
+-  sqrt : (Float64) => Float64
+-  each : (List[A], (A) => {}) => {}
+-  heavy : (Int32) => Int32
+-  audit_log : ({query: String}, Resp) => {}
+-  handle_client : (Conn) => {} @ {Async extends R1}
+-  a : Int32
+-  b : Int64
+-  c : Int64
+-  d : Int32
+-  e : Float64
+-  sum_xy : ({x: Float64, y: Float64 extends R1}) => Float64
+-  with_z : ({extends R1}) => {z: Float64 extends R1}
+-  move_x : ({x: Float64 extends R1}, Float64) => {x: Float64 extends R1}
+-  outer_x : () => Float64
+-  make_point : (Float64, Float64) => {x: Float64, y: Float64}
+-  swap : ((A, B)) => (B, A)
+-  fst : ({_item: A extends R1}) => A
+-  describe : (#Even | #Odd | R1) => String
+-  report : (#NotFound(String) | #Denied(String) | #Syntax((Int32, Int32))) => String
+-  some_one : () => Option[Int32]
+-  get_or : (Option[A], A) => A
+-  list_length : (List[A]) => Int32
+-  twice_sum_xy : ({x: Float64, y: Float64}) => Float64
+-  dist : ({x: Float64, y: Float64}) => Float64
+-  head_and_rest : ({_item: A extends R1}) => A
+-  inc_all : (List[Int32]) => List[Int32]
+-  count_if : (List[A], (A) => Boolean) => Int32
+-  is_even : (Int32) => Boolean
+-  is_odd : (Int32) => Boolean
+-  fma : [A: Add + Mul] (A, A, A) => A
+-  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean
+-  same_pair : ((Int32, String), (Int32, String)) => Boolean
+-  user_names : (List[{id: String, name: String}]) => List[String] @ {Print extends R1}
+-  println : (String) => {} @ {Print extends R1}
+-  _ : {}
+-  capture : (() => A @ {Print extends R1}) => {value: A, output: String}
+-  try_ : (() => A @ {Fail extends R1}) => #Ok(A) | #Err(String)
+-  with_file : (String, () => A @ {File, Fs extends R1}) => A @ {Fs extends R1}
+-  copy : (String, String) => {} @ {Console, Fs extends R1}
+-  Parser.bind : (Parser.Parser[A], (A) => Parser.Parser[B]) => Parser.Parser[B]
+-  Parser.pure : (A) => Parser.Parser[A]
+-  Parser.token : (String) => Parser.Parser[String]
+-  parens : () => Parser.Parser[(String, String)]
+-  handle_request : ({query: String}) => Resp @ {ReqId, Logger, Tracer, Db, Async extends R1}
+-  _ : {}
+-  sum : (Array[Int32]) => Int32
+-  doubled : (Array[Int32]) => Array[Int32]
+-  par_map : (Array[A], (A) => B) => Array[B]
+-  par : (() => A, () => B) => (A, B)
+-  scope : (() => A @ {Nursery, Async extends R1}) => A @ {Async extends R1}
+-  serve : (List[Conn]) => {} @ {Async extends R1}
+-  with_timeout : (Int64, () => A @ {Deadline extends R1}) => Option[A] @ {Async extends R1}
+-  handle_audited : ({query: String}) => Resp @ {ReqId, Logger, Tracer, Db, Background, Async extends R1}
+-  crunch : (Array[Int32]) => Int32 @ {Async extends R1}
+-  channel : (Int32) => Chan[A]
+-  send : (Chan[A], A) => {} @ {Async extends R1}
+-  recv : (Chan[A]) => A @ {Async extends R1}
+-  sin : (Float64) => Float64
+-  sqlite_step : (Stmt) => Int32 @ {Blocking extends R1}
+-  pinned : (() => A @ {Blocking extends R1}) => A
+-  BigInt.parse : (String) => BigInt.BigInt
+-  BigInt.normalize : (BigInt.BigInt) => BigInt.BigInt
+-  big_sum : () => BigInt.BigInt
++  ! sample/sample.kel:59:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
++  [1]
+ 
+ 実行(トップレベル式文: sample.kel:548 の handle と :660 の capture):
+ 
+   $ diktor sample/stubs.kel sample/sample.kel
+-  test
+-  test
++  ! sample/sample.kel:59:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
++  [1]
+File "test/blocking_top.t", line 1, characters 0-0:
+diff --git a/_build/default/test/blocking_top.t b/_build/default/test/blocking_top.t.corrected
+index bd12e77..0017489 100644
+--- a/_build/default/test/blocking_top.t
++++ b/_build/default/test/blocking_top.t.corrected
+@@ -53,7 +53,7 @@ Blocking は操作を持たないので handle の対象にできない(禁止
+ 
+   $ printf 'effect Blocking = { block: (String) => Int32 }\n' > bbad.kel
+   $ diktor --type-check bbad.kel
+-  ! bbad.kel:1:1: 型エラー: effect Blocking の宣言がプレリュードの宣言と一致しません(操作が違います: プレリュードは操作を持ちません)
++  ! bbad.kel:1:1: 型エラー: 標準環境の effect Blocking は再宣言できません
+   [1]
+ 
+ --no-prelude でも Blocking は組み込み登録なのでトップレベル行に残る:
+File "test/fs_effect.t", line 1, characters 0-0:
+diff --git a/_build/default/test/fs_effect.t b/_build/default/test/fs_effect.t.corrected
+index c095fed..0e0c3ed 100644
+--- a/_build/default/test/fs_effect.t
++++ b/_build/default/test/fs_effect.t.corrected
+@@ -118,13 +118,14 @@ write が dst 側に解決することも実行で示す:
+   > echoln("dst=[" + back + "]")
+   > KEL
+   $ diktor fsdecl.kel
+-  dst=[hello]
++  ! fsdecl.kel:1:1: 型エラー: 標準環境の effect Fs は再宣言できません
++  [1]
+ 
+ 操作を足した再宣言は照合で落ちる:
+ 
+   $ printf 'effect Fs = { op1: () => Int32 }\n' > fsbad.kel
+   $ diktor --type-check fsbad.kel
+-  ! fsbad.kel:1:1: 型エラー: effect Fs の宣言がプレリュードの宣言と一致しません(操作が違います: プレリュードは操作を持ちません)
++  ! fsbad.kel:1:1: 型エラー: 標準環境の effect Fs は再宣言できません
+   [1]
+ 
+ プレリュードの extern は再宣言できない(@ Fs を剥がす経路を塞ぐ):
+File "test/premise.t", line 1, characters 0-0:
+diff --git a/_build/default/test/premise.t b/_build/default/test/premise.t.corrected
+index e9e9842..8337ca6 100644
+--- a/_build/default/test/premise.t
++++ b/_build/default/test/premise.t.corrected
+@@ -172,11 +172,8 @@
+   > echoln(show(Nil == Cons(1i32, Nil)))
+   > EOF
+   $ diktor pr10.kel
+-  true
+-  false
+-  true
+-  false
+-  false
++  ! pr10.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
++  [1]
+ 
+ AST ダンプ(束縛子があるときだけ tparams が出る):
+ 
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index c2db5ab..2f50a22 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -41,13 +41,8 @@ Add / Eq は組み込みと同名なので「照合の上で受理」される(
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude cls.kel
+-  __int32_add : (Int32, Int32) => Int32
+-  __int32_mul : (Int32, Int32) => Int32
+-  __string_concat : (String, String) => String
+-  fma : [A: Add + Mul] (A, A, A) => A
+-  same_point : ({x: Float64, y: Float64}, {x: Float64, y: Float64}) => Boolean
+-  use_myshow : String
+-  generic_show : [A: MyShow] (A) => String
++  ! cls.kel:7:1: 型エラー: 標準環境の type class Add は再宣言できません
++  [1]
+ 
+ MiniLang §16-9(クラス制約、注釈なし。read 系は v1 の曖昧性検査待ちで除外):
+ 
+@@ -200,7 +195,7 @@ newtype の型パラメータ制約も検証される(D6 の残り):
+ 
+   $ printf 'type Unit[A: Bogus] = A\n' > c17.kel
+   $ diktor --type-check c17.kel
+-  ! c17.kel:1:1: 型エラー: 型エイリアス Unit の宣言がプレリュードの宣言と一致しません(型パラメータの個数が違います: プレリュードは 0、宣言は 1)
++  ! c17.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+   [1]
+ 
+ module 内 let の相互参照と自己再帰(C5a / D39。値の同義語のフォール
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck.t b/_build/default/test/typecheck.t.corrected
+index 632fe50..083eae5 100644
+--- a/_build/default/test/typecheck.t
++++ b/_build/default/test/typecheck.t.corrected
+@@ -221,37 +221,37 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+ 
+   $ printf 'newtype Option[A] = None(Int32) | Some\n' > d1.kel
+   $ diktor --type-check d1.kel
+-  ! d1.kel:1:1: 型エラー: newtype Option の宣言がプレリュードの宣言と一致しません(コンストラクタ None のフィールド数が違います: プレリュードは 0、宣言は 1)
++  ! d1.kel:1:1: 型エラー: 標準環境の newtype Option は再宣言できません
+   [1]
+ 
+   $ printf 'newtype List[A, B] = Nil | Cons(head: A, tail: List[A])\n' > d3.kel
+   $ diktor --type-check d3.kel
+-  ! d3.kel:1:1: 型エラー: newtype List の宣言がプレリュードの宣言と一致しません(型パラメータの個数が違います: プレリュードは 1、宣言は 2)
++  ! d3.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+   [1]
+ 
+   $ printf 'newtype List[A] = Nil | Cons(A, tail: List[A])\n' > d4.kel
+   $ diktor --type-check d4.kel
+-  ! d4.kel:1:1: 型エラー: newtype List の宣言がプレリュードの宣言と一致しません(コンストラクタ Cons の第1フィールドのラベルが違います: プレリュードは head、宣言は ラベルなし)
++  ! d4.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+   [1]
+ 
+   $ printf 'type Unit = Int32\n' > d5.kel
+   $ diktor --type-check d5.kel
+-  ! d5.kel:1:1: 型エラー: 型エイリアス Unit の宣言がプレリュードの宣言と一致しません(本体が違います)
++  ! d5.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+   [1]
+ 
+   $ printf 'type Unit = NoSuchType\n' > d6.kel
+   $ diktor --type-check d6.kel
+-  ! d6.kel:1:1: 型エラー: 型エイリアス Unit の宣言がプレリュードの宣言と一致しません(本体が違います)
++  ! d6.kel:1:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+   [1]
+ 
+   $ printf 'effect Console = { write: (Int32) => Unit }\n' > d7.kel
+   $ diktor --type-check d7.kel
+-  ! d7.kel:1:1: 型エラー: effect Console の宣言がプレリュードの宣言と一致しません(操作 write の型が違います)
++  ! d7.kel:1:1: 型エラー: 標準環境の effect Console は再宣言できません
+   [1]
+ 
+   $ printf 'type class Add[A] { val add: (A, A) => Boolean }\n' > d8.kel
+   $ diktor --type-check d8.kel
+-  ! d8.kel:1:1: 型エラー: type class Add の宣言が組み込みの宣言と一致しません(メソッド add の型が違います)
++  ! d8.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+   [1]
+ 
+ 受理側 — 順序違いは許し、ラベルは照合する(仕様どおりの再宣言が全部通り、
+@@ -267,7 +267,8 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > echoln(show(l match { case Cons(head = h) => h case Nil => 0 }))
+   > KEL
+   $ diktor d9.kel
+-  1
++  ! d9.kel:1:1: 型エラー: 標準環境の newtype Option は再宣言できません
++  [1]
+ 
+ 同じファイルを 2 回渡すと二重宣言(CLI 経路の連結処理の回帰。C11):
+ 
+@@ -317,11 +318,11 @@ Int32 がプレリュードの List を黙って奪った):
+ 
+   $ printf 'newtype List[A] = Nil | Cons(head: A, tail: List[A])\nnewtype List[A] = Nil | Cons(head: A, tail: List[A])\necholn("x")\n' > rd1.kel
+   $ diktor --type-check rd1.kel
+-  ! rd1.kel:2:1: 型エラー: newtype List が二重に宣言されています
++  ! rd1.kel:1:1: 型エラー: 標準環境の newtype List は再宣言できません
+   [1]
+   $ printf 'type class Add[A] { val add: (A, A) => A }\ntype class Add[A] { val add: (A, A) => A }\nlet main(): Int32 = 1\n' > rd2.kel
+   $ diktor --type-check rd2.kel
+-  ! rd2.kel:2:1: 型エラー: type class Add が二重に宣言されています
++  ! rd2.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+   [1]
+ 
+ エイリアスの構造照合は行・ヴァリアント・制約の並び順を見ない(型として
+@@ -336,20 +337,22 @@ Int32 がプレリュードの List を黙って奪った):
+   > EOF2
+   $ printf 'type Rec = {y: String, x: Int32}\ntype Par = #Odd | #Even\nlet main(): Int32 = 1\n' > al1.kel
+   $ diktor --prelude alias_pre.kel --type-check al1.kel
+-  main : () => Int32
++  ! al1.kel:1:1: 型エラー: 標準環境の型エイリアス Rec は再宣言できません
++  [1]
+   $ printf 'type Cap[G] = (G, G)\nlet main(): Int32 = 1\n' > al2.kel
+   $ diktor --prelude alias_pre.kel --type-check al2.kel
+-  ! al2.kel:1:1: 型エラー: 型エイリアス Cap の宣言がプレリュードの宣言と一致しません(本体が違います)
++  ! al2.kel:1:1: 型エラー: 標準環境の型エイリアス Cap は再宣言できません
+   [1]
+   $ printf 'type Cap[B] = (B, G)\nlet main(): Int32 = 1\n' > al3.kel
+   $ diktor --prelude alias_pre.kel --type-check al3.kel
+-  main : () => Int32
++  ! al3.kel:1:1: 型エラー: 標準環境の型エイリアス Cap は再宣言できません
++  [1]
+ 
+ Never の照合不一致はコンストラクタゼロを明示する:
+ 
+   $ printf 'newtype Never = Nope\necholn("ok")\n' > nv1.kel
+   $ diktor --type-check nv1.kel
+-  ! nv1.kel:1:1: 型エラー: newtype Never の宣言がプレリュードの宣言と一致しません(コンストラクタが違います: プレリュードはコンストラクタを持ちません)
++  ! nv1.kel:1:1: 型エラー: 標準環境の newtype Never は再宣言できません
+   [1]
+ 
+ ブレース無しの引数付きエフェクトラベル @ Heap[h] は @ {Heap[h]} の略記
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 9d03fee..0747e11 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -545,7 +545,8 @@ effect の操作型の**頭**の矢印に書いた @ は、受理されるが型
+   > let f(): Unit @ Weird = perform op("a")
+   > KEL
+   $ diktor --type-check ophead.kel
+-  f : () => {} @ {Weird extends R1}
++  ! ophead.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+   $ printf 'effect Weird = { op: (String) => Unit @ Undeclared }\n' > ophead2.kel
+   $ diktor --type-check ophead2.kel
+File "test/eval.t", line 1, characters 0-0:
+diff --git a/_build/default/test/eval.t b/_build/default/test/eval.t.corrected
+index 0b42bd1..dbb72a5 100644
+--- a/_build/default/test/eval.t
++++ b/_build/default/test/eval.t.corrected
+@@ -233,8 +233,8 @@ cancel 節の中で例外が起きると、その cancel 節は打ち切る(後
+   > echoln(myshow(Meters(7)))
+   > EOF
+   $ diktor dispatch.kel
+-  7
+-  7m
++  ! dispatch.kel:2:1: 型エラー: 標準環境の type class Add は再宣言できません
++  [1]
+ 
+ 実行時エラー(exit 3): ??? 到達、resume のアフィン違反、ゼロ除算。
+ ハンドラ節内の ??? でも内側の cancel は走る(例外経路の discontinue、§8.4):
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index aba1cee..1348960 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -39,9 +39,8 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+   > let with_ext[E](c: Callback[{Print extends E}]): Callback[{Print extends E}] = c
+   > EOF
+   $ diktor --type-check cbext.kel
+-  mk : (() => {}) => Callback[R1]
+-  open_ : (Callback[R1]) => () => {}
+-  with_ext : (Callback[{Print extends R1}]) => Callback[{Print extends R1}]
++  ! cbext.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+ 実行も通る(構築・分解・handle 越しの呼び出し):
+ 
+@@ -59,7 +58,8 @@ M23 / ワークストリーム C(newtype の型パラメータのカインド推
+   > main()
+   > EOF
+   $ diktor cbrun.kel
+-  hello
++  ! cbrun.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+ 使われ方の無いパラメータは Type に既定化される(D7 の一般化。D81):
+ 
+@@ -142,7 +142,7 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+ 
+   $ printf 'effect Print = { print: (String) => Unit }\ntype P: EffectRow = {Print}\nnewtype X = X(P)\nlet f(): X = X(???)\n' > fieldalias.kel
+   $ diktor --type-check fieldalias.kel
+-  ! fieldalias.kel:3:15: 型エラー: コンストラクタ X のフィールドの型のカインドが Type ではありません: {Print} :: Row
++  ! fieldalias.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+ 
+ 相互再帰する newtype でも、宣言順のどちらでもカインドが伝わる(D81。
+@@ -211,7 +211,8 @@ EffectRow エイリアスをフィールドに書いた形も宣言の時点で
+   > let f[E](x: M.A6[E]): M.A6[E] = x
+   > EOF
+   $ diktor --type-check fwdrowmod.kel
+-  f : (M.A6[R1]) => M.A6[R1]
++  ! fwdrowmod.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_module で包んでいるか
+ を見張るのはこの形で、上の fwdrowmod は B6 の投機だけで通るため包みを外しても
+@@ -227,7 +228,8 @@ module の中の深さ 2 の連鎖も通る。投機のループを with_decl_mo
+   > let f[E](x: M.A9[E]): M.A9[E] = x
+   > EOF
+   $ diktor --type-check fwdrowmod2.kel
+-  f : (M.A9[R1]) => M.A9[R1]
++  ! fwdrowmod2.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+ 投機は effect の操作の登録(1b)より前に走るので、同じ宣言群のエフェクトラベルは
+ 投機の時点ではすべて未知で、() => Unit @ {Log} のようなフィールドは投機の中で
+@@ -352,8 +354,8 @@ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾
+   > let g(c: Cb.Callback[{Print}]): Int32 = 0
+   > EOF
+   $ diktor --type-check modcb.kel
+-  Cb.mk : (() => {}) => Cb.Callback[R1]
+-  g : (Cb.Callback[{Print}]) => Int32
++  ! modcb.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+ プレリュード所有名の再宣言はプレリュードが決めたカインドを引き継ぐ(D80。
+ 別のセルを作ると構造照合で KVar と KStar が食い違う):
+@@ -361,10 +363,11 @@ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾
+   $ printf 'type Unit = {}\nnewtype Callback[E] = Callback(() => Unit @ E)\n' > tinypre.kel
+   $ printf 'newtype Callback[E] = Callback(() => Unit @ E)\nlet f[E](c: Callback[E]): Callback[E] = c\n' > redecl.kel
+   $ diktor --prelude tinypre.kel --type-check redecl.kel
+-  f : (Callback[R1]) => Callback[R1]
++  ! redecl.kel:1:1: 型エラー: 標準環境の newtype Callback は再宣言できません
++  [1]
+   $ printf 'newtype Callback[E] = Callback(E)\n' > redecl2.kel
+   $ diktor --prelude tinypre.kel --type-check redecl2.kel
+-  ! redecl2.kel:1:32: 型エラー: コンストラクタ Callback のフィールドの型のカインドが Type ではありません: R1 :: Row
++  ! redecl2.kel:1:1: 型エラー: 標準環境の newtype Callback は再宣言できません
+   [1]
+ 
+ 行カインドのパラメータを持つ型は Functor のインスタンスにできない(D126)。
+@@ -484,7 +487,8 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check aliasorder.kel
+-  g : (Callback[{Print}]) => Int32
++  ! aliasorder.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
++  [1]
+ 
+ エイリアス経由で newtype のパラメータのカインドが決まる形。既定化を投機より
+ 後に置いたので、X が先に Type に固定されない(D81 / D84):
+@@ -629,7 +633,7 @@ Functor の正常系は変わらない:
+   > let f(x: (P, Int32)): Int32 = 0
+   > EOF
+   $ diktor --type-check valkind.kel
+-  ! valkind.kel:3:11: 型エラー: タプルの要素の型のカインドが Type ではありません: {Print} :: Row
++  ! valkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > valkind2.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -637,7 +641,7 @@ Functor の正常系は変わらない:
+   > let f(x: {a: P}): Int32 = 0
+   > EOF
+   $ diktor --type-check valkind2.kel
+-  ! valkind2.kel:3:14: 型エラー: レコードのフィールド a の型のカインドが Type ではありません: {Print} :: Row
++  ! valkind2.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > valkind3.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -645,7 +649,7 @@ Functor の正常系は変わらない:
+   > let f(g: (P) => Int32): Int32 = 0
+   > EOF
+   $ diktor --type-check valkind3.kel
+-  ! valkind3.kel:3:11: 型エラー: 矢印の引数の型のカインドが Type ではありません: {Print} :: Row
++  ! valkind3.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > valkind4.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -653,7 +657,7 @@ Functor の正常系は変わらない:
+   > let f(g: () => P @ {}): Int32 = 0
+   > EOF
+   $ diktor --type-check valkind4.kel
+-  ! valkind4.kel:3:16: 型エラー: 矢印の返り値の型のカインドが Type ではありません: {Print} :: Row
++  ! valkind4.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > valkind5.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -661,7 +665,7 @@ Functor の正常系は変わらない:
+   > let f(x: #T(P)): Int32 = 0
+   > EOF
+   $ diktor --type-check valkind5.kel
+-  ! valkind5.kel:3:13: 型エラー: ヴァリアント #T の積載の型のカインドが Type ではありません: {Print} :: Row
++  ! valkind5.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > valkind6.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -669,7 +673,7 @@ Functor の正常系は変わらない:
+   > type class C2[A] { val m: (A) => P }
+   > EOF
+   $ diktor --type-check valkind6.kel
+-  ! valkind6.kel:3:34: 型エラー: 矢印の返り値の型のカインドが Type ではありません: {Print} :: Row
++  ! valkind6.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+ 
+ 積載は和の中でも読む。上の valkind5 は単独の #T(P) だが、値の型として
+@@ -681,7 +685,7 @@ Functor の正常系は変わらない:
+   > let f(x: #U(Int32) | #T(P)): Int32 = 0
+   > EOF
+   $ diktor --type-check sumkind.kel
+-  ! sumkind.kel:3:25: 型エラー: ヴァリアント #T の積載の型のカインドが Type ではありません: {Print} :: Row
++  ! sumkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+ 
+ 注釈の位置も値の型の位置(D131)。かつては束縛の単一化まで生き延びて
+@@ -693,7 +697,7 @@ Functor の正常系は変わらない:
+   > let f(x: P): Int32 = 0
+   > EOF
+   $ diktor --type-check annotkind.kel
+-  ! annotkind.kel:3:10: 型エラー: 型注釈のカインドが Type ではありません: {Print} :: Row
++  ! annotkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > annotkind2.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -701,7 +705,7 @@ Functor の正常系は変わらない:
+   > let f(): P = ???
+   > EOF
+   $ diktor --type-check annotkind2.kel
+-  ! annotkind2.kel:3:10: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
++  ! annotkind2.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > annotkind3.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -709,7 +713,7 @@ Functor の正常系は変わらない:
+   > let m: P = ???
+   > EOF
+   $ diktor --type-check annotkind3.kel
+-  ! annotkind3.kel:3:8: 型エラー: 型注釈のカインドが Type ではありません: {Print} :: Row
++  ! annotkind3.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+ 
+ 上の annotkind2 は素の let だが、返り値の注釈は他の宣言の形でも同じ照合を
+@@ -722,7 +726,7 @@ annotkind2 と同じ文言で落ちる(D131):
+   > extern "C" let nosuch(x: Float64): P
+   > EOF
+   $ diktor --type-check extkind.kel
+-  ! extkind.kel:3:36: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
++  ! extkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > reckind.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -730,7 +734,7 @@ annotkind2 と同じ文言で落ちる(D131):
+   > let rec f(x: Int32): P = f(x)
+   > EOF
+   $ diktor --type-check reckind.kel
+-  ! reckind.kel:3:22: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
++  ! reckind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+   $ cat > instkind.kel <<'EOF'
+   > effect Print = { print: (String) => Unit }
+@@ -740,7 +744,7 @@ annotkind2 と同じ文言で落ちる(D131):
+   > type instance C[Box] { let m(b): P = ??? }
+   > EOF
+   $ diktor --type-check instkind.kel
+-  ! instkind.kel:5:34: 型エラー: 返り値の型注釈のカインドが Type ではありません: {Print} :: Row
++  ! instkind.kel:1:1: 型エラー: 標準環境の effect Print は再宣言できません
+   [1]
+ 
+ 同じパラメータを行と値の両方で使う宣言は、包んであっても宣言の時点で
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index b741c99..9be868f 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -228,7 +228,8 @@ A を使える:
+   > echoln(show(2 + 3))
+   > EOF
+   $ diktor coh.kel
+-  5
++  ! coh.kel:1:1: 型エラー: 標準環境のインスタンス Add[Int32] は再宣言できません
++  [1]
+ 
+ module 内の type instance が実行時に見つかる(sample.kel §13 の形):
+ 
+@@ -464,7 +465,8 @@ return / cancel 節にガードは書けない(型検査を通ったガードが
+ 
+   $ printf 'type class Add[A] { val add: (A, A) => A }\necholn(show(2 + 3))\n' > readd.kel
+   $ diktor readd.kel
+-  5
++  ! readd.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
++  [1]
+ 
+ 操作節のガードでは resume が使えない(interp はガードを resume 無しで
+ 評価する。かつては型検査を通って実行時に落ちた):
+@@ -608,7 +610,7 @@ handle の操作節の resume は通る:
+   > type instance Add[Int32] { let add(x, y) = y }
+   > KEL
+   $ diktor --type-check dupinst.kel
+-  ! dupinst.kel:2:1: 型エラー: インスタンス Add[Int32] が二重に宣言されています(コヒーレンス違反)
++  ! dupinst.kel:1:1: 型エラー: 標準環境のインスタンス Add[Int32] は再宣言できません
+   [1]
+ 
+ 既定の節が無い操作節は型検査で拒否(B2 / D29。仕様は、どの節にも一致しなかった

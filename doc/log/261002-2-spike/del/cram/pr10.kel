@@ -1,0 +1,12 @@
+type instance[A: Eq] Eq[List[_]] {
+  let rec eq(xs, ys) = (xs, ys) match {
+    case (Nil, Nil)                 => true
+    case (Cons(x, xt), Cons(y, yt)) => x == y && eq(xt, yt)
+    case _                          => false
+  }
+}
+echoln(show(Cons(1i32, Cons(2i32, Nil)) == Cons(1i32, Cons(2i32, Nil))))
+echoln(show(Cons(1i32, Nil) == Cons(2i32, Nil)))
+echoln(show(Cons(Cons("a", Nil), Nil) == Cons(Cons("a", Nil), Nil)))
+echoln(show(Cons(Cons("a", Nil), Nil) == Cons(Cons("b", Nil), Nil)))
+echoln(show(Nil == Cons(1i32, Nil)))

@@ -1,0 +1,4 @@
+runtime_effects.t:40: $ diktor --type-check sched.kel
+    -> ! sched.kel:1:33: 型エラー: 未知のエフェクト: Async
+== runtime_effects.t: 1 blocks (of 21)
+TOTAL 1

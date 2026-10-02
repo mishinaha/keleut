@@ -1,0 +1,2 @@
+echoln("init leaf")
+pub let base: Int32 = 10
