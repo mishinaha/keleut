@@ -1,0 +1,2 @@
+newtype Cb = Cb(go: () => Unit @ Print)
+let use(c: Cb): Unit @ {Print, Console} = c match { case Cb(go = r) => { r(); echoln("done") } }

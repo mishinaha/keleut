@@ -1,0 +1,2 @@
+let rec f(n: Int32): Unit @ Print = { println("a"); g(n) }
+and g(n: Int32): Unit @ {} = f(n)

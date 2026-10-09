@@ -1,0 +1,39 @@
+--- lib/elab.ml.orig	2026-10-09 23:41:08.696683736 +0900
++++ lib/elab.ml	2026-10-09 23:43:44.010736543 +0900
+@@ -1573,6 +1573,15 @@
+          空の行の関数を空でない行から呼ぶ失敗は仕様 §9 の規則そのものなので、
+          一般的な文言のかわりに規則を案内する *)
+       let callee_pure = match repr tf with TArrow (_, _, e) -> repr e = TRowEmpty | _ -> false in
++      (* SPIKE: 呼び出し先の行が閉じていれば、尾部を新しい行変数で開いてから単一化する *)
++      let tf =
++        match repr tf with
++        | TArrow (a, r, e) -> (
++            match repr (snd (row_fields e)) with
++            | TRowEmpty -> TArrow (a, r, row_append e (new_row_var level))
++            | _ -> tf)
++        | _ -> tf
++      in
+       let tr = new_var level in
+       let pvar = new_var level in
+       (* 関数の行を呼び出し側の eff と単一化してから、引数を期待型で検査する(§11.12) *)
+@@ -3066,7 +3075,19 @@
+         | None, T.Lambda _ | Some _, _ -> ()
+         | None, _ -> type_error "let rec の右辺は関数でなければなりません");
+         match snd b.T.lb_name with
+-        | T.PVar x -> (x, new_var lvl)
++        | T.PVar x ->
++            (* SPIKE2: 型パラメータが無く、行を書いた(または pub の)関数束縛は、
++               閉じた行の矢印を pre に置き、先行する本体の呼び出しから見えるようにする *)
++            let pre =
++              match (b.T.lb_params, b.T.lb_tparams, b.T.lb_eff) with
++              | Some params, [], Some e ->
++                  let fn_eff = elab_eff env lvl e in
++                  TArrow (TRecord (closed_item_row (List.map (fun _ -> new_var lvl) params)), new_var lvl, fn_eff)
++              | Some params, [], None when b.T.lb_pub ->
++                  TArrow (TRecord (closed_item_row (List.map (fun _ -> new_var lvl) params)), new_var lvl, new_pub_pure_row ())
++              | _ -> new_var lvl
++            in
++            (x, pre)
+         | _ -> type_error "let rec の束縛はパターンにできません")
+       bs
+   in
