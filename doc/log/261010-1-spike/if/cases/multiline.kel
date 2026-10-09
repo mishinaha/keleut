@@ -1,0 +1,18 @@
+let pick(n: Int32): String =
+  if n > 0
+  then "pos"
+  else "nonpos"
+let pick2(n: Int32): String = {
+  let k = n * 2
+  if k > 10 then
+    "big"
+  else if k > 0 then
+    "small"
+  else
+    "none"
+}
+echoln(pick(1))
+echoln(pick(0))
+echoln(pick2(6))
+echoln(pick2(1))
+echoln(pick2(0))

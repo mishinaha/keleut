@@ -1,0 +1,5 @@
+let a(): Int32 @ {} = 1
+let use(): Int32 @ Console = {
+  let xs = Cons(fn() => a(), Cons(fn() => { echoln("x"); 2 }, Nil))
+  0
+}

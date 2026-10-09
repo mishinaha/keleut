@@ -1,0 +1,3 @@
+echoln("before")
+let f(): Int32 = ???
+echoln(show(f()))

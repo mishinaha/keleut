@@ -1,0 +1,3 @@
+let rec g(n: Int32) = n match { case 0 => () case _ => f(n - 1) }
+and f(n: Int32): Unit @ Print = n match { case 0 => () case _ => { println("f"); g(n - 1) } }
+with_stdout(fn() => f(3))

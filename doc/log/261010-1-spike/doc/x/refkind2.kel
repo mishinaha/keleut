@@ -1,0 +1,1 @@
+let f(r: Ref[Int32, Int32]): Int32 @ Heap[Int32] = Ref.get(r)

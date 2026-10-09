@@ -1,0 +1,34 @@
+annot_rows.t {'ext': 46, 'br': 7, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 53, 'plus': 53}
+blocking_top.t {'ext': 3, 'br': 1, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 4, 'plus': 4}
+classes.t {'ext': 2, 'br': 0, 'both': 0, 'other_minus': 5, 'other_plus': 5, 'minus': 7, 'plus': 7}
+     +   ! inam.kel:4:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+     -   ! inam.kel:4:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド cm の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+     +   ! clsimpure.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません。@ の省略は @ {} と読みます — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Console がありませ
+     -   ! clsimpure.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈
+     +   ! clsmismatch.kel:3:29: 型エラー: インスタンスメソッド pr がクラス宣言の型を満たしません(ラベル Console がありません(行は閉じています))
+     -   ! clsmismatch.kel:3:29: 型エラー: インスタンスメソッド pr がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側に Console を(必要なら引数つきで)書き足してください))
+     +   ! clsbarerow.kel:3:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません。@ の省略は @ {} と読みます — 仕様 §9)。インスタンスメソッド pr2 の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数
+     -   ! clsbarerow.kel:3:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド pr2 の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈
+     +   ! clsargpure.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません。@ の省略は @ {} と読みます — 仕様 §9)。インスタンスメソッド r3 の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数な
+     -   ! clsargpure.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド r3 の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側
+extern_c.t {'ext': 4, 'br': 0, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 4, 'plus': 4}
+extern_c_blocking.t {'ext': 5, 'br': 4, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 9, 'plus': 9}
+import.t {'ext': 1, 'br': 0, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 1, 'plus': 1}
+kinds.t {'ext': 1, 'br': 3, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 4, 'plus': 4}
+nonfeatures.t {'ext': 1, 'br': 0, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 1, 'plus': 1}
+pub.t {'ext': 1, 'br': 2, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 3, 'plus': 3}
+region.t {'ext': 1, 'br': 3, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 4, 'plus': 4}
+repl.t {'ext': 0, 'br': 1, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 1, 'plus': 1}
+tokens.t {'ext': 3, 'br': 1, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 4, 'plus': 4}
+trailing_comma.t {'ext': 1, 'br': 0, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 1, 'plus': 1}
+typecheck.t {'ext': 1, 'br': 4, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 5, 'plus': 5}
+typecheck_m6.t {'ext': 20, 'br': 1, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 21, 'plus': 21}
+typecheck_m7.t {'ext': 0, 'br': 3, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 3, 'plus': 3}
+typecheck_sample.t {'ext': 14, 'br': 5, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 19, 'plus': 19}
+verify_fixes.t {'ext': 0, 'br': 0, 'both': 0, 'other_minus': 2, 'other_plus': 2, 'minus': 2, 'plus': 2}
+     +   ! patrigid.kel:1:6: 型エラー: (Int32) => Int32 @ {Console} は Integral のインスタンスではありません
+     -   ! patrigid.kel:1:6: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+     +   ! patrigid2.kel:1:10: 型エラー: (Int32) => Int32 @ {} は Integral のインスタンスではありません
+     -   ! patrigid2.kel:1:10: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+visibility.t {'ext': 27, 'br': 5, 'both': 0, 'other_minus': 0, 'other_plus': 0, 'minus': 32, 'plus': 32}
+TOTAL {'ext': 131, 'br': 40, 'both': 0, 'other_minus': 7, 'other_plus': 7, 'minus': 178, 'plus': 178}

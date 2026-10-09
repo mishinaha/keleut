@@ -1,0 +1,4 @@
+let f = fn(b: Boolean) => if b then 1 else 2
+let g = if true then fn(x: Int32) => x + 1 else fn(x: Int32) => x - 1
+echoln(show(f(false)))
+echoln(show(g(1)))

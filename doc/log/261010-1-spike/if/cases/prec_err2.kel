@@ -1,0 +1,2 @@
+let g = if true then 1 else 2 match { case 1 => "one" case _ => "other" }
+echoln(g)

@@ -1,0 +1,2 @@
+let idf[A](x: A): A = x
+pub let s: (_) => String = idf(show)

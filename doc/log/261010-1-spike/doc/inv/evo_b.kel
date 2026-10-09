@@ -1,0 +1,3 @@
+let n(s: String): Int32 @ Console = { echo(s); 1 }
+let p = {y = n("y"), x = n("x")}
+echoln("")

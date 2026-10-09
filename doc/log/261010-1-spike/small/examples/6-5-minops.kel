@@ -1,0 +1,13 @@
+let m: Int32 = -2147483648
+let n1: Int32 = -1
+echoln(show(-m))
+echoln(show(m % n1))
+echoln(show(m / n1))
+let lm: Int64 = -9223372036854775808i64
+echoln(show(-lm))
+echoln(show(lm % -1i64))
+echoln(show(-7 % 2))
+echoln(show(7 % -2))
+let nan = 0.0 / 0.0
+echoln(show(-nan))
+echoln(show(-(1.0 / 0.0)))

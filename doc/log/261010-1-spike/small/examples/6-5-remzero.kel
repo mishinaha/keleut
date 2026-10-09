@@ -1,0 +1,2 @@
+let z: Int32 = 0
+echoln(show(5 % z))

@@ -1,0 +1,2 @@
+let rec rep(k: Int32, acc: Int32): Int32 = (k == 0) match { case true => acc case false => rep(k - 1, ({a = k, b = "x"} == {b = "x", a = k}) match { case true => acc + 1 case false => acc }) }
+echoln(show(rep(300000, 0)))

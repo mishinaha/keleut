@@ -1,0 +1,4 @@
+let r = {f = show, g = ???}
+echoln("after")
+let q = r.g
+echoln("end")

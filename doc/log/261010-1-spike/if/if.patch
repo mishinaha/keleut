@@ -1,0 +1,418 @@
+diff -ruN '--exclude=_build' base/lib/lexer.ml diktor/lib/lexer.ml
+--- base/lib/lexer.ml	2026-10-02 23:15:20.000000000 +0900
++++ diktor/lib/lexer.ml	2026-10-10 01:40:12.550101513 +0900
+@@ -235,6 +235,7 @@
+     | "case" -> CASE
+     | "class" -> CLASS
+     | "effect" -> EFFECT
++    | "else" -> ELSE
+     | "extends" -> EXTENDS
+     | "extern" -> EXTERN
+     | "false" -> BOOL false
+@@ -253,6 +254,7 @@
+     | "rec" -> REC
+     | "resume" -> RESUME
+     | "run" -> RUN
++    | "then" -> THEN
+     | "true" -> BOOL true
+     | "type" -> TYPE
+     | "val" -> VAL
+@@ -756,6 +758,7 @@
+    - `IMPORT`：`from` とパスの文字列の行と、次の行の `import x` を 1 つの import 文につなぐ
+    - `CASE`：節の並びを改行で区切らない(節の区切りは `case` 自身)
+    - `MATCH` / `HANDLE`：後置なので、改行してから書ける
++   - `THEN` / `ELSE`：条件式を `then` と `else` の前で折り返す(`if c ⏎ then a ⏎ else b`)
+    - `DOT` / `BACKSLASH`：メソッドチェーンとレコードの制限を行の途中で折り返す
+    - `EXTENDS` / `VERTICAL`：`extends` の直前と、`#X | #Y` の `|` の直前で改行できる
+    - 二項演算子：`1 ⏎ + 2` のように、演算子で始まる行を前の行につなぐ
+@@ -767,6 +770,10 @@
+    これは、行頭の `(` を前の行の続きとみなさないという sample.kel:295 の規則の実装である。
+    `VAL` も含めている。
+    これが無いと、クラスの本体の 2 つ目の `val` の前で改行が捨てられ、パースエラーになる。
++   `IF` も含めている。
++   行頭の `if` は条件式(第3章 §3.18)で、新しい文を始める。
++   ガードの `if` は `RClause` の中にあり、そこでは述語を見ずに改行を捨てるので、
++   `IF` を含めても `case x ⏎ if g =>` の改行は区切りにならない。
+ 
+    末尾ブロックの `{` を直前のトークンと同じ行に書く規則は、この層では扱わない。
+    `{` が次の行にあれば、この層の規則どおりに改行を区切りにするか捨てるかを決め、
+@@ -851,10 +858,10 @@
+         true
+     | _ -> false
+ 
+-  (* NL の後で文を始められるトークン。AND / CASE / MATCH / HANDLE / DOT / BACKSLASH /
+-     EXTENDS / VERTICAL / 二項演算子は、前の行の続きにするために除いている *)
++  (* NL の後で文を始められるトークン。AND / CASE / MATCH / HANDLE / THEN / ELSE / DOT /
++     BACKSLASH / EXTENDS / VERTICAL / 二項演算子は、前の行の続きにするために除いている *)
+   let can_begin_statement = function
+-    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | WITH | PERFORM | RESUME | RUN | FN | FROM
++    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | WITH | PERFORM | RESUME | RUN | FN | FROM | IF
+     | LOWER_IDENTIFIER _ | UPPER_IDENTIFIER _ | HASH_IDENT _ | NUMBER _ | TEXT _ | BOOL _ | HOLE | EXCLAMATION
+     | LBRACE_BLOCK | LBRACE_RECORD | LBRACE_TYPE | LPAREN ->
+         true
+@@ -963,6 +970,7 @@
+     | DOT -> "."
+     | DOTDOTDOT -> "..."
+     | EFFECT -> "effect"
++    | ELSE -> "else"
+     | EOF -> "<EOF>"
+     | EQ -> "="
+     | EQ_GREATER -> "=>"
+@@ -1008,6 +1016,7 @@
+     | SEMI -> ";"
+     | SOLIDUS -> "/"
+     | TEXT s -> "\"" ^ String.escaped s ^ "\""
++    | THEN -> "then"
+     | TYPE -> "type"
+     | UPPER_IDENTIFIER s -> s
+     | VAL -> "val"
+diff -ruN '--exclude=_build' base/lib/parser.mly diktor/lib/parser.mly
+--- base/lib/parser.mly	2026-10-02 23:34:08.000000000 +0900
++++ diktor/lib/parser.mly	2026-10-10 01:45:31.670108740 +0900
+@@ -450,7 +450,7 @@
+ 
+ (* ## 3.11 トークン表
+ 
+-   トークンの宣言は 2 段に分かれていて、上段が 44 個、下段が 20 個である。
++   トークンの宣言は 2 段に分かれていて、上段が 46 個、下段が 21 個である。
+    下段には、この言語に特有の構文のトークンが多い。
+    `{` の 3 分割、`\`(レコードからのフィールドの除去)、`...`(尾部の束縛)、`???`(穴)と、
+    `class`、`instance`、`extends`、`extern`、`newtype`、`perform`、`resume`、`run`、
+@@ -463,6 +463,7 @@
+ %token EFFECT EOF EQ EQ_GREATER EXCLAMATION EXCLAMATION_EQ FN GREATER HANDLE
+ %token HYPHEN IF LBRACKET LESS LET LOWLINE LPAREN MATCH MODULE NL PLUS RBRACKET
+ %token REC RPAREN SEMI SOLIDUS TYPE VAL VERTICAL WITH
++%token THEN ELSE
+ %token <bool> BOOL
+ %token <string> LOWER_IDENTIFIER UPPER_IDENTIFIER TEXT
+ %token <Syntax.number> NUMBER
+@@ -841,11 +842,24 @@
+    曖昧な文法を宣言で抑え込むと、`--strict` が何も言わなくなるからである(§3.13)。
+    弱いほうから、次の順に並ぶ。
+ 
+-   `fn` → 後置の `match` / `handle` → `||` → `&&` → 比較 → 加減 → 乗除 → 前置 → 後置 → アトム
++   `fn` と `if` → 後置の `match` / `handle` → `||` → `&&` → 比較 → 加減 → 乗除 → 前置 → 後置 → アトム
+ 
+    後置の `match` / `handle` はどの二項演算子よりも弱いので、`x match {...} + 1` とは書けない。
+    `(x match {...}) + 1` のように括弧が要る。
+ 
++   条件式 `if e1 then e2 else e3` は、`e1 match { case true => e2 case false => e3 }` に脱糖する。
++   構文木にノードを足さないので、型(第11章)、網羅性(第10章)、評価と末尾位置(第14章)は、
++   `match` の規則がそのまま働く。
++   `else` の後ろの式は、`fn` の本体と同じく右へできるだけ長く取る。
++   そのため `if c then a else b + 1` は `else (b + 1)` と読み、`if` の結果を演算に使うときは括弧が要る。
++   `else` は省略できない。
++   省略できる形を足すと、`if a then if b then x else y` の `else` をどちらの `if` に付けるかで、
++   shift/reduce の conflict が 1 個出る。
++
++   合成する 2 つの節のパターンには、条件 `e1` の位置を付ける。
++   条件が `Boolean` でないとき、第11章はパターンと照合対象の単一化で落ち、パターンの位置を報告する。
++   この位置付けにより、その誤りは条件を指す。
++
+    比較は**非結合**である。
+    `a < b < c` は文法の段階で落ちる。
+ 
+@@ -857,6 +871,10 @@
+ 
+ exp:
+   | FN LPAREN params RPAREN EQ_GREATER exp { mk $sloc (Lambda { l_params = $3; l_body = $6 }) }
++  | IF exp THEN exp ELSE exp
++      { (* Boolean に対する match に脱糖する(§3.18)。パターンの位置は条件 e1 に置く *)
++        let arm b sp ep body = mk (sp, ep) { cl_pat = mk $loc($2) (PBool b); cl_guard = None; cl_body = body } in
++        mk $sloc (Match ($2, [ arm true $startpos($3) $endpos($4) $4; arm false $startpos($5) $endpos($6) $6 ])) }
+   | postfixed                              { $1 }
+ 
+ postfixed:
+diff -ruN '--exclude=_build' base/lib/syntax.ml diktor/lib/syntax.ml
+--- base/lib/syntax.ml	2026-10-02 23:34:08.000000000 +0900
++++ diktor/lib/syntax.ml	2026-10-10 01:40:12.550992966 +0900
+@@ -968,6 +968,8 @@
+    複数のスクルティニを持つように見える照合は、タプルに対する照合である。
+    タプルは `_item` 行なので、この照合も 1 つのスクルティニに対する照合として扱える。
+    網羅性検査のパターン行列も、入口では列数 1 である(第10章)。
++   条件式 `if` も専用のノードを持たない。
++   第3章が、`Boolean` に対する 2 節の `Match` に脱糖する。
+ 
+    `resume` は名前ではなく、`Resume` という専用のノードで表す。
+    構文が保証できるのは、`resume` を値として名前に束縛できないことまでで、
+diff -ruN '--exclude=_build' base/test/if.t diktor/test/if.t
+--- base/test/if.t	1970-01-01 09:00:00.000000000 +0900
++++ diktor/test/if.t	2026-10-10 01:43:36.806756618 +0900
+@@ -0,0 +1,277 @@
++条件式 if e1 then e2 else e3(仕様 §5.8)。Boolean の値に対する 2 節の match の略記で、
++構文木のノードを持たない。パーサが case true と case false の 2 節を持つ match に
++脱糖するので、型、評価順序、網羅性、末尾位置はすべて match の規則で決まる。
++
++脱糖：if と、同じ 2 節を書いた match は、同じ構文木になる:
++
++  $ cat > desugar.kel <<'KEL'
++  > let f(b: Boolean): Int32 = if b then 1 else 2
++  > let g(b: Boolean): Int32 = b match { case true => 1 case false => 2 }
++  > KEL
++  $ diktor --dump-ast desugar.kel
++  (dlet
++   (binding f (params (pannot b Boolean)) : Int32 =
++    (match b (case true => 1) (case false => 2))))
++  (dlet
++   (binding g (params (pannot b Boolean)) : Int32 =
++    (match b (case true => 1) (case false => 2))))
++
++評価。else の枝にも if を書ける:
++
++  $ cat > basic.kel <<'KEL'
++  > let sign(n: Int32): Int32 = if n < 0 then 0 - 1 else if n == 0 then 0 else 1
++  > echoln(show(sign(0 - 5)))
++  > echoln(show(sign(0)))
++  > echoln(show(sign(7)))
++  > echoln(if true then "yes" else "no")
++  > let r = if true then { let y = 2; y * 3 } else { 0 }
++  > echoln(show(r))
++  > KEL
++  $ diktor basic.kel
++  -1
++  0
++  1
++  yes
++  6
++
++評価順序：条件を 1 回だけ評価し、選んだ枝だけを評価する:
++
++  $ cat > order.kel <<'KEL'
++  > let t(s: String, b: Boolean): Boolean = { echoln(s); b }
++  > echoln(show(if t("cond", true) then t("then", true) else t("else", false)))
++  > echoln(show(if t("cond", false) then t("then", true) else t("else", false)))
++  > KEL
++  $ diktor order.kel
++  cond
++  then
++  true
++  cond
++  else
++  false
++
++優先順位は fn と同じ段で、else の枝は右へできるだけ長く取る。
++2 + 10 も後置の match も else の枝に入る。if の結果を演算に使うときは括弧で囲む:
++
++  $ cat > prec.kel <<'KEL'
++  > echoln(show(if true then 1 else 2 + 10))
++  > echoln(show((if true then 1 else 2) + 10))
++  > echoln(show(if true then Some(1) else None match { case Some(x) => Some(x + 1) case None => None }))
++  > echoln(if 1 < 2 && 2 < 3 then "both" else "not")
++  > KEL
++  $ diktor prec.kel
++  1
++  11
++  Some(1)
++  both
++
++括弧で囲まない if は、演算子のオペランドに書けない:
++
++  $ printf 'let g = 1 + if true then 1 else 2\n' > operand.kel
++  $ diktor operand.kel
++  operand.kel:1:13: パースエラー(付近のトークンを確認してください)
++  [2]
++
++else は省略できない。改行が文を区切った位置で else を待っていたことが、
++パースエラーの位置で分かる:
++
++  $ cat > noelse.kel <<'KEL'
++  > let f(b: Boolean): Unit = {
++  >   if b then echoln("x")
++  >   echoln("y")
++  > }
++  > KEL
++  $ diktor noelse.kel
++  noelse.kel:2:24: パースエラー(付近のトークンを確認してください)
++  [2]
++
++改行：then と else で始まる行と、then と else で終わる行は、前後の行に続く。
++if で始まる行は新しい文を始める:
++
++  $ cat > newline.kel <<'KEL'
++  > let pick(n: Int32): String =
++  >   if n > 0
++  >   then "pos"
++  >   else "nonpos"
++  > let pick2(n: Int32): String = {
++  >   let k = n * 2
++  >   if k > 10 then
++  >     "big"
++  >   else if k > 0 then
++  >     "small"
++  >   else
++  >     "none"
++  > }
++  > echoln(pick(1))
++  > echoln(pick(0))
++  > echoln(pick2(6))
++  > echoln(pick2(1))
++  > echoln(pick2(0))
++  > let x = 1
++  > if x == 1 then echoln("one") else echoln("other")
++  > echoln("after")
++  > KEL
++  $ diktor newline.kel
++  pos
++  nonpos
++  big
++  small
++  none
++  one
++  after
++  $ printf 'let x = 1\nif x == 1\nthen 2\nelse 3\n' > tok.kel
++  $ diktor --dump-tokens tok.kel
++     1  let
++     1  x
++     1  =
++     1  1
++     1  <NL>
++     2  if
++     2  x
++     2  ==
++     2  1
++     3  then
++     3  2
++     4  else
++     4  3
++     5  <EOF>
++
++対話的な実行でも、then や else が来るまで入力を読み続ける:
++
++  $ printf 'let y = if false then 0\nelse 5\n' | diktor --repl
++  y : Int32 = 5
++
++型：条件は Boolean でなければならない。誤りは条件の位置に報告する:
++
++  $ cat > condty.kel <<'KEL'
++  > let f(s: String): Int32 =
++  >   if s
++  >   then 1
++  >   else 2
++  > KEL
++  $ diktor --type-check condty.kel
++  ! condty.kel:2:6: 型エラー: 型が一致しません: String と Boolean
++  [1]
++
++2 つの枝は同じ型でなければならない。診断は同じ 2 節の match と同じになる:
++
++  $ printf 'let f(b: Boolean) = if b then "one" else b\n' > armty.kel
++  $ diktor --type-check armty.kel
++  ! armty.kel:1:21: 型エラー: 型が一致しません: Boolean と String
++  [1]
++  $ printf 'let f(b: Boolean) = b match { case true => "one" case false => b }\n' > armty2.kel
++  $ diktor --type-check armty2.kel
++  ! armty2.kel:1:21: 型エラー: 型が一致しません: Boolean と String
++  [1]
++
++型注釈が無くても、条件は Boolean に、枝は共通の型に推論する:
++
++  $ cat > infer.kel <<'KEL'
++  > let choose(b, x, y) = if b then x else y
++  > echoln(show(choose(true, 1, 2)))
++  > echoln(choose(false, "a", "b"))
++  > KEL
++  $ diktor infer.kel
++  1
++  b
++
++網羅性：脱糖した 2 節は網羅的なので、警告を出さない。
++対照の 1 節の match には警告が出る:
++
++  $ cat > exhaust.kel <<'KEL'
++  > let f(b: Boolean): Int32 = if b then 1 else 2
++  > let g(b: Boolean): Int32 = b match { case true => 1 }
++  > echoln(show(f(false)))
++  > KEL
++  $ diktor exhaust.kel
++  ⚠ match が非網羅的です。例えば false が漏れています
++  2
++
++then と else は予約語で、変数、引数、レコードのラベルに使えない:
++
++  $ printf 'let then = 1\n' > kwthen.kel
++  $ diktor kwthen.kel
++  kwthen.kel:1:5: パースエラー(付近のトークンを確認してください)
++  [2]
++  $ printf 'let f(else: Int32): Int32 = else\n' > kwelse.kel
++  $ diktor kwelse.kel
++  kwelse.kel:1:7: パースエラー(付近のトークンを確認してください)
++  [2]
++  $ printf 'let r = {then = 1}\n' > kwlabel.kel
++  $ diktor kwlabel.kel
++  kwlabel.kel:1:10: パースエラー(付近のトークンを確認してください)
++  [2]
++
++ガードの if と共存する。ガードの中の条件式は、括弧が無くても読める。
++ガードの前の改行は、今までどおり節を区切らない:
++
++  $ cat > guard.kel <<'KEL'
++  > let classify(n: Int32): String = n match {
++  >   case 0 => "zero"
++  >   case x if if x < 0 then true else false => "negative"
++  >   case x
++  >     if x > 100 => if x > 1000 then "huge" else "big"
++  >   case _ => "positive"
++  > }
++  > echoln(classify(0))
++  > echoln(classify(0 - 3))
++  > echoln(classify(500))
++  > echoln(classify(5000))
++  > echoln(classify(5))
++  > KEL
++  $ diktor guard.kel
++  zero
++  negative
++  big
++  huge
++  positive
++
++末尾位置：then と else の枝は、match の節の本体として末尾位置にある(仕様 §5.7)。
++test/tail_calls.t と同じく、OCAMLRUNPARAM=l=100k で上限を絞って 10 万回続ける。
++対照の末尾でない再帰は落ちる:
++
++  $ cat > nontail.kel <<'KEL'
++  > let rec sum(n: Int32): Int32 = if n == 0 then 0 else n + sum(n - 1)
++  > echoln(show(sum(100000)))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor nontail.kel
++  実行時エラー: スタックオーバーフロー(再帰が深すぎます)
++  [3]
++
++else の枝と then の枝からの自己再帰、else if を通る相互再帰、else の枝のブロック:
++
++  $ cat > tail.kel <<'KEL'
++  > let rec loop(n: Int32, acc: Int32): Int32 = if n == 0 then acc else loop(n - 1, acc + 1)
++  > let rec down(n: Int32): Int32 = if n != 0 then down(n - 1) else 0
++  > let rec even(n: Int32): Boolean = if n == 0 then true else if n == 1 then false else odd(n - 1)
++  > and odd(n: Int32): Boolean = if n == 0 then false else even(n - 1)
++  > let rec blk(n: Int32): Unit = {
++  >   let m = n - 1
++  >   if n == 0 then () else { let k = m; blk(k) }
++  > }
++  > echoln(show(loop(100000, 0)))
++  > echoln(show(down(100000)))
++  > echoln(show(even(100000)))
++  > blk(100000)
++  > echoln("ok")
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor tail.kel
++  100000
++  0
++  true
++  ok
++
++操作節の本体の if の枝にある resume は、末尾 resume である:
++
++  $ cat > resume.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > effect Tick = { tick: () => Unit }
++  > let rec asks(n: Int32, acc: Int32): Int32 @ Ask =
++  >   if n == 0 then acc else asks(n - 1, acc + perform ask(n))
++  > let rec ticks(n: Int32): Unit @ Tick = if n == 0 then () else { perform tick(); ticks(n - 1) }
++  > echoln(show(asks(100000, 0) handle { case ask(x) => if x > 0 then resume(1) else resume(0) }))
++  > ticks(100000) handle { case tick() => { let c = 1; if c == 1 then resume() else resume() } }
++  > echoln("ticks")
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor resume.kel
++  100000
++  ticks

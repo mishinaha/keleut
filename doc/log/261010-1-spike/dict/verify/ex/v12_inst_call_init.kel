@@ -1,0 +1,5 @@
+newtype Box[A] = Box(A)
+let mkb[A](n: Int32): (Box[A]) => String @ {} = { let z = 10 / n; fn(b) => "box" }
+type instance[A: Show] Show[Box[_]] { let show = mkb(0) }
+echoln("after")
+echoln(show(Box(1)))

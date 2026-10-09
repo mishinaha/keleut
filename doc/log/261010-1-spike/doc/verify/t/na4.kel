@@ -1,0 +1,2 @@
+let f(_item: Int32, y: Int32): Int32 = _item - y
+echoln(show(f(5, 1)))

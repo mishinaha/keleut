@@ -1,0 +1,6 @@
+newtype Box[A] = Box(A)
+type instance[A: Show] Show[Box[_]] {
+  let show = fn(b) => b match { case Box(x) => "Box(" + show(x) + ")" }
+}
+echoln(show(Box(1)))
+echoln(show(Box(Box("s"))))

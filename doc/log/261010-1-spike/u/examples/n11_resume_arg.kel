@@ -1,0 +1,8 @@
+effect Get = { get: () => () => Unit @ Console }
+let a(): Unit @ {} = ()
+let use(): Unit @ Console = {
+  let g = perform get()
+  g()
+} handle {
+  case get() => resume(a)
+}

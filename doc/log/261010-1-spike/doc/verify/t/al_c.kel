@@ -1,0 +1,3 @@
+let k(x: Int32): Int32 = { echoln("k"); x }
+let use(f: (Int32) => Int32 @ Console): Int32 @ Console = f(1)
+echoln(show(use(k)))

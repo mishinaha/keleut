@@ -1,0 +1,27 @@
+let x: Int32 = 7
+let y = 2i64
+let z = 1.5
+echoln(show(-x))
+echoln(show(-y))
+echoln(show(-z))
+echoln(show(- -x))
+echoln(show(-(x + 1)))
+echoln(show(-x * 2))
+echoln(show(2 - -x))
+echoln(show(x % 3))
+echoln(show(-x % 3))
+echoln(show(x % -3))
+echoln(show(17i64 % 5))
+echoln(show(1 + 7 % 4 * 2))
+echoln(show(-2147483648))
+echoln(show(-(0x7fffffff) - 1))
+echoln(show(-x == -7))
+let f(n: Int32): Int32 = n
+echoln(show(-f(3)))
+echoln(show(-0.0))
+let neg2[A: Neg](a: A): A = -a
+echoln(show(neg2(5)))
+echoln(show(Neg.neg(4)))
+echoln(show(Rem.rem(9, 4)))
+echoln(show(rem(9, 4)))
+echoln(show(neg(1.25)))

@@ -1,0 +1,3 @@
+let f(n: Int32): String = n match { case _ => "a" case 0 => "b" }
+let (a, Some(b)) = (1, Some(2))
+echoln(f(0) + show(b))

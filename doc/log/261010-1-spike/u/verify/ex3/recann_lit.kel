@@ -1,0 +1,5 @@
+let a(): Int32 @ {} = 1
+let use(): Int32 @ Console = {
+  let r: {go: () => Int32 @ Console} = {go = a}
+  r.go()
+}

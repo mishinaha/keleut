@@ -1,0 +1,4 @@
+let r = if true then { let y = 2; y * 3 } else { 0 }
+echoln(show(r))
+let s = if false then {a = 1}.a else {a = 2}.a
+echoln(show(s))

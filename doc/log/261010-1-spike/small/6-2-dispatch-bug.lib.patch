@@ -1,0 +1,12 @@
+diff -ruN -x _build base/lib/interp.ml d/diktor/lib/interp.ml
+--- base/lib/interp.ml	2026-10-02 23:34:08.000000000 +0900
++++ d/diktor/lib/interp.ml	2026-10-10 01:52:45.328421632 +0900
+@@ -559,7 +559,7 @@
+               ps
+         in
+         match ps with
+-        | [] -> vals (* 位置が取れなければすべてを走査する(現状は到達しない安全側の保険) *)
++        | [] -> bug ("dispatch_positions: " ^ cls_name ^ "." ^ meth ^ " にクラスパラメータが頭に現れる引数がありません")
+         | ps -> List.filteri (fun i _ -> List.mem i ps) vals)
+     | None -> vals
+   in

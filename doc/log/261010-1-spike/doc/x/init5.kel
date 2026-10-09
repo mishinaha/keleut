@@ -1,0 +1,2 @@
+echoln(show(g()))
+let g(): Int32 @ {} = 42

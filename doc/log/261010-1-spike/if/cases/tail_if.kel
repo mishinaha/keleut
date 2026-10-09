@@ -1,0 +1,2 @@
+let rec loop(n: Int32, acc: Int32): Int32 = if n == 0 then acc else loop(n - 1, acc + 1)
+echoln(show(loop(100000, 0)))

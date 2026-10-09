@@ -1,0 +1,2 @@
+pub let k: (Int32) => Int32 = fn(x) => x
+echoln(show(k(1)))

@@ -1,0 +1,3 @@
+newtype Box = Box(Int32)
+type instance Show[Box] { let show = { let z = 1 / 0; fn(b) => "box" } }
+echoln("after")

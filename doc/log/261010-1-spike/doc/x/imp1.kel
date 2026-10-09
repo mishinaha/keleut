@@ -1,0 +1,2 @@
+from "./nosuch" import x
+echoln("a")

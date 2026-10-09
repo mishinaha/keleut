@@ -1,0 +1,12 @@
+let a: (Int32) = 1
+let b: (Int32,) = (1,)
+let c: ((Int32, String)) = (1, "x")
+let d: (((Int32))) = 2
+let k(x: Int32): (Int32) => Int32 @ {} = fn(y) => x + y
+let k2(x: Int32): ((Int32) => Int32) @ {Console} = { echoln("k2"); fn(y) => x + y }
+let k3: (Int32) => ((Int32) => Int32 @ {}) @ {} = fn(x) => fn(y) => x + y
+let k4(x: Int32): ((Int32) => Int32 @ {Console}) @ {} = fn(y) => { echoln("in"); x + y }
+let ar: ((Int32) => Int32,) = (fn(x) => x,)
+let lst: List[((Int32) => Int32)] = Nil
+let e: (Int32, (String)) = (1, "y")
+echoln(show(k2(1)(2)))

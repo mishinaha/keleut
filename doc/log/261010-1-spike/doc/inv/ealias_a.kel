@@ -1,0 +1,2 @@
+let f(): Unit @ {Print, Console} = { println("p"); echoln("c") }
+with_stdout(f)

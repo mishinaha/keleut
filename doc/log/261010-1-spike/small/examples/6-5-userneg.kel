@@ -1,0 +1,5 @@
+let neg(x: Int32): Int32 = 100
+echoln(show(-5))
+let k: Int32 = 5
+echoln(show(-k))
+echoln(show(neg(1)))

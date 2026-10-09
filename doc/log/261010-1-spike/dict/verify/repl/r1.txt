@@ -1,0 +1,14 @@
+show
+let sh = show
+let idf[A](x: A): A = x
+let s = idf(show)
+s(1i32)
+let xs = idf(Nil)
+show(xs)
+:type idf(show)
+let t = idf(show); t(2i32)
+Show.show
+1 == 1
+let eqf = fn(a: Int32, b: Int32) => a == b
+let pr[A: Show](x: A): String = show(x)
+pr

@@ -1,0 +1,23 @@
+annot_rows.t {'ext': 0, 'br': 0, 'both': 0, 'other_minus': 10, 'other_plus': 7, 'minus': 10, 'plus': 7}
+     +   user : () => Int32 @ {Console extends R1}
+     -   ! alval.kel:3:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+     -   [1]
+     +   user : () => Int32 @ {Console extends R1}
+     +   k : (Int32) => Int32 @ {}
+     -   ! alval2.kel:2:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+     -   [1]
+     +   user : () => Int32 @ {Console extends R1}
+     -   ! alval4.kel:3:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+     -   [1]
+     +   use : (Box) => Int32 @ {Print, Log extends R1}
+     -   ! clsalias3.kel:8:61: 型エラー: ラベル Log がありません(行は閉じています)
+     -   [1]
+     +   b : (Int32) => Int32 @ {Console, Print extends R1}
+     +   a : (Int32) => Int32 @ {Console extends R1}
+     -   ! recandfwddiff.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+     -   [1]
+verify_fixes.t {'ext': 0, 'br': 0, 'both': 0, 'other_minus': 2, 'other_plus': 1, 'minus': 2, 'plus': 1}
+     +   15
+     -   ! vrgen.kel:6:12: 型エラー: ラベル Ask がありません(行は閉じています)
+     -   [1]
+TOTAL {'ext': 0, 'br': 0, 'both': 0, 'other_minus': 12, 'other_plus': 8, 'minus': 12, 'plus': 8}

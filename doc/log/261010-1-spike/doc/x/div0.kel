@@ -1,0 +1,5 @@
+echo("before ")
+echoln("line")
+let z = 0
+echoln(show(1 / z))
+echoln("after")

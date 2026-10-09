@@ -1,0 +1,2 @@
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() if resume(true) => true case test() => false }

@@ -1,0 +1,4 @@
+let f(): Int32 = g()
+let v: Int32 = f()
+let g(): Int32 @ {} = 42
+echoln(show(v))

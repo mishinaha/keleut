@@ -1,0 +1,7 @@
+newtype Foo = Foo
+type instance Show[Foo] { let show(x) = helper(1, "a") }
+let user(): String = helper2(Foo, 2)
+let helper[A: Show, B: Show](x: A, y: B): String @ {} = show(y) + show(x) + "!"
+let helper2[B: Eq, A: Show](x: A, y: B): String @ {} = show(x) + show(y == y)
+echoln(show(Foo))
+echoln(user())

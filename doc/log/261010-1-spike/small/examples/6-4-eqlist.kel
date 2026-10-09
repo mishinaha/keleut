@@ -1,0 +1,6 @@
+echoln(show(Cons(1, Cons(2, Nil)) == Cons(1, Cons(2, Nil))))
+echoln(show(Cons(1, Nil) != Cons(1, Cons(2, Nil))))
+echoln(show(Some("a") == Some("a")))
+echoln(show(Some(1) == None))
+echoln(show(Cons(Some(1), Nil) == Cons(Some(1), Nil)))
+echoln(show(true == true))

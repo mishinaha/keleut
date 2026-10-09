@@ -1,0 +1,22 @@
+let outer[A: Show](x: A): String = {
+  let rec p(n: Int32, y) = (n == 0) match { case true => show(y) + show(x) case false => q(n - 1, y) }
+  and q(n: Int32, y) = p(n, y)
+  p(3, 1) + "|" + p(2, "s")
+}
+echoln(outer(true))
+let sh = show
+echoln(sh(1) + sh("a") + sh(Some(2)))
+let loc(): String = { let s2 = show; s2(1) + s2(false) }
+echoln(loc())
+let (pa, pb) = (show, 1)
+echoln(pa(pb))
+effect Ask = { ask: () => Int32 }
+let withask[A: Show](x: A): String @ {} = { perform ask() + 1 } handle { case ask() => resume(41) case return(v) => show(v) + show(x) }
+echoln(withask("!"))
+type class Functor[F[_]] { val map[A, B, E]: (F[A], (A) => B @ E) => F[B] @ E }
+type instance Functor[Option[_]] { let map(o, f) = o match { case Some(x) => Some(f(x)) case None => None } }
+let showall[F[_]: Functor, A: Show](xs: F[A]): F[String] = map(xs, fn(x) => show(x))
+echoln(show(showall(Some(5))))
+let rec both[A: Eq](x: A, y: A): Boolean = x == y && same(y, x)
+and same(a, b) = a == b
+echoln(show(both({k = 1}, {k = 1})))

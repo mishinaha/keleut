@@ -1,0 +1,4 @@
+newtype Seq[A] = Empty | More(A, Seq[A])
+type S = Seq[Int32]
+type class Size[A] { val size: (A) => Int32 }
+type instance Size[S] { let size(x) = 0 }

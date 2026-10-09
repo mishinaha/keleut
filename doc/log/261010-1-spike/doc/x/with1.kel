@@ -1,0 +1,15 @@
+let zero[A, E](body: () => A @ E): A @ E = body()
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let a(): Int32 = {
+  with _ = zero()
+  1
+}
+let b(): Int32 = {
+  with _x = one()
+  2
+}
+let c(): Int32 = {
+  with (_) = zero()
+  3
+}
+echoln(show(a() + b() + c()))

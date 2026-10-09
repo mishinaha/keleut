@@ -1,0 +1,2 @@
+let f(p: {x: Int32}): Int32 = p match { case {y} => y }
+echoln(show(f({x = 3})))

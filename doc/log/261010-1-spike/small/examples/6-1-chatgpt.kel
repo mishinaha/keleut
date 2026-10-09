@@ -1,0 +1,4 @@
+effect A = { ask: () => Int32 }
+effect B = { ask: () => Int32 }
+let first(): Int32 @ {A, B} = perform ask()
+let second(): Int32 @ {B, A} = perform ask()

@@ -1,0 +1,2 @@
+echoln("a")
+let f: (Int32) => Int32 = { let q = 1 / 0; fn(x) => x }

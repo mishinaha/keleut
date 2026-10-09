@@ -1,0 +1,11 @@
+type class Pure[F[_]] { val pure[A]: (A) => F[A] }
+type instance Pure[Option[_]] { let pure(x) = Some(x) }
+let o: Option[Int32] = pure(1)
+:type pure(1)
+pure(1)
+let p = pure
+type class Rd[A] { val rd: (String) => A }
+type instance Rd[Int32] { let rd(s) = 5 }; 1 / 0
+let n: Int32 = rd("x")
+type instance Rd[Int32] { let rd(s) = 6 }
+let n: Int32 = rd("x")

@@ -1,0 +1,3 @@
+type Fn[E] = () => Unit @ E
+let call[E](f: Fn[E]): Unit @ E = f()
+call(fn() => echoln("hi"))

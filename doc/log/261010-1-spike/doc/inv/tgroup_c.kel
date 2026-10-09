@@ -1,0 +1,3 @@
+newtype T = T(U)
+let x = 1
+newtype U = U(Int32)

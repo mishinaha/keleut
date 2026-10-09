@@ -1,0 +1,10 @@
+newtype Box = Box(Int32)
+type instance Eq[Box] { let eq(a, b) = true }
+echoln(show({p = 1, q = "a"} == {q = "a", p = 1}))
+echoln(show((1, Box(1)) == (1, Box(2))))
+let va: #A(Int32) | #B(String) = #A(1)
+echoln(show(va == #A(1)))
+echoln(show(va == #B("x")))
+let f[A: Eq](x: A, y: A): Boolean = {v = x} == {v = y}
+echoln(show(f(Box(1), Box(3))))
+echoln(show(f(Cons(1, Nil), Cons(2, Nil))))

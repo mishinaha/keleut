@@ -1,0 +1,2 @@
+effect Ask = { ask: () => String }
+echoln(perform ask())

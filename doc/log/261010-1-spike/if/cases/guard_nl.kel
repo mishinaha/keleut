@@ -1,0 +1,10 @@
+let classify(n: Int32): String = n match {
+  case x
+    if x < 0 => "negative"
+  case x => if x == 0
+    then "zero"
+    else "positive"
+}
+echoln(classify(0 - 1))
+echoln(classify(0))
+echoln(classify(1))

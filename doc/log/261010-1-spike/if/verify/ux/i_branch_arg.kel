@@ -1,0 +1,5 @@
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let call[E](f: () => Unit @ E): Unit @ E = f()
+let run_it(b: Boolean): Unit @ Console = call(if b then pure_f else print_f)
+run_it(false)

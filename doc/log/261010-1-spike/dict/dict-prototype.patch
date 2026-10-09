@@ -1,0 +1,1155 @@
+diff -ru lib.orig/driver.ml diktor/lib/driver.ml
+--- lib.orig/driver.ml	2026-10-10 01:47:08.878892987 +0900
++++ diktor/lib/driver.ml	2026-10-10 01:52:12.985522581 +0900
+@@ -808,7 +808,9 @@
+     | _ -> false
+   in
+   if shows then
+-    match Interp.dispatch "Show" "show" (Value.VRecord [ (l_item, v) ]) with Value.VText s -> s | v -> Value.show v
++    let env = { Value.globals = Hashtbl.create 1; locals = Value.SMap.empty; resume = None } in
++    let d = Interp.eval_ev env (Unify.display_evidence (intern "Show") ty) in
++    match Interp.apply (Interp.select_method d "show" []) (Value.VRecord [ (l_item, v) ]) with Value.VText s -> s | v -> Value.show v
+   else Value.show v
+ 
+ let repl options =
+diff -ru lib.orig/elab.ml diktor/lib/elab.ml
+--- lib.orig/elab.ml	2026-10-10 01:47:08.879061227 +0900
++++ diktor/lib/elab.ml	2026-10-10 02:05:19.656639633 +0900
+@@ -1437,6 +1437,21 @@
+    リテラルの型はその場で決まる。
+    `Hole`(`???`)は新しい型変数を型とし、実行時に評価されると落ちる。 *)
+ 
++(* 試作:再帰群の pre を通る参照の記録。(pre, 群の束縛ノード, 群の現在の束縛) *)
++let group_pres : (ty * T.let_binding * T.let_binding option ref) list ref = ref []
++
++let group_refs : (T.exp * T.let_binding option * T.let_binding * ((oid * oid) * Tree.hole) list) list ref = ref []
++
++(* 試作:穴を解き、Unsolved_param を型エラーにする *)
++let solve_holes_at ~since ~params =
++  try Unify.solve_holes ~since ~params
++  with Unify.Unsolved_param (h, _) ->
++    raise
++      (Type_error_at
++         ( h.Tree.h_loc,
++           "曖昧な制約: " ^ display_of h.Tree.h_cls
++           ^ " の辞書を束縛の型から決められません(束縛の型に現れない型変数に制約が付いています。注釈で型を決めてください)" ))
++
+ let rec elab_exp env level eff ((_, e) as node : T.exp) : ty =
+   let t = at_node node (fun () -> elab_exp' env level eff node e) in
+   Tree.set_ty node t;
+@@ -1481,7 +1496,14 @@
+              任意の非 pub の値を外から呼べてしまう *)
+           Decls.check_value_visible (intern name);
+           (match SMap.find_opt name env.tops with Some g -> Tree.set_resolved node (Tree.RVar g) | None -> ());
+-          Unify.instantiate level sch
++          let t, hs = Unify.instantiate_ev ~loc:(Tree.loc_of node) level sch in
++          if hs <> [] then Tree.set_dict node (Tree.DUse hs);
++          (match List.find_opt (fun (t, _, _) -> t == sch) !group_pres with
++          | Some (_, target, cur) ->
++              let keyed = List.combine (Unify.dkeys_of sch) hs in
++              group_refs := (node, !cur, target, keyed) :: !group_refs
++          | None -> ());
++          t
+       | None -> (
+           (* 環境に無かったときだけ、module スコープの値の同義語を引く。フォールバック専用
+              なので、局所束縛による遮蔽が自動で効く。スコープの外では解決せず、候補の列
+@@ -1498,7 +1520,9 @@
+               (match Option.bind scoped (fun q -> SMap.find_opt (name_of q) env.tops) with
+               | Some g -> Tree.set_resolved node (Tree.RVar g)
+               | None -> bug ("同義語の先が実体を持ちません: " ^ name));
+-              Unify.instantiate level sch
++              let t, hs = Unify.instantiate_ev ~loc:(Tree.loc_of node) level sch in
++              if hs <> [] then Tree.set_dict node (Tree.DUse hs);
++              t
+           | None -> (
+               match li with
+               | LongId comps when comps <> [] && String.length (List.nth comps (List.length comps - 1)) > 0 ->
+@@ -1629,7 +1653,9 @@
+       | Prims.OpMethod (cls, m) | Prims.OpMethodNot (cls, m) ->
+           let scheme = method_scheme cls m in
+           let ret = new_var level in
+-          Unify.unify (Unify.instantiate level scheme) (TArrow (TRecord (closed_item_row [ tl; tr ]), ret, eff));
++          let it, hs = Unify.instantiate_ev ~loc:(Tree.loc_of node) level scheme in
++          Tree.set_dict node (Tree.DUse hs);
++          Unify.unify it (TArrow (TRecord (closed_item_row [ tl; tr ]), ret, eff));
+           ret)
+   | T.Not e ->
+       Unify.unify (elab_exp env level eff e) t_boolean;
+@@ -2875,6 +2901,7 @@
+     type_error "非値の束縛に型パラメータは付けられません(値制限。関数にするか値を束縛してください)";
+   let lvl = level + 1 in
+   let mark = Unify.class_mark () in
++  let hmark = Unify.hole_mark () in
+   let extra_rigids = ref [] in
+   let rigids = make_rigids lvl b.T.lb_tparams in
+   let env_ty = { env with types = List.fold_left (fun m (n, t, _) -> SMap.add n t m) env.types rigids } in
+@@ -2953,6 +2980,7 @@
+         Unify.generalize level fn_ty)
+       else Unify.lower_levels ~since:mark level fn_ty;
+       release_rigids rigids;
++      finish_binding_dicts node gen hmark fn_ty;
+       add_local env x fn_ty
+   | T.PWildcard ->
+       List.iter warn (Exhaust.drain ());
+@@ -2961,6 +2989,7 @@
+         Unify.generalize level fn_ty)
+       else Unify.lower_levels ~since:mark level fn_ty;
+       release_rigids rigids;
++      finish_binding_dicts node gen hmark fn_ty;
+       env
+   | _ ->
+       (* パターン束縛は単相(節が 1 つだけの match と同じ扱い)。網羅性の警告に乗せる。
+@@ -2973,8 +3002,15 @@
+       Exhaust.queue [ (b.T.lb_name, false) ] fn_ty;
+       List.iter warn (Exhaust.drain ());
+       release_rigids rigids;
++      finish_binding_dicts node false hmark fn_ty;
+       env'
+ 
++(* 試作:束縛の終わりに辞書パラメータを決め、本体の穴を解く *)
++and finish_binding_dicts node gen hmark fn_ty =
++  let dps = if gen then Unify.dkeys_of fn_ty else [] in
++  if dps <> [] then Tree.set_dict node (Tree.DAbs dps);
++  solve_holes_at ~since:hmark ~params:dps
++
+ (* ## 11.29 let rec
+ 
+    手順は 4 つある。
+@@ -3092,11 +3128,17 @@
+   in
+   let rec_arg_queue = ref [] in
+   let published = ref [] in
++  let cur_member = ref None in
++  let saved_pres = !group_pres in
++  group_pres := List.map2 (fun bn (_, pre) -> (pre, bn, cur_member)) bs names @ !group_pres;
++  let member_marks = ref [] in
+   (* 検査し終えて公開の型が決まった束縛は、後続の本体からその型で見せる *)
+   let env_now = ref env_rec in
+   List.iter2
+     (fun ((_, b) as bnode) (x, pre) ->
+       at_node bnode @@ fun () ->
++      cur_member := Some bnode;
++      member_marks := (bnode, Unify.hole_mark ()) :: !member_marks;
+       (* pub の完全注釈検査と、関数束縛の @ の省略を純粋と読む規則は、let(§11.28)と同じ。
+          ただし完全注釈検査では値束縛の頭を最外として扱わない(値束縛に pub の省略 @ の
+          分岐が無いため。§11.29) *)
+@@ -3146,6 +3188,7 @@
+               let t', rig = publish_open lvl fn_ty in
+               extra_rigids := rig @ !extra_rigids;
+               published := (bnode, t') :: !published;
++              group_pres := (t', bnode, cur_member) :: !group_pres;
+               env_now := { !env_now with values = SMap.add x t' !env_now.values };
+               t'
+           | _ -> fn_ty)
+@@ -3187,6 +3230,47 @@
+      到達できればよい *)
+   Unify.check_ambiguity ~all:false ~level (List.map snd names);
+   List.iter (fun (_, t) -> Unify.generalize level t) names;
++  group_pres := saved_pres;
++  (* 試作:各束縛の辞書パラメータ、束縛ごとの穴、pre を通る参照 *)
++  let dps_of = List.map2 (fun bn (_, t) -> (bn, Unify.dkeys_of t)) bs names in
++  List.iter (fun (bn, dps) -> if dps <> [] then Tree.set_dict bn (Tree.DAbs dps)) dps_of;
++  let marks = List.rev !member_marks in
++  let ends = List.tl (List.map snd marks) @ [ Unify.hole_mark () ] in
++  let ranges = List.map2 (fun (bn, lo) hi -> (bn, lo, hi)) marks ends in
++  List.iter
++    (fun (bn, lo, hi) ->
++      let dps = List.assq bn dps_of in
++      (try Unify.solve_holes_range ~lo ~hi ~params:dps
++       with Unify.Unsolved_param (h, _) ->
++         raise
++           (Type_error_at
++              ( h.Tree.h_loc,
++                "曖昧な制約: " ^ display_of h.Tree.h_cls
++                ^ " の辞書を、この式を含む再帰群の束縛の型から決められません(群のほかの束縛の型にだけ現れる型変数に制約が付いています。注釈で型を決めてください)" ))))
++    ranges;
++  let refs = List.filter (fun (_, _, tgt, _) -> List.memq tgt bs) !group_refs in
++  group_refs := List.filter (fun (_, _, tgt, _) -> not (List.memq tgt bs)) !group_refs;
++  List.iter
++    (fun (node, from, tgt, keyed) ->
++      let need = List.assq tgt dps_of in
++      if need <> [] then (
++        let have = match from with Some f -> List.assq f dps_of | None -> [] in
++        let hs =
++          List.map
++            (fun ((_, c) as k) ->
++              match List.assoc_opt k keyed with
++              | Some h -> h
++              | None ->
++                  if not (List.mem k have) then
++                    raise
++                      (Type_error_at
++                         ( Tree.loc_of node,
++                           "曖昧な制約: 再帰群の中のこの参照が要る辞書を、呼ぶ側の束縛の型から決められません(注釈で型を決めてください)" ));
++                  { Tree.h_id = new_oid (); h_cls = c; h_ty = t_unit; h_loc = Tree.loc_of node; h_sol = Some (Tree.EvParam k) })
++            need
++        in
++        Tree.set_dict node (Tree.DUse hs)))
++    refs;
+   bind_names env names
+ 
+ (* ## 11.30 トップレベルで許されるエフェクト
+@@ -3735,20 +3819,12 @@
+         Unify.generalize 0 ty;
+         release_rigids eff_rigids;
+         List.iter (fun (_, t) -> match repr t with TVar r -> default_kind (Unify.var_info_of r).vkind | _ -> ()) mt_params;
+-        (* クラスパラメータが少なくとも 1 つの引数の頭に現れることを要求する(§11.33)。
+-           実行時のディスパッチ(tycon_of_value)は値の頭のコンストラクタしか見ないので、
+-           List[A] のようにパラメータが引数の内側に埋もれた形は選べない。頭に現れる
+-           ことは、その引数でタグによるディスパッチができることを保証する *)
+-        let head_is_param t =
+-          match repr (fst (app_spine t)) with TVar r -> ( match !r with Generic i -> i.vid = pinfo.vid | _ -> false) | _ -> false
+-        in
++        (* 試作:クラスパラメータがメソッドの型のどこかに現れることを要求する。
++           現れないメソッドは、使う位置でインスタンスを型から決められない *)
+         (match repr ty with
+-        | TArrow (args, _, _) -> (
+-            match repr args with
+-            | TRecord row when List.exists (fun (_, t) -> head_is_param t) (fst (row_fields row)) -> ()
+-            | _ ->
+-                type_error
+-                  ("メソッド " ^ v.T.cv_name ^ " はクラスパラメータが引数の頭に現れないため v0 では宣言できません(実行時タグディスパッチの前提、§7.4)"))
++        | TArrow _ ->
++            if not (List.exists (fun ((i : var_info), _) -> i.vid = pinfo.vid) (Unify.constraints_of ty)) then
++              type_error ("メソッド " ^ v.T.cv_name ^ " の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)")
+         | _ -> type_error ("メソッド " ^ v.T.cv_name ^ " の型は矢印型でなければなりません"));
+         (v.T.cv_name, ty))
+       c.T.cls_vals
+@@ -4207,13 +4283,21 @@
+    本体は普通の `elab_binding` / `elab_rec_bindings` で推論する。
+    そのため、注釈つきのメソッドも `let rec` のメソッドも同じ経路で通る(sample.kel:443-446)。 *)
+ 
+-let check_instance_bodies env (i : T.instance_decl') =
++let check_instance_bodies env inode (i : T.instance_decl') =
+   let cls, con, _holes = instance_head i in
+   let ci = match Decls.find_class cls with Some ci -> ci | None -> bug "instance: class 未登録" in
++  let imark = Unify.hole_mark () in
+   (* 前提つきインスタンスの頭型は、部分適用の形。束縛子を剛定数にして vcls に前提を載せる。
+      束縛子が 0 個なら頭型は TCon (con, [])。束縛子の名前は本体の型スコープに入る *)
+   let head_rigids = make_rigids 1 i.T.ins_tparams in
+   let head_ty = TCon (con, List.map (fun (_, t, _) -> t) head_rigids) in
++  (* 試作:前提の辞書パラメータ。ii_premises と同じ順(束縛子の順、各束縛子の制約の順) *)
++  let pk =
++    List.concat_map
++      (fun (_, _, r) -> let i = Unify.var_info_of r in List.map (fun c -> (i.vid, c)) i.vcls)
++      head_rigids
++  in
++  Tree.set_dict inode (Tree.DInstance pk);
+   let env = { env with types = List.fold_left (fun m (n, t, _) -> SMap.add n t m) env.types head_rigids } in
+   let expected_of mname =
+     match List.assoc_opt mname ci.Decls.ci_methods with
+@@ -4223,10 +4307,26 @@
+         Unify.map_generics_with memo (fun info -> TVar (ref (Generic info))) scheme
+     | None -> bug "instance: メソッドスキーマ未登録"
+   in
+-  let subsume mname inferred =
++  let subsume bnode mname inferred =
+     let lvl = 1 in
+-    let skol = Unify.skolemize lvl (expected_of mname) in
+-    let inf = Unify.instantiate lvl inferred in
++    let expected = expected_of mname in
++    let smemo = Hashtbl.create 8 in
++    let skol = Unify.map_generics_with smemo (fun i -> new_rigid ~kind:i.vkind ~classes:i.vcls lvl) expected in
++    let mk =
++      List.map
++        (fun ((gi : var_info), c) ->
++          match repr (Hashtbl.find smemo gi.vid) with
++          | TVar r -> ((Unify.var_info_of r).vid, c)
++          | _ -> bug "skolem")
++        (Unify.constraints_of expected)
++    in
++    let amark = Unify.hole_mark () in
++    let inf, adapter = Unify.instantiate_ev ~loc:(Tree.loc_of bnode) lvl inferred in
++    let finish_adapter () =
++      solve_holes_at ~since:amark ~params:(mk @ pk);
++      let own = match Tree.get_dict bnode with Tree.DAbs ks -> ks | _ -> [] in
++      Tree.set_dict bnode (Tree.DMethod (own, mk, adapter))
++    in
+     (* 包摂が失敗したときの既定の文言。最外の行の単一化だけは別に包んで純粋性の規則を
+        名指しするので、包む単位をここで関数に切り出す。引数と返り値の失敗はこの文言になる *)
+     let wrap f = try f () with Type_error msg -> type_error ("インスタンスメソッド " ^ mname ^ " がクラス宣言の型を満たしません(" ^ msg ^ ")") in
+@@ -4242,7 +4342,7 @@
+     | TArrow (ia, ir, ie), TArrow (sa, sr, se) ->
+         wrap (fun () -> Unify.unify ia sa);
+         wrap (fun () -> Unify.unify ir sr);
+-        if repr ie = TRowEmpty then ()
++        (if repr ie = TRowEmpty then ()
+         else
+           (* 宣言の側の行がラベル 0 個の裸の行変数(メソッドの最外の @ を省略した形など)
+              のときだけ、規則を名指しする。単一化の一般の文言
+@@ -4256,8 +4356,11 @@
+                type_error
+                  ("型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド " ^ mname
+                 ^ " の本体がエフェクトを起こしています。元の報告: " ^ msg)
+-             else type_error ("インスタンスメソッド " ^ mname ^ " がクラス宣言の型を満たしません(" ^ msg ^ ")"))
+-    | _ -> wrap (fun () -> Unify.unify inf skol)
++             else type_error ("インスタンスメソッド " ^ mname ^ " がクラス宣言の型を満たしません(" ^ msg ^ ")")));
++        finish_adapter ()
++    | _ ->
++        wrap (fun () -> Unify.unify inf skol);
++        finish_adapter ()
+   in
+   List.iter
+     (fun ((_, d) : T.decl) ->
+@@ -4267,16 +4370,17 @@
+           let env2 = elab_binding env 0 (new_row_var 0) bnode in
+           (* 包摂のエラーは、そのメソッドの束縛を指す。宣言の先頭を指すと、複数のメソッドの
+              どれが悪いかを位置から読めない *)
+-          at_node bnode (fun () -> subsume mname (SMap.find mname env2.values))
++          at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values))
+       | T.DLetRec bs ->
+           let env2 = elab_rec_bindings env 0 (new_row_var 0) bs in
+           List.iter
+             (fun (((_, b) as bnode) : T.let_binding) ->
+               let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+-              at_node bnode (fun () -> subsume mname (SMap.find mname env2.values)))
++              at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values)))
+             bs
+       | _ -> type_error "インスタンス本体には let だけが書けます")
+     i.T.ins_body;
++  solve_holes_at ~since:imark ~params:pk;
+   release_rigids head_rigids
+ 
+ (* ## 11.39 宣言列を 4 回なめる
+@@ -4709,13 +4813,14 @@
+           let ty = TArrow (TRecord (closed_item_row param_tys), ret_ty, fn_eff) in
+           Unify.generalize 0 ty;
+           release_rigids (rigids @ eff_rigids);
++          (let dps = Unify.dkeys_of ty in if dps <> [] then Tree.set_dict node (Tree.DAbs dps));
+           emit (Binding (Type.display ex.T.ex_name ^ " : " ^ Show.show ty));
+           add_top env ex.T.ex_name ty (Tree.GDecl (Tree.oid_of node, ex.T.ex_name))
+       | T.DNewtype _ -> env (* パス 1 で登録済み。フィールド型の検査も登録時に済んでいる *)
+       | T.DEffect _ -> env (* パス 1 で登録済み *)
+       | T.DClass _ -> env (* パス 1 で登録済み *)
+       | T.DInstance i ->
+-          check_instance_bodies env i;
++          check_instance_bodies env node i;
+           (* インスタンス本体にも、宣言の終わりの曖昧性検査を掛ける。値制限で一般化されない
+              本体の let は all=false の検査(gen のガード)を通らないので、ここで掛けないと、
+              曖昧な制約が台帳ごと捨てられる。到達集合は、各メソッドの束縛の型 *)
+@@ -4735,6 +4840,7 @@
+       (* 既定化も宣言の包みの中で走らせる。DInstance の本体で作られた数値リテラルの述語は、
+          ここで初めて落ちることがある。包みの外で走らせると、位置なしの型エラーになる *)
+       Unify.default_numerics ();
++      solve_holes_at ~since:0 ~params:[];
+       env'
+     in
+     (* この宣言が出した警告だけを拾う。warnings は逆順に積んであるので、先頭の n 個を
+@@ -4747,7 +4853,17 @@
+   (* パス 1 で溜まった制約つき変数(インスタンスの頭や署名の instantiate)は、宣言ごとの
+      曖昧性の判定に関係しない。台帳だけを空にしてから畳み込む *)
+   Unify.reset ();
+-  List.fold_left step env decls
++  let env = List.fold_left step env decls in
++  (* 試作:単位の終わりに残った穴は曖昧性エラー *)
++  (match List.rev (Unify.unsolved_holes ()) with
++  | (_, h) :: _ ->
++      raise
++        (Type_error_at
++           ( h.Tree.h_loc,
++             "曖昧な制約: " ^ display_of h.Tree.h_cls
++             ^ " を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)" ))
++  | [] -> ());
++  env
+ 
+ (* ## 11.41 型検査の入口
+ 
+diff -ru lib.orig/interp.ml diktor/lib/interp.ml
+--- lib.orig/interp.ml	2026-10-10 01:47:08.878731911 +0900
++++ diktor/lib/interp.ml	2026-10-10 01:58:22.921373530 +0900
+@@ -81,38 +81,27 @@
+    引き方は `(クラス, 型構成子) → メソッド名 → 値` である。
+    型構成子は第1章のインターン表の oid で、型の側と同じ番号を使う。 *)
+ 
+-(* 利用者が宣言したインスタンスのメソッドの実体。(クラス, 型構成子) → メソッド名 → 値 *)
+-let user_instances : (oid * oid, (oid * Value.t) list) Hashtbl.t = Hashtbl.create 32
++(* 試作:利用者が宣言したインスタンスのメソッド。(クラス, 型構成子) → メソッド名 → 前提と
++   メソッド自身の辞書を受け取って実装を返す関数。DInstance の実行だけが書く *)
++let instance_impls : (oid * oid, (oid * (Value.t list -> Value.t)) list) Hashtbl.t = Hashtbl.create 32
+ 
+-(* dispatch の解決のキャッシュ。(クラス, 型構成子, メソッド) → 実装。
+-   見つからなかったこと(None。構造的導出へ進む)も覚える。
+-   user_instances に書き込むのは exec_decl の DInstance の 1 か所だけで、
+-   そこで必ずこの表を無効化する。
+-   書き込む箇所を 1 か所に保つことが、この表の正しさの前提である。
+-   無効化が漏れると、宣言の順序によって結果が変わる *)
+-let resolution_cache : (oid * oid * oid, (Value.t -> Value.t) option) Hashtbl.t = Hashtbl.create 64
+-
+-(* dispatch_positions の結果のメモ。(クラス, メソッド) → 候補の位置。
+-   スキーマは宣言の後は変わらないので、無効化するのは run の初期化だけでよい *)
+-let positions_cache : (oid * oid, int list) Hashtbl.t = Hashtbl.create 64
+-
+-(* `tycon_of_value` はディスパッチの入口で、値から名目的な型の名前を 1 つ取り出す。
+-   `VRecord` と `VVariant` が `None` になるのは、レコードとヴァリアントが構造的な型で名前を持たず、
+-   名目的なインスタンス表を引く鍵にならないからである。
+-   ここで `None` になった値は、§14.7 の構造的導出へ回る。
+-   `VClosure` と `VPrim` も、関数にはインスタンスが付かないので `None` になる。 *)
+-
+-let tycon_of_value = function
+-  | VBool _ -> Some (Type.intern "Boolean")
+-  | VInt32 _ -> Some (Type.intern "Int32")
+-  | VInt64 _ -> Some (Type.intern "Int64")
+-  | VFloat64 _ -> Some (Type.intern "Float64")
+-  | VText _ -> Some (Type.intern "String")
+-  | VData d -> Some d.d_type
+-  | VRef _ -> Some (Type.intern "Ref")
+-  | VArray _ -> Some (Type.intern "Array")
+-  | VMutArray _ -> Some (Type.intern "MutableArray")
+-  | VRecord _ | VVariant _ | VClosure _ | VPrim _ -> None
++(* 辞書パラメータの鍵を局所環境の名前にする。利用者の識別子は $ で始まらない *)
++let dkey_name ((v, c) : Tree.dkey) = "$d" ^ string_of_int v ^ ":" ^ Type.name_of c
++
++let bind_dicts env ks ds =
++  { env with locals = List.fold_left2 (fun l k d -> SMap.add (dkey_name k) d l) env.locals ks ds }
++
++(* 閉じた証拠(EvParam を含まない)の辞書は、穴ごとに 1 回だけ作る *)
++let closed_cache : (oid, Value.t) Hashtbl.t = Hashtbl.create 64
++
++let rec closed_ev (e : Tree.evidence) =
++  match e with
++  | Tree.EvParam _ -> false
++  | Tree.EvInst (_, _, subs) -> List.for_all closed_ev subs
++  | Tree.EvRecord fs | Tree.EvVariant fs -> List.for_all (fun (_, e) -> closed_ev e) fs
++  | Tree.EvHole h -> ( match h.Tree.h_sol with Some e -> closed_ev e | None -> false)
++
++let dict_params_of node = match Tree.get_dict node with Tree.DAbs ks | Tree.DMethod (ks, _, _) -> ks | _ -> []
+ 
+ (* `cancel_log` は、cancel 節で抑制した例外の行き先である。
+    仕様 sample.kel:585 は、cancel 節について次のように定めている。
+@@ -306,12 +295,12 @@
+   | T.Ident li -> (
+       let name = show_long_id li in
+       match SMap.find_opt name env.locals with
+-      | Some v -> v
++      | Some v -> with_evidence env node v
+       | None -> (
+           match Tree.get_resolved node with
+           | Some (Tree.RVar g) -> (
+               match Hashtbl.find_opt env.globals g with
+-              | Some v -> v
++              | Some v -> with_evidence env node v
+               | None -> runtime_error ("未束縛の変数: " ^ name))
+           (* 裸の引数なしコンストラクタ *)
+           | Some (Tree.RCtor (d, c, _)) -> VData { d_type = d; d_ctor = c; d_fields = [||] }
+@@ -342,14 +331,17 @@
+           | And -> if Builtin.as_bool (eval env l) then eval env r else VBool false
+           | Or -> if Builtin.as_bool (eval env l) then VBool true else eval env r
+           | _ -> bug "OpBool")
+-      | Prims.OpMethod (cls, m) ->
++      | Prims.OpMethod (_, m) ->
++          (* 辞書はオペランドより先に作る。副作用は無い。後で作ると env が右辺の評価をまたいで生き残る *)
++          let d = op_dict env node in
+           let vl = eval env l in
+           let vr = eval env r in
+-          dispatch cls m (VRecord [ (Type.l_item, vl); (Type.l_item, vr) ])
+-      | Prims.OpMethodNot (cls, m) ->
++          apply (select_method d m []) (VRecord [ (Type.l_item, vl); (Type.l_item, vr) ])
++      | Prims.OpMethodNot (_, m) ->
++          let d = op_dict env node in
+           let vl = eval env l in
+           let vr = eval env r in
+-          VBool (not (Builtin.as_bool (dispatch cls m (VRecord [ (Type.l_item, vl); (Type.l_item, vr) ])))))
++          VBool (not (Builtin.as_bool (apply (select_method d m []) (VRecord [ (Type.l_item, vl); (Type.l_item, vr) ])))))
+   | T.Not e -> VBool (not (Builtin.as_bool (eval env e)))
+   | T.Let (b, rest) ->
+       let locals = eval_binding env b in
+@@ -439,213 +431,89 @@
+   | VPrim p -> p.p_fn vargs
+   | v -> runtime_error ("関数ではない値を適用しました: " ^ show v)
+ 
+-(* ## 14.6 ディスパッチに使う引数の位置
++(* ## 14.6 辞書(試作)
+ 
+-   辞書渡しをしない実装では、どの値のタグでインスタンスを選ぶかを、実行時に決めなければならない。
+-   引数を左から見て、最初にインスタンスを持つ値で決めるという素朴な方法は、誤りである。
+-   次の例がその反例になる。
+-
+-   ```keleut
+-   type class Pick[A] { val pick: (Int32, A) => Int32 }
+-   type instance Pick[Int32]  { let pick(n, a) = a }
+-   type instance Pick[String] { let pick(n, a) = n }
+-   let s: String = ...    // 何か String の値
+-   pick(0, s)
+-   ```
+-
+-   左から走査すると、第 1 引数の `Int32` に `Pick[Int32]` が当たり、実行時は `Pick[Int32]` を選ぶ。
+-   一方、elab はクラスパラメータ `A` の位置で解決するので、`Pick[String]` を選ぶ。
+-   型検査と実行が別のインスタンスを選ぶので、コヒーレンスが実行時に破れる。
+-
+-   正しい規約は、クラスパラメータが頭に現れる引数の位置だけで選ぶことである。
+-   `dispatch_positions` は、メソッドのスキーマ(Generic の印が付いたもの)の引数レコードを走査し、
+-   型適用の背骨(`app_spine`)の頭がそのクラスパラメータである位置を集める。
+-   elab 側の `register_class` は、宣言の時点で、
+-   少なくとも 1 つの引数の頭にパラメータが現れることを要求する。
+-   `(List[A]) => …` のように、パラメータが引数の内側にしか現れないメソッドの宣言は拒否する。
+-   宣言を受理する側と実行する側が、まったく同じ述語を見ている。
+-   上の `Pick` の例の回帰テストは、`test/verify_fixes.t` の pick.kel である。
+-
+-   位置が 1 つも取れなかったときは、すべての引数を走査する。
+-   ただし、この分岐には現状では到達しない。
+-   組み込みのクラス(Add、Sub、Mul、Div、Eq、Ord、Show)のスキーマは、
+-   どれも引数の頭がクラスパラメータそのものである。
+-   メソッドを持たない Integral と Fractional は、そもそも dispatch されない。
+-   利用者が宣言したクラスには、上の受理検査が同じ形を強制する。
+-   この分岐を残してあるのは、安全側の判断である。
+-   スキーマが想定外の形になったとき、候補を狭めるより広げるほうが、
+-   「インスタンスが見つかりません」で落ちにくい。 *)
+-
+-(* メソッドのスキーマから、クラスパラメータが頭に現れる引数の位置を求める。
+-   ディスパッチはこの位置だけで行う(elab.ml の register_class と同じ規約)。
+-   これを守らないと、pick: (Int32, A) => Int32 が第 1 引数の Int32 で誤ってディスパッチし、
+-   elab の解決と食い違う *)
+-and dispatch_positions ci meth =
+-  let is_param t =
+-    match Type.repr (fst (Type.app_spine t)) with
+-    | Type.TVar r -> ( match !r with Type.Generic i -> i.Type.vid = ci.Decls.ci_param.Type.vid | _ -> false)
+-    | _ -> false
+-  in
+-  match List.assoc_opt meth ci.Decls.ci_methods with
+-  | Some scheme -> (
+-      match Type.repr scheme with
+-      | Type.TArrow (args, _, _) -> (
+-          match Type.repr args with
+-          | Type.TRecord row ->
+-              fst (Type.row_fields row)
+-              |> List.mapi (fun i (_, t) -> (i, t))
+-              |> List.filter_map (fun (i, t) -> if is_param t then Some i else None)
+-          | _ -> [])
+-      | _ -> [])
+-  | None -> []
+-
+-(* ## 14.7 dispatch の探索順序とフォールバック
+-
+-   候補の位置の値を左から見て、最初に実装が見つかった値でメソッドを決める。
+-   1 つの値について引く順序は、利用者が宣言したインスタンス、組み込みのメソッド表の順である。
+-   利用者の宣言が組み込みの鍵を奪えないことは、第6章が宣言の時点で保証する。
+-
+-   どこにも無ければ、構造的導出へ進む。
+-   Diktor が構造的に導出するのは `Eq` だけで、
+-   組み込みの `Eq` のクラス表の印 `ci_derive_structural` が、構造的導出を有効にする。
+-   仕様は構造的な型へのインスタンスについて「利用者には書かせない。コヒーレンスを守るため、
+-   組み込みの自動導出だけがインスタンスを与える」と定め(sample.kel:384)、
+-   導出が閉じた行にしか効かないことも定めている(sample.kel:392-396)。
+-
+-   ここでは次の不変条件が効いている。
+-   elab 側(第8章(unify.ml))は、構造的導出を閉じた行のレコードとヴァリアントにしか適用しない。
+-   それ以外の型に `Eq` が要求されればインスタンス表を引き、無ければ型エラーにする。
+-   そのため、型検査を通ったプログラムでこの分岐に来る値は、
+-   レコードかヴァリアント(`tycon_of_value` が `None` を返す値)に限られ、
+-   実行時の選択が elab の判定と一致する。
+-
+-   ただし、名目型の値がこの分岐に来る場合が 1 つだけある。
+-   利用者のインスタンスを、その宣言より前の位置で使う場合である。
+-   型検査はパス 1c でインスタンス表を揃えてから本体を見るので、宣言の順序を問わない。
+-   一方、実行は宣言の順に `user_instances` へ書くので、その時点ではまだ実体が無い。
+-   ここで名目型の値を黙って構造的等価に落とすと、同じ式が宣言の前と後で違う値を返す。
+-   そこで、elab の表にはインスタンスがあるのに実行の表には無い値を見つけたら、
+-   構造的導出へ進む前に実行時エラーにする(`test/verify_fixes.t` の instorder)。
+-   黙って誤った値を返すより、エラーで止めるほうを選ぶ点で、
+-   §14.15 の前方参照の値の扱いと同じ判断である。
+-
+-   上の不変条件から、ここで「インスタンスが見つかりません」が出たら、誤りは実行時の側ではなく、
+-   型検査の側か表の登録の側にある。
+-
+-   実行時ディスパッチが正しいのは、探索の方法によるのではなく、
+-   コヒーレンスが保証されているからである。
+-   そのため、探索の結果を覚えても意味は変わらない。
+-   結果を覚える表は 2 つある。
+-   `resolution_cache` は解決の結果(None も含む)を、`positions_cache` は候補の位置を覚える。
+-   無効化する箇所は 2 つだけである。
+-   `run` の冒頭の初期化と、`exec_decl` の `DInstance` の登録で、
+-   後者は `resolution_cache` を空にする。
+-   `user_instances` に書き込む箇所を 1 か所に保つことが、
+-   `resolution_cache` の正しさの前提である。 *)
+-
+-and dispatch cls_name meth args =
+-  let cls_oid = Type.intern cls_name in
+-  let meth_oid = Type.intern meth in
+-  let vals = Builtin.arg_values args in
+-  let cand_vals =
+-    match Decls.find_class cls_oid with
+-    | Some ci -> (
+-        let ps =
+-          match Hashtbl.find_opt positions_cache (cls_oid, meth_oid) with
+-          | Some ps -> ps
+-          | None ->
+-              let ps = dispatch_positions ci meth in
+-              Hashtbl.replace positions_cache (cls_oid, meth_oid) ps;
+-              ps
+-        in
+-        match ps with
+-        | [] -> vals (* 位置が取れなければすべてを走査する(現状は到達しない安全側の保険) *)
+-        | ps -> List.filteri (fun i _ -> List.mem i ps) vals)
+-    | None -> vals
+-  in
+-  let find_impl v =
+-    match tycon_of_value v with
+-    | Some con -> (
+-        (* 解決の結果はキャッシュを通して引く。コヒーレンスが保証されていて、
+-           正しさが探索の方法に依らないので、結果を覚えても意味は変わらない *)
+-        match Hashtbl.find_opt resolution_cache (cls_oid, con, meth_oid) with
+-        | Some r -> r
+-        | None ->
+-            let r =
+-              match Hashtbl.find_opt user_instances (cls_oid, con) with
+-              | Some methods -> (
+-                  match List.assoc_opt meth_oid methods with Some f -> Some (fun args -> apply f args) | None -> None)
+-              | None -> Builtin.builtin_method cls_name (Type.name_of con) meth
+-            in
+-            Hashtbl.replace resolution_cache (cls_oid, con, meth_oid) r;
+-            r)
+-    | None -> None
+-  in
+-  match List.find_map find_impl cand_vals with
+-  | Some f -> f args
+-  | None -> (
+-      (* 名目型の値がここへ来るのは、その `(クラス, 型構成子)` の利用者のインスタンスが、
+-         宣言より前の位置で使われたときだけである。型検査はパス 1c で表を揃えるので
+-         この使用を通す。一方、実行は宣言の順に user_instances へ書くので、この時点では
+-         まだ実体が無い。黙って構造的等価へ落とすと、同じ式が宣言の前と後で違う値を
+-         返すので、実行時エラーにする(§14.15 の前方参照と同じ判断) *)
+-      (match List.find_map tycon_of_value cand_vals with
+-      | Some con when Decls.find_instance ~cls:cls_oid ~con <> None ->
+-          runtime_error
+-            (Type.display cls_name ^ "[" ^ Type.display_of con ^ "] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)")
+-      | _ -> ());
+-      (* 構造的導出(Diktor は Eq だけを導出する)。コヒーレンスにより elab の選択と一致する *)
+-      let structural = match Decls.find_class cls_oid with Some ci -> ci.Decls.ci_derive_structural | None -> false in
+-      match (structural, meth, vals) with
+-      | true, "eq", [ a; b ] -> VBool (structural_eq a b)
++   型検査が木に書いた証拠から辞書を作り、メソッドを選ぶ。
++   値のタグは見ない。 *)
++
++and with_evidence env node v =
++  match Tree.get_dict node with
++  | Tree.DUse hs -> apply_dicts v (List.map (fun h -> eval_ev env (Tree.EvHole h)) hs)
++  | _ -> v
++
++and apply_dicts v ds =
++  match v with
++  | VDictAbs da -> (
++      match da.da_last with
++      | Some (ds0, r) when List.length ds0 = List.length ds && List.for_all2 ( == ) ds0 ds -> r
+       | _ ->
+-          runtime_error
+-            (Type.display cls_name ^ "." ^ meth ^ " のインスタンスが見つかりません: "
+-            ^ String.concat ", " (List.map show vals)))
+-
+-(* ## 14.8 構造的等価
+-
+-   `{p = 1, q = 2}` と `{q = 2, p = 1}` は同じ値である。
+-   行の型は最左一致で決まる一方、異なるラベルの間には順序が無い。
+-   そのため、値のフィールドのリストを前から突き合わせる比較は誤りである。
+-   正しい手順では、左辺のレコードのフィールドを順に取り、
+-   右辺のレコードから同名のフィールドのうち最も左のものを取り出して消していく。
+-   最後に右辺が空になれば一致である(右辺に余分なフィールドがあれば、ここで不一致になる)。
+-
+-   フィールドの比較は、直接の再帰ではなく `value_eq`(つまり `dispatch Eq.eq`)に通す。
+-   フィールドに利用者定義の `Eq` を持つ newtype があるとき、
+-   宣言されたインスタンスを無視して構造をのぞき込まないためである。
+-
+-   引数レコードに `_item` が 2 つ並ぶのは、Scoped Labels がラベルの重複を許すからである。
+-   ラベルの重複を許すことが、そのまま多引数の表現になっている。
+-
+-   関数どうしの比較は、実行時エラーにする。
+-   Float64 の比較は `__float64_eq` に委ねるので、IEEE の意味論(NaN ≠ NaN)がそのまま出る。 *)
+-
+-and value_eq a b = Builtin.as_bool (dispatch "Eq" "eq" (VRecord [ (Type.l_item, a); (Type.l_item, b) ]))
+-
+-(* レコードは、左辺のフィールドを順に取り、
+-   右辺から同名のフィールドのうち最も左のものを取り出して消す。
+-   異なるラベルの間の物理的な順序は値によって違いうるので、単純な順序比較は誤りである *)
+-and structural_eq a b =
++          let r = da.da_fn ds in
++          da.da_last <- Some (ds, r);
++          r)
++  | _ -> bug ("辞書を受け取らない値に辞書を渡しました: " ^ show v)
++
++and op_dict env node =
++  match Tree.get_dict node with Tree.DUse [ h ] -> eval_ev env (Tree.EvHole h) | _ -> bug "演算子に証拠がありません"
++
++and eval_ev env (ev : Tree.evidence) =
++  match ev with
++  | Tree.EvParam k -> ( match SMap.find_opt (dkey_name k) env.locals with Some d -> d | None -> bug ("辞書パラメータが束縛されていません: " ^ dkey_name k))
++  | Tree.EvInst (c, n, subs) -> VDict (DInst (c, n, List.map (eval_ev env) subs, ref []))
++  | Tree.EvRecord fs -> VDict (DRecord (List.map (fun (l, e) -> (l, eval_ev env e)) fs))
++  | Tree.EvVariant fs -> VDict (DVariant (List.map (fun (l, e) -> (l, eval_ev env e)) fs))
++  | Tree.EvHole { Tree.h_sol = Some (Tree.EvParam _ as e); _ } -> eval_ev env e
++  | Tree.EvHole h -> (
++      match Hashtbl.find_opt closed_cache h.Tree.h_id with
++      | Some d -> d
++      | None -> (
++          match h.Tree.h_sol with
++          | Some e ->
++              let d = eval_ev env e in
++              if closed_ev e then Hashtbl.replace closed_cache h.Tree.h_id d;
++              d
++          | None -> VDict DPending))
++
++(* 辞書 d からメソッド meth の実装(関数の値)を選ぶ。own はメソッド自身の辞書 *)
++and select_method d meth own =
++  match d with
++  | VDict (DInst (_, _, _, cache)) when own = [] && List.mem_assoc meth !cache -> List.assoc meth !cache
++  | VDict (DInst (c, n, ps, cache)) -> (
++      let memo v = if own = [] then cache := (meth, v) :: !cache; v in
++      memo @@
++      match Hashtbl.find_opt instance_impls (c, n) with
++      | Some ms -> (
++          match List.assoc_opt (Type.intern meth) ms with Some f -> f (ps @ own) | None -> bug ("メソッドがありません: " ^ meth))
++      | None -> (
++          match Builtin.builtin_method (Type.name_of c) (Type.name_of n) meth with
++          | Some f -> VPrim { p_name = Type.name_of c ^ "." ^ meth; p_fn = f }
++          | None ->
++              if Decls.find_instance ~cls:c ~con:n <> None then
++                runtime_error
++                  (Type.display_of c ^ "[" ^ Type.display_of n
++                 ^ "] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)")
++              else bug ("インスタンスがありません: " ^ Type.display_of c ^ "[" ^ Type.display_of n ^ "]")))
++  | VDict (DRecord fs) ->
++      VPrim { p_name = "Eq.eq"; p_fn = (fun args -> let a, b = Builtin.arg2 args in VBool (record_eq fs a b)) }
++  | VDict (DVariant fs) ->
++      VPrim { p_name = "Eq.eq"; p_fn = (fun args -> let a, b = Builtin.arg2 args in VBool (variant_eq fs a b)) }
++  | VDict DPending -> runtime_error "型の決まっていない制約の辞書を使いました"
++  | v -> bug ("辞書ではない値: " ^ show v)
++
++and eq_with d x y = Builtin.as_bool (apply (select_method d "eq" []) (VRecord [ (Type.l_item, x); (Type.l_item, y) ]))
++
++(* 閉じたレコード型の構造的 Eq。型の行の順にラベルを取り、両辺から最左の同名のフィールドを取り出して比べる *)
++and record_eq fs a b =
++  match fs with
++  | [] -> record_fields a = [] && record_fields b = []
++  | (l, d) :: rest ->
++      let x, a' = record_take a l in
++      let y, b' = record_take b l in
++      eq_with d x y && record_eq rest a' b'
++
++and variant_eq fs a b =
+   match (a, b) with
+-  | VRecord fs1, VRecord _ ->
+-      let rec go fs1 rv =
+-        match fs1 with
+-        | [] -> record_fields rv = [] (* 右辺に余りがあれば不一致 *)
+-        | (l, x) :: rest -> (
+-            match record_take rv l with
+-            | y, rv' -> value_eq x y && go rest rv'
+-            | exception Runtime_error _ -> false)
+-      in
+-      go fs1 b
+-  | VVariant (l1, p1), VVariant (l2, p2) -> l1 = l2 && value_eq p1 p2
+-  | VData d1, VData d2 ->
+-      d1.d_type = d2.d_type && d1.d_ctor = d2.d_ctor
+-      && Array.length d1.d_fields = Array.length d2.d_fields
+-      && Array.for_all2 (fun x y -> value_eq x y) d1.d_fields d2.d_fields
+-  | (VClosure _ | VPrim _), _ | _, (VClosure _ | VPrim _) -> runtime_error "関数は比較できません"
+-  | _ -> value_eq a b
++  | VVariant (l1, p1), VVariant (l2, p2) -> l1 = l2 && eq_with (List.assoc l1 fs) p1 p2
++  | _ -> bug "variant_eq"
+ 
+ (* ## 14.9 let と let rec
+ 
+@@ -666,34 +534,48 @@
+    トップレベルの `let rec`(§14.13)にバックパッチが要らないのは、
+    globals が共有の可変な表で、実体の表引きが呼び出し時に起きるからである。 *)
+ 
+-and eval_binding_value env ((_, b) : T.let_binding) =
++and eval_binding_value_plain env ((_, b) : T.let_binding) =
+   match b.T.lb_params with
+   | Some ps -> VClosure { c_env = env; c_params = ps; c_body = b.T.lb_body }
+   | None -> eval env b.T.lb_body
+ 
++and eval_binding_value env bnode =
++  match dict_params_of bnode with
++  | [] -> eval_binding_value_plain env bnode
++  | ks -> VDictAbs { da_last = None; da_name = "let"; da_fn = (fun ds -> eval_binding_value_plain (bind_dicts env ks ds) bnode) }
++
+ and eval_binding env ((_, b) as bnode : T.let_binding) =
+   let v = eval_binding_value env bnode in
+   bind_pat_exn env.locals b.T.lb_name v
+ 
+ and eval_rec_bindings env (bs : T.let_binding list) =
+   (* クロージャの生成 → 環境の構築 → c_env のバックパッチ *)
++  let genv = ref env in
+   let closures =
+     List.map
+-      (fun ((_, b) : T.let_binding) ->
++      (fun (((_, b) as bnode) : T.let_binding) ->
+         let name = match snd b.T.lb_name with T.PVar x -> x | _ -> runtime_error "let rec は名前束縛のみです" in
+-        let c =
++        let ps, body =
+           match b.T.lb_params with
+-          | Some ps -> { c_env = env; c_params = ps; c_body = b.T.lb_body }
++          | Some ps -> (ps, b.T.lb_body)
+           | None -> (
+               match snd b.T.lb_body with
+-              | T.Lambda { l_params; l_body } -> { c_env = env; c_params = l_params; c_body = l_body }
++              | T.Lambda { l_params; l_body } -> (l_params, l_body)
+               | _ -> runtime_error "let rec の右辺は関数でなければなりません")
+         in
+-        (name, c))
++        match dict_params_of bnode with
++        | [] ->
++            let c = { c_env = env; c_params = ps; c_body = body } in
++            (name, VClosure c, Some c)
++        | ks ->
++            ( name,
++              VDictAbs { da_last = None; da_name = name; da_fn = (fun ds -> VClosure { c_env = bind_dicts !genv ks ds; c_params = ps; c_body = body }) },
++              None ))
+       bs
+   in
+-  let locals = List.fold_left (fun locals (n, c) -> SMap.add n (VClosure c) locals) env.locals closures in
+-  List.iter (fun (_, c) -> c.c_env <- { env with locals }) closures;
++  let locals = List.fold_left (fun locals (n, v, _) -> SMap.add n v locals) env.locals closures in
++  genv := { env with locals };
++  List.iter (function _, _, Some c -> c.c_env <- { env with locals } | _ -> ()) closures;
+   locals
+ 
+ (* ## 14.10 ハンドラ
+@@ -1221,16 +1103,33 @@
+    鍵はクラスごとに別なので順序は結果を変えないが、
+    ハッシュ順に由来する非決定性を表の走査に残さない。 *)
+ 
+-(* クラスメソッドの識別子参照は、dispatch を呼ぶラッパで処理する *)
++(* 試作:クラスメソッドの実体は、辞書を受け取ってメソッドを選ぶ関数。選ぶのは呼び出しの時点 *)
++let method_selector (ci : Decls.class_info) (m, scheme) =
++  let cls_name = Type.name_of ci.Decls.ci_name in
++  let cs = Unify.constraints_of scheme in
++  let rec index j = function
++    | [] -> bug ("メソッドの型にクラスパラメータがありません: " ^ m)
++    | ((i : Type.var_info), c) :: rest -> if i.Type.vid = ci.Decls.ci_param.Type.vid && c = ci.Decls.ci_name then j else index (j + 1) rest
++  in
++  let idx = index 0 cs in
++  VDictAbs
++    {
++      da_last = None;
++      da_name = cls_name ^ "." ^ m;
++      da_fn =
++        (fun ds ->
++          let d = List.nth ds idx in
++          let own = List.filteri (fun j _ -> j <> idx) ds in
++          VPrim { p_name = cls_name ^ "." ^ m; p_fn = (fun args -> apply (select_method d m own) args) });
++    }
++
+ let register_class_methods globals =
+   Hashtbl.fold (fun _ ci acc -> ci :: acc) Decls.classes []
+   |> List.sort (fun (a : Decls.class_info) b -> compare (Type.name_of a.Decls.ci_name) (Type.name_of b.Decls.ci_name))
+   |> List.iter (fun (ci : Decls.class_info) ->
+          let cls_name = Type.name_of ci.Decls.ci_name in
+          List.iter
+-           (fun (m, _) ->
+-             let wrapper = VPrim { p_name = cls_name ^ "." ^ m; p_fn = (fun args -> dispatch cls_name m args) } in
+-             Hashtbl.replace globals (Tree.GMethod (cls_name ^ "." ^ m)) wrapper)
++           (fun ((m, _) as ms) -> Hashtbl.replace globals (Tree.GMethod (cls_name ^ "." ^ m)) (method_selector ci ms))
+            ci.Decls.ci_methods)
+ 
+ (* ## 14.13 宣言の実行
+@@ -1304,37 +1203,46 @@
+       env
+   | T.DInstance i ->
+       let cls = Decls.resolve_class (Type.intern i.T.ins_class) in
+-      (* module の平坦化で作った同義語を通す(BigInt.BigInt など)。組み込みと同じ鍵の
+-         利用者の宣言は elab が拒否するので、ここに来る宣言は組み込みを差し替えない *)
+       let con =
+         match i.T.ins_args with
+         | [ (_, T.EIdent (LongId comps)) ] -> Decls.resolve_con (Type.intern (String.concat "." comps))
+         | [ (_, T.EApply ((_, T.EIdent (LongId comps)), _)) ] -> Decls.resolve_con (Type.intern (String.concat "." comps))
+         | _ -> bug "インスタンス頭が解決できません"
+       in
++      let pk = match Tree.get_dict node with Tree.DInstance ks -> ks | _ -> [] in
++      let np = List.length pk in
++      let method_fn bnode eval_in =
++        let mk, adapter = match Tree.get_dict bnode with Tree.DMethod (_, mk, ad) -> (mk, ad) | _ -> ([], []) in
++        let build ds =
++          let pds = List.filteri (fun j _ -> j < np) ds and mds = List.filteri (fun j _ -> j >= np) ds in
++          let env' = bind_dicts (bind_dicts env pk pds) mk mds in
++          let v = eval_in env' in
++          if adapter = [] then v else apply_dicts v (List.map (fun h -> eval_ev env' (Tree.EvHole h)) adapter)
++        in
++        if pk = [] && mk = [] then
++          let v = build [] in
++          fun _ -> v
++        else build
++      in
+       let methods =
+         List.concat_map
+           (fun ((_, d) : T.decl) ->
+             match d with
+             | T.DLet ((_, b) as bnode) -> (
+                 match snd b.T.lb_name with
+-                | T.PVar x -> [ (Type.intern x, eval_binding_value env bnode) ]
++                | T.PVar x -> [ (Type.intern x, method_fn bnode (fun env' -> eval_binding_value env' bnode)) ]
+                 | _ -> [])
+             | T.DLetRec bs ->
+-                let locals = eval_rec_bindings env bs in
+                 List.filter_map
+-                  (fun ((_, b) : T.let_binding) ->
++                  (fun (((_, b) as bnode) : T.let_binding) ->
+                     match snd b.T.lb_name with
+-                    | T.PVar x -> Some (Type.intern x, SMap.find x locals)
++                    | T.PVar x -> Some (Type.intern x, method_fn bnode (fun env' -> SMap.find x (eval_rec_bindings env' bs)))
+                     | _ -> None)
+                   bs
+             | _ -> [])
+           i.T.ins_body
+       in
+-      jreplace user_instances (cls, con) methods;
+-      (* 解決のキャッシュを無効化する。宣言より前の呼び出しが覚えた None を残すと、
+-         この宣言が二度と見えない *)
+-      Hashtbl.reset resolution_cache;
++      jreplace instance_impls (cls, con) methods;
+       env
+   | T.DExtern ex ->
+       let impl =
+@@ -1350,7 +1258,9 @@
+                 ("未実装のプリミティブ: " ^ Type.display ex.T.ex_name
+                 ^ if ex.T.ex_name = ex.T.ex_prim then "" else "(実装名 " ^ ex.T.ex_prim ^ " が見つかりません)")
+       in
+-      bind_globals env [ (Tree.GDecl (Tree.oid_of node, ex.T.ex_name), VPrim { p_name = ex.T.ex_name; p_fn = impl }) ]
++      let prim = VPrim { p_name = ex.T.ex_name; p_fn = impl } in
++      let v = match Tree.get_dict node with Tree.DAbs (_ :: _) -> VDictAbs { da_last = None; da_name = ex.T.ex_name; da_fn = (fun _ -> prim) } | _ -> prim in
++      bind_globals env [ (Tree.GDecl (Tree.oid_of node, ex.T.ex_name), v) ]
+   | T.DType _ | T.DNewtype _ | T.DEffect _ | T.DClass _ -> env
+   | T.DModule _ -> runtime_error "module の評価は未実装です(M10)"
+ 
+@@ -1379,9 +1289,8 @@
+ 
+ (* 大域の環境を作る。組み込みの値と、その時点で宣言表にあるクラスのメソッドのラッパを置く *)
+ let start_program () =
+-  Hashtbl.reset user_instances;
+-  Hashtbl.reset resolution_cache;
+-  Hashtbl.reset positions_cache;
++  Hashtbl.reset instance_impls;
++  Hashtbl.reset closed_cache;
+   let globals = Hashtbl.create 512 in
+   register_builtin_values globals;
+   register_class_methods globals;
+@@ -1512,12 +1421,7 @@
+         match Decls.find_class (Type.intern c.T.cls_name) with
+         | Some ci ->
+             let cls_name = Type.name_of ci.Decls.ci_name in
+-            bind_globals env
+-              (List.map
+-                 (fun (m, _) ->
+-                   ( Tree.GMethod (cls_name ^ "." ^ m),
+-                     VPrim { p_name = cls_name ^ "." ^ m; p_fn = (fun args -> dispatch cls_name m args) } ))
+-                 ci.Decls.ci_methods)
++            bind_globals env (List.map (fun ((m, _) as ms) -> (Tree.GMethod (cls_name ^ "." ^ m), method_selector ci ms)) ci.Decls.ci_methods)
+         | None -> env)
+     | T.DExp e ->
+         let v = eval env e in
+@@ -1563,6 +1467,4 @@
+       journal := [];
+       journaling := false;
+       s.s_env <- saved_env;
+-      Hashtbl.reset resolution_cache;
+-      Hashtbl.reset positions_cache;
+       raise ex
+diff -ru lib.orig/tree.ml diktor/lib/tree.ml
+--- lib.orig/tree.ml	2026-10-10 01:47:08.878614358 +0900
++++ diktor/lib/tree.ml	2026-10-10 01:54:53.254789806 +0900
+@@ -137,6 +137,30 @@
+   | RCtor of oid * oid * int array (* Construct。data、ctor、実引数の位置 → フィールドの位置 *)
+   | RCtorPat of oid * oid * int option array (* PCtor。data、ctor、フィールドの位置 → 実引数の位置(None は省略) *)
+ 
++(* ## 5.1b 証拠(試作)
++
++   型クラスの制約の証拠。型検査が穴を作り、束縛の終わりに解いて書き込む。
++   評価器は書き込まれた証拠から辞書を作り、再解決しない。 *)
++
++(* 辞書パラメータの鍵。型変数の vid とクラスの oid *)
++type dkey = oid * oid
++
++type evidence =
++  | EvParam of dkey
++  | EvInst of oid * oid * evidence list
++  | EvRecord of (oid * evidence) list
++  | EvVariant of (oid * evidence) list
++  | EvHole of hole
++
++and hole = { h_id : oid; h_cls : oid; h_ty : Syntax.Type.ty; h_loc : Location.span; mutable h_sol : evidence option }
++
++type dict_info =
++  | DNone
++  | DUse of hole list
++  | DAbs of dkey list
++  | DMethod of dkey list * dkey list * hole list
++  | DInstance of dkey list
++
+ (* ## 5.2 ノードに付く 4 つのもの
+ 
+    AST のすべてのノードに、`ElabData.t` が 1 つずつ付く。
+@@ -181,9 +205,10 @@
+     loc : Location.span;
+     mutable ty_field : Syntax.Type.ty option;
+     mutable resolved : resolved option;
++    mutable dict : dict_info;
+   }
+ 
+-  let allocate loc = { oid = new_oid (); loc; ty_field = None; resolved = None }
++  let allocate loc = { oid = new_oid (); loc; ty_field = None; resolved = None; dict = DNone }
+ end
+ 
+ (* ## 5.3 この木を独立したファイルに置く理由
+@@ -244,3 +269,7 @@
+ let get_resolved (d, _) = d.ElabData.resolved
+ 
+ let set_resolved (d, _) r = d.ElabData.resolved <- Some r
++
++let get_dict (d, _) = d.ElabData.dict
++
++let set_dict (d, _) x = d.ElabData.dict <- x
+diff -ru lib.orig/unify.ml diktor/lib/unify.ml
+--- lib.orig/unify.ml	2026-10-10 01:47:08.878932272 +0900
++++ diktor/lib/unify.ml	2026-10-10 01:54:53.255110796 +0900
+@@ -908,4 +908,125 @@
+     (fun i -> match List.assoc_opt i.vid args with Some t -> t | None -> new_class_var ~kind:i.vkind ~classes:i.vcls level)
+     t
+ 
+-let reset () = class_vars := []
++(* ## 8.11 証拠の穴(試作)
++
++   制約つきのスキーマを具体化するたびに、制約ごとに穴を 1 つ作り、台帳に積む。
++   穴の順序は、スキーマの制約の正準順(constraints_of)である。
++   束縛の終わりに solve_holes が穴を解き、解けない部分は新しい穴として残す。 *)
++
++module TT = Tree
++
++let holes : (int * TT.hole) list ref = ref []
++
++let hole_seq = ref 0
++
++let hole_mark () = !hole_seq
++
++let note_hole h =
++  incr hole_seq;
++  holes := (!hole_seq, h) :: !holes
++
++let new_hole ~loc c t =
++  let h = { TT.h_id = new_oid (); h_cls = c; h_ty = t; h_loc = loc; h_sol = None } in
++  note_hole h;
++  h
++
++(* スキーマの制約の正準順。型を左から右へたどり、Generic 変数が最初に現れた順に、
++   その vcls の順(予約述語を除く)で並べる *)
++let constraints_of t =
++  let seen = Hashtbl.create 8 in
++  let acc = ref [] in
++  let rec go t =
++    match repr t with
++    | TVar v -> (
++        match !v with
++        | Generic i when not (Hashtbl.mem seen i.vid) ->
++            Hashtbl.add seen i.vid ();
++            List.iter (fun c -> if not (is_predicate c) then acc := (i, c) :: !acc) i.vcls
++        | _ -> ())
++    | TCon (_, args) -> List.iter go args
++    | TApp (f, a) ->
++        go f;
++        go a
++    | TArrow (p, r, e) ->
++        go p;
++        go r;
++        go e
++    | TRecord row | TVariant row -> go row
++    | TRowEmpty -> ()
++    | TRowExtend (_, f, rest) ->
++        go f;
++        go rest
++  in
++  go t;
++  List.rev !acc
++
++let dkeys_of t = List.map (fun ((i : var_info), c) -> (i.vid, c)) (constraints_of t)
++
++(* instantiate と同じく Generic を新しい未定変数にし、制約ごとの穴を正準順で返す *)
++let instantiate_ev ~loc level t =
++  let cs = constraints_of t in
++  let memo = Hashtbl.create 8 in
++  let t' = map_generics_with memo (fun i -> new_class_var ~kind:i.vkind ~classes:i.vcls level) t in
++  let hs = List.map (fun ((i : var_info), c) -> new_hole ~loc c (Hashtbl.find memo i.vid)) cs in
++  (t', hs)
++
++exception Unsolved_param of TT.hole * var_info
++
++(* 型 t のクラス c の証拠を組む。params は束縛の辞書パラメータの鍵。
++   Generic と Rigid の変数は、鍵が params にあれば EvParam にする。
++   Unbound と params に無い Rigid は、新しい穴にして残す。
++   params に無い Generic は Unsolved_param を投げる *)
++let rec evidence_of ~loc ~params ~(origin : TT.hole) c t =
++  match repr t with
++  | TVar v -> (
++      match !v with
++      | Generic i ->
++          if List.mem (i.vid, c) params then TT.EvParam (i.vid, c) else raise (Unsolved_param (origin, i))
++      | Rigid i when List.mem (i.vid, c) params -> TT.EvParam (i.vid, c)
++      | _ -> TT.EvHole (new_hole ~loc c t))
++  | TCon (n, args) -> (
++      match Decls.find_instance ~cls:c ~con:n with
++      | Some { ii_premises; _ } ->
++          TT.EvInst (c, n, List.map (fun (i, c2) -> evidence_of ~loc ~params ~origin c2 (List.nth args i)) ii_premises)
++      | None -> bug ("証拠: インスタンスがありません: " ^ display_of c ^ "[" ^ display_of n ^ "]"))
++  | TRecord row ->
++      let fields, _ = row_fields row in
++      TT.EvRecord (List.map (fun (l, f) -> (l, evidence_of ~loc ~params ~origin c f)) fields)
++  | TVariant row ->
++      let fields, _ = row_fields row in
++      TT.EvVariant (List.map (fun (l, f) -> (l, evidence_of ~loc ~params ~origin c f)) fields)
++  | _ -> bug ("証拠: 解けない型 " ^ show t)
++
++(* 台帳のうち番号が since より大きい穴を解く。解いた穴は台帳から外し、
++   解いた途中で作った穴(Unbound の部分)は台帳に残る *)
++let rec solve_holes ~since ~params = solve_holes_range ~lo:since ~hi:max_int ~params
++
++and solve_holes_range ~lo ~hi ~params =
++  let mine, older = List.partition (fun (n, _) -> n > lo && n <= hi) !holes in
++  holes := older;
++  List.iter
++    (fun (_, (h : TT.hole)) ->
++      if h.h_sol = None then
++        match repr h.h_ty with
++        | TVar { contents = Unbound _ } -> note_hole h
++        | TVar ({ contents = Rigid i }) when not (List.mem (i.vid, h.h_cls) params) -> note_hole h
++        | _ -> h.h_sol <- Some (evidence_of ~loc:h.h_loc ~params ~origin:h h.h_cls h.h_ty))
++    (List.rev mine)
++
++(* 対話的な実行の表示用。台帳に積まない。決まっていない部分は解けていない穴のまま残す *)
++let rec display_evidence c t =
++  match repr t with
++  | TCon (n, args) -> (
++      match Decls.find_instance ~cls:c ~con:n with
++      | Some { ii_premises; _ } -> TT.EvInst (c, n, List.map (fun (i, c2) -> display_evidence c2 (List.nth args i)) ii_premises)
++      | None -> bug "display_evidence")
++  | TRecord row -> TT.EvRecord (List.map (fun (l, f) -> (l, display_evidence c f)) (fst (row_fields row)))
++  | TVariant row -> TT.EvVariant (List.map (fun (l, f) -> (l, display_evidence c f)) (fst (row_fields row)))
++  | _ -> TT.EvHole { TT.h_id = new_oid (); h_cls = c; h_ty = t; h_loc = { Location.start = Lexing.dummy_pos; finish = Lexing.dummy_pos }; h_sol = None }
++
++let unsolved_holes () = List.filter (fun (_, (h : TT.hole)) -> h.h_sol = None) !holes
++
++let reset () =
++  class_vars := [];
++  holes := []
+diff -ru lib.orig/value.ml diktor/lib/value.ml
+--- lib.orig/value.ml	2026-10-10 01:47:08.878860966 +0900
++++ diktor/lib/value.ml	2026-10-10 01:54:53.256910134 +0900
+@@ -88,6 +88,16 @@
+   | VRef of t ref
+   | VArray of t array
+   | VMutArray of t array
++  | VDict of dict (* 試作:辞書。型検査が選んだインスタンスと、前提の辞書 *)
++  | VDictAbs of dict_abs (* 試作:辞書パラメータを持つ束縛の値。辞書を受け取って値を返す *)
++
++and dict =
++  | DInst of oid * oid * t list * (string * t) list ref
++  | DRecord of (oid * t) list
++  | DVariant of (oid * t) list
++  | DPending
++
++and dict_abs = { da_name : string; da_fn : t list -> t; mutable da_last : (t list * t) option }
+ 
+ (* ## 12.2 クロージャの環境が可変である理由
+ 
+@@ -463,3 +473,5 @@
+   | VRef _ -> "<ref>"
+   | VArray a -> "[" ^ String.concat ", " (Array.to_list (Array.map show a)) ^ "]"
+   | VMutArray a -> "<mutable [" ^ String.concat ", " (Array.to_list (Array.map show a)) ^ "]>"
++  | VDict _ -> "<dict>"
++  | VDictAbs _ -> "<fn>"

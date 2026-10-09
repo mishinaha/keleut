@@ -1,0 +1,7 @@
+type class Pp[A] { val pp[B: Show]: (A, B) => String }
+newtype Foo = Foo
+type instance Pp[Foo] { let pp(a, b) = "Foo:" + show(b) }
+type instance[A: Pp] Pp[Option[_]] { let pp(o, b) = o match { case Some(x) => "S(" + pp(x, b) + ")" case None => "N" } }
+echoln(pp(Some(Some(Foo)), 3))
+let g[A: Pp](a: A): String = pp(a, true)
+echoln(g(Foo))

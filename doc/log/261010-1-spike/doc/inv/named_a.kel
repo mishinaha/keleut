@@ -1,0 +1,5 @@
+newtype P = P(a: Int32, b: String)
+let n(s: String): Int32 @ Console = { echo(s); 1 }
+let p = P(a = n("a"), b = "x")
+let {x, y} = {x = 1, y = 2}
+echoln(show(x + y))

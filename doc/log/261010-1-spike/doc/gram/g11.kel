@@ -1,0 +1,1 @@
+type class C[A, B] { val c: (A) => B }

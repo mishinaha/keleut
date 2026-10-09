@@ -1,0 +1,16 @@
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index 92b4034..49291a4 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -393,8 +393,8 @@ MiniLang §16-8 の runST 2例(値制限):
+   > let g(): Unit @ {E2, E1} = perform op("g")
+   > KEL
+   $ diktor --type-check --no-prelude leftmost.kel
+-  f : () => {} @ {E1, E2}
+-  g : () => {} @ {E2, E1}
++  ! leftmost.kel:4:28: 型エラー: 操作 op は、この位置の行に現れる複数のエフェクト(E1, E2)に属します。E1.op、E2.op のどれかに修飾してください
++  [1]
+ 
+ サブエフェクティングは無い(計画 §12 の意図した挙動の明示的な固定。H4 / D23-a)が、
+ 最外の矢印の @ {} は公開の型で開くので、エフェクトのある文脈から呼べる(LangSpec §13.2):

@@ -1,0 +1,145 @@
+annot_rows.t	nested1	L20	cmdL17	replace	ext	-1+1
+annot_rows.t	nested3	L77	cmdL76	replace	ext	-1+1
+annot_rows.t	opsig	L103	cmdL102	replace	ext	-1+1
+annot_rows.t	val2	L158	cmdL156	replace	ext	-1+1
+annot_rows.t	val1	L165	cmdL164	replace	closed:{},ext	-2+2
+annot_rows.t	sumgen	L182	cmdL180	replace	closed:{},ext	-2+2
+annot_rows.t	sumclosed	L190	cmdL189	replace	closed:{},ext	-2+2
+annot_rows.t	alval	L205	cmdL203	replace	shape	-2+1
+    -   ! alval.kel:3:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+    -   [1]
+    +   user : () => Int32 @ {Console}
+annot_rows.t	alval2	L213	cmdL212	replace	other	-2+2
+    -   ! alval2.kel:2:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+    -   [1]
+    +   user : () => Int32 @ {Console}
+    +   k : (Int32) => Int32 @ {}
+annot_rows.t	alval3	L222	cmdL220	replace	closed:{}	-1+1
+annot_rows.t	alval4	L230	cmdL228	replace	shape	-2+1
+    -   ! alval4.kel:3:31: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+    -   [1]
+    +   user : () => Int32 @ {Console}
+annot_rows.t	clsalias3	L249	cmdL248	replace	shape	-2+1
+    -   ! clsalias3.kel:8:61: 型エラー: ラベル Log がありません(行は閉じています)
+    -   [1]
+    +   use : (Box) => Int32 @ {Print, Log}
+annot_rows.t	clslit	L264	cmdL263	replace	ext	-1+1
+annot_rows.t	rec2	L289	cmdL287	replace	ext	-1+1
+annot_rows.t	valopen	L301	cmdL300	replace	ext	-2+2
+annot_rows.t	valopen2	L315	cmdL314	replace	ext	-1+1
+annot_rows.t	valfwd	L327	cmdL326	replace	ext	-2+2
+annot_rows.t	valclosed	L341	cmdL339	replace	ext	-1+1
+annot_rows.t	valclosedfn	L349	cmdL347	replace	ext	-1+1
+annot_rows.t	pubval	L369	cmdL368	replace	closed:{},ext	-2+2
+annot_rows.t	pubvalfwd	L382	cmdL381	replace	closed:{},ext	-2+2
+annot_rows.t	pubvalinit	L409	cmdL408	replace	closed:{},ext	-2+2
+annot_rows.t	recval	L434	cmdL433	replace	ext	-2+2
+annot_rows.t	recand	L459	cmdL458	replace	ext	-1+1
+annot_rows.t	recand	L461	cmdL458	replace	ext	-1+1
+annot_rows.t	recandfn	L477	cmdL476	replace	ext	-1+1
+annot_rows.t	recandfn	L479	cmdL476	replace	ext	-1+1
+annot_rows.t	recandeff	L510	cmdL509	replace	ext	-2+2
+annot_rows.t	recandboth	L521	cmdL520	replace	ext	-2+2
+annot_rows.t	recandbothfn	L528	cmdL527	replace	ext	-2+2
+annot_rows.t	recandfwd	L541	cmdL540	replace	ext	-2+2
+annot_rows.t	recandfwdfn	L548	cmdL547	replace	ext	-2+2
+annot_rows.t	recandfwddiff	L555	cmdL554	replace	other	-2+2
+    -   ! recandfwddiff.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+    -   [1]
+    +   b : (Int32) => Int32 @ {Console, Print}
+    +   a : (Int32) => Int32 @ {Console}
+annot_rows.t	recandback	L562	cmdL561	replace	ext	-2+2
+annot_rows.t	ophead	L577	cmdL576	replace	ext	-1+1
+blocking_top.t	bpure	L22	cmdL21	replace	closed:{},ext	-2+2
+blocking_top.t	bann	L34	cmdL33	replace	ext	-1+1
+blocking_top.t	bnp	L66	cmdL65	replace	ext	-1+1
+classes.t	inam	L100	cmdL97	replace	other	-1+1
+    -   ! inam.kel:4:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド cm の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+    +   ! inam.kel:4:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+classes.t	clsrow3	L188	cmdL187	replace	ext	-2+2
+classes.t	clsmismatch	L215	cmdL214	replace	other	-1+1
+    -   ! clsmismatch.kel:3:29: 型エラー: インスタンスメソッド pr がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側に Console を(必要なら引数つきで)書き足してください))
+    +   ! clsmismatch.kel:3:29: 型エラー: インスタンスメソッド pr がクラス宣言の型を満たしません(ラベル Console がありません(行は閉じています))
+extern_c.t	cblk1	L25	cmdL24	replace	ext	-1+1
+extern_c.t	cblk3	L28	cmdL27	replace	ext	-1+1
+extern_c.t	cblk2	L45	cmdL44	replace	ext	-1+1
+extern_c.t	dd	L89	cmdL88	replace	ext	-1+1
+extern_c_blocking.t	cdef	L10	cmdL9	replace	ext	-2+2
+extern_c_blocking.t	pdef	L21	cmdL19	replace	closed:{}	-1+1
+extern_c_blocking.t	cclosed	L40	cmdL39	replace	ext	-1+1
+extern_c_blocking.t	cpub	L62	cmdL61	replace	ext	-1+1
+extern_c_blocking.t	cpure	L81	cmdL80	replace	closed:{}	-1+1
+extern_c_blocking.t	cpure	L83	cmdL80	replace	closed:{},ext	-3+3
+import.t	m2	L459	cmdL458	replace	ext	-1+1
+kinds.t	cb	L28	cmdL25	replace	ext	-1+1
+kinds.t	cbext	L41	cmdL40	replace	closed:{}	-2+2
+kinds.t	modcb	L344	cmdL343	replace	closed:{}	-1+1
+nonfeatures.t	case7c	L97	cmdL96	replace	ext	-1+1
+pub.t	pub4	L52	cmdL51	replace	closed:{},ext	-2+2
+pub.t	pub15	L126	cmdL125	replace	closed:{}	-1+1
+region.t	read	L17	cmdL14	replace	closed:{}	-2+2
+region.t	maannot	L168	cmdL167	replace	ext	-1+1
+region.t	eachclosed	L229	cmdL228	replace	closed:{}	-1+1
+repl.t	?	L130	cmdL122	replace	closed:{}	-1+1
+tokens.t	effbrace	L632	cmdL631	replace	closed:{},ext	-2+2
+tokens.t	effnl	L659	cmdL658	replace	ext	-2+2
+trailing_comma.t	tc2	L30	cmdL28	replace	ext	-1+1
+typecheck.t	rec	L135	cmdL132	replace	closed:{}	-2+2
+typecheck.t	eff	L155	cmdL153	replace	closed:{}	-1+1
+typecheck.t	effshort	L286	cmdL285	replace	ext	-1+1
+typecheck.t	rigids	L307	cmdL306	replace	closed:{}	-1+1
+typecheck_m6.t	eff9	L63	cmdL62	replace	ext	-1+1
+typecheck_m6.t	eff9	L66	cmdL62	replace	ext	-4+4
+typecheck_m6.t	eff9	L71	cmdL62	replace	ext	-1+1
+typecheck_m6.t	effrow	L85	cmdL84	replace	ext	-1+1
+typecheck_m6.t	qual	L106	cmdL105	replace	ext	-1+1
+typecheck_m6.t	qual1	L148	cmdL147	replace	ext	-1+1
+typecheck_m6.t	qual2	L165	cmdL164	replace	ext	-1+1
+typecheck_m6.t	qual3	L181	cmdL180	replace	ext	-1+1
+typecheck_m6.t	qual4	L202	cmdL201	replace	ext	-1+1
+typecheck_m6.t	qual4b	L218	cmdL217	replace	ext	-1+1
+typecheck_m6.t	qual5	L237	cmdL236	replace	ext	-1+1
+typecheck_m6.t	qualret	L257	cmdL256	replace	ext	-1+1
+typecheck_m6.t	qualcancel	L272	cmdL271	replace	ext	-1+1
+typecheck_m6.t	leftmost	L396	cmdL395	replace	ext	-2+2
+typecheck_m6.t	noSub	L408	cmdL407	replace	closed:{},ext	-2+2
+typecheck_m6.t	fwdsig	L463	cmdL462	replace	ext	-1+1
+typecheck_m7.t	vamb	L260	cmdL259	replace	closed:{}	-2+2
+typecheck_m7.t	v10c	L340	cmdL339	replace	closed:{}	-1+1
+typecheck_sample.t	stubs	L7	cmdL6	replace	closed:{}	-1+1
+typecheck_sample.t	stubs	L12	cmdL6	replace	ext	-1+1
+typecheck_sample.t	stubs	L41	cmdL6	replace	ext	-1+1
+typecheck_sample.t	stubs	L45	cmdL6	replace	ext	-4+4
+typecheck_sample.t	stubs	L50	cmdL6	replace	ext	-1+1
+typecheck_sample.t	stubs	L52	cmdL6	replace	closed:{}	-2+2
+typecheck_sample.t	stubs	L55	cmdL6	replace	ext	-1+1
+typecheck_sample.t	stubs	L62	cmdL6	replace	ext	-1+1
+typecheck_sample.t	stubs	L64	cmdL6	replace	ext	-2+2
+typecheck_sample.t	stubs	L67	cmdL6	replace	closed:{},ext	-4+4
+typecheck_sample.t	stubs	L72	cmdL6	replace	closed:{}	-1+1
+verify_fixes.t	vrgen	L59	cmdL58	replace	shape	-2+1
+    -   ! vrgen.kel:6:12: 型エラー: ラベル Ask がありません(行は閉じています)
+    -   [1]
+    +   15
+verify_fixes.t	patrigid	L193	cmdL192	replace	other	-1+1
+    -   ! patrigid.kel:1:6: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+    +   ! patrigid.kel:1:6: 型エラー: (Int32) => Int32 @ {Console} は Integral のインスタンスではありません
+verify_fixes.t	patrigid2	L197	cmdL196	replace	other	-1+1
+    -   ! patrigid2.kel:1:10: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+    +   ! patrigid2.kel:1:10: 型エラー: (Int32) => Int32 @ {} は Integral のインスタンスではありません
+visibility.t	vis1	L16	cmdL15	replace	closed:{}	-1+1
+visibility.t	vis5	L72	cmdL71	replace	closed:{}	-1+1
+visibility.t	vis6	L88	cmdL87	replace	closed:{}	-1+1
+visibility.t	visrow1	L167	cmdL166	replace	ext	-3+3
+visibility.t	visrow1	L171	cmdL166	replace	ext	-2+2
+visibility.t	visrow2	L188	cmdL187	replace	ext	-2+2
+visibility.t	visrow6	L222	cmdL221	replace	ext	-2+2
+visibility.t	visrow7	L246	cmdL245	replace	ext	-2+2
+visibility.t	visrow7	L250	cmdL245	replace	ext	-3+3
+visibility.t	visrow10	L283	cmdL282	replace	ext	-4+4
+visibility.t	visrow10b	L298	cmdL297	replace	ext	-4+4
+visibility.t	visrow11	L320	cmdL319	replace	ext	-2+2
+visibility.t	visrow11b	L337	cmdL336	replace	ext	-2+2
+visibility.t	visrow14	L360	cmdL359	replace	ext	-1+1
+visibility.t	visbi3	L495	cmdL494	replace	closed:{}	-1+1
+visibility.t	visbi4	L498	cmdL497	replace	closed:{}	-1+1

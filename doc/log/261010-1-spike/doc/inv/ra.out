@@ -1,0 +1,5 @@
+idf : (A) => A = <fn>
+g : (_A) => _A = <fn>
+_ : N = N(1)
+_ : N = N(2)
+h : (N) => N @ {Console, Blocking, Print extends R1} = <fn>

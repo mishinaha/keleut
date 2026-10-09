@@ -1,0 +1,7 @@
+let rec member[A: Eq](x: A, xs: List[A]): Boolean = xs match { case Nil => false case Cons(h, t) => h == x || member(x, t) }
+echoln(show(member({a = 1}, Cons({a = 2}, Cons({a = 1}, Nil)))))
+let big = {
+  let rec mk(n: Int32, acc: List[Int32]): List[Int32] = (n == 0) match { case true => acc case false => mk(n - 1, Cons(n, acc)) }
+  mk(100000, Nil)
+}
+echoln(show(member(100000, big)))

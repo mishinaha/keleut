@@ -1,0 +1,142 @@
+== a1_alias rc=1
+   k : (Int32) => Int32 @ {}
+   ! a1_alias.kel:3:30: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+== a2_rec_fwd rc=1
+   ! a2_rec_fwd.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+== a3_pub_rec_fwd rc=1
+   ! a3_pub_rec_fwd.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+== a4_param_call rc=1
+   ! a4_param_call.kel:1:46: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+== a5_field_call rc=1
+   ! a5_field_call.kel:2:74: 型エラー: ラベル Console がありません(行は閉じています)
+== a7_value_binding_nonvalue rc=1
+   mk : () => (Int32) => Int32 @ {}
+   k : (Int32) => Int32 @ {}
+   ! a7_value_binding_nonvalue.kel:3:30: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+== n10_lambda_ret rc=1
+   a : () => {}
+   ! n10_lambda_ret.kel:2:60: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+== n11_resume_arg rc=1
+   a : () => {}
+   ! n11_resume_arg.kel:5:3: 型エラー: ラベル Get がありません(行は閉じています)
+== n12_run_mixed_list rc=0
+   a : () => {}
+   echoln_never : () => {}
+   b : () => {} @ {Console extends R1}
+   run_all : (List[() => {} @ {Console}]) => {} @ {Console extends R1}
+   _ : {}
+   _ : {}
+== n1_eta rc=0
+   a : () => Int32
+   use : () => Int32 @ {Console extends R1}
+== n2_record_field rc=0
+   a : () => Int32
+   use : () => Int32 @ {Console extends R1}
+== n3_tuple rc=0
+   a : () => Int32
+   b : () => Int32 @ {Console extends R1}
+   use : () => Int32 @ {Console extends R1}
+== n4_match_arms rc=0
+   a : () => Int32
+   b : () => Int32 @ {Console extends R1}
+   pick : (Boolean) => () => Int32 @ {Console}
+== n5_match_arms_unann rc=0
+   a : () => Int32
+   b : () => Int32 @ {Console extends R1}
+   pick : (Boolean) => () => Int32 @ {Console extends R1}
+== n6_ctor_field_arrow rc=0
+   a : () => {}
+   mk : () => Cb
+== n7_perform_arg rc=0
+   a : () => {}
+   use : () => {} @ {Reg extends R1}
+== n8_ref_store rc=0
+   a : () => {}
+   use : () => {} @ {Console extends R1}
+== n9_local_let_ann rc=0
+   a : () => {}
+   use : () => {} @ {Console extends R1}
+== o1_order_call_first rc=1
+   ! o1_order_call_first.kel:4:3: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== o2_order_list_first rc=1
+   ! o2_order_list_first.kel:4:3: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== o3_vrgen_rev rc=1
+   idf : (A) => A
+   ! o3_vrgen_rev.kel:9:11: 型エラー: ラベル Ask がありません(行は閉じています)
+== p1_pass_pure_to_print rc=0
+   pure_fn : () => {}
+   call_p : (() => {} @ {Print}) => {} @ {Print extends R1}
+   t : () => {} @ {Print extends R1}
+== p2_twice2 rc=0
+   twice2 : (() => {}, () => {}) => {}
+   pure_fn : () => {}
+   printer : () => {} @ {Console extends R1}
+   t : () => {} @ {Console extends R1}
+== p3_return_closed rc=0
+   pure_fn : () => {}
+   mk : () => () => {}
+== p4_method_as_value rc=0
+   map_l : (List[A], (A) => B) => List[B]
+   t : () => {} @ {Console extends R1}
+== p6_extern_in_row rc=1
+   sqrt : (Float64) => Float64 @ {Blocking extends R1}
+   t : () => Float64 @ {Blocking, Console extends R1}
+   ! p6_extern_in_row.kel:3:30: 型エラー: ラベル Blocking がありません(行は閉じています)
+== p7_eachclosed rc=0
+   g : (Int32) => {}
+   use : (Array[Int32]) => {}
+== p8_pub_pure_passed rc=0
+   inc : (Int32) => Int32
+   t : (Array[Int32]) => {} @ {Console extends R1}
+   map_l : (List[A], (A) => B) => List[B]
+   u : () => List[Int32] @ {Console extends R1}
+== q1_pub_fwd_list rc=0
+   use : () => Int32 @ {Console extends R1}
+   a : () => Int32
+== q2_pub_back_list rc=0
+   a : () => Int32
+   use : () => Int32 @ {Console extends R1}
+== q3_pubval_fwd_list rc=0
+   use : () => Int32 @ {Console extends R1}
+   k : () => Int32
+== q4_pubval_back_list rc=0
+   k : () => Int32
+   use : () => Int32 @ {Console extends R1}
+== q5_ann_fwd_list rc=0
+   use : () => Int32 @ {Console extends R1}
+   a : () => Int32
+== q6_ann_back_list rc=0
+   a : () => Int32
+   use : () => Int32 @ {Console extends R1}
+== r1_param_pass_effectful rc=1
+   ! r1_param_pass_effectful.kel:1:46: 型エラー: ラベル Console がありません(行は閉じています)(呼び出し先の行は空 = 純粋です。行の部分型付けが無いので、空でない行の下からは呼べません。入れ子の矢印の @ 省略は @ {} と読みます — 行を通すなら行変数を型パラメータに取ってください。§9)
+== r2_unsound_call rc=1
+   ! r2_unsound_call.kel:3:3: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== r3_blocking_in_pure rc=1
+   sqrt : (Float64) => Float64 @ {Blocking extends R1}
+   ! r3_blocking_in_pure.kel:2:25: 型エラー: ラベル Blocking がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== r4_mutual_diff_rows rc=1
+   ! r4_mutual_diff_rows.kel:2:30: 型エラー: ラベル Print がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== t10_pub_rec_tp rc=1
+   ! t10_pub_rec_tp.kel:3:7: 型エラー: ラベル Print がありません(行は閉じています)
+== t11_heap_both rc=1
+   ! t11_heap_both.kel:2:5: 型エラー: ラベル Heap がありません(行は閉じています)
+== t12_recval_pub_omit_impure rc=1
+   ! t12_recval_pub_omit_impure.kel:2:15: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+== t1_tp_later rc=1
+   ! t1_tp_later.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+== t2_heap_unann_caller rc=0
+   f : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+   g : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+== t3_val_fwd_diff rc=1
+   ! t3_val_fwd_diff.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+== t5_recandtp_eff rc=0
+   f : (A) => A @ {Print extends R1}
+   g : (A) => A @ {Print extends R1}
+== t6_tp_mutual_diff rc=1
+   ! t6_tp_mutual_diff.kel:2:26: 型エラー: ラベル Print がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== t8_tp_both rc=1
+   ! t8_tp_both.kel:2:5: 型エラー: ラベル Print がありません(行は閉じています)
+== t9_tp_poly_later rc=0
+   f : (A) => A @ {Print extends R1}
+   g : (Int32) => Int32 @ {Print extends R1}

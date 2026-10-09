@@ -1,0 +1,3 @@
+let v: #Foo((Int32)) = #Foo(1)
+let w: #Foo((Int32,)) = #Foo((1,))
+let u: #Foo(Int32,) = #Foo(1)

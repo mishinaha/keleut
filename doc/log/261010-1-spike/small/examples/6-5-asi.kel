@@ -1,0 +1,5 @@
+let a: Int32 = 1
+let b: Int32 = 2
+let c = a
+-b
+echoln(show(c))

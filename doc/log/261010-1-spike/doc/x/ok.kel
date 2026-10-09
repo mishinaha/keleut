@@ -1,0 +1,3 @@
+echoln("hello")
+let x = 1 + 2
+echoln(show(x))

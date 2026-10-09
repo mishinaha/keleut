@@ -1,0 +1,37 @@
+diff -ruN -x _build base/lib/elab.ml a/diktor/lib/elab.ml
+--- base/lib/elab.ml	2026-10-03 00:00:35.000000000 +0900
++++ a/diktor/lib/elab.ml	2026-10-10 01:35:16.750334169 +0900
+@@ -2059,22 +2059,22 @@
+       | [] -> type_error ("未知の操作: " ^ op)
+       | [ e ] -> (e, opo, List.assoc opo (Option.get (Decls.find_effect e)).Decls.ef_ops)
+       | many -> (
+-          (* 現在の eff 行に現れる候補のうち、最左を採る。handle の入れ子から推論された
+-             行では最左が最も内側のハンドラになり、注釈された行では書かれた順で最左が
+-             決まる(§11.20) *)
++          (* 現在の eff 行に現れる候補が 1 つだけなら、それを採る。行の中の位置は見ない(§11.20) *)
+           let labels = List.map fst (fst (row_fields eff)) in
+-          let pos e =
+-            let rec go i = function [] -> None | l :: tl -> if l = e then Some i else go (i + 1) tl in
+-            go 0 labels
+-          in
+-          let ranked = List.filter_map (fun e -> Option.map (fun i -> (i, e)) (pos e)) many in
+-          match List.sort compare ranked with
+-          | (_, e) :: _ -> (e, opo, List.assoc opo (Option.get (Decls.find_effect e)).Decls.ef_ops)
++          match List.filter (fun e -> List.mem e labels) many with
++          | [ e ] -> (e, opo, List.assoc opo (Option.get (Decls.find_effect e)).Decls.ef_ops)
+           | [] ->
+               type_error
+                 ("操作 " ^ op ^ " は複数のエフェクト("
+                 ^ String.concat ", " (List.map display_of many)
+-                ^ ")に属します。" ^ display_of (List.hd many) ^ "." ^ op ^ " のように修飾してください")))
++                ^ ")に属します。" ^ display_of (List.hd many) ^ "." ^ op ^ " のように修飾してください")
++          | in_row ->
++              type_error
++                ("操作 " ^ op ^ " は、この位置の行に現れる複数のエフェクト("
++                ^ String.concat ", " (List.map display_of in_row)
++                ^ ")に属します。"
++                ^ String.concat "、" (List.map (fun e -> display_of e ^ "." ^ op) in_row)
++                ^ " のどれかに修飾してください")))
+   | li -> type_error ("不正な操作名です: " ^ show_long_id li)
+ 
+ (* ## 11.21 resume の第二級性

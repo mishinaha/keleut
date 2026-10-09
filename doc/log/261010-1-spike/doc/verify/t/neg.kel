@@ -1,0 +1,4 @@
+let x0 = 1
+let p = -x0
+let q = 7 % 3
+echoln(show(p) + show(q))

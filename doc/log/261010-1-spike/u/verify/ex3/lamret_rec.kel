@@ -1,0 +1,3 @@
+let a(): Int32 @ {} = 1
+let app(mk: () => {go: () => Int32 @ Console}): Int32 @ Console = mk().go()
+let use(): Int32 @ Console = app(fn() => {go = a})

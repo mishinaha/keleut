@@ -1,0 +1,9 @@
+let a(): Unit @ {} = echoln_never()
+let echoln_never(): Unit @ {} = ()
+let b(): Unit @ Console = echoln("b")
+let rec run_all(fs: List[() => Unit @ Console]): Unit @ Console = fs match {
+  case Nil => ()
+  case Cons(f, t) => { f(); run_all(t) }
+}
+run_all(Cons(a, Cons(b, Cons(a, Nil))))
+echoln("done")

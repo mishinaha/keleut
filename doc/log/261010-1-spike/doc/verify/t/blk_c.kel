@@ -1,0 +1,2 @@
+let v = { type T = Int32; 5 }
+echoln(show(v))

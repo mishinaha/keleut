@@ -1,0 +1,11 @@
+--- base/test/sample/sample.kel	2026-10-03 00:00:46.000000000 +0900
++++ a/diktor/test/sample/sample.kel	2026-10-10 01:35:33.102159053 +0900
+@@ -621,7 +621,7 @@
+   with _ = with_file(src)
+   let text = perform read()                   // 最も左の File は src のもの
+   with _ = with_file(dst)
+-  perform write(text)                         // 最も左の File は dst のもの
++  perform File.write(text)                    // 最も左の File は dst のもの
+ }
+ 
+ // 逐次合成を必要とするライブラリ（パーサコンビネータなど）も、同じ規則で書ける。

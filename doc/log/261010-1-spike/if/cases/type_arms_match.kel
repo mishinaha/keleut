@@ -1,0 +1,1 @@
+let f(b: Boolean) = b match { case true => 1 case false => "one" }

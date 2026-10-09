@@ -1,0 +1,4 @@
+let f(): Int32 = y
+echoln("before")
+echoln(show(f()))
+let y: Int32 = 7

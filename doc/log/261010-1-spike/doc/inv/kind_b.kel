@@ -1,0 +1,4 @@
+type Fn[E] = () => Unit @ E
+newtype Cb[E] = Cb(Fn[E])
+let run_cb[E](c: Cb[E]): Unit @ E = c match { case Cb(f) => f() }
+run_cb(Cb(fn() => echoln("hi")))

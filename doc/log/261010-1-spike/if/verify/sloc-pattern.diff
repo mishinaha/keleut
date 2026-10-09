@@ -1,0 +1,11 @@
+--- diktor/lib/parser.mly	2026-10-10 01:55:59.228938815 +0900
++++ sloc/lib/parser.mly	2026-10-10 02:04:50.252015024 +0900
+@@ -873,7 +873,7 @@
+   | FN LPAREN params RPAREN EQ_GREATER exp { mk $sloc (Lambda { l_params = $3; l_body = $6 }) }
+   | IF exp THEN exp ELSE exp
+       { (* Boolean に対する match に脱糖する(§3.18)。パターンの位置は条件 e1 に置く *)
+-        let arm b sp ep body = mk (sp, ep) { cl_pat = mk $loc($2) (PBool b); cl_guard = None; cl_body = body } in
++        let arm b sp ep body = mk (sp, ep) { cl_pat = mk $sloc (PBool b); cl_guard = None; cl_body = body } in
+         mk $sloc (Match ($2, [ arm true $startpos($3) $endpos($4) $4; arm false $startpos($5) $endpos($6) $6 ])) }
+   | postfixed                              { $1 }
+ 

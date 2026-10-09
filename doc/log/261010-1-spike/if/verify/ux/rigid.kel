@@ -1,0 +1,1 @@
+let pick[A](a: A, b: A, d: A): A = (a == b) match { case true => a case false => d }

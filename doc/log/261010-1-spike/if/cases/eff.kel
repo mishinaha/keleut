@@ -1,0 +1,2 @@
+let f(b: Boolean): Unit = if b then echoln("t") else ()
+let g(b: Boolean): Int32 @ {} = if b then 1 else { echoln("x"); 2 }

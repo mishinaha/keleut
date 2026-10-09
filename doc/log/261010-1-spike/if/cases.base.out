@@ -1,0 +1,105 @@
+=== basic.kel
+basic.kel:1:29: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== blocks.kel
+blocks.kel:1:9: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== eff.kel
+eff.kel:1:27: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== else_ident.kel
+[rc=0]
+=== exhaust.kel
+exhaust.kel:1:28: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== guard_if_noparen.kel
+guard_if_noparen.kel:2:13: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== guard.kel
+guard.kel:3:14: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== guard_nl.kel
+guard_nl.kel:4:13: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== hole.kel
+hole.kel:1:9: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== lam.kel
+lam.kel:1:27: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== multiline.kel
+multiline.kel:2:3: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== noelse2.kel
+noelse2.kel:2:3: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== noelse.kel
+noelse.kel:1:27: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== nontail_cond.kel
+nontail_cond.kel:1:35: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== nontail_if.kel
+nontail_if.kel:1:32: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== order.kel
+order.kel:2:10: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== prec_err2.kel
+prec_err2.kel:1:9: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== prec_err.kel
+prec_err.kel:1:13: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== prec.kel
+prec.kel:1:9: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== resume_if_cond.kel
+resume_if_cond.kel:2:40: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== resume_if.kel
+resume_if.kel:4:3: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== stmt.kel
+stmt.kel:2:1: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== tail_if_block.kel
+tail_if_block.kel:3:3: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== tail_if_else_then.kel
+tail_if_else_then.kel:1:33: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== tail_if.kel
+tail_if.kel:1:45: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== tail_if_nested.kel
+tail_if_nested.kel:1:35: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== then_ident.kel
+[rc=0]
+=== then_label.kel
+[rc=0]
+=== type_arms.kel
+type_arms.kel:1:21: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== type_arms_match.kel
+! type_arms_match.kel:1:21: 型エラー: String は Integral のインスタンスではありません
+[rc=1]
+=== type_cond.kel
+type_cond.kel:1:26: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== type_cond_lit.kel
+type_cond_lit.kel:1:18: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== type_cond_str.kel
+type_cond_str.kel:2:3: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== type_infer.kel
+type_infer.kel:1:23: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== valrestr2.kel
+! valrestr2.kel:3:12: 型エラー: 型が一致しません: String と Int32
+[rc=1]
+=== valrestr.kel
+valrestr.kel:1:10: パースエラー(付近のトークンを確認してください)
+[rc=2]

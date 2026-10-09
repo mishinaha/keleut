@@ -1,0 +1,3 @@
+extern "C" let sqrt(x: Float64): Float64
+let t(): Float64 @ {Blocking, Console} = sqrt(4.0)
+let u(): Float64 @ Console = sqrt(4.0)

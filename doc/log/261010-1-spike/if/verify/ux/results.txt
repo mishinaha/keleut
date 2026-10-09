@@ -1,0 +1,117 @@
+=== m_branch_let.kel
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let run_it(b: Boolean): Unit @ Console = {
+  let g = b match { case true => pure_f case false => print_f }
+  g()
+}
+run_it(false)
+--- B: p [rc=0]
+--- P: p [rc=0]
+--- U: ! m_branch_let.kel:4:11: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- S: ! m_branch_let.kel:4:11: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- D: p [rc=0]
+--- N: p [rc=0]
+=== i_branch_let.kel
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let run_it(b: Boolean): Unit @ Console = {
+  let g = if b then pure_f else print_f
+  g()
+}
+run_it(false)
+--- B: i_branch_let.kel:4:11: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: p [rc=0]
+--- U: ! i_branch_let.kel:4:11: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- S: ! i_branch_let.kel:4:11: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- D: p [rc=0]
+--- N: p [rc=0]
+=== i_branch_arg.kel
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let call[E](f: () => Unit @ E): Unit @ E = f()
+let run_it(b: Boolean): Unit @ Console = call(if b then pure_f else print_f)
+run_it(false)
+--- B: i_branch_arg.kel:4:47: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: p [rc=0]
+--- U: ! i_branch_arg.kel:4:47: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- S: ! i_branch_arg.kel:4:47: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- D: p [rc=0]
+--- N: p [rc=0]
+=== i_branch_call.kel
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let run_it(b: Boolean): Unit @ Console = (if b then pure_f else print_f)()
+run_it(false)
+--- B: i_branch_call.kel:3:43: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: p [rc=0]
+--- U: ! i_branch_call.kel:3:43: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- S: ! i_branch_call.kel:3:43: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- D: p [rc=0]
+--- N: p [rc=0]
+=== i_branch.kel
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let pick(b: Boolean): () => Unit @ Console = if b then pure_f else print_f
+pick(false)()
+--- B: i_branch.kel:3:46: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: ! i_branch.kel:4:1: 型エラー: ラベル Blocking がありません(行は閉じています) [rc=1]
+--- U: ! i_branch.kel:3:46: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- S: ! i_branch.kel:3:46: 型エラー: ラベル Console がありません(行は閉じています) [rc=1]
+--- D: ! i_branch.kel:4:1: 型エラー: ラベル Blocking がありません(行は閉じています) [rc=1]
+--- N: ! i_branch.kel:4:1: 型エラー: ラベル Blocking がありません(行は閉じています) [rc=1]
+=== m_list.kel
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let run_it(): Unit @ Console = {
+  let fs = Cons(pure_f, Cons(print_f, Nil))
+  fs match { case Cons(f, _) => f() case Nil => () }
+}
+run_it()
+--- B: [rc=0]
+--- P: [rc=0]
+--- U: ! m_list.kel:4:12: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9) [rc=1]
+--- S: ! m_list.kel:4:12: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9) [rc=1]
+--- D: [rc=0]
+--- N: [rc=0]
+=== i_branch_lam.kel
+let run_it(b: Boolean): Unit @ Console = {
+  let g = if b then fn() => () else fn() => echoln("p")
+  g()
+}
+run_it(false)
+--- B: i_branch_lam.kel:2:11: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: p [rc=0]
+--- U: p [rc=0]
+--- S: p [rc=0]
+--- D: p [rc=0]
+--- N: p [rc=0]
+=== neg.kel
+let f(x: Int32): Int32 = if x < 0 then -x else x
+echoln(show(f(0 - 3)))
+let g(x: Int32): Int32 = if x < 0 then - x else -1
+echoln(show(g(5)))
+echoln(show(if true then 7 % 3 else 0))
+--- B: neg.kel:1:26: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: neg.kel:1:41: パースエラー(付近のトークンを確認してください) [rc=2]
+--- U: neg.kel:1:41: パースエラー(付近のトークンを確認してください) [rc=2]
+--- S: neg.kel:1:41: パースエラー(付近のトークンを確認してください) [rc=2]
+--- D: neg.kel:1:41: パースエラー(付近のトークンを確認してください) [rc=2]
+--- N: 3 -1 1 [rc=0]
+=== dict_if.kel
+let pick[A: Eq](a: A, b: A, d: A): A = if a == b then a else d
+echoln(show(pick(1, 1, 9)))
+echoln(pick("x", "y", "z"))
+let showif[A: Show](c: Boolean, x: A, y: A): String = if c then show(x) else show(y)
+echoln(showif(false, 1, 2))
+let rec cnt[A: Eq](xs: List[A], v: A, acc: Int32): Int32 = xs match {
+  case Nil => acc
+  case Cons(h, t) => if h == v then cnt(t, v, acc + 1) else cnt(t, v, acc)
+}
+echoln(show(cnt(Cons(1, Cons(2, Cons(1, Nil))), 1, 0)))
+--- B: dict_if.kel:1:40: パースエラー(付近のトークンを確認してください) [rc=2]
+--- P: 1 z 2 2 [rc=0]
+--- U: 1 z 2 2 [rc=0]
+--- S: 1 z 2 2 [rc=0]
+--- D: 1 z 2 2 [rc=0]
+--- N: 1 z 2 2 [rc=0]

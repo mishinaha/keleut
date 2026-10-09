@@ -1,0 +1,2 @@
+let rec f(n: Int32): Int32 @ Print = { println("a"); g(n) }
+and g[A](n: Int32): Int32 @ {} = n

@@ -1,0 +1,4 @@
+let f(x: Int32): Int32 = x
+let a = f(1)
+  + 2
+echoln(show(a))

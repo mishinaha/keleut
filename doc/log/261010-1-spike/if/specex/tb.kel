@@ -1,0 +1,8 @@
+let twice(f: () => Int32): Int32 = f() + f()
+let r = if true then twice { 1 } else twice { 2 }
+echoln(show(r))
+let s = if false then
+  { 1 }
+else
+  { let z = 4; z }
+echoln(show(s))

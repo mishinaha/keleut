@@ -1,0 +1,2 @@
+let rec g(): Unit @ {} = ()
+and f(): Unit @ Print = { println("a"); g() }

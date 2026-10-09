@@ -1,0 +1,4 @@
+let rec f(x) = show(x)
+and g(y) = y + y
+echoln(f(1))
+echoln(show(g(2)))

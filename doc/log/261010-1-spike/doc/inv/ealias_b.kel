@@ -1,0 +1,3 @@
+type Out: EffectRow = {Print, Console}
+let f(): Unit @ Out = { println("p"); echoln("c") }
+with_stdout(f)

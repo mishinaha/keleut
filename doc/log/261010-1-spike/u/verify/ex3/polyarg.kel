@@ -1,0 +1,4 @@
+let a(): Int32 @ {} = 1
+let b(): Int32 @ Console = 2
+let pick[A](c: Boolean, x: A, y: A): A = c match { case true => x case false => y }
+let use(): Int32 @ Console = pick(true, a, b)()

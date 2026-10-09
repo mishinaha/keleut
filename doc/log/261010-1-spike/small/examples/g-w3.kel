@@ -1,0 +1,5 @@
+let k(x: Int32, body: (Int32) => Int32): Int32 = body(x)
+let g(): Int32 = {
+  with 1 = k(1)
+  2
+}

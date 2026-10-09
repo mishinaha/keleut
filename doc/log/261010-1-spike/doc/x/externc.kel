@@ -1,0 +1,3 @@
+echoln("before")
+extern "C" let foo(x: Float64): Float64
+let y = foo(1.0)

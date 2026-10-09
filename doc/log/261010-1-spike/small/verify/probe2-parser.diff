@@ -1,0 +1,38 @@
+--- /home/sumito3478/repo/keleut/diktor/lib/parser.mly	2026-10-02 23:34:08.861101045 +0900
++++ /tmp/claude-1000/-home-sumito3478-repo-keleut/1ef5cecb-cda8-4677-8a57-ab1345c7b36f/scratchpad/verify-small/probe2/lib/parser.mly	2026-10-10 02:26:37.264842326 +0900
+@@ -1235,9 +1235,9 @@
+ 
+ ty: union_ty { $1 } | arrow_ty { $1 }
+ 
+-arrow_ty: LPAREN ty_list0 RPAREN EQ_GREATER arrow_ret
++arrow_ty: LPAREN paren_ty_items RPAREN EQ_GREATER arrow_ret
+   { let ret, eff = $5 in
+-    mk $sloc (EArrow ($2, ret, eff)) }
++    mk $sloc (EArrow (fst $2, ret, eff)) }
+ arrow_ret:
+   | union_ty eff_opt { ($1, $2) }
+   | arrow_ty         { ($1, None) } (* 入れ子の矢印の外側には @ を書けない(型エイリアスを使う) *)
+@@ -1262,9 +1262,22 @@
+         | [] -> mk $sloc (EVariantCase ($1, None))
+         | ts -> mk $sloc (EVariantCase ($1, Some (variant_ty_payload $sloc ts))) }
+   | brace_ty                          { $1 }
+-  | LPAREN ty_list0 RPAREN            { tuple_ty $sloc $2 } (* 型位置の (A) は常に 1-タプル *)
++  | LPAREN paren_ty_items RPAREN
++      { let tys, comma = $2 in
++        (match tys, comma with
++         | [ _ ], false ->
++             let (sp, _) = $sloc in
++             (let oc = open_out_gen [Open_append; Open_creat] 0o644 "/tmp/claude-1000/-home-sumito3478-repo-keleut/1ef5cecb-cda8-4677-8a57-ab1345c7b36f/scratchpad/verify-small/probe2.log" in Printf.fprintf oc "PROBE-PAREN1 %s:%d:%d\n" sp.Lexing.pos_fname sp.Lexing.pos_lnum (sp.Lexing.pos_cnum - sp.Lexing.pos_bol + 1); close_out oc)
++         | _ -> ());
++        tuple_ty $sloc tys }
+ 
+ ty_list0: { [] } | ty_list { $1 }
++(* 括弧の中の型の並び。カンマを 1 つでも書いたか(または空か)を第 2 要素で返す *)
++paren_ty_items:
++  |                         { ([], true) }
++  | ty                      { ([ $1 ], false) }
++  | ty COMMA                { ([ $1 ], true) }
++  | ty COMMA ty_list        { ($1 :: $3, true) }
+ ty_list:
+   | ty               { [ $1 ] }
+   | ty COMMA         { [ $1 ] }

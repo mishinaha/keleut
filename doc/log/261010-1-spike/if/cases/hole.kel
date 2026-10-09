@@ -1,0 +1,6 @@
+let r = if true then 1 else ???
+echoln(show(r))
+let s = if false then ??? else 2
+echoln(show(s))
+let u = if ??? then 1 else 2
+echoln(show(u))

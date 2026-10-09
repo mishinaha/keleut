@@ -1,0 +1,12 @@
+b1_ops.kel	base	1.10s	rc=0	1784293664
+b1_ops.kel	dict	0.57s	rc=0	1784293664
+b2_poly.kel	base	0.47s	rc=0	0
+b2_poly.kel	dict	0.77s	rc=0	0
+b2b_add.kel	base	0.47s	rc=0	0
+b2b_add.kel	dict	0.63s	rc=0	0
+b2a_mono.kel	base	0.47s	rc=0	0
+b2a_mono.kel	dict	0.37s	rc=0	0
+b4_eqrec.kel	base	0.41s	rc=0	300000
+b4_eqrec.kel	dict	0.21s	rc=0	300000
+b5_noops.kel	base	0.46s	rc=0	0
+b5_noops.kel	dict	0.48s	rc=0	0

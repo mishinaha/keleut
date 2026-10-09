@@ -1,0 +1,3 @@
+newtype Box[A] = Box(A)
+type instance[A: Show] Show[Box[_]] { let show = ??? }
+echoln("after")

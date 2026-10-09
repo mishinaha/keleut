@@ -1,0 +1,7 @@
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let run_it(): Unit @ Console = {
+  let fs = Cons(pure_f, Cons(print_f, Nil))
+  fs match { case Cons(f, _) => f() case Nil => () }
+}
+run_it()

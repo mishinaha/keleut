@@ -1,0 +1,10 @@
+let outer[A: Show](x: A): String = {
+  let both(y) = show(y) + "/" + show(x)
+  both(1) + " " + both(true)
+}
+echoln(outer("s"))
+let rec sa[A: Show](xs: List[A]): String = xs match { case Nil => "." case Cons(h, t) => show(h) + sr(t) }
+and sr(t) = sa(t)
+echoln(sa(Cons(1, Cons(2, Nil))))
+let rec loop(n, acc) = (n == 0) match { case true => acc case false => loop(n - 1, acc + n) }
+echoln(show(loop(100000, 0)))

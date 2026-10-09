@@ -1,0 +1,4 @@
+let p: {y: String, x: Int32} = {y = "s", x = 1}
+let f[R](r: {y: String, x: Int32 extends R}): String = r.y + show(r.x)
+let v: #B | #A(Int32) = #A(1)
+echoln(f(p) + (v match { case #A(n) => show(n) case #B => "b" }))

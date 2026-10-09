@@ -1,0 +1,4 @@
+newtype N = N(Int32)
+let k2(x: N): String @ {} = "n"
+type instance Show[N] { let show(x: N): String = k2(x) }
+echoln(show(N(1)))

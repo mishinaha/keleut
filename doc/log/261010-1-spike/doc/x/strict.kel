@@ -1,0 +1,7 @@
+let ignore2(a: Int32, b: Int32): Int32 = a
+let noisy(n: Int32): Int32 @ Console = { echoln("eval " + show(n)); n }
+let r = ignore2(noisy(1), noisy(2))
+let unused = noisy(3)
+let rec_ = {a = noisy(4), b = noisy(5)}
+let lazy = fn() => noisy(6)
+echoln("end " + show(r))

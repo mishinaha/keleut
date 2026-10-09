@@ -1,0 +1,32 @@
+######## BASE
+_ : [_A: Show] (_A) => String = <prim Show.show>
+sh : [A: Show] (A) => String = <prim Show.show>
+idf : (A) => A = <fn>
+s : [_A: Show] (_A) => String = <prim Show.show>
+_ : String = "1"
+xs : List[_A] = []
+! <stdin>:7:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[_A: Show] (_A) => String
+t : (Int32) => String @ {Console, Blocking, Print} = <prim Show.show>
+_ : String = "2"
+_ : [_A: Show] (_A) => String = <prim Show.show>
+_ : Boolean = true
+eqf : (Int32, Int32) => Boolean = <fn>
+pr : [A: Show] (A) => String = <fn>
+_ : [_A: Show] (_A) => String = <fn>
+######## PROTO
+! <stdin>:1:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)
+sh : [A: Show] (A) => String = <fn>
+idf : (A) => A = <fn>
+! <stdin>:4:13: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)
+! <stdin>:5:1: 型エラー: 未束縛の変数: s
+xs : List[_A] = []
+! <stdin>:7:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[_A: Show] (_A) => String
+t : (Int32) => String @ {Console, Blocking, Print} = <prim Show.show>
+_ : String = "2"
+! <stdin>:10:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)
+_ : Boolean = true
+eqf : (Int32, Int32) => Boolean = <fn>
+pr : [A: Show] (A) => String = <fn>
+! <stdin>:14:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)

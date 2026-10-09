@@ -1,0 +1,4 @@
+newtype Foo = Foo
+let p[A: Show](x: A): String = show(x)
+echoln(p(Foo))
+type instance Show[Foo] { let show(x) = "foo" }

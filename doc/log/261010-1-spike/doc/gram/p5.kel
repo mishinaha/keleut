@@ -1,0 +1,3 @@
+let v = #Even
+let w = 1
+echoln(show(w))

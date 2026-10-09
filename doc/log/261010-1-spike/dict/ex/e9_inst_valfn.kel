@@ -1,0 +1,6 @@
+newtype Foo = Foo
+let helper(x: Foo): String = "foo"
+type instance Show[Foo] {
+  let show = helper
+}
+echoln(show(Foo))

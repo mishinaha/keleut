@@ -1,0 +1,2 @@
+let rec f(): Int32 = { let _ = g(???); 0 }
+and g(y) = show(y)

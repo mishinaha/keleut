@@ -1,0 +1,5 @@
+newtype Box[A] = Box(A)
+type instance[A: Show] Show[Box[_]] { let show = { let z = 1 / 0; fn(b) => "box" } }
+echoln("after")
+echoln(show(Box(1)))
+echoln(show(Box(2)))

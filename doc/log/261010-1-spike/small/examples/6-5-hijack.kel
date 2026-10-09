@@ -1,0 +1,2 @@
+module Show { pub let show(x: Int32): String = "hijack" }
+echoln(Show.show(1))

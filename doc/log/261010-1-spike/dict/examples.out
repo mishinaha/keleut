@@ -1,0 +1,165 @@
+== ex/e10_premise_val.kel
+-- base
+Box(1)
+Box(Box(s))
+-- dict
+Box(1)
+Box(Box(s))
+== ex/e11_method_own.kel
+-- base
+Foo:3
+Foo:x
+-- dict
+Foo:3
+Foo:x
+== ex/e12_dexp.kel
+-- base
+x
+-- dict
+! ex/e12_dexp.kel:1:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)
+== ex/e1_shownil.kel
+-- base
+! ex/e1_shownil.kel:1:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+-- dict
+! ex/e1_shownil.kel:1:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+== ex/e2_inst_eff.kel
+-- base
+! ex/e2_inst_eff.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+-- dict
+! ex/e2_inst_eff.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+== ex/e3_weak.kel
+-- base
+1
+-- dict
+1
+== ex/e4_weak_late.kel
+-- base
+foo
+-- dict
+foo
+== ex/e5_rec_amb.kel
+-- base
+-- dict
+! ex/e5_rec_amb.kel:1:32: 型エラー: 曖昧な制約: 再帰群の中のこの参照が要る辞書を、呼ぶ側の束縛の型から決められません(注釈で型を決めてください)
+== ex/e6_rec_indep.kel
+-- base
+1
+4
+-- dict
+1
+4
+== ex/e7_tp_absent.kel
+-- base
+-- dict
+! ex/e7_tp_absent.kel:1:46: 型エラー: 曖昧な制約: Show の辞書を束縛の型から決められません(束縛の型に現れない型変数に制約が付いています。注釈で型を決めてください)
+== ex/e8_inst_init_console.kel
+-- base
+! ex/e8_inst_init_console.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+-- dict
+! ex/e8_inst_init_console.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(公開される型は行多相 — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+== ex/e9_inst_valfn.kel
+-- base
+foo
+-- dict
+foo
+== ex2/n1_applicative.kel
+-- base
+! ex2/n1_applicative.kel:1:1: 型エラー: メソッド pure はクラスパラメータが引数の頭に現れないため v0 では宣言できません(実行時タグディスパッチの前提、§7.4)
+-- dict
+Some(1)
+[a]
+Some(2)
+Some(42)
+== ex2/n2_pure_amb.kel
+-- base
+! ex2/n2_pure_amb.kel:1:1: 型エラー: メソッド pure はクラスパラメータが引数の頭に現れないため v0 では宣言できません(実行時タグディスパッチの前提、§7.4)
+-- dict
+! ex2/n2_pure_amb.kel:5:9: 型エラー: 曖昧な制約: Applicative を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)
+== ex2/n3_read.kel
+-- base
+! ex2/n3_read.kel:1:1: 型エラー: メソッド read はクラスパラメータが引数の頭に現れないため v0 では宣言できません(実行時タグディスパッチの前提、§7.4)
+-- dict
+84
+false
+84
+== ex2/n4_struct_eq.kel
+-- base
+true
+true
+true
+false
+true
+false
+-- dict
+true
+true
+true
+false
+true
+false
+== ex2/n5_local_poly.kel
+-- base
+1/s true/s
+12.
+705082704
+-- dict
+1/s true/s
+12.
+705082704
+== ex2/n6_method_own.kel
+-- base
+S(S(Foo:3))
+Foo:true
+-- dict
+S(S(Foo:3))
+Foo:true
+== ex2/n7_poly_rec_eq.kel
+-- base
+true
+true
+-- dict
+true
+true
+== ex2/r1_recpoly.kel
+-- base
+3true
+z
+-- dict
+3true
+z
+== ex2/s1_stress.kel
+-- base
+1true|strue
+1aSome(2)
+1false
+1
+42!
+Some(5)
+true
+-- dict
+1true|strue
+1aSome(2)
+1false
+1
+42!
+Some(5)
+true
+== ex2/s2_fwd.kel
+-- base
+a1!
+a1!true
+-- dict
+a1!
+a1!true
+== ex2/t1_tail_poly.kel
+-- base
+100000
+true
+-- dict
+100000
+true
+== ex2/x1_extern.kel
+-- base
+実行時エラー: 未実装のプリミティブ: foo
+-- dict
+実行時エラー: 未実装のプリミティブ: foo

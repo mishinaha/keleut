@@ -1,0 +1,5 @@
+pub let k: () => Int32 = fn() => 1
+let use(): Int32 @ Console = {
+  let xs = Cons(k, Cons(fn() => { echoln("x"); 2 }, Nil))
+  0
+}

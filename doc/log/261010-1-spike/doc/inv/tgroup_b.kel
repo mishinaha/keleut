@@ -1,0 +1,4 @@
+type A = B
+let x = 1
+newtype B = B(Int32)
+let y: A = B(x)

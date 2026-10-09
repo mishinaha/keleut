@@ -1,0 +1,10 @@
+type class Read[A] { val read: (String) => A }
+type instance Read[Int32] { let read(s) = 42 }
+type instance Read[Boolean] { let read(s) = true }
+let n: Int32 = read("1")
+let b = read("t") && false
+echoln(show(n + read("2")))
+echoln(show(b))
+let twice[A: Read + Add](s: String): A = read(s) + read(s)
+let t: Int32 = twice("x")
+echoln(show(t))

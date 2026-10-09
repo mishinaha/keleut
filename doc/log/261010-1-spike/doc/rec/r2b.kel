@@ -1,0 +1,3 @@
+let rec g() = ()
+and f(): Unit @ Print = { println("a"); g() }
+with_stdout(f)

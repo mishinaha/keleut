@@ -1,0 +1,5 @@
+type class Pp[A] { val pp[B: Show]: (A, B) => String }
+newtype Foo = Foo
+type instance Pp[Foo] { let pp(a, b) = "Foo:" + show(b) }
+echoln(pp(Foo, 3))
+echoln(Pp.pp(Foo, "x"))

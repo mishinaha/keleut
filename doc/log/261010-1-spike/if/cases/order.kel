@@ -1,0 +1,5 @@
+let t(s: String, b: Boolean): Boolean = { echoln(s); b }
+let r1 = if t("cond", true) then t("then", true) else t("else", false)
+echoln(show(r1))
+let r2 = if t("cond", false) then t("then", true) else t("else", false)
+echoln(show(r2))

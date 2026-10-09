@@ -1,0 +1,2 @@
+echoln("before")
+let f(): Int32 = 3000000000

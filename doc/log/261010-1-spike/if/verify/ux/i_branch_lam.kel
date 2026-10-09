@@ -1,0 +1,5 @@
+let run_it(b: Boolean): Unit @ Console = {
+  let g = if b then fn() => () else fn() => echoln("p")
+  g()
+}
+run_it(false)

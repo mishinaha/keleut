@@ -1,0 +1,10 @@
+--- diktor/lib/parser.mly	2026-10-10 01:55:59.228938815 +0900
++++ noelse/lib/parser.mly	2026-10-10 01:57:17.812377420 +0900
+@@ -875,6 +875,7 @@
+       { (* Boolean に対する match に脱糖する(§3.18)。パターンの位置は条件 e1 に置く *)
+         let arm b sp ep body = mk (sp, ep) { cl_pat = mk $loc($2) (PBool b); cl_guard = None; cl_body = body } in
+         mk $sloc (Match ($2, [ arm true $startpos($3) $endpos($4) $4; arm false $startpos($5) $endpos($6) $6 ])) }
++  | IF exp THEN exp { mk $sloc (Match ($2, [])) }
+   | postfixed                              { $1 }
+ 
+ postfixed:

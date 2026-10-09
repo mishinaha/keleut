@@ -1,0 +1,2 @@
+module Add { pub let x: Int32 = 1 }
+echoln(show(Add.x))

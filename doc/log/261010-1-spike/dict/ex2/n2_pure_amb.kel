@@ -1,0 +1,5 @@
+type class Applicative[F[_]] {
+  val pure[A]: (A) => F[A]
+}
+type instance Applicative[Option[_]] { let pure(x) = Some(x) }
+let x = pure(1)

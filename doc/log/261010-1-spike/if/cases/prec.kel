@@ -1,0 +1,12 @@
+let a = if false then 1 else 2 + 10
+echoln(show(a))
+let b = (if false then 1 else 2) + 10
+echoln(show(b))
+let c = if true then 1 else 2 + 10
+echoln(show(c))
+let d = if 1 < 2 && 2 < 3 then "both" else "not"
+echoln(d)
+let e = if true then Some(1) else None match { case Some(x) => Some(x + 1) case None => None }
+echoln(show(e))
+let f = if false then Some(1) else None match { case Some(x) => Some(x + 1) case None => Some(0) }
+echoln(show(f))

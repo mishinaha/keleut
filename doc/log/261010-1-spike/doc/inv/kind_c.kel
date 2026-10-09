@@ -1,0 +1,2 @@
+let call[E](f: () => Unit @ E): Unit @ E = f()
+call(fn() => echoln("hi"))

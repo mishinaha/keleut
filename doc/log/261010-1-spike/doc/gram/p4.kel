@@ -1,0 +1,2 @@
+let g = (fn(x: Int32) => x + 1)(2)
+echoln(show(g))

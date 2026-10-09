@@ -1,0 +1,26 @@
+type class Applicative[F[_]] {
+  val pure[A]: (A) => F[A]
+  val ap[A, B, E]: (F[(A) => B @ E], F[A]) => F[B] @ E
+}
+type instance Applicative[Option[_]] {
+  let pure(x) = Some(x)
+  let ap(f, x) = (f, x) match {
+    case (Some(g), Some(v)) => Some(g(v))
+    case _ => None
+  }
+}
+type instance Applicative[List[_]] {
+  let pure(x) = Cons(x, Nil)
+  let ap(fs, xs) = fs match {
+    case Nil => Nil
+    case Cons(g, _) => xs match { case Nil => Nil case Cons(v, _) => Cons(g(v), Nil) }
+  }
+}
+let o: Option[Int32] = pure(1)
+let l: List[String] = pure("a")
+echoln(show(o))
+echoln(show(l))
+echoln(show(ap(pure(fn(x: Int32) => x + 1), o)))
+let lift2[F[_]: Applicative, A, B, C](f: (A, B) => C, x: F[A], y: F[B]): F[C] =
+  ap(ap(pure(fn(a: A) => fn(b: B) => f(a, b)), x), y)
+echoln(show(lift2(fn(a: Int32, b: Int32) => a * b, Some(6), Some(7))))

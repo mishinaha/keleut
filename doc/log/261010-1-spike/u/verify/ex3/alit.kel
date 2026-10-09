@@ -1,0 +1,1 @@
+let k: (Int32) => Int32 = fn(x) => { echo("x"); x }

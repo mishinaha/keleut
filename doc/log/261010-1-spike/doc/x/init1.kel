@@ -1,0 +1,5 @@
+let f(): Int32 = g()
+echoln("before")
+echoln(show(f()))
+let g(): Int32 @ {} = 42
+echoln("after")

@@ -1,0 +1,6 @@
+let a(): Unit @ {} = ()
+let use(): Unit @ Console = run h {
+  let r = Ref.new(fn() => echoln("x"))
+  Ref.set(r, a)
+  Ref.get(r)()
+}

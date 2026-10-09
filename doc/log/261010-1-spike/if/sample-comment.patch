@@ -1,0 +1,11 @@
+--- diktor/test/sample/sample.kel	2026-10-03 00:00:46.000000000 +0900
++++ sample/test/sample/sample.kel	2026-10-10 01:42:07.464637471 +0900
+@@ -319,7 +319,7 @@
+ // `fn` を前に置くことで、パラメータリストとタプルを構文上で区別できる。
+ let inc_all(xs: List[Int32]): List[Int32] = map(xs, fn(n) => n + 1)
+ 
+-// ガード付きパターン `case P if cond => e`
++// ガード付きパターン `case P if cond => e`（条件式 `if c then a else b` は別の構文で、Boolean に対する match の略記である）
+ // 網羅性検査は、ガード付きのケースを「必ず一致する」ケースとして数えない。
+ // そのため、最後にガードのないケースが必要になる
+ let rec count_if[A, E](xs: List[A], pred: (A) => Boolean @ E): Int32 @ E =

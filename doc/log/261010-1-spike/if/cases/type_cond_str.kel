@@ -1,0 +1,4 @@
+let f(s: String): Int32 =
+  if s
+  then 1
+  else 2

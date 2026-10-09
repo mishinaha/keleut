@@ -1,0 +1,10 @@
+let e = "\u00e9"
+echoln(show(__string_length(e)))
+echoln(show(e == "é"))
+echoln(show(__string_length("\U0001F600")))
+echoln(show(__string_length("\u0000")))
+echo(__string_sub(e, 0, 1))
+echo("|")
+echo(__string_sub("\U0001F600", 1, 2))
+echoln("")
+echoln(show(e < "z"))

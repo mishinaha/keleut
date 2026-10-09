@@ -1,0 +1,14 @@
+effect File = { read: () => String, write: (String) => Unit }
+let with_file[A, E](path: String, body: () => A @ {File, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case read() => resume(path)
+    case write(s) => resume(echoln(path + ":" + s))
+    case return(x) => x
+  }
+let copy2(): Unit @ {Console} = {
+  with _ = with_file("src")
+  let t = perform read()
+  with _ = with_file("dst")
+  perform File.write(t)
+}
+copy2()

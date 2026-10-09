@@ -1,0 +1,5 @@
+newtype Shape = Circle(Float64) | Square(Float64)
+let area(s: Shape): Float64 = s match { case Circle(r) => r * r * 3.0 case Square(a) => a * a }
+let unit_sq = Square(1.0)
+let label = "area"
+echoln(label + " " + show(area(unit_sq)))

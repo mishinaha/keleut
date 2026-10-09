@@ -1,0 +1,6 @@
+type H = (Int32) => ((Int32) => Int32) @ Console
+let f(x: Int32): ((Int32) => Int32) @ Console = { echoln("f"); fn(y) => y }
+let u: () = ()
+let t: (Int32,) = (1,)
+let g: (Int32) = 3
+let p = -x0

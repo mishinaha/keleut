@@ -1,0 +1,4 @@
+let pure_f(): Unit @ {} = ()
+let print_f(): Unit @ Console = echoln("p")
+let pick(b: Boolean): () => Unit @ Console = if b then pure_f else print_f
+pick(false)()

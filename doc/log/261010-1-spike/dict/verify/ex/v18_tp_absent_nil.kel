@@ -1,0 +1,2 @@
+let f[A: Show](): String = { let y: List[A] = Nil; show(y) }
+echoln(f())

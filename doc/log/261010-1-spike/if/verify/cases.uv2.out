@@ -1,0 +1,140 @@
+=== basic.kel
+-1
+0
+1
+yes
+[rc=0]
+=== blocks.kel
+6
+2
+[rc=0]
+=== eff.kel
+! eff.kel:2:52: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+[rc=1]
+=== else_ident.kel
+else_ident.kel:1:7: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== exhaust.kel
+⚠ match が非網羅的です。例えば false が漏れています
+1
+[rc=0]
+=== guard_if_noparen.kel
+negative
+other
+[rc=0]
+=== guard.kel
+zero
+negative
+big
+huge
+positive
+[rc=0]
+=== guard_nl.kel
+negative
+zero
+positive
+[rc=0]
+=== hole.kel
+1
+2
+実行時エラー: ??? に到達しました
+[rc=3]
+=== lam.kel
+2
+2
+[rc=0]
+=== multiline.kel
+pos
+nonpos
+big
+small
+none
+[rc=0]
+=== noelse2.kel
+noelse2.kel:2:24: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== noelse.kel
+noelse.kel:2:1: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== nontail_cond.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[rc=3]
+=== nontail_if.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[rc=3]
+=== order.kel
+cond
+then
+true
+cond
+else
+false
+[rc=0]
+=== prec_err2.kel
+! prec_err2.kel:1:9: 型エラー: String は Integral のインスタンスではありません
+[rc=1]
+=== prec_err.kel
+prec_err.kel:1:13: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== prec.kel
+12
+12
+1
+both
+Some(1)
+Some(0)
+[rc=0]
+=== resume_if_cond.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[rc=3]
+=== resume_if.kel
+100000
+ticks
+[rc=0]
+=== stmt.kel
+one
+after
+[rc=0]
+=== tail_if_block.kel
+ok
+[rc=0]
+=== tail_if_else_then.kel
+0
+[rc=0]
+=== tail_if.kel
+100000
+[rc=0]
+=== tail_if_nested.kel
+true
+[rc=0]
+=== then_ident.kel
+then_ident.kel:1:5: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== then_label.kel
+then_label.kel:1:10: パースエラー(付近のトークンを確認してください)
+[rc=2]
+=== type_arms.kel
+! type_arms.kel:1:21: 型エラー: String は Integral のインスタンスではありません
+[rc=1]
+=== type_arms_match.kel
+! type_arms_match.kel:1:21: 型エラー: String は Integral のインスタンスではありません
+[rc=1]
+=== type_cond.kel
+! type_cond.kel:1:29: 型エラー: 型が一致しません: Int32 と Boolean
+[rc=1]
+=== type_cond_lit.kel
+! type_cond_lit.kel:1:21: 型エラー: Boolean は Integral のインスタンスではありません
+[rc=1]
+=== type_cond_str.kel
+! type_cond_str.kel:2:6: 型エラー: 型が一致しません: String と Boolean
+[rc=1]
+=== type_infer.kel
+1
+b
+[rc=0]
+=== valrestr2.kel
+! valrestr2.kel:3:12: 型エラー: 型が一致しません: String と Int32
+[rc=1]
+=== valrestr.kel
+! valrestr.kel:3:12: 型エラー: 型が一致しません: String と Int32
+[rc=1]

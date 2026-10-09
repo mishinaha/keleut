@@ -1,0 +1,10 @@
+let pick[A: Eq](a: A, b: A, d: A): A = if a == b then a else d
+echoln(show(pick(1, 1, 9)))
+echoln(pick("x", "y", "z"))
+let showif[A: Show](c: Boolean, x: A, y: A): String = if c then show(x) else show(y)
+echoln(showif(false, 1, 2))
+let rec cnt[A: Eq](xs: List[A], v: A, acc: Int32): Int32 = xs match {
+  case Nil => acc
+  case Cons(h, t) => if h == v then cnt(t, v, acc + 1) else cnt(t, v, acc)
+}
+echoln(show(cnt(Cons(1, Cons(2, Cons(1, Nil))), 1, 0)))

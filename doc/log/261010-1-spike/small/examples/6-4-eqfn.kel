@@ -1,0 +1,2 @@
+let f(x: Int32): Int32 = x
+echoln(show(Cons(f, Nil) == Cons(f, Nil)))

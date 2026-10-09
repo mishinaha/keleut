@@ -1,0 +1,2 @@
+from "./imp2" import x
+pub let y = 1

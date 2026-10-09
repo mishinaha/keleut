@@ -1,0 +1,196 @@
+diff -ruN -x _build base/lib/builtin.ml e/diktor/lib/builtin.ml
+--- base/lib/builtin.ml	2026-10-02 23:34:08.000000000 +0900
++++ e/diktor/lib/builtin.ml	2026-10-10 01:41:31.130163441 +0900
+@@ -362,6 +362,11 @@
+     (("Div", "Int32", "div"), "__int32_div");
+     (("Div", "Int64", "div"), "__int64_div");
+     (("Div", "Float64", "div"), "__float64_div");
++    (("Rem", "Int32", "rem"), "__int32_rem");
++    (("Rem", "Int64", "rem"), "__int64_rem");
++    (("Neg", "Int32", "neg"), "__int32_neg");
++    (("Neg", "Int64", "neg"), "__int64_neg");
++    (("Neg", "Float64", "neg"), "__float64_neg");
+     (("Eq", "Int32", "eq"), "__int32_eq");
+     (("Eq", "Int64", "eq"), "__int64_eq");
+     (("Eq", "Float64", "eq"), "__float64_eq");
+diff -ruN -x _build base/lib/decls.ml e/diktor/lib/decls.ml
+--- base/lib/decls.ml	2026-10-02 23:35:43.000000000 +0900
++++ e/diktor/lib/decls.ml	2026-10-10 01:41:31.130046549 +0900
+@@ -1118,6 +1118,8 @@
+   def_class "Sub" ~derive:false ~methods:(fun a -> [ ("sub", arrow2 a a) ]) ~instances:numerics;
+   def_class "Mul" ~derive:false ~methods:(fun a -> [ ("mul", arrow2 a a) ]) ~instances:numerics;
+   def_class "Div" ~derive:false ~methods:(fun a -> [ ("div", arrow2 a a) ]) ~instances:numerics;
++  def_class "Rem" ~derive:false ~methods:(fun a -> [ ("rem", arrow2 a a) ]) ~instances:[ "Int32"; "Int64" ];
++  def_class "Neg" ~derive:false ~methods:(fun a -> [ ("neg", arrow1 a a) ]) ~instances:numerics;
+   def_class "Eq" ~derive:true
+     ~methods:(fun a -> [ ("eq", arrow2 a Type.t_boolean) ])
+     ~instances:("String" :: "Boolean" :: numerics);
+diff -ruN -x _build base/lib/dump.ml e/diktor/lib/dump.ml
+--- base/lib/dump.ml	2026-10-02 23:12:22.000000000 +0900
++++ e/diktor/lib/dump.ml	2026-10-10 01:41:31.129837032 +0900
+@@ -265,6 +265,7 @@
+   | Variant (s, e) -> L [ A ("#" ^ s); sexp_of_exp e ]
+   | BinOp (l, op, r) -> L [ A (Prims.show_bin_op op); sexp_of_exp l; sexp_of_exp r ]
+   | Not e -> L [ A "!"; sexp_of_exp e ]
++  | Neg e -> L [ A "-"; sexp_of_exp e ]
+   | Lambda { l_params; l_body } -> L [ A "fn"; L (List.map sexp_of_pat l_params); sexp_of_exp l_body ]
+   | Let (b, e) -> L [ A "let"; sexp_of_binding b; sexp_of_exp e ]
+   | LetRec (bs, e) -> L [ A "letrec"; L (List.map sexp_of_binding bs); sexp_of_exp e ]
+diff -ruN -x _build base/lib/elab.ml e/diktor/lib/elab.ml
+--- base/lib/elab.ml	2026-10-03 00:00:35.000000000 +0900
++++ e/diktor/lib/elab.ml	2026-10-10 01:41:31.129424648 +0900
+@@ -1634,6 +1634,12 @@
+   | T.Not e ->
+       Unify.unify (elab_exp env level eff e) t_boolean;
+       t_boolean
++  | T.Neg e ->
++      let te = elab_exp env level eff e in
++      let cls, m = Prims.neg_method in
++      let ret = new_var level in
++      Unify.unify (Unify.instantiate level (method_scheme cls m)) (TArrow (TRecord (closed_item_row [ te ]), ret, eff));
++      ret
+   | T.RecordEmpty -> t_unit
+   | T.RecordExtend (rest, l, v) ->
+       let tv = elab_exp env level eff v in
+@@ -2149,7 +2155,7 @@
+   | T.BinOp (l, _, r) ->
+       go l;
+       go r
+-  | T.Not v -> go v
++  | T.Not v | T.Neg v -> go v
+   | T.Let (b, rest) ->
+       go_binding b;
+       go rest
+diff -ruN -x _build base/lib/interp.ml e/diktor/lib/interp.ml
+--- base/lib/interp.ml	2026-10-02 23:34:08.000000000 +0900
++++ e/diktor/lib/interp.ml	2026-10-10 01:41:31.129705151 +0900
+@@ -351,6 +351,9 @@
+           let vr = eval env r in
+           VBool (not (Builtin.as_bool (dispatch cls m (VRecord [ (Type.l_item, vl); (Type.l_item, vr) ])))))
+   | T.Not e -> VBool (not (Builtin.as_bool (eval env e)))
++  | T.Neg e ->
++      let cls, m = Prims.neg_method in
++      dispatch cls m (VRecord [ (Type.l_item, eval env e) ])
+   | T.Let (b, rest) ->
+       let locals = eval_binding env b in
+       eval { env with locals } rest
+diff -ruN -x _build base/lib/lexer.ml e/diktor/lib/lexer.ml
+--- base/lib/lexer.ml	2026-10-02 23:15:20.000000000 +0900
++++ e/diktor/lib/lexer.ml	2026-10-10 01:41:31.125351562 +0900
+@@ -517,6 +517,7 @@
+     | '-' -> here HYPHEN
+     | '*' -> here ASTERISK
+     | '/' -> here SOLIDUS
++    | '%' -> here PERCENT
+     | '!' -> here EXCLAMATION
+     | '<' -> here LESS
+     | '>' -> here GREATER
+@@ -997,6 +998,7 @@
+     | NL -> "<NL>"
+     | NUMBER n -> show_number n
+     | PERFORM -> "perform"
++    | PERCENT -> "%"
+     | PLUS -> "+"
+     | PUB -> "pub"
+     | RBRACE -> "}"
+diff -ruN -x _build base/lib/parser.mly e/diktor/lib/parser.mly
+--- base/lib/parser.mly	2026-10-02 23:34:08.000000000 +0900
++++ e/diktor/lib/parser.mly	2026-10-10 01:41:31.126645610 +0900
+@@ -416,6 +416,16 @@
+ 
+ let variant_ty_payload sloc = function [ t ] -> t | ts -> tuple_ty sloc ts
+ 
++(* 前置の -。被演算子が括弧で囲まない数値リテラルなら負のリテラルに畳む。
++   括弧はノードを残さないので、被演算子の字面の長さとリテラルの原文の長さを比べて見分ける *)
++let negate sloc (sp : Lexing.position) (ep : Lexing.position) e =
++  match e with
++  | (_, Number n)
++    when (n.n_text = "" || n.n_text.[0] <> '-')
++         && ep.Lexing.pos_cnum - sp.Lexing.pos_cnum = String.length n.n_text + String.length n.n_suffix_text ->
++      mk sloc (Number { n with n_text = "-" ^ n.n_text })
++  | _ -> mk sloc (Neg e)
++
+ (* ## 3.10 `pub` と、`newtype` の右辺をいったん生の形で受ける理由
+ 
+    `pub` は宣言の前に付く修飾子である。
+@@ -461,7 +471,7 @@
+    ほかのトークンは名前がすべての情報である。 *)
+ %token AND AT ASTERISK BIG_AMPERSAND BIG_EQ BIG_VERTICAL CASE COLON COMMA DOT
+ %token EFFECT EOF EQ EQ_GREATER EXCLAMATION EXCLAMATION_EQ FN GREATER HANDLE
+-%token HYPHEN IF LBRACKET LESS LET LOWLINE LPAREN MATCH MODULE NL PLUS RBRACKET
++%token HYPHEN IF LBRACKET LESS LET LOWLINE LPAREN MATCH MODULE NL PERCENT PLUS RBRACKET
+ %token REC RPAREN SEMI SOLIDUS TYPE VAL VERTICAL WITH
+ %token <bool> BOOL
+ %token <string> LOWER_IDENTIFIER UPPER_IDENTIFIER TEXT
+@@ -873,11 +883,11 @@
+ add_exp: add_exp add_op mul_exp { mk $sloc (BinOp ($1, $2, $3)) } | mul_exp { $1 }
+ %inline add_op: PLUS { Add } | HYPHEN { Sub }
+ mul_exp: mul_exp mul_op prefix_exp { mk $sloc (BinOp ($1, $2, $3)) } | prefix_exp { $1 }
+-%inline mul_op: ASTERISK { Mul } | SOLIDUS { Div }
++%inline mul_op: ASTERISK { Mul } | SOLIDUS { Div } | PERCENT { Rem }
+ prefix_exp:
+   | EXCLAMATION prefix_exp { mk $sloc (Not $2) }
+-  (* 符号はパーサが畳む。AST に単項マイナス演算子は無い *)
+-  | HYPHEN NUMBER          { mk $sloc (Number { $2 with n_text = "-" ^ $2.n_text }) }
++  (* 括弧で囲まない数値リテラルに付いた - は負のリテラルに畳み、それ以外は Neg にする *)
++  | HYPHEN prefix_exp      { negate $sloc $startpos($2) $endpos($2) $2 }
+   | postfix_exp            { $1 }
+ 
+ (* ## 3.19 後置とアトム
+diff -ruN -x _build base/lib/prims.ml e/diktor/lib/prims.ml
+--- base/lib/prims.ml	2026-10-02 23:34:08.000000000 +0900
++++ e/diktor/lib/prims.ml	2026-10-10 01:41:31.124911526 +0900
+@@ -99,6 +99,7 @@
+   | Sub -> OpMethod ("Sub", "sub")
+   | Mul -> OpMethod ("Mul", "mul")
+   | Div -> OpMethod ("Div", "div")
++  | Rem -> OpMethod ("Rem", "rem")
+   | Eq -> OpMethod ("Eq", "eq")
+   | Ne -> OpMethodNot ("Eq", "eq")
+   | Lt -> OpMethod ("Ord", "lt")
+@@ -124,6 +125,7 @@
+   | Sub -> "-"
+   | Mul -> "*"
+   | Div -> "/"
++  | Rem -> "%"
+   | Eq -> "=="
+   | Ne -> "!="
+   | Lt -> "<"
+@@ -221,6 +223,9 @@
+    `toplevel_effects` を `runtime_effects` との連結で定義しているのは、
+    この包含を構造で保つためである。 *)
+ 
++(* 前置の - が呼ぶメソッド。第11章と第14章が同じ組を引く *)
++let neg_method = ("Neg", "neg")
++
+ let runtime_effects = [ "Console" ]
+ 
+ (* 上の名簿に Blocking を足したもの。包含 runtime_effects ⊆ toplevel_effects を
+diff -ruN -x _build base/lib/syntax.ml e/diktor/lib/syntax.ml
+--- base/lib/syntax.ml	2026-10-02 23:34:08.000000000 +0900
++++ e/diktor/lib/syntax.ml	2026-10-10 01:41:31.124716716 +0900
+@@ -743,7 +743,6 @@
+    この 2 つの例外を表の中に閉じ込めるために、AST に演算子のノードを残し、
+    第11章と第14章が第7章の同じ表を引く。
+    エラーメッセージが演算子の姿を保てる、という利点もある。
+-   剰余 `%` は仕様の演算子表に無いので入れない(プリミティブとして提供する)。
+ 
+    なお、Float の表示は最短往復表現で、有限値なら Float64 リテラルとして読み戻せる(第12章 §12.7)。
+    絶対値が 1e16 以上の値の最短表現は、
+@@ -755,7 +754,7 @@
+ 
+ type number = { n_text : string; n_is_float : bool; n_suffix : num_suffix option; n_suffix_text : string }
+ 
+-type bin_op = Add | Sub | Mul | Div | Eq | Ne | Lt | Le | Gt | Ge | And | Or
++type bin_op = Add | Sub | Mul | Div | Rem | Eq | Ne | Lt | Le | Gt | Ge | And | Or
+ 
+ (* ## 1.12 型パラメータの束縛子
+ 
+@@ -1007,6 +1006,7 @@
+     | Variant of string * exp (* #Foo(e)。ペイロードは常に単値 *)
+     | BinOp of exp * bin_op * exp (* elab / interp が prims.ml の表を引く *)
+     | Not of exp (* ! のみ *)
++    | Neg of exp (* 前置の -。Neg.neg を呼ぶ。数値リテラルに付いた - はパーサが負のリテラルに畳む *)
+     | Lambda of lambda (* fn(x, y) => e *)
+     | Let of let_binding * exp
+     | LetRec of let_binding list * exp

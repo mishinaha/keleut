@@ -1,0 +1,3 @@
+let x = 3
+-x
+echoln(show(x))

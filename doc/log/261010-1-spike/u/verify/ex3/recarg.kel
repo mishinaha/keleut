@@ -1,0 +1,3 @@
+let a(): Int32 @ {} = 1
+let take(r: {go: () => Int32 @ Console}): Int32 @ Console = r.go()
+let use(): Int32 @ Console = take({go = a})

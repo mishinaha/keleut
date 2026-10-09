@@ -1,0 +1,2 @@
+let f(x: Int32, y: Int32): Int32 = x - y
+echoln(show(f(5, 1)))

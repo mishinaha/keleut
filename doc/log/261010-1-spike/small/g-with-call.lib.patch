@@ -1,0 +1,40 @@
+diff -ruN -x _build base/lib/parser.mly g/diktor/lib/parser.mly
+--- base/lib/parser.mly	2026-10-02 23:34:08.000000000 +0900
++++ g/diktor/lib/parser.mly	2026-10-10 01:48:27.219125869 +0900
+@@ -618,8 +618,10 @@
+   |                            { [] }
+   | item                       { [ $1 ] }
+   | item semi items            { $1 :: $3 }
+-  | WITH pat EQ exp            { [ mk $sloc (DExp (with_splice $sloc $2 $4 (mk $sloc RecordEmpty))) ] }
+-  | WITH pat EQ exp semi items { [ mk $sloc (DExp (with_splice $sloc $2 $4 (block_of_items $sloc $6))) ] }
++  | WITH bind_pat EQ exp            { [ mk $sloc (DExp (with_splice $sloc $2 $4 (mk $sloc RecordEmpty))) ] }
++  | WITH bind_pat EQ exp semi items { [ mk $sloc (DExp (with_splice $sloc $2 $4 (block_of_items $sloc $6))) ] }
++  | WITH with_call             { [ mk $sloc (DExp (with_splice $sloc (mk $sloc PWildcard) $2 (mk $sloc RecordEmpty))) ] }
++  | WITH with_call semi items  { [ mk $sloc (DExp (with_splice $sloc (mk $sloc PWildcard) $2 (block_of_items $sloc $4))) ] }
+ 
+ import_decl:
+   | FROM TEXT IMPORT import_name
+@@ -643,11 +645,21 @@
+   | semi items                 { $2 }
+   | item                       { [ $1 ] }
+   | item semi items            { $1 :: $3 }
+-  | WITH pat EQ exp            { [ mk $sloc (DExp (with_splice $sloc $2 $4 (mk $sloc RecordEmpty))) ] }
+-  | WITH pat EQ exp semi items { [ mk $sloc (DExp (with_splice $sloc $2 $4 (block_of_items $sloc $6))) ] }
++  | WITH bind_pat EQ exp            { [ mk $sloc (DExp (with_splice $sloc $2 $4 (mk $sloc RecordEmpty))) ] }
++  | WITH bind_pat EQ exp semi items { [ mk $sloc (DExp (with_splice $sloc $2 $4 (block_of_items $sloc $6))) ] }
++  | WITH with_call             { [ mk $sloc (DExp (with_splice $sloc (mk $sloc PWildcard) $2 (mk $sloc RecordEmpty))) ] }
++  | WITH with_call semi items  { [ mk $sloc (DExp (with_splice $sloc (mk $sloc PWildcard) $2 (block_of_items $sloc $4))) ] }
+ 
+ item: decl { $1 } | exp { mk $sloc (DExp $1) }
+ 
++(* 束縛を省いた with の右辺。( と { で始まる呼び出し先はタプルとレコードのパターンと衝突するので、
++   名前(M.f を含む)の呼び出しに限る *)
++with_call:
++  | lower_id LPAREN call_args RPAREN
++      { call $sloc (mk $loc($1) (Ident (LongId [ $1 ]))) $3 }
++  | upper_path DOT lower_id LPAREN call_args RPAREN
++      { call $sloc (mk $sloc (Ident (LongId ($1 @ [ $3 ])))) $5 }
++
+ decl: PUB decl_body { mk $sloc (set_pub $2) } | decl_body { mk $sloc $1 }
+ 
+ decl_body:

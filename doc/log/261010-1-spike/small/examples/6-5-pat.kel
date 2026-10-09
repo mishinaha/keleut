@@ -1,0 +1,2 @@
+let f(n: Int32): String = n match { case -1 => "m1" case _ => "other" }
+echoln(f(-1))

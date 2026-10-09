@@ -1,0 +1,2 @@
+let pure_fn(): Unit @ {} = ()
+let mk[E](): () => Unit @ E = pure_fn

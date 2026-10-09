@@ -1,0 +1,1 @@
+let k(x: Int32): (Int32) => Int32 @ Console = fn(y) => { echoln("a"); y }

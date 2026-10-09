@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+let rec sum(n: Int32): Int32 = n match { case 0 => 0 case _ => n + sum(n - 1) }
+echoln("start")
+let r = (perform ask() + 1) handle {
+  case ask() => resume(sum(10000000))
+  case cancel => echoln("cancel ran")
+}
+echoln("after")

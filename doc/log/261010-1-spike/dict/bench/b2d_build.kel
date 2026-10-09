@@ -1,0 +1,3 @@
+let rec mk(n: Int32, acc: List[Int32]): List[Int32] = (n == 0) match { case true => acc case false => mk(n - 1, Cons(n, acc)) }
+let xs = mk(10000, Nil)
+echoln("x")

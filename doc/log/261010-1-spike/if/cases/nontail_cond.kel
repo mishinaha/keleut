@@ -1,0 +1,2 @@
+let rec down(n: Int32): Boolean = if (n == 0 || down(n - 1)) then true else false
+echoln(show(down(100000)))

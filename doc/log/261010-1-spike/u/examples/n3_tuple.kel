@@ -1,0 +1,7 @@
+let a(): Int32 @ {} = 1
+let b(): Int32 @ Console = 2
+let use(): Int32 @ Console = {
+  let p = (a, b)
+  let q: (() => Int32 @ Console, Int32) = (a, 1)
+  0
+}

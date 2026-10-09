@@ -1,0 +1,3 @@
+let k: (Int32) => Int32 = fn(x) => x
+let use(): Int32 @ Console = k(1)
+echoln(show(use()))

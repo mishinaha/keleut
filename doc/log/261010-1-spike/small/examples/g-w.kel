@@ -1,0 +1,16 @@
+let around[A, E](name: String, body: () => A @ {Console extends E}): A @ {Console extends E} = {
+  echoln("enter " + name)
+  let r = body()
+  echoln("leave " + name)
+  r
+}
+module M { pub let around2[A, E](body: () => A @ {Console extends E}): A @ {Console extends E} = around("m", body) }
+let f(): Int32 = {
+  with around("a")
+  with M.around2()
+  echoln("body")
+  42
+}
+echoln(show(f()))
+with around("top")
+echoln("rest")

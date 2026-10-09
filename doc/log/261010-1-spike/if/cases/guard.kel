@@ -1,0 +1,11 @@
+let classify(n: Int32): String = n match {
+  case 0 => "zero"
+  case x if (if x < 0 then true else false) => "negative"
+  case x if x > 100 => if x > 1000 then "huge" else "big"
+  case _ => "positive"
+}
+echoln(classify(0))
+echoln(classify(0 - 3))
+echoln(classify(500))
+echoln(classify(5000))
+echoln(classify(5))

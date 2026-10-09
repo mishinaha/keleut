@@ -1,0 +1,28 @@
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 776c0ce..8ae7149 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -49,6 +49,8 @@ MiniLang §16-9(曖昧性検査)。read : Str -> a は v0 ではクラスとし
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+   weak : [_A: Show] (_A) => String
++  ! ml9e.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛の型変数です。注釈で型を決めてください)
++  [1]
+ 
+ 予約述語が乗った変数は既定化で決まるので曖昧にしない(D8 / D48):
+ 
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index 2d3a5e2..a701a62 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -71,8 +71,6 @@ MiniLang §16-9(クラス制約、注釈なし。read 系は v1 の曖昧性検
+   > type class Pure[F[_]] { val pure[A]: (A) => F[A] }
+   > EOF
+   $ diktor --type-check --no-prelude c2.kel
+-  ! c2.kel:2:1: 型エラー: メソッド pure はクラスパラメータが引数の頭に現れないため v0 では宣言できません(実行時タグディスパッチの前提、§7.4)
+-  [1]
+ 
+   $ cat > c3.kel <<'EOF'
+   > type class C[A] { val f: (A) => A }

@@ -1,0 +1,57 @@
+== v1_hole_val
+-- base
+実行時エラー: ??? に到達しました
+[exit 3]
+-- proto
+after
+[exit 0]
+== v6_hole_rec
+-- base
+実行時エラー: ??? に到達しました
+[exit 3]
+-- proto
+after
+実行時エラー: ??? に到達しました
+[exit 3]
+== v10_inst_hole
+-- base
+実行時エラー: ??? に到達しました
+[exit 3]
+-- proto
+after
+[exit 0]
+== v11_inst_hole_noprem
+-- base
+実行時エラー: ??? に到達しました
+[exit 3]
+-- proto
+実行時エラー: ??? に到達しました
+[exit 3]
+== v14_unused_tp
+-- base
+0
+[exit 0]
+-- proto
+0
+[exit 0]
+== v16_rec_nil
+-- base
+[]
+[exit 0]
+-- proto
+! v16_rec_nil.kel:1:23: 型エラー: 曖昧な制約: 再帰群の中のこの参照が要る辞書を、呼ぶ側の束縛の型から決められません(注釈で型を決めてください)
+[exit 1]
+== v18_tp_absent_nil
+-- base
+[]
+[exit 0]
+-- proto
+! v18_tp_absent_nil.kel:1:52: 型エラー: 曖昧な制約: Show の辞書を束縛の型から決められません(束縛の型に現れない型変数に制約が付いています。注釈で型を決めてください)
+[exit 1]
+== l2_rec_two_tp
+-- base
+! l2_rec_two_tp.kel:2:72: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+-- proto
+! l2_rec_two_tp.kel:2:72: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]

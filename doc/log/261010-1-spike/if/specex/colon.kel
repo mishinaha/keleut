@@ -1,0 +1,5 @@
+let f(x: Int32)
+  : Int32 = x
+let g(x: Int32): Int32
+  = x + 1
+echoln(show(f(1) + g(1)))

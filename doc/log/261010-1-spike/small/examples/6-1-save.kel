@@ -1,0 +1,15 @@
+effect File = { read: () => String, write: (String) => Unit }
+let with_file[A, E](path: String, body: () => A @ {File extends E}): A @ E =
+  body() handle {
+    case read() => resume("")
+    case write(s) => resume(())
+    case return(x) => x
+  }
+let save[E](s: String): Unit @ E = {
+  with _ = with_file("out")
+  perform write(s)
+}
+let save2(s: String): Unit @ {Console} = {
+  with _ = with_file("out")
+  perform write(s)
+}

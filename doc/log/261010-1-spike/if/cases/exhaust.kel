@@ -1,0 +1,3 @@
+let f(b: Boolean): Int32 = if b then 1 else 2
+let g(b: Boolean): Int32 = b match { case true => 1 }
+echoln(show(f(true)))

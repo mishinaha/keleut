@@ -1,0 +1,2 @@
+echoln(show(Cons({a = 1}, Nil) == Cons({a = 1}, Nil)))
+echoln(show(Some((1, "x")) == Some((1, "x"))))

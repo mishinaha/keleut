@@ -1,0 +1,11 @@
+--- diktor/lib/lexer.ml	2026-10-10 01:40:12.550101513 +0900
++++ abl/lib/lexer.ml	2026-10-10 01:46:02.949559338 +0900
+@@ -861,7 +861,7 @@
+   (* NL の後で文を始められるトークン。AND / CASE / MATCH / HANDLE / THEN / ELSE / DOT /
+      BACKSLASH / EXTENDS / VERTICAL / 二項演算子は、前の行の続きにするために除いている *)
+   let can_begin_statement = function
+-    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | WITH | PERFORM | RESUME | RUN | FN | FROM | IF
++    | LET | TYPE | NEWTYPE | EFFECT | MODULE | PUB | EXTERN | VAL | WITH | PERFORM | RESUME | RUN | FN | FROM
+     | LOWER_IDENTIFIER _ | UPPER_IDENTIFIER _ | HASH_IDENT _ | NUMBER _ | TEXT _ | BOOL _ | HOLE | EXCLAMATION
+     | LBRACE_BLOCK | LBRACE_RECORD | LBRACE_TYPE | LPAREN ->
+         true

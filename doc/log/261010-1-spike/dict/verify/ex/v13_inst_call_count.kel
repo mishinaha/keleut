@@ -1,0 +1,4 @@
+newtype Box[A] = Box(A)
+let mkb[A](n: Int32): (Box[A]) => String @ {} = fn(b) => "box"
+type instance[A: Show] Show[Box[_]] { let show = mkb(1) }
+echoln(show(Box(1)) + show(Box("a")) + show(Box(Box(2))))

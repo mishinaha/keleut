@@ -1,0 +1,5 @@
+let a(): Unit @ {} = ()
+let use(): Unit @ Console = {
+  let f: () => Unit @ Console = a
+  f()
+}

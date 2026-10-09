@@ -1,0 +1,152 @@
+== a1_alias rc=0
+   k : (Int32) => Int32 @ {}
+   use : () => Int32 @ {Console}
+== a2_rec_fwd rc=0
+   f : () => {} @ {Print}
+   g : () => {} @ {}
+== a3_pub_rec_fwd rc=0
+   f : () => {} @ {Print}
+   g : () => {} @ {}
+== a4_param_call rc=0
+   twice : (() => {} @ {}) => {} @ {Console}
+   _ : {}
+== a5_field_call rc=0
+   use : (Cb) => {} @ {Print, Console}
+== a7_value_binding_nonvalue rc=0
+   mk : () => (Int32) => Int32 @ {}
+   k : (Int32) => Int32 @ {}
+   use : () => Int32 @ {Console}
+== n10_lambda_ret rc=0
+   a : () => {} @ {}
+   app : (() => () => {} @ {}) => {}
+   use : () => {} @ {Console}
+== n11_resume_arg rc=0
+   a : () => {} @ {}
+   use : () => {} @ {Console}
+== n12_run_mixed_list rc=0
+   a : () => {} @ {}
+   echoln_never : () => {} @ {}
+   b : () => {} @ {Console}
+   run_all : (List[() => {} @ {Console}]) => {} @ {Console}
+   _ : {}
+   _ : {}
+== n1_eta rc=0
+   a : () => Int32 @ {}
+   use : () => Int32 @ {Console}
+== n2_record_field rc=0
+   a : () => Int32 @ {}
+   use : () => Int32 @ {Console}
+== n3_tuple rc=0
+   a : () => Int32 @ {}
+   b : () => Int32 @ {Console}
+   use : () => Int32 @ {Console}
+== n4_match_arms rc=0
+   a : () => Int32 @ {}
+   b : () => Int32 @ {Console}
+   pick : (Boolean) => () => Int32 @ {Console}
+== n5_match_arms_unann rc=0
+   a : () => Int32 @ {}
+   b : () => Int32 @ {Console}
+   pick : (Boolean) => () => Int32 @ {Console extends R1}
+== n6_ctor_field_arrow rc=0
+   a : () => {} @ {}
+   mk : () => Cb
+== n7_perform_arg rc=0
+   a : () => {} @ {}
+   use : () => {} @ {Reg}
+== n8_ref_store rc=0
+   a : () => {} @ {}
+   use : () => {} @ {Console}
+== n9_local_let_ann rc=0
+   a : () => {} @ {}
+   use : () => {} @ {Console}
+== o1_order_call_first rc=1
+   ! o1_order_call_first.kel:4:3: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== o2_order_list_first rc=0
+   h : (() => {} @ {}, {k: () => {} @ {}}) => {} @ {Console extends R1}
+== o3_vrgen_rev rc=1
+   idf : (A) => A
+   ! o3_vrgen_rev.kel:9:11: 型エラー: ラベル Ask がありません(行は閉じています)
+== p1_pass_pure_to_print rc=0
+   pure_fn : () => {} @ {}
+   call_p : (() => {} @ {Print}) => {} @ {Print}
+   t : () => {} @ {Print}
+== p2_twice2 rc=0
+   twice2 : (() => {}, () => {}) => {}
+   pure_fn : () => {} @ {}
+   printer : () => {} @ {Console}
+   t : () => {} @ {Console}
+== p3_return_closed rc=0
+   pure_fn : () => {} @ {}
+   mk : () => () => {}
+== p4_method_as_value rc=0
+   map_l : (List[A], (A) => B) => List[B]
+   t : () => {} @ {Console}
+== p6_extern_in_row rc=1
+   sqrt : (Float64) => Float64 @ {Blocking}
+   t : () => Float64 @ {Blocking, Console}
+   ! p6_extern_in_row.kel:3:30: 型エラー: ラベル Blocking がありません(行は閉じています)
+== p7_eachclosed rc=0
+   g : (Int32) => {} @ {}
+   use : (Array[Int32]) => {}
+== p8_pub_pure_passed rc=0
+   inc : (Int32) => Int32 @ {}
+   t : (Array[Int32]) => {} @ {Console}
+   map_l : (List[A], (A) => B) => List[B]
+   u : () => List[Int32] @ {Console}
+== q1_pub_fwd_list rc=0
+   use : () => Int32 @ {Console}
+   a : () => Int32 @ {}
+== q2_pub_back_list rc=0
+   a : () => Int32 @ {}
+   use : () => Int32 @ {Console}
+== q3_pubval_fwd_list rc=0
+   use : () => Int32 @ {Console}
+   k : () => Int32 @ {}
+== q4_pubval_back_list rc=0
+   k : () => Int32 @ {}
+   use : () => Int32 @ {Console}
+== q5_ann_fwd_list rc=0
+   use : () => Int32 @ {Console}
+   a : () => Int32 @ {}
+== q6_ann_back_list rc=0
+   a : () => Int32 @ {}
+   use : () => Int32 @ {Console}
+== r1_param_pass_effectful rc=1
+   twice : (() => {} @ {}) => {} @ {Console}
+   ! r1_param_pass_effectful.kel:2:15: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== r2_unsound_call rc=1
+   ! r2_unsound_call.kel:3:3: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== r3_blocking_in_pure rc=1
+   sqrt : (Float64) => Float64 @ {Blocking}
+   ! r3_blocking_in_pure.kel:2:25: 型エラー: ラベル Blocking がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== r4_mutual_diff_rows rc=1
+   ! r4_mutual_diff_rows.kel:2:30: 型エラー: ラベル Print がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== t10_pub_rec_tp rc=0
+   M.f : (A, Int32) => Int32 @ {Print}
+   M.g : (Int32) => Int32 @ {}
+== t11_heap_both rc=0
+   f : (Ref[A, Int32], Int32) => Int32 @ {Heap[A], Print}
+   g : (Int32) => Int32 @ {}
+== t12_recval_pub_omit_impure rc=1
+   ! t12_recval_pub_omit_impure.kel:2:15: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+== t1_tp_later rc=0
+   f : (Int32) => Int32 @ {Print}
+   g : (Int32) => Int32 @ {}
+== t2_heap_unann_caller rc=0
+   f : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+   g : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+== t3_val_fwd_diff rc=0
+   a : (Int32) => Int32 @ {Console, Print}
+   b : (Int32) => Int32 @ {Console}
+== t5_recandtp_eff rc=0
+   f : (A) => A @ {Print}
+   g : (A) => A @ {Print}
+== t6_tp_mutual_diff rc=1
+   ! t6_tp_mutual_diff.kel:2:26: 型エラー: ラベル Print がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+== t8_tp_both rc=0
+   f : (A, Int32) => Int32 @ {Print}
+   g : (Int32) => Int32 @ {}
+== t9_tp_poly_later rc=0
+   f : (A) => A @ {Print}
+   g : (Int32) => Int32 @ {Print}
