@@ -69,9 +69,10 @@ then true type val with
 トップレベルとブロックの中では、改行の直前のトークンが文を終えられ、直後のトークンが文を始められる場合に、その改行を区切りとみなす。
 空行や余分なセミコロンを置いてもよい。
 
-文を終えられるトークンは、識別子、リテラル、閉じ括弧、`???` である。
+文を終えられるトークンは、識別子、リテラル、構造的ヴァリアントのラベル、閉じ括弧、`???` である（付録 A.3）。
 次の行が二項演算子、`.`、`\`、`match`、`handle`、`then`、`else`、`and`、`extends`、`|`、`case`、`import` で始まる場合、その改行は区切りにならず、前の行の文が続く。
 行頭の `if` は条件式（§5.8）の始まりであり、新しい文を始める。
+前の行に続くトークンと、文を始められるトークンの一覧は付録 A.3 にある。
 行頭の `(` は、前の行に続く関数呼び出しとは読まず、新しい文の始まりとする。
 前置の `-` や負の数値リテラルで新しい文を始めるときは、前の文との間にセミコロンを置く。
 
@@ -1807,3 +1808,266 @@ let a = r(1)
 対話的な実行（§6.6）で、受理した入力の列の間に、受理しなかった入力を挟んでも、受理した各入力の受理、表示、評価の結果は変わらない。
 受理しなかった入力が後の入力から見えないこと（§6.6）による。
 ただし、実行時エラーで止まった入力が止まるまでに書いた出力は残る（§6.6）。
+
+## 付録 A. 文法
+
+本付録は、Keleut の字句と構文を定める。
+各節の散文は、構文の意味と、この文法が受けても型検査が拒むもの（たとえば §13.1 のエフェクトの型パラメータ）を定める。
+
+### A.1. 記法
+
+| 記法 | 意味 |
+| --- | --- |
+| `"let"` | その綴りの終端記号 |
+| `exp` | 非終端記号 |
+| `a b` | 並び |
+| `a \| b` | 選択 |
+| `a?`、`a*`、`a+` | 省略可、0 回以上、1 回以上 |
+| `( ... )` | まとめ |
+| `list0(x)` | `( x ( "," x )* ","? )?`。カンマで区切る 0 個以上の並びで、末尾のカンマを許す |
+| `list1(x)` | `x ( "," x )* ","?` |
+
+字句の段階で、すべての `{` を §5.4 の表で 3 つに分類する。
+表は式の位置について定めたものだが、字句の段階では位置によらず同じ表を当てる。
+ただし `import` の直後の `{` はレコードの形とする。
+`LBRACE_BLOCK`、`LBRACE_RECORD`、`LBRACE_TYPE` は、それぞれブロック、レコード、レコード型の形に分類した `{` を表す。
+`"{"` と書いた位置では、どの分類の `{` でもよい。
+型、パターン、宣言の本体の位置では、分類は A.3 の改行の扱いにだけ効く。
+`sep` は文の区切り（A.3）である。
+
+### A.2. 字句
+
+```text
+lower_ident ::= ( "a"…"z" | "_" ) idchar*     -- 予約語と、単独の "_" を除く
+upper_ident ::= "A"…"Z" idchar*
+idchar      ::= "a"…"z" | "A"…"Z" | "0"…"9" | "_"
+hash_label  ::= "#" upper_ident                -- "#" と名前の間に空白を置かない
+number      ::= dec_number | hex_number | oct_number | bin_number
+dec_number  ::= digit ( digit | "_" )*
+                ( "." ( digit ( digit | "_" )* )? )?
+                ( ( "e" | "E" ) ( "+" | "-" )? digit+ )?
+                ( ( "i" | "u" | "f" ) digit+ )?
+hex_number  ::= "0x" hexdigit ( hexdigit | "_" )* ( ( "i" | "u" ) digit+ )?
+oct_number  ::= "0o" octdigit ( octdigit | "_" )* ( ( "i" | "u" ) digit+ )?
+bin_number  ::= "0b" bindigit ( bindigit | "_" )* ( ( "i" | "u" ) digit+ )?
+text        ::= '"' ( text_char | escape )* '"'
+text_char   ::= '"' と "\" を除く任意の文字。改行と CR を含む
+escape      ::= "\" ( "n" | "t" | "r" | "a" | "b" | "f" | "v" | "\" | '"' | "'" )
+              | "\u" hexdigit hexdigit hexdigit hexdigit
+              | "\U" hexdigit hexdigit hexdigit hexdigit hexdigit hexdigit hexdigit hexdigit
+```
+
+字句は、最も長く一致する綴りで切る。
+そのため `1.foo` は数値 `1.` と識別子 `foo` に、`1u8` は 1 個の数値に切れる。
+数値の接尾辞として意味を持つのは `i32`、`i64`、`f64` だけであり（§4.2）、ほかの接尾辞を持つ数値を含むプログラムは受理しない。
+16 進、8 進、2 進の数値は、小数点、指数、`f` の接尾辞を持たない。
+
+予約語は §2.2 の表の語である。
+記号は次のとおりである。
+
+```text
+(  )  [  ]  {  }  ,  ;  :  .  =  =>  @  |  \  ...  ???
++  -  *  /  %  !  ==  !=  <  <=  >  >=  &&  ||
+```
+
+改行を含むブロックコメントは、改行として扱う（§2.1）。
+それ以外のコメントと、空白、タブ、CR は、トークンを区切るだけである。
+改行は、A.3 の規則で文の区切りになるときだけ意味を持つ。
+ファイルの先頭の `#!` の行は読み飛ばす。
+
+### A.3. 文の区切り
+
+改行の直前のトークンが次の「終端トークン」で、直後のトークンが次の「始端トークン」であれば、その改行を `sep` とする。
+それ以外の改行は捨てる。
+
+- 終端トークン：`)`、`]`、`}`、`lower_ident`、`upper_ident`、`hash_label`、`number`、`text`、`true`、`false`、`???`。
+- 始端トークン：`let`、`type`、`newtype`、`effect`、`module`、`pub`、`extern`、`val`、`with`、`perform`、`resume`、`run`、`fn`、`from`、`if`、`lower_ident`、`upper_ident`、`hash_label`、`number`、`text`、`true`、`false`、`???`、`!`、`{`、`(`。
+
+始端トークンに無いトークン（二項演算子、`.`、`\`、`match`、`handle`、`then`、`else`、`and`、`extends`、`|`、`case`、`import` など）で始まる行は、前の行に続く。
+次の範囲の中では、改行をすべて捨てる。
+
+- `(` と `)` の間、`[` と `]` の間。
+- `LBRACE_RECORD` と `LBRACE_TYPE` で始まる波括弧の中。
+- `case` から、その節の `=>` まで。節のガードの中の `fn(...) =>` の矢印は数えて読み飛ばす。
+
+範囲の中にさらにブロック（`LBRACE_BLOCK`）を書くと、そのブロックの中では上の規則で改行を区切る。
+
+```text
+sep ::= ";" | 改行
+```
+
+### A.4. プログラムと宣言
+
+```text
+program      ::= items
+               | import_decl ( sep+ import_decl )* ( sep+ items )?
+import_decl  ::= "from" text "import" ( import_name | LBRACE_RECORD list1(import_name) "}" )
+import_name  ::= ( upper_ident "." )? ( upper_ident | lower_ident )
+
+items        ::= sep* item_seq?
+item_seq     ::= item ( sep+ item_seq? )?
+               | "with" pat "=" exp ( sep+ items )?
+item         ::= decl | exp
+
+decl         ::= "pub"? decl_body
+decl_body    ::= "let" binding
+               | "let" "rec" binding ( "and" binding )*
+               | "type" upper_ident typarams? ( ":" upper_ident )? "=" ty
+               | "type" "class" upper_ident typarams class_body
+               | "type" "instance" typarams? upper_ident "[" list1(ty_arg) "]" "{" items "}"
+               | "newtype" upper_ident typarams? newtype_rhs
+               | "effect" upper_ident typarams? "=" "{" list0(eff_op) "}"
+               | "module" upper_ident "{" items "}"
+               | "extern" text "let" lower_ident typarams? "(" list0(param) ")" sig_tail
+
+binding      ::= lower_ident typarams? "(" list0(param) ")" sig_tail "=" exp
+               | bind_pat ( ":" ty )? "=" exp
+sig_tail     ::= ( "@" eff )?
+               | ":" ty_ret
+ty_ret       ::= union_ty ( "@" eff )?
+               | arrow_ty
+param        ::= pat ( ":" ty )?
+
+class_body   ::= "{" sep* ( class_item ( sep+ class_item )* )? sep* "}"
+class_item   ::= "val" lower_ident typarams? ":" ty
+newtype_rhs  ::= ( "(" list0(ctor_field) ")" )?
+               | "=" ctor ( "|" ctor )*
+ctor         ::= upper_ident ( "(" list0(ctor_field) ")" )?
+ctor_field   ::= ty | lower_ident ":" ty
+eff_op       ::= lower_ident ":" ty
+
+typarams     ::= "[" list1(typaram) "]"
+typaram      ::= ( lower_ident | upper_ident ) ( "[" list1("_") "]" )? ( ":" upper_ident ( "+" upper_ident )* )?
+```
+
+`pub` は、`type instance` と式文には付けられない。
+`with` の右辺は関数呼び出しでなければならない（§6.5）。
+`with` は残りの `items` をすべて本体に取るので、同じ並びの最後の文になる。
+`import_decl` の前には `sep` を置けない。
+`extern` の文字列は `"C"` か `"prim"` に限る（§17）。
+
+### A.5. 式
+
+```text
+exp          ::= "fn" "(" list0(param) ")" "=>" exp
+               | "if" exp "then" exp "else" exp
+               | postfixed
+postfixed    ::= postfixed "match" clause_body
+               | postfixed "handle" clause_body
+               | or_exp
+or_exp       ::= or_exp "||" and_exp | and_exp
+and_exp      ::= and_exp "&&" cmp_exp | cmp_exp
+cmp_exp      ::= add_exp cmp_op add_exp | add_exp
+cmp_op       ::= "==" | "!=" | "<" | "<=" | ">" | ">="
+add_exp      ::= add_exp ( "+" | "-" ) mul_exp | mul_exp
+mul_exp      ::= mul_exp ( "*" | "/" | "%" ) prefix_exp | prefix_exp
+prefix_exp   ::= "!" prefix_exp
+               | "-" prefix_exp
+               | postfix_exp
+postfix_exp  ::= postfix_exp "." ( lower_ident | upper_ident )
+               | postfix_exp "\" lower_ident
+               | postfix_exp "(" list0(arg) ")"
+               | tb_call
+               | atom
+tb_call      ::= postfix_exp "(" list0(arg) ")" trailing_block
+               | postfix_exp "." lower_ident trailing_block
+               | lower_ident trailing_block
+trailing_block ::= block
+               | LBRACE_BLOCK lower_ident "=>" items "}"
+               | LBRACE_BLOCK clause+ "}"
+arg          ::= ( lower_ident "=" )? exp
+atom         ::= number | text | "true" | "false" | "???"
+               | lower_ident | upper_ident | hash_label
+               | "perform" long_id "(" list0(arg) ")"
+               | "resume" "(" ( exp ","? )? ")"
+               | "run" lower_ident "{" items "}"
+               | block
+               | record_exp
+               | paren_exp
+block        ::= LBRACE_BLOCK items "}"
+record_exp   ::= LBRACE_RECORD "}"
+               | LBRACE_RECORD "extends" exp "}"
+               | LBRACE_RECORD list1(field) ( "extends" exp )? "}"
+               | LBRACE_RECORD lower_ident "with" list1(field) "}"
+field        ::= lower_ident ( "=" exp )?
+paren_exp    ::= "(" ")" | "(" exp ")" | "(" exp "," ")" | "(" exp "," list1(exp) ")"
+clause_body  ::= "{" clause* "}"
+clause       ::= "case" pat ( "if" exp )? "=>" exp
+long_id      ::= lower_ident | upper_path | upper_path "." lower_ident
+upper_path   ::= upper_ident ( "." upper_ident )*
+```
+
+非終端の階層は、§5.2 の表の優先順位を表す。
+`fn` と条件式（§5.8）は `atom` に含まれないので、演算子のオペランドや呼び出し先に書くときは括弧で囲む。
+後置の `match` と `handle` の照合対象は、直前の `or_exp` 全体である。
+括弧で囲まない数値リテラルに付けた `-` は、負の数値リテラル（§4.2）として読む。
+`tb_call` の 3 つの形のほかに末尾ブロックを書く位置はない（§5.5）。
+`LBRACE_BLOCK lower_ident "=>" ...` と `LBRACE_BLOCK clause+ ...` は、`trailing_block` としてだけ書ける。
+`perform` と `resume` の後ろ、括弧で囲んだ式の後ろ、コンストラクタの後ろに末尾ブロックは書けない。
+`resume` の引数にはラベルを付けられない。
+
+### A.6. パターン
+
+```text
+pat          ::= "_" | "-"? number | text | "true" | "false"
+               | long_id ( "(" list0(pat_arg) ")" )?
+               | hash_label ( "(" list0(pat_arg) ")" )?
+               | record_pat
+               | paren_pat
+bind_pat     ::= "_" | lower_ident
+               | upper_path ( "(" list0(pat_arg) ")" )?
+               | record_pat
+               | paren_pat
+pat_arg      ::= ( lower_ident "=" )? pat
+record_pat   ::= "{" ( pat_field "," )* ( pat_field | "..." lower_ident )? "}"
+pat_field    ::= lower_ident ( "=" pat )?
+paren_pat    ::= "(" ( pat "," )* ( pat | "..." lower_ident )? ")"
+```
+
+`long_id` が小文字で始まる 1 個の識別子なら変数、それ以外は引数のないコンストラクタのパターンである。
+`pat_field` の `lower_ident` だけの形は、同じ名前のラベルと変数を表す。
+`paren_pat` の中身がカンマも `...` も持たない 1 個のパターンなら、括弧でまとめただけである（§11.1）。
+`bind_pat` は `let` の束縛にだけ使い、リテラル、構造的ヴァリアント、小文字で始まる名前の呼び出しの形を持たない。
+
+### A.7. 型
+
+```text
+ty           ::= union_ty | arrow_ty
+arrow_ty     ::= "(" list0(ty) ")" "=>" arrow_ret
+arrow_ret    ::= union_ty ( "@" eff )?
+               | arrow_ty
+union_ty     ::= union_ty "|" app_ty | app_ty
+app_ty       ::= atom_ty ( "[" list1(ty_arg) "]" )?
+ty_arg       ::= ty | "_"
+atom_ty      ::= long_id
+               | hash_label ( "(" list0(ty) ")" )?
+               | brace_ty
+               | "(" ")"
+               | "(" ty ")"
+               | "(" ty "," list0(ty) ")"
+brace_ty     ::= "{" "}"
+               | "{" "extends" ty "}"
+               | "{" list1(brace_item) ( "extends" ty )? "}"
+brace_item   ::= lower_ident ":" ty
+               | eff_name
+eff          ::= eff_name | brace_ty
+eff_name     ::= long_id ( "[" list1(ty_arg) "]" )?
+```
+
+`arrow_ty` の `"(" list0(ty) ")"` は引数の並びであり、`=>` が続くかどうかで `atom_ty` の括弧と区別する。
+`brace_ty` がレコード型とエフェクト行のどちらを表すかは、要素の形と位置で決まる（§3.1、§13.1）。
+`@` は、`arrow_ret` の最初の形でだけ書け、直前の矢印に付く。
+
+### A.8. 文法から読める制限
+
+- 矢印を返す矢印の外側の `@`：`arrow_ret` の 2 つ目の形（返り値がさらに矢印）は `@` を持たない。
+  関数束縛でも、`ty_ret` の 2 つ目の形（返り値の型が矢印）は `@` を持たないので、返り値の型の後ろの `@` は返り値の矢印に付く。
+  関数自身の行を書くには、返り値の型を省いて `@` だけを書くか、返り値の矢印を括弧で囲む（`(A) => ((B) => C) @ E`、`let f(x: A): ((B) => C) @ E = ...`）。
+- 値束縛の型パラメータ：`binding` の 2 つ目の形は `typarams` を持たない。
+  型パラメータを書けるのは、関数束縛、型エイリアス、`newtype`、型クラスとそのメソッド（`class_item`）、インスタンスの前提、`extern` である。
+- 操作の型パラメータ：`eff_op` は `typarams` を持たない。
+  エフェクトの宣言の `typarams` は文法が受けるが、§13.1 が禁じる。
+- 型クラスの型パラメータ：`type class` の `typarams` は省略できない。
+- 外部関数の形：`extern` は関数束縛の形だけを持ち、値束縛の形を持たない。
+- 無名関数の注釈：`exp` の `fn` の形は、返り値の型とエフェクト行を持たない。
+- 式の型引数：呼び出しに型引数を書く形はない（§3.2）。
