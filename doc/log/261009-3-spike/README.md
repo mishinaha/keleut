@@ -11,6 +11,6 @@
   `a` で始まるものは受理に変わるべき形、`r` で始まるものは拒否のままであるべき形、`o` で始まるものは順序依存を示す形、`p` で始まるものは関数を値として置く形である。
   結果の表は提案の 3.5 節と 3.10 節にある。
 
-写しの作り方は、`diktor` の作業ツリーを `.git` と `_build` を除いて作業用の場所へ写し、どちらかの patch を `patch -p1` で当てて `dune build` する。
+写しの作り方は、`diktor` の作業ツリーを `.git` と `_build` を除いて作業用の場所へ写し、どちらかの patch を `patch -p0` で当てて `dune build` する(差分の見出しは `lib/elab.ml` なので `-p1` ではない)。
 写しで `dune runtest` を走らせると、`callsite-open.patch` では `test/annot_rows.t` の 5 ブロックと `test/verify_fixes.t` の 1 ブロックの期待値が変わる。
 `callsite-open-v2.patch` では 19 ファイルの期待値が変わるが、新たに落ちるブロックは無い。
