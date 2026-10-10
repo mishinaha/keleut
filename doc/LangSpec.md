@@ -909,11 +909,14 @@ type instance Functor[List[_]] {
 | `-` | `Sub.sub` | `Int32`、`Int64`、`Float64` |
 | `*` | `Mul.mul` | `Int32`、`Int64`、`Float64` |
 | `/` | `Div.div` | `Int32`、`Int64`、`Float64` |
-| `==` | `Eq.eq` | `Int32`、`Int64`、`Float64`、`String`、`Boolean` |
+| `==` | `Eq.eq` | `Int32`、`Int64`、`Float64`、`String`、`Boolean`、`List[A]`、`Option[A]` |
 | `!=` | `Eq.eq` の否定 | `Eq` と同じ |
 | `<`、`<=`、`>`、`>=` | `Ord.lt`、`Ord.le`、`Ord.gt`、`Ord.ge` | `Int32`、`Int64`、`Float64`、`String` |
 
 算術メソッドの型は `(A, A) => A`、比較メソッドの型は `(A, A) => Boolean` である。
+`List[A]` と `Option[A]` の `Eq` は、要素の型 `A` が `Eq` を持つときに使える。
+2 つのリストは、長さが同じで、同じ位置の要素がすべて等しいときに等しい。
+2 つの `Option` は、どちらも `None` であるか、どちらも `Some` で中の値が等しいときに等しい。
 `String` では、`+` は連結を表し、順序の比較はバイト列の辞書順で行う。
 `&&`、`||`、`!` は `Boolean` 専用の組み込み演算子であり、型クラスのメソッドではない。
 
