@@ -1,0 +1,6 @@
+effect Fail = { throw: (String) => Never }
+let r = { perform throw("retry"); 1 } handle {
+  case throw(e) if e == "retry" => { echoln("guarded"); 7 }
+  case throw(e) => { echoln("other " + e); 0 }
+}
+echoln(show(r))

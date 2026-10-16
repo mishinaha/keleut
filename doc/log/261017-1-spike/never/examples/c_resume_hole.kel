@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let r = { perform throw("x"); 1 } handle { case throw(e) => resume(???) }
+echoln(show(r))

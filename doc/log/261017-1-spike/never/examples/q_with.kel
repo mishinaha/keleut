@@ -1,0 +1,11 @@
+effect Fail = { throw: (String) => Never }
+let try_[A, E](body: () => A @ {Fail extends E}): #Ok(A) | #Err(String) @ E =
+  body() handle {
+    case throw(e)  => #Err(e)
+    case return(x) => #Ok(x)
+  }
+let r = try_(fn() => {
+  let x: Int32 = perform throw("w")
+  x + 1
+})
+echoln(r match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })

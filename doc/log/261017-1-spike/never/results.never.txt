@@ -1,0 +1,82 @@
+===== a_nevertype
+[exit 0]
+===== b_absurd
+⚠ match が非網羅的です。例えば _ が漏れています
+3
+-1
+[exit 0]
+===== c_resume_hole
+! c_resume_hole.kel:2:61: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[exit 1]
+===== d_order
+open outer
+open inner
+cancel inner
+cancel outer
+catch abort
+-1
+[exit 0]
+===== e_rethrow
+outer got re:x
+0
+[exit 0]
+===== f_retry
+0
+===== h_alias
+caught none
+-1
+[exit 0]
+===== i_resume_static
+! i_resume_static.kel:2:61: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[exit 1]
+===== j_resume_lambda
+! j_resume_lambda.kel:2:79: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[exit 1]
+===== k_mixed
+42
+fail negative
+-1
+[exit 0]
+===== l_guard
+guarded
+7
+[exit 0]
+===== m_generic
+42
+s:y
+[exit 0]
+===== n_stmt
+! n_stmt.kel:2:9: 型エラー: エフェクト Fail をここでは実行できません(ラベル Fail がありません(行は閉じています))
+[exit 1]
+===== o_clause_error
+open outer
+open inner
+cancel inner
+catch boom
+cancel outer
+実行時エラー: panic: in clause
+[exit 3]
+===== p_nested
+nested 11
+11
+outer catch big
+0
+[exit 0]
+===== q_with
+err w
+[exit 0]
+===== r_runtime_body
+cancel runs
+実行時エラー: ゼロ除算です
+[exit 3]
+===== s_from_clause
+ask clause throws
+cancel res
+caught from clause
+0
+[exit 0]
+===== t_cancel_perform
+cancel res
+cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+実行時エラー: ゼロ除算です
+[exit 3]

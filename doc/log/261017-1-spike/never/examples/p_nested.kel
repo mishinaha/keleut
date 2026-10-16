@@ -1,0 +1,16 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = { perform throw("x"); 1 } handle {
+  case throw(e) => {
+    let a = (perform ask() + 1) handle { case ask() => resume(10) }
+    echoln("nested " + show(a))
+    a
+  }
+}
+echoln(show(r))
+let r2 = ({ let a = perform ask(); if a > 5 then perform throw("big") else a }) handle {
+  case throw(e) => { echoln("outer catch " + e); 0 }
+} handle {
+  case ask() => resume(9)
+}
+echoln(show(r2))

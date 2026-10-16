@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+let get(o: Option[Int32]): Int32 @ Fail = o match {
+  case Some(v) => v
+  case None => perform throw("none")
+}

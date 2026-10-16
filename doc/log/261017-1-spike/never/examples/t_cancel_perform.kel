@@ -1,0 +1,12 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let r = {
+  let v = { perform use(); 1 / 0 } handle {
+    case use() => resume()
+    case cancel => { echoln("cancel res"); perform throw("from cancel") }
+  }
+  v
+} handle {
+  case throw(e) => { echoln("caught " + e); 0 }
+}
+echoln(show(r))

@@ -1,0 +1,70 @@
+===== a_nevertype
+! a_nevertype.kel:2:43: 型エラー: 型が一致しません: Never と Int32
+[exit 1]
+===== b_absurd
+3
+-1
+[exit 0]
+===== c_resume_hole
+実行時エラー: ??? に到達しました
+[exit 3]
+===== d_order
+open outer
+open inner
+catch abort
+cancel inner
+cancel outer
+-1
+[exit 0]
+===== e_rethrow
+! e_rethrow.kel:5:20: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+===== f_retry
+! f_retry.kel:3:4: 型エラー: Never は Integral のインスタンスではありません
+===== h_alias
+! h_alias.kel:3:43: 型エラー: 型が一致しません: Never と Int32
+[exit 1]
+===== i_resume_static
+実行時エラー: ??? に到達しました
+[exit 3]
+===== j_resume_lambda
+! j_resume_lambda.kel:2:79: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[exit 1]
+===== k_mixed
+! k_mixed.kel:4:3: 型エラー: 型が一致しません: Int32 と Never
+[exit 1]
+===== l_guard
+guarded
+7
+[exit 0]
+===== m_generic
+! m_generic.kel:2:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: ς1 と Never)
+[exit 1]
+===== n_stmt
+! n_stmt.kel:2:9: 型エラー: エフェクト Fail をここでは実行できません(ラベル Fail がありません(行は閉じています))
+[exit 1]
+===== o_clause_error
+open outer
+open inner
+catch boom
+cancel inner
+cancel catcher
+cancel outer
+実行時エラー: panic: in clause
+[exit 3]
+===== p_nested
+! p_nested.kel:11:36: 型エラー: 型が一致しません: Int32 と Never
+[exit 1]
+===== q_with
+! q_with.kel:8:7: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と Never)
+[exit 1]
+===== r_runtime_body
+cancel runs
+実行時エラー: ゼロ除算です
+[exit 3]
+===== s_from_clause
+! s_from_clause.kel:4:9: 型エラー: 型が一致しません: Never と Int32
+[exit 1]
+===== t_cancel_perform
+! t_cancel_perform.kel:4:11: 型エラー: 型が一致しません: Never と {}
+[exit 1]

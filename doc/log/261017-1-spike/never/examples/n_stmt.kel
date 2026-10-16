@@ -1,0 +1,2 @@
+effect Fail = { throw: (String) => Never }
+let x = perform throw("top")

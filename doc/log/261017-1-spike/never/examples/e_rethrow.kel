@@ -1,0 +1,8 @@
+effect Fail = { throw: (String) => Never }
+effect Other = { oops: (Int32) => Never }
+let inner(): Int32 @ {Fail, Other} = { perform throw("x"); 1 }
+let mid(): Int32 @ {Fail, Other} = inner() handle {
+  case throw(e) => if e == "x" then perform throw("re:" + e) else 2
+}
+let r = (mid() handle { case oops(n) => n }) handle { case throw(e) => { echoln("outer got " + e); 0 } }
+echoln(show(r))
