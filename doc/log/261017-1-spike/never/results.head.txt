@@ -21,6 +21,7 @@ cancel outer
 [exit 1]
 ===== f_retry
 ! f_retry.kel:3:4: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
 ===== h_alias
 ! h_alias.kel:3:43: 型エラー: 型が一致しません: Never と Int32
 [exit 1]
