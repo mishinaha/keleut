@@ -1,0 +1,12 @@
+let a = 0xffi32
+let b = 0b1010i64
+let c = 7f64
+let d = 1.5e3f64
+let e = 0o17i32
+echoln(show(a))
+echoln(show(b))
+echoln(show(c))
+echoln(show(d))
+echoln(show(e))
+let f(n: Int64): Int32 = n match { case 1i64 => 1 case _ => 0 }
+echoln(show(f(1i64)))

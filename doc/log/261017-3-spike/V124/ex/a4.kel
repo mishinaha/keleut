@@ -1,0 +1,2 @@
+newtype N = MkN(A[{}])
+type A[E] = (Int32) => Unit @ E

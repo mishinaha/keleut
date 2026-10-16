@@ -1,0 +1,2 @@
+pub effect Log = { log: (String) => Unit }
+pub newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))

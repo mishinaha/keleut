@@ -1,0 +1,6 @@
+type class Pr[A] { val pr: (A) => Unit @ Console }
+newtype Foo = Foo
+type instance Pr[Foo] {
+  let pr = { echoln("init"); fn(x: Foo) => echoln("call") }
+}
+pr(Foo)

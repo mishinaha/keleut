@@ -1,0 +1,2 @@
+let first[h, A](a: MutableArray[h, A]): A @ Heap[h] = MutableArray.get(a, 0)
+let g[h](r: Ref[h, Int32]): Int32 @ Heap[h] = first(r)

@@ -1,0 +1,5 @@
+module M {
+  pub newtype Ref[A, B] = MkRef(A, B)
+}
+let f(r: M.Ref[Int32, String]): Int32 = 0
+let g(): Int32 = f(M.MkRef("a", "b"))

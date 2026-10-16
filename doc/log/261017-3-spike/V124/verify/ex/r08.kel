@@ -1,0 +1,4 @@
+type C = A[{}]
+type A[E] = Option[E]
+let v: C = Some({})
+echoln("ok")

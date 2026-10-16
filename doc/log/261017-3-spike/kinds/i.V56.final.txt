@@ -1,0 +1,185 @@
+=== V56/ex/a10.kel
+! a10.kel:2:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/a11.kel
+! a11.kel:4:8: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/ex/a12.kel
+! a12.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/a13.kel
+! a13.kel:4:18: 型エラー: エフェクト位置の型のカインドが Row ではありません: Int32 :: Type
+[exit 1]
+=== V56/ex/a14.kel
+! a14.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/ex/a1.kel
+! a1.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/a2.kel
+! a2.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/a3.kel
+! a3.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/a4.kel
+! a4.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/a5.kel
+! a5.kel:4:18: 型エラー: 未知のエフェクト: P
+[exit 1]
+=== V56/ex/a6.kel
+! a6.kel:4:18: 型エラー: 型 P はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V56/ex/a7.kel
+! a7.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/ex/a8.kel
+! a8.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/ex/a9.kel
+f : () => {} @ {Print}
+! a9.kel:5:1: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+=== V56/ex/b1.kel
+! b1.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V56/ex/b2.kel
+! b2.kel:3:28: 型エラー: エフェクト行に Type エイリアス T は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/ex/b3.kel
+! b3.kel:5:28: 型エラー: 未知のエフェクト: T
+[exit 1]
+=== V56/ex2/visrow20.kel
+! visrow20.kel:2:26: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a10.kel
+! a10.kel:2:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a11.kel
+! a11.kel:4:8: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/a12.kel
+! a12.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a13.kel
+! a13.kel:4:18: 型エラー: エフェクト位置の型のカインドが Row ではありません: Int32 :: Type
+[exit 1]
+=== V56/verify/ex/a14.kel
+! a14.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/a1.kel
+! a1.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a2.kel
+! a2.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a3.kel
+! a3.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a4.kel
+! a4.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/a5.kel
+! a5.kel:4:18: 型エラー: 未知のエフェクト: P
+[exit 1]
+=== V56/verify/ex/a6.kel
+! a6.kel:4:18: 型エラー: 型 P はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V56/verify/ex/a7.kel
+! a7.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/a8.kel
+! a8.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/a9.kel
+f : () => {} @ {Print}
+! a9.kel:5:1: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+=== V56/verify/ex/b1.kel
+! b1.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V56/verify/ex/b2.kel
+! b2.kel:3:28: 型エラー: エフェクト行に Type エイリアス T は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/b3.kel
+! b3.kel:5:28: 型エラー: 未知のエフェクト: T
+[exit 1]
+=== V56/verify/ex/c1.kel
+! c1.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/c2.kel
+f : (Int32) => Int32 @ {Print, Console}
+[exit 0]
+=== V56/verify/ex/c3.kel
+c3.kel:4:39: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V56/verify/ex/c4.kel
+c4.kel:4:39: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V56/verify/ex/c5.kel
+f : (Int32) => Int32
+[exit 0]
+=== V56/verify/ex/c6.kel
+f : (Int32) => Int32
+g : (Int32) => Int32 @ {Print}
+[exit 0]
+=== V56/verify/ex/c7.kel
+f : (Int32) => Int32 @ {Console extends R1}
+g : () => Int32 @ {Console}
+[exit 0]
+=== V56/verify/ex/myprelude.kel
+__int32_add : (Int32, Int32) => Int32
+__int32_sub : (Int32, Int32) => Int32
+__int32_mul : (Int32, Int32) => Int32
+__int32_div : (Int32, Int32) => Int32
+[exit 0]
+=== V56/verify/ex/pre.kel
+! pre.kel:1:26: 型エラー: 未知のエフェクト: Out
+[exit 1]
+=== V56/verify/ex/pre_ok.kel
+! pre_ok.kel:1:26: 型エラー: 未知のエフェクト: Out
+[exit 1]
+=== V56/verify/ex/q1.kel
+! q1.kel:4:18: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/q2.kel
+! q2.kel:4:18: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/q3.kel
+! q3.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/q4.kel
+! q4.kel:4:18: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V56/verify/ex/q5.kel
+! q5.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V56/verify/ex/r1.kel
+f : (Int32) => Int32 @ {Print, Console}
+g : (Int32) => Int32 @ {Print}
+r : Int32
+_ : {}
+[exit 0]
+=== V56/verify/ex/r2.kel
+M.inner : (Int32) => Int32 @ {Console}
+M.outer : (Int32) => Int32 @ {Console}
+n : Int32
+_ : {}
+[exit 0]
+=== V56/verify/ex/r3.kel
+f : (Int32, () => Int32) => Int32
+_ : {}
+h : (Int32, () => Int32 @ {Console extends R1}) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V56/verify/ex/r4.kel
+M.f : (Int32) => Int32 @ {Console}
+M.g : (Int32) => Int32 @ {Console}
+_ : {}
+[exit 0]
+=== V56/verify/ex/r5.kel
+f : (Int32) => Int32 @ {Print}
+r : Int32
+_ : {}
+[exit 0]

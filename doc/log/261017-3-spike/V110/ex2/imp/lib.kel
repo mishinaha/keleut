@@ -1,0 +1,6 @@
+pub effect Ask = { ask: () => Int32 }
+pub type class Sz[A] { val sz: (A) => Int32 }
+pub newtype Foo = Foo
+type instance Sz[Foo] {
+  let sz: (Foo) => Int32 = { let n = perform ask(); fn(x) => n }
+}

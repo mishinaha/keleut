@@ -1,0 +1,9 @@
+M.ps : () => List[M.P] @ {}
+v : () => List[Option[List[Int32]]]
+_ : {}
+_ : {}
+generic : [A: Show] (List[A]) => String
+_ : {}
+_ : {}
+_ : {}
+rc=0

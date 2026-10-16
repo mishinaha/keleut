@@ -1,0 +1,8 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub type P[E]: EffectRow = {Log extends E}
+  pub type Q[E] = P[E]
+  pub type Fn[E] = (Int32) => Int32 @ E
+}
+let app[E](f: M.Fn[E], x: Int32): Int32 @ E = f(x)
+echoln(show(app(fn(x) => x * 2, 21)))

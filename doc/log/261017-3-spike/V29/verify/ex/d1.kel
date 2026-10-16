@@ -1,0 +1,2 @@
+type Cb[E] = () => Unit @ E
+newtype H = MkH(Cb[Int32])

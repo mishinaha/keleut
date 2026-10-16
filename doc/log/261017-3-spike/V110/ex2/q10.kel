@@ -1,0 +1,6 @@
+type class Pp[A] { val pp[B: Show]: (A, B) => String }
+newtype Foo = Foo
+type instance Pp[Foo] {
+  let pp = { echoln("init"); fn(a: Foo, b) => show(b) }
+}
+echoln(pp(Foo, 1i32))

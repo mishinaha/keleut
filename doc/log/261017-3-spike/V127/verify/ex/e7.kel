@@ -1,0 +1,5 @@
+effect A1 = { a1: () => Int32 }
+effect B1 = { b1: (Int32, Int32) => Int32 }
+let k(): Int32 @ {A1, B1} = perform b1(perform a1(), 2)
+let r = { k() handle { case a1() => resume(10) } } handle { case b1(x, y) => resume(x + y) }
+echoln(show(r))

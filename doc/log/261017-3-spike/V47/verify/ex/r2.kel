@@ -1,0 +1,5 @@
+module W {
+  pub type W[E]: EffectRow = {Print extends E}
+}
+let say(s: String): Unit @ W[{}] = perform print(s + "\n")
+with_stdout(fn() => say("companion"))

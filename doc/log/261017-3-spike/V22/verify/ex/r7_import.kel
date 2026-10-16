@@ -1,0 +1,8 @@
+from "./lib/a" import { Log, B }
+newtype A = MkA(B[{}])
+let main() = {
+  let a = MkA(MkB((fn() => {}, fn() => perform log("x"))))
+  a match { case MkA(MkB((g, _))) => g() }
+  echoln("imp")
+}
+main()

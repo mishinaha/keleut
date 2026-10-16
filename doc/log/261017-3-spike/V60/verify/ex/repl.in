@@ -1,0 +1,7 @@
+let f(g: () => Int32): Int32 = g()
+let a = f {
+  41 }
+let b = (f
+  { 1 })
+echoln(show(a))
+let c = Foo {

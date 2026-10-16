@@ -1,0 +1,2 @@
+type E = Int32
+let f[E](x: Int32): Int32 @ {E} = x

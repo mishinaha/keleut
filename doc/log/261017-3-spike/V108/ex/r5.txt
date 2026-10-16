@@ -1,0 +1,6 @@
+extern "prim" let ex1[A: Show](x: A): String
+let pe = (ex1, 1)
+let rec ev[A: Eq](x: A): Boolean = eq(x, x)
+let pv = (ev, 2)
+let nn = 1
+let z = (fn(x) => show(x), 0)

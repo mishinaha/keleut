@@ -1,0 +1,5 @@
+newtype T[E](
+  Int32,
+  E
+)
+let x: T[{}] = T(1, {})

@@ -1,0 +1,4 @@
+type Unit = {}
+effect Console = { write: (String) => Unit }
+let echoln(message: String): Unit @ Console = perform write(message + "\n")
+let twice[A: Add](x: A): A = x + x

@@ -1,0 +1,315 @@
+== H cr1.kel 
+! cr1.kel:1:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== H cr1.kel --type-check
+! cr1.kel:1:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== N cr1.kel 
+! cr1.kel:1:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== N cr1.kel --type-check
+! cr1.kel:1:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== H cr2.kel 
+cr2.kel:1:65: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== H cr2.kel --type-check
+cr2.kel:1:65: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== N cr2.kel 
+cr2.kel:1:65: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== N cr2.kel --type-check
+cr2.kel:1:65: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== H cr.kel 
+! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== H cr.kel --type-check
+ok : Int32
+! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== N cr.kel 
+! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== N cr.kel --type-check
+ok : Int32
+! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== H mix.kel 
+! mix.kel:2:11: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H mix.kel --type-check
+ok : Int32
+! mix.kel:2:11: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N mix.kel 
+! mix.kel:2:11: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N mix.kel --type-check
+ok : Int32
+! mix.kel:2:11: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H mod_int8.kel 
+! mod_int8.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== H mod_int8.kel --type-check
+! mod_int8.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N mod_int8.kel 
+! mod_int8.kel:2:10: 型エラー: 未知の型: Int8(M.Int8 と修飾してください)
+[exit 1]
+== N mod_int8.kel --type-check
+! mod_int8.kel:2:10: 型エラー: 未知の型: Int8(M.Int8 と修飾してください)
+[exit 1]
+== H nm.kel 
+! nm.kel:1:12: 未実装: module の入れ子(M10)
+[exit 4]
+== H nm.kel --type-check
+! nm.kel:1:12: 未実装: module の入れ子(M10)
+[exit 4]
+== N nm.kel 
+! nm.kel:1:12: 未実装: module の入れ子(M10)
+[exit 4]
+== N nm.kel --type-check
+! nm.kel:1:12: 未実装: module の入れ子(M10)
+[exit 4]
+== H sfx_after_err.kel 
+! sfx_after_err.kel:1:5: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[exit 1]
+== H sfx_after_err.kel --type-check
+! sfx_after_err.kel:1:5: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[exit 1]
+== N sfx_after_err.kel 
+! sfx_after_err.kel:1:5: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[exit 1]
+== N sfx_after_err.kel --type-check
+! sfx_after_err.kel:1:5: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[exit 1]
+== H sfx_big.kel 
+! sfx_big.kel:1:9: 未実装: 数値接尾辞 1i99999999999999999999999(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_big.kel --type-check
+! sfx_big.kel:1:9: 未実装: 数値接尾辞 1i99999999999999999999999(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_big.kel 
+! sfx_big.kel:1:9: 型エラー: 数値リテラル 1i99999999999999999999999 の接尾辞 i99999999999999999999999 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_big.kel --type-check
+! sfx_big.kel:1:9: 型エラー: 数値リテラル 1i99999999999999999999999 の接尾辞 i99999999999999999999999 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_f32.kel 
+! sfx_f32.kel:1:9: 未実装: 数値接尾辞 1.5f32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_f32.kel --type-check
+! sfx_f32.kel:1:9: 未実装: 数値接尾辞 1.5f32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_f32.kel 
+! sfx_f32.kel:1:9: 型エラー: 数値リテラル 1.5f32 の接尾辞 f32 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_f32.kel --type-check
+! sfx_f32.kel:1:9: 型エラー: 数値リテラル 1.5f32 の接尾辞 f32 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_floatint.kel 
+! sfx_floatint.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
+[exit 1]
+== H sfx_floatint.kel --type-check
+! sfx_floatint.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
+[exit 1]
+== N sfx_floatint.kel 
+! sfx_floatint.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
+[exit 1]
+== N sfx_floatint.kel --type-check
+! sfx_floatint.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
+[exit 1]
+== H sfx_hex.kel 
+! sfx_hex.kel:1:9: 未実装: 数値接尾辞 0xffu8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_hex.kel --type-check
+! sfx_hex.kel:1:9: 未実装: 数値接尾辞 0xffu8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_hex.kel 
+! sfx_hex.kel:1:9: 型エラー: 数値リテラル 0xffu8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_hex.kel --type-check
+! sfx_hex.kel:1:9: 型エラー: 数値リテラル 0xffu8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_i8.kel 
+! sfx_i8.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_i8.kel --type-check
+! sfx_i8.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_i8.kel 
+! sfx_i8.kel:1:9: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_i8.kel --type-check
+! sfx_i8.kel:1:9: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_late.kel 
+! sfx_late.kel:2:9: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_late.kel --type-check
+_ : {}
+! sfx_late.kel:2:9: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_late.kel 
+! sfx_late.kel:2:9: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_late.kel --type-check
+_ : {}
+! sfx_late.kel:2:9: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_ok.kel 
+1
+[exit 0]
+== H sfx_ok.kel --type-check
+x : Int64
+_ : {}
+[exit 0]
+== N sfx_ok.kel 
+1
+[exit 0]
+== N sfx_ok.kel --type-check
+x : Int64
+_ : {}
+[exit 0]
+== H sfx_pat.kel 
+! sfx_pat.kel:2:8: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_pat.kel --type-check
+! sfx_pat.kel:2:8: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_pat.kel 
+! sfx_pat.kel:2:8: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_pat.kel --type-check
+! sfx_pat.kel:2:8: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_pat_ok.kel 
+0
+[exit 0]
+== H sfx_pat_ok.kel --type-check
+f : (Int64) => Int32
+_ : {}
+[exit 0]
+== N sfx_pat_ok.kel 
+0
+[exit 0]
+== N sfx_pat_ok.kel --type-check
+f : (Int64) => Int32
+_ : {}
+[exit 0]
+== H sfx_two.kel 
+! sfx_two.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_two.kel --type-check
+! sfx_two.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_two.kel 
+! sfx_two.kel:1:9: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_two.kel --type-check
+! sfx_two.kel:1:9: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_u32.kel 
+! sfx_u32.kel:1:9: 未実装: 数値接尾辞 1u32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_u32.kel --type-check
+! sfx_u32.kel:1:9: 未実装: 数値接尾辞 1u32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_u32.kel 
+! sfx_u32.kel:1:9: 型エラー: 数値リテラル 1u32 の接尾辞 u32 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_u32.kel --type-check
+! sfx_u32.kel:1:9: 型エラー: 数値リテラル 1u32 の接尾辞 u32 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H sfx_zero.kel 
+! sfx_zero.kel:1:9: 未実装: 数値接尾辞 1i032(v0 は i32/i64/f64 のみ)
+[exit 4]
+== H sfx_zero.kel --type-check
+! sfx_zero.kel:1:9: 未実装: 数値接尾辞 1i032(v0 は i32/i64/f64 のみ)
+[exit 4]
+== N sfx_zero.kel 
+! sfx_zero.kel:1:9: 型エラー: 数値リテラル 1i032 の接尾辞 i032 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== N sfx_zero.kel --type-check
+! sfx_zero.kel:1:9: 型エラー: 数値リテラル 1i032 の接尾辞 i032 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== H tp_int8.kel 
+1
+[exit 0]
+== H tp_int8.kel --type-check
+f : (A) => A
+_ : {}
+[exit 0]
+== N tp_int8.kel 
+1
+[exit 0]
+== N tp_int8.kel --type-check
+f : (A) => A
+_ : {}
+[exit 0]
+== H ty_int8_decl.kel 
+ok
+[exit 0]
+== H ty_int8_decl.kel --type-check
+_ : {}
+[exit 0]
+== N ty_int8_decl.kel 
+ok
+[exit 0]
+== N ty_int8_decl.kel --type-check
+_ : {}
+[exit 0]
+== H ty_int8.kel 
+! ty_int8.kel:1:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== H ty_int8.kel --type-check
+! ty_int8.kel:1:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N ty_int8.kel 
+! ty_int8.kel:1:10: 型エラー: 未知の型: Int8(数値型は Int32、Int64、Float64 だけです)
+[exit 1]
+== N ty_int8.kel --type-check
+! ty_int8.kel:1:10: 型エラー: 未知の型: Int8(数値型は Int32、Int64、Float64 だけです)
+[exit 1]
+== H ty_int8_user.kel 
+! ty_int8_user.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== H ty_int8_user.kel --type-check
+! ty_int8_user.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N ty_int8_user.kel 
+ok
+[exit 0]
+== N ty_int8_user.kel --type-check
+f : (Int8) => Int8
+_ : {}
+[exit 0]
+== H ty_int9_user.kel 
+ok
+[exit 0]
+== H ty_int9_user.kel --type-check
+f : (Int9) => Int9
+_ : {}
+[exit 0]
+== N ty_int9_user.kel 
+ok
+[exit 0]
+== N ty_int9_user.kel --type-check
+f : (Int9) => Int9
+_ : {}
+[exit 0]
+== H ty_unknown.kel 
+! ty_unknown.kel:1:10: 型エラー: 未知の型: Foo
+[exit 1]
+== H ty_unknown.kel --type-check
+! ty_unknown.kel:1:10: 型エラー: 未知の型: Foo
+[exit 1]
+== N ty_unknown.kel 
+! ty_unknown.kel:1:10: 型エラー: 未知の型: Foo
+[exit 1]
+== N ty_unknown.kel --type-check
+! ty_unknown.kel:1:10: 型エラー: 未知の型: Foo
+[exit 1]

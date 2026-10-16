@@ -1,0 +1,3 @@
+let f[G](v: #A(Int32) | G[Int32]): Int32 = 0
+let main(): Unit @ Console = with_stdout(fn() => println(show(f(#A(1)))))
+main()

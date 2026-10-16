@@ -1,0 +1,4 @@
+type class Mk[A] { val mk[B: Show]: (A) => Option[B] }
+type instance Mk[Int32] { let mk(x) = None }
+let o: Option[String] = mk(3i32)
+echoln(o match { case None => "none" case Some(s) => s })

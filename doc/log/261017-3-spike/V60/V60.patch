@@ -1,0 +1,234 @@
+diff a/lib/parser.mly b/lib/parser.mly
+--- a/lib/parser.mly	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/parser.mly	2026-10-17 04:26:34.507502105 +0900
+@@ -374,6 +374,25 @@
+ let trailing_record pos =
+   raise (Syntax_error_at (pos, "末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)"))
+ 
++(* 末尾ブロックの位置に来た、末尾ブロックにならない波括弧の 3 つの形 *)
++type trailing_other = Tb_record | Tb_params of Lexing.position | Tb_annot of Lexing.position
++
++let trailing_other pos = function
++  | Tb_record -> trailing_record pos
++  | Tb_params pos ->
++      raise (Syntax_error_at (pos,
++        "末尾ブロックの引数は小文字の識別子 1 個です(2 個以上の引数を取る関数は fn(x, y) => 式 と書いて括弧の中に渡します)"))
++  | Tb_annot pos ->
++      raise (Syntax_error_at (pos,
++        "末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)"))
++
++let trailing_misplaced pos =
++  raise (Syntax_error_at (pos, "コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません"))
++
++let trailing_after_paren pos =
++  raise (Syntax_error_at (pos,
++    "括弧で囲んだ式には末尾ブロックを付けられません(関数を括弧の中の引数として渡します)"))
++
+ let trailing_call sloc callee args (lbrace_pos, prev_end, k) =
+   if lbrace_pos.Lexing.pos_lnum <> prev_end.Lexing.pos_lnum then
+     raise (Syntax_error_at (lbrace_pos, "末尾ブロックの { は、呼び出しと同じ行に書きます"));
+@@ -938,6 +957,18 @@
+    また、任意の後置式の後ろと呼び出しの後ろの両方に付ける文法は、
+    shift/reduce の conflict を 1 個生む。
+    呼び出しの位置でも、`call`(§3.6)が構築を作ったとき(大文字の名前や `#Tag`)は構文エラーにする。
++   引数リストの無い大文字の名前、`M.Foo`、`#Tag` と、括弧で囲んだ式の直後の `{` は、
++   `tb_call` の診断用の規則が受ける。
++   これらの規則は `tb_brace` で `{` の 1 トークンだけを読み、中身を読まずに構文エラーにする。
++   ほかの位置でこれらの式の直後に `{` が続く文法は無いので、規則を足しても conflict は生じない。
++
++   末尾ブロックの位置の `{` も、字句の分類(第2章 §2.9)を受ける。
++   `{ x: T => … }` は `LBRACE_TYPE` に、`{ x, y => … }` は `LBRACE_RECORD` に分類されるので、
++   `trailing_block` には届かない。
++   この 2 つとレコードの形は `trailing_other` が受け、引数の誤りかレコードの形かを返す。
++   呼び出しの側の規則が、返った形に応じて診断を出す。
++   `{ (a, b) => … }` は `LBRACE_BLOCK` に分類されるので、`lambda_block` の規則が受ける。
++   この規則は `=>` まで読んだところで構文エラーにし、本体を読まない。
+ 
+    末尾ブロックの `{` は直前のトークンと同じ行に書く。
+    トップレベルとブロックの中では、改行が先に文を区切る(§2.10)ので、
+@@ -948,9 +979,14 @@
+    末尾ブロックの位置の外に現れたときに専用の診断を出す。
+    `{ 文の列 }` は単独でも正しいブロックなので、次の行に書くと独立した式文になる。
+ 
+-   末尾ブロックの診断は、`Syntax_error_at` で誤りの `{`(`{ _ =>` では `_`)の位置を報告する。
+-   診断は `}` の後ろのトークンを読んでから出るので、
++   末尾ブロックの診断は、`Syntax_error_at` で誤りの `{` の位置を報告する。
++   引数の誤り(`_`、括弧で囲んだパターン、型注釈、2 個以上の引数)では、引数の先頭を報告する。
++   レコードの形と `{ _ =>` の診断は `}` の後ろのトークンを読んでから出るので、
+    最後に読んだトークンの位置は誤りの場所を指さない。
++   `tb_brace` は `{` を、`LBRACE_TYPE` の規則は名前を、
++   `lambda_block` の括弧の規則と `LBRACE_RECORD` の規則は `=>` を読んだところで診断を出す。
++   `LBRACE_RECORD` の規則は、2 個以上の名前だけを並べた形を引数の誤りとし、
++   `{ x = 1 =>` や `{ x, =>` のようなほかのフィールドの並びをレコードの形とする。
+ 
+    `atom` の `#Ident` は空のペイロードの `Variant` として作り、
+    引数が付いていれば、後置の呼び出しの規則が `call` で差し替える(§3.6)。
+@@ -983,11 +1019,27 @@
+       { trailing_call $sloc (dot_select $sloc $1 $3) [] ($startpos($4), $endpos($3), $4) }
+   | lower_id trailing_block
+       { trailing_call $sloc (mk $loc($1) (Ident (LongId [ $1 ]))) [] ($startpos($2), $endpos($1), $2) }
+-  | postfix_exp LPAREN call_args RPAREN record_exp { trailing_record $startpos($5) }
+-  | postfix_exp DOT lower_id record_exp            { trailing_record $startpos($4) }
+-  | lower_id record_exp                            { trailing_record $startpos($2) }
++  | postfix_exp LPAREN call_args RPAREN trailing_other { trailing_other $startpos($5) $5 }
++  | postfix_exp DOT lower_id trailing_other            { trailing_other $startpos($4) $4 }
++  | lower_id trailing_other                            { trailing_other $startpos($2) $2 }
+   | tb_call trailing_block
+       { raise (Syntax_error_at ($startpos($2), "末尾ブロックは 1 つの呼び出しに 1 個までです")) }
++  | tb_call trailing_other
++      { raise (Syntax_error_at ($startpos($2), "末尾ブロックは 1 つの呼び出しに 1 個までです")) }
++  | upper_id tb_brace                                  { trailing_misplaced $startpos($2) }
++  | postfix_exp DOT upper_id tb_brace                  { trailing_misplaced $startpos($4) }
++  | HASH_IDENT tb_brace                                { trailing_misplaced $startpos($2) }
++  | paren_exp tb_brace                                 { trailing_after_paren $startpos($2) }
++
++trailing_other:
++  | record_exp                          { Tb_record }
++  | LBRACE_RECORD field_list EQ_GREATER
++      { let punned (l, e) = match e with _, Ident (LongId [ x ]) -> x = l | _ -> false in
++        if List.length $2 >= 2 && List.for_all punned $2 then Tb_params $startpos($2) else Tb_record }
++  | LBRACE_TYPE lower_id                { Tb_annot $startpos($2) }
++  | LBRACE_TYPE upper_id                { Tb_annot $startpos($2) }
++
++tb_brace: LBRACE_BLOCK {} | LBRACE_RECORD {} | LBRACE_TYPE {}
+ 
+ trailing_block:
+   | block                         { mk $sloc (Lambda { l_params = []; l_body = $1 }) }
+@@ -999,6 +1051,9 @@
+   | LBRACE_BLOCK LOWLINE EQ_GREATER items RBRACE
+       { raise (Syntax_error_at ($startpos($2),
+           "末尾ブロックの引数に _ は書けません(引数なしは { 式 }、引数を捨てる 1 引数は { case _ => 式 })")) }
++  | LBRACE_BLOCK paren_exp EQ_GREATER
++      { raise (Syntax_error_at ($startpos($2),
++          "末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)")) }
+   | LBRACE_BLOCK clause clauses RBRACE
+       { let v = mk $sloc (Ident (LongId [ trailing_param ])) in
+         mk $sloc (Lambda { l_params = [ mk $sloc (PVar trailing_param) ];
+diff a/test/trailing_block.t b/test/trailing_block.t
+--- a/test/trailing_block.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/trailing_block.t	2026-10-17 04:27:10.675738593 +0900
+@@ -127,6 +127,50 @@
+   wild.kel:1:13: 構文エラー: 末尾ブロックの引数に _ は書けません(引数なしは { 式 }、引数を捨てる 1 引数は { case _ => 式 })
+   [2]
+ 
++引数は小文字の識別子 1 個に限る。括弧で囲んだパターン、型注釈、2 個以上の
++引数は、それぞれ専用の診断になり、_ と同じく引数の位置を指す。
++{ x: T => ... } の { は字句の分類でレコード型、{ x, y => ... } の { は
++レコードになるが、末尾ブロックの位置では引数の誤りとして報告する:
++
++  $ echo 'let a = f { (a, b) => a + b }' > ptup.kel
++  $ diktor --type-check ptup.kel
++  ptup.kel:1:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
++  [2]
++  $ echo 'let a = f { () => 1 }' > punit.kel
++  $ diktor --type-check punit.kel
++  punit.kel:1:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
++  [2]
++  $ echo 'let a = g(1) { x: Int32 => x }' > pannot.kel
++  $ diktor --type-check pannot.kel
++  pannot.kel:1:16: 構文エラー: 末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)
++  [2]
++  $ echo 'let a = M.f { x, y => x + y }' > ptwo.kel
++  $ diktor --type-check ptwo.kel
++  ptwo.kel:1:15: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(2 個以上の引数を取る関数は fn(x, y) => 式 と書いて括弧の中に渡します)
++  [2]
++
++=> の前が名前だけの並びでないとき(x = 1 や末尾のカンマ)は、レコードの形の
++診断になる:
++
++  $ echo 'let a = f { x = 1 => 2 }' > prec.kel
++  $ diktor --type-check prec.kel
++  prec.kel:1:11: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
++  [2]
++  $ echo 'let a = f { x, => 1 }' > prec2.kel
++  $ diktor --type-check prec2.kel
++  prec2.kel:1:11: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
++  [2]
++
++{ x => } のように文の列が空なら、本体の値は Unit である:
++
++  $ cat > pempty.kel <<'EOF'
++  > let each3[E](f: (Int32) => Unit @ E): Unit @ E = { f(1); f(2); f(3) }
++  > each3 { x => }
++  > echoln("done")
++  > EOF
++  $ diktor pempty.kel
++  done
++
+ 中身がレコードの形(空の {} を含む)の末尾ブロックはエラーにする。
+ 末尾ブロックは常に関数を渡す:
+ 
+@@ -144,8 +188,7 @@
+   [2]
+ 
+ コンストラクタ、構造的ヴァリアント、perform、resume には付けられない。
+-引数リストのある形は専用の診断になり、引数リストの無い Foo { k } と
+-#Tag { k } は一般のパースエラーになる:
++引数リストの有無によらず、専用の診断になる:
+ 
+   $ echo 'let a = Some(1) { k }' > ctor.kel
+   $ diktor --type-check ctor.kel
+@@ -165,11 +208,19 @@
+   [2]
+   $ echo 'let a = Foo { k }' > ctor0.kel
+   $ diktor --type-check ctor0.kel
+-  ctor0.kel:1:13: パースエラー(付近のトークンを確認してください)
++  ctor0.kel:1:13: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+   [2]
+   $ echo 'let a = #Tag { k }' > tag0.kel
+   $ diktor --type-check tag0.kel
+-  tag0.kel:1:14: パースエラー(付近のトークンを確認してください)
++  tag0.kel:1:14: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
++  [2]
++  $ echo 'let a = M.Foo { k }' > mctor0.kel
++  $ diktor --type-check mctor0.kel
++  mctor0.kel:1:15: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
++  [2]
++  $ echo 'let a = Foo {}' > ctorrec.kel
++  $ diktor --type-check ctorrec.kel
++  ctorrec.kel:1:13: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+   [2]
+ 
+ 末尾ブロックは 1 つの呼び出しに 1 個まで:
+@@ -182,13 +233,17 @@
+   $ diktor --type-check two2.kel
+   two2.kel:1:25: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+   [2]
++  $ echo 'let a = f { 1 } {}' > two3.kel
++  $ diktor --type-check two3.kel
++  two3.kel:1:17: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
++  [2]
+ 
+ 括弧で囲んだ式の後ろには書けない。(g(1)) { k } は g(1) の結果への適用にも、
+-g(1, fn() => k) にもならず、パースエラーになる:
++g(1, fn() => k) にもならず、構文エラーになる:
+ 
+   $ echo 'let a = (g(1)) { k }' > paren.kel
+   $ diktor --type-check paren.kel
+-  paren.kel:1:16: パースエラー(付近のトークンを確認してください)
++  paren.kel:1:16: 構文エラー: 括弧で囲んだ式には末尾ブロックを付けられません(関数を括弧の中の引数として渡します)
+   [2]
+ 
+ { x => ... } と { case ... } は、末尾ブロックの位置の外ではエラーになる。
+@@ -239,6 +294,21 @@
+   (dlet (binding r = f))
+   (exp 1)
+ 
++match の節の並びの波括弧の中でも、改行はブロックの中と同じ規則で区切りになる。
++節の本体の後ろに区切りを置けないので、節の本体の呼び出しの { を次の行に
++書くと、どの中身でも構文エラーになる。誤りの位置は区切りになった改行を指す:
++
++  $ cat > nlarm.kel <<'EOF'
++  > let a = 1 match {
++  >   case 1 => f
++  >     { 2 }
++  >   case _ => 0
++  > }
++  > EOF
++  $ diktor --type-check nlarm.kel
++  nlarm.kel:2:14: パースエラー(付近のトークンを確認してください)
++  [2]
++
+ 末尾ブロックの本体は無名関数の本体なので、操作節の中の末尾ブロックには
+ その節の resume を書けない(LangSpec §13.5)。末尾ブロックの中の別の handle
+ の resume は書ける:

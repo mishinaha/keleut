@@ -1,0 +1,9 @@
+type Q[F[_]] = F
+type App[G[_]] = G[Int32]
+type class Fx[F[_]] {
+  val fx: (App[Q[F]]) => Int32
+}
+type instance Fx[Option[_]] {
+  let fx(x) = x match { case Some(n) => n case None => 0 }
+}
+echoln(show(fx(Some(3))))

@@ -1,0 +1,824 @@
+### a1.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype H = MkH(Cb[{Print}])
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a2.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype H = MkH(Cb[{Print}])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a4.kel --type-check --no-prelude
+```
+type Unit = {}
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype H = MkH(Cb[{}])
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a6.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype H[E] = MkH(Cb[{Print extends E}])
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a7.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+type K = Cb[{Print}]
+newtype H = MkH(K)
+let mk(): H = MkH(Callback(fn() => perform print("x")))
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a9.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype H = MkH({f: Cb[{Print}]})
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### w1.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+type Wr[E]: EffectRow = {Print extends E}
+newtype H = MkH(() => Unit @ Wr[{}])
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a3.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+type K = Cb[{Print}]
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### a5.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+let g(c: Cb[{Print}]): Int32 = 0
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### w2.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+type Wr[E]: EffectRow = {Print extends E}
+let f(x: Int32): Int32 @ Wr[{}] = x
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### w3.kel --type-check --no-prelude
+```
+type Unit = {}
+effect Print = { print: (String) => Unit }
+type Wr[E]: EffectRow = {Print extends E}
+type F = () => Unit @ Wr[{}]
+```
+HEAD:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+試作:
+```
+diktor: unknown option: --type-check --no-prelude
+usage: diktor [OPTIONS] FILE.kel...
+  --type-check         型検査のみ。トップレベル束縛の型を "name : type" で出力
+  --dump-tokens        ASI 適用後のトークン列を出力
+  --dump-ast           脱糖後の AST を S 式で出力
+  --repl               対話的に実行する(FILE は不要)
+  --no-prelude / --prelude PATH
+  --strict-exhaustive  網羅性・到達不能警告をエラー化
+  --import-path DIR    import の検索パスに DIR を足す(繰り返せる)
+[exit 64]
+```
+
+### ch3.kel --type-check
+```
+type B[E] = (Int32) => Unit @ E
+newtype H = MkH(B[{Print}])
+```
+HEAD:
+```
+! ch3.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### ch4.kel --type-check
+```
+newtype H = MkH(B[{Print}])
+type B[E] = (Int32) => Unit @ E
+```
+HEAD:
+```
+! ch4.kel:1:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### ar3.kel --type-check
+```
+type C = A[{}]
+type A[E] = B[E]
+type B[E] = (Int32) => Unit @ E
+let f(x: C): Int32 = 0
+```
+HEAD:
+```
+! ar3.kel:3:31: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+```
+
+### chain.kel --type-check
+```
+type C = A[{}]
+type A[E] = B[E]
+type B[E] = (Int32) => Unit @ E
+newtype H = MkH(A[{Print}])
+let f(x: C): Int32 = 0
+```
+HEAD:
+```
+! chain.kel:4:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+```
+
+### v124.kel --type-check
+```
+type C = A[{}]
+type A[E] = (Int32) => Unit @ E
+let f(x: C): Int32 = 0
+```
+HEAD:
+```
+! v124.kel:2:31: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+```
+
+### v124b.kel --type-check
+```
+type A[E] = (Int32) => Unit @ E
+type C = A[{}]
+let f(x: C): Int32 = 0
+```
+HEAD:
+```
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+```
+試作:
+```
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+```
+
+### v124c.kel --type-check
+```
+newtype H = MkH(A[{}])
+type A[E] = (Int32) => Unit @ E
+```
+HEAD:
+```
+! v124c.kel:2:31: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### mod1.kel --type-check
+```
+newtype H = MkH(M.Cb[{Print}])
+module M {
+  pub type Cb[E] = Callback[E]
+  pub newtype Callback[E] = Callback(() => Unit @ E)
+}
+```
+HEAD:
+```
+! mod1.kel:1:22: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### effop.kel --type-check
+```
+effect Ev = { on: (Cb[{Print}]) => Unit }
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+```
+HEAD:
+```
+! effop.kel:1:23: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### mix.kel --type-check
+```
+newtype H = MkH(Cb[{}], Bx[{}])
+type Cb[E] = Callback[E]
+type Bx[A] = (A, Int32)
+newtype Callback[E] = Callback(() => Unit @ E)
+let h = MkH(Callback(fn() => ()), ((), 1))
+```
+HEAD:
+```
+! mix.kel:4:45: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+h : H
+[exit 0]
+```
+
+### pre1.kel --type-check
+```
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, Th[{Print}]))
+type Th[E] = () => Unit @ E
+```
+HEAD:
+```
+! pre1.kel:2:40: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### post1.kel --type-check
+```
+newtype H = MkH(K[{}])
+type K[E] = (() => Unit @ E, Callback[{Print}])
+newtype Callback[E] = Callback(() => Unit @ E)
+```
+HEAD:
+```
+! post1.kel:2:27: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### v22a.kel --type-check
+```
+effect Log = { log: (String) => Unit }
+newtype H = MkH(Cb[{}])
+type Cb[E] = B[E]
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+```
+HEAD:
+```
+! v22a.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+! v22a.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+
+### v22b.kel --type-check
+```
+effect Log = { log: (String) => Unit }
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+type Cb[E] = B[E]
+newtype H = MkH(Cb[{}])
+```
+HEAD:
+```
+! v22b.kel:2:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+
+### id.kel --type-check
+```
+type Id[A] = A
+newtype N[X] = MkN(() => Unit @ Id[X])
+```
+HEAD:
+```
+! id.kel:2:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: A
+[exit 1]
+```
+試作:
+```
+! id.kel:2:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: A
+[exit 1]
+```
+
+### ph.kel --type-check
+```
+newtype H = MkH(Ph[{}])
+type Ph[E] = Int32
+let h: H = MkH(1)
+```
+HEAD:
+```
+h : H
+[exit 0]
+```
+試作:
+```
+h : H
+[exit 0]
+```
+
+### neg2.kel --type-check
+```
+newtype H = MkH(Cb[Int32])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+```
+HEAD:
+```
+! neg2.kel:3:45: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+! neg2.kel:3:45: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+
+### run1.kel 
+```
+newtype H = MkH(Cb[{Print}])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let fire(h: H): Unit @ Print = h match { case MkH(Callback(f)) => f() }
+let h = MkH(Callback(fn() => println("hello")))
+with_stdout(fn() => fire(h))
+```
+HEAD:
+```
+! run1.kel:1:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+hello
+[exit 0]
+```
+
+### run2.kel 
+```
+newtype J = MkJ(() => Unit @ Wr[{}])
+type Wr[E]: EffectRow = {Print extends E}
+let j = MkJ(fn() => println("wr"))
+with_stdout(fn() => j match { case MkJ(f) => f() })
+```
+HEAD:
+```
+! run2.kel:2:40: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+wr
+[exit 0]
+```
+
+### neg1.kel 
+```
+newtype H = MkH(Cb[{Print}])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let h = MkH(Callback(fn() => println("hello")))
+let bad: Cb[{}] = Callback(fn() => println("x"))
+```
+HEAD:
+```
+! neg1.kel:1:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+```
+試作:
+```
+! neg1.kel:5:5: 型エラー: 注釈された型を満たしません(ラベル Print がありません(行は閉じています))
+[exit 1]
+```
+
+### neg3.kel 
+```
+newtype H = MkH(Bx[{}])
+type Bx[A] = Box[A]
+newtype Box[A] = Box(A)
+let h: H = MkH(Box(1))
+```
+HEAD:
+```
+! neg3.kel:4:12: 型エラー: {} は Integral のインスタンスではありません
+[exit 1]
+```
+試作:
+```
+! neg3.kel:4:12: 型エラー: {} は Integral のインスタンスではありません
+[exit 1]
+```
+
+### pos3.kel 
+```
+newtype H = MkH(Bx[{}])
+type Bx[A] = Box[A]
+newtype Box[A] = Box(A)
+let h: H = MkH(Box(()))
+```
+HEAD:
+```
+[exit 0]
+```
+試作:
+```
+[exit 0]
+```
+
+## 残る形と拡張(V29-ext.patch)の効果
+### lab1.kel --type-check
+```
+effect Log = { log: (String) => Unit }
+type K[E] = (() => Unit @ E, () => Unit @ {Log})
+newtype H = MkH(K[{}])
+```
+HEAD:
+```
+! lab1.kel:2:27: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+! lab1.kel:2:27: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+拡張:
+```
+[exit 0]
+```
+
+### lab3.kel --type-check
+```
+effect Log = { log: (String) => Unit }
+type K[E] = (() => Unit @ {Log}, () => Unit @ E)
+newtype H = MkH(K[{}])
+```
+HEAD:
+```
+! lab3.kel:2:47: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+[exit 0]
+```
+拡張:
+```
+[exit 0]
+```
+
+### v22a.kel --type-check
+```
+effect Log = { log: (String) => Unit }
+newtype H = MkH(Cb[{}])
+type Cb[E] = B[E]
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+```
+HEAD:
+```
+! v22a.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+試作:
+```
+! v22a.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+```
+拡張:
+```
+[exit 0]
+```
+

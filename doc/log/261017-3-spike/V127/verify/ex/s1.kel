@@ -1,0 +1,2 @@
+let f(x: Int32, y: Int32): Int32 = x
+let b(): Int32 = f(1i8, 2)

@@ -1,0 +1,3 @@
+module M {
+  pub let g: (Int32) => #A | #B = fn(x) => #C
+}

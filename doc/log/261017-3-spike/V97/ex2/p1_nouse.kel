@@ -1,0 +1,7 @@
+newtype Box[A] = Box(A)
+let z = 0
+echoln("a")
+type instance [A: Show] Show[Box[_]] {
+  let show: (Box[A]) => String = { let q = 1 / z; fn(b) => "box" }
+}
+echoln("b")

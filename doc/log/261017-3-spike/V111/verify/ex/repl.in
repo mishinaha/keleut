@@ -1,0 +1,5 @@
+let x: Int32 = { let g[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }; 0i32 }
+let rec f[A](x: A): Int32 = g(x) and g[B](y: B): Int32 = 0i32
+let rec p[A](x: A): Int32 = 0i32 and q[B](y: B): Int32 = p(y)
+echoln(show(q(1i32)))
+let rec s(n: Int32): Int32 = { let k = t; n } and t[B](y: B): Int32 = t(1i32)

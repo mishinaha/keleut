@@ -1,0 +1,8 @@
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+effect Fail = { throw: (String) => Never }
+let r = ({ let b = perform test(); if b then perform throw("x") else false } handle {
+  case test() => resume(true)
+  case cancel => { let n = perform Ask.ask() handle { case ask() => resume(3) }; echoln("cancel " + show(n)) }
+}) handle { case throw(m) => false }
+echoln(show(r))

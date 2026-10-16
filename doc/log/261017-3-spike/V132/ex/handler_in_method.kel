@@ -1,0 +1,12 @@
+effect Fail = { throw: (String) => Never }
+type class Parse[A] {
+  val parse: (String) => Option[A]
+}
+let digit(s: String): Int32 @ Fail = if s == "1" then 1 else perform throw("bad")
+type instance Parse[Int32] {
+  let parse(s) = Some(digit(s)) handle { case throw(e) => None }
+}
+let a: Option[Int32] = parse("1")
+let b: Option[Int32] = parse("2")
+echoln(show(a))
+echoln(show(b))

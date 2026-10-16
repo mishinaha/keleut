@@ -1,0 +1,5 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+type K[E] = (() => Unit @ E, Callback[{Print}])
+newtype H = MkH(K[{}])
+let f(h: H): Int32 = 0
+echoln("ok")

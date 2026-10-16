@@ -1,0 +1,4 @@
+pub type class Size[A] { val size: (A) => Int32 }
+pub newtype T(Int32)
+type instance Size[T] { let size(t: T): Int32 = t match { case T(n) => n } }
+pub let s(t: T): Int32 = size(t)

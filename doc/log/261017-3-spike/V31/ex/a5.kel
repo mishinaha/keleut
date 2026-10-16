@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+newtype Callback[E] = Callback(() => Unit @ E)
+let f(c: Callback[Q]): Int32 = 0

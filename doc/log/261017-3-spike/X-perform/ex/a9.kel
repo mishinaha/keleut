@@ -1,0 +1,4 @@
+type Unit = {}
+effect Async2 = { yield2: () => Unit }
+let take(g: () => Unit): Unit = g()
+let bad(): Unit @ Async2 = take(fn() => perform yield2())

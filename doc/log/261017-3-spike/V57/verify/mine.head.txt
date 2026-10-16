@@ -1,0 +1,57 @@
+=== b0.kel
+! b0.kel:2:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b10.kel
+M.f : (Int32) => Int32 @ {Print extends R1}
+[exit 0]
+=== b11.kel
+M.f : (Int32) => Int32 @ {Print}
+[exit 0]
+=== b12.kel
+! b12.kel:1:33: 型エラー: 行変数 Print は extends の位置にのみ書けます
+[exit 1]
+=== b13.kel
+! b13.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b14.kel
+! b14.kel:3:26: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b15.kel
+! b15.kel:3:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b16.kel
+! b16.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b17.kel
+! b17.kel:3:31: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== b18.kel
+! b18.kel:4:29: 型エラー: 型 W.W は module W の外からは参照できません(pub を付けてください)
+[exit 1]
+=== b1.kel
+! b1.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b2.kel
+! b2.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b3.kel
+! b3.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+[exit 1]
+=== b4.kel
+! b4.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b5.kel
+! b5.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b6.kel
+! b6.kel:2:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b7.kel
+! b7.kel:1:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b8.kel
+! b8.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b9.kel
+M.f : (Int32) => Int32
+[exit 0]

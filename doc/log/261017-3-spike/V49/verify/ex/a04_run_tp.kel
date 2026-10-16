@@ -1,0 +1,7 @@
+let fill[A](n: Int32, x: A): Int32 = run h {
+  let r = Ref.new(0)
+  let _ = Ref.set(r, n)
+  Ref.get(r)
+}
+let main(): Unit @ {Console} = echoln(show(fill(4, "s")))
+main()

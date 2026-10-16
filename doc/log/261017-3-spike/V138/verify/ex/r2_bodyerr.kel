@@ -1,0 +1,15 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+effect Out = { note: () => Unit }
+let f(): Int32 = (({ perform use(); perform throw("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel res"); perform throw("from cancel") }
+}) handle {
+  case throw(e) => { echoln("H " + e); 1 / 0 }
+  case cancel => echoln("H cancel")
+}
+let r = ({ perform note(); f() }) handle {
+  case note() => resume()
+  case cancel => echoln("outer cancel")
+}
+echoln(show(r))

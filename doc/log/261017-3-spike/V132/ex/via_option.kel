@@ -1,0 +1,13 @@
+effect Fail = { throw: (String) => Never }
+type class Parse[A] {
+  val parse: (String) => Option[A]
+}
+type instance Parse[Int32] {
+  let parse(s) = if s == "1" then Some(1) else None
+}
+let parse_or_fail[A: Parse](s: String): A @ Fail = parse(s) match {
+  case Some(v) => v
+  case None => perform throw("bad: " + s)
+}
+let r: Int32 = parse_or_fail("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+echoln(show(r))

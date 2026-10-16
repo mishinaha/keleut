@@ -1,0 +1,4 @@
+let r0 = 1
+let f[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r) + 1
+run h { let r = Ref.new(3); f(r) }
+run h { let r = Ref.new(1); run k { let s = Ref.new(2); Ref.get(s) } }

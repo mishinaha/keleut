@@ -1,0 +1,4 @@
+newtype Box = Box(Int32)
+effect Out = { out: (String) => Unit }
+type class Pu[T] { val pu: (T) => Unit }
+type instance Pu[Box] { let pu(b) = perform out("i") }

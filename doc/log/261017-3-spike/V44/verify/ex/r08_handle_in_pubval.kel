@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+let base: (Int32) => Int32 = fn(x) => x
+module M {
+  pub let g: (Int32) => Int32 = fn(n) => (perform ask() + base(n)) handle {
+    case ask() => resume(100)
+    case return(x) => x
+  }
+}
+with_stdout(fn() => echoln(show(M.g(1))))

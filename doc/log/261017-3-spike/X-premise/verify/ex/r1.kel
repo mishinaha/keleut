@@ -1,0 +1,7 @@
+let a = Nil == Cons(Cons(1i32, Nil), Nil)
+let b = Cons(Nil, Nil) == Cons(Cons(2i32, Nil), Nil)
+let c = Cons(Some(Cons(1i32, Nil)), Nil) match {
+  case Cons(x, _) if x == Some(Cons(1i32, Nil)) => "guard-hit"
+  case _ => "guard-miss"
+}
+echoln(show(a) + " " + show(b) + " " + c)

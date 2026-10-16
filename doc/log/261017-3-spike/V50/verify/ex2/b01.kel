@@ -1,0 +1,4 @@
+module M {
+  type E[R]: EffectRow = {Print extends R}
+  let f[E, R](x: Int32): Int32 @ {E[R]} = x
+}

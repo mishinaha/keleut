@@ -1,0 +1,3 @@
+let k(): Int32 = 1
+let j(x: Int32): Int32 = x
+let xs = Cons(j, Cons(k, Nil))

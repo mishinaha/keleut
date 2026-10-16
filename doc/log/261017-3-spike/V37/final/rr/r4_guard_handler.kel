@@ -1,0 +1,14 @@
+effect Ask = { ask: () => Int32 }
+let f(): List[Int32] @ Ask = Cons(perform ask(), Cons(perform ask() + 1, Nil))
+let r = f() handle {
+  case ask() => resume(10)
+}
+echoln(show(r))
+let pick(xs: List[Int32]): String = xs match {
+  case Cons(head = h, tail = _) if h > 5 => show(xs)
+  case _ => "small " + show(xs)
+}
+echoln(pick(r))
+echoln(pick(Cons(1, Nil)))
+let s = { echoln(show(Cons(1, Cons(2, Nil)))); perform ask() } handle { case ask() => resume(show(Cons(7, Nil)) == "[7]" match { case true => 1  case false => 0 }) }
+echoln(show(s))

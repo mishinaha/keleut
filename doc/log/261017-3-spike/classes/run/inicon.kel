@@ -1,0 +1,6 @@
+type class Sh[A] { val sh: (A) => String }
+newtype Foo = Foo
+type instance Sh[Foo] {
+  let sh: (Foo) => String = { echoln("init"); fn(x) => "foo" }
+}
+echoln(sh(Foo))

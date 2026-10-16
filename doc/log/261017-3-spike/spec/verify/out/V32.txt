@@ -1,0 +1,142 @@
+### p01_both_val.kel
+let rec f: (Int32) => Int32 @ Console = fn(x) => g(x)
+and g: (Int32) => Int32 @ Console = fn(x) => f(x)
+--- --type-check
+f : (Int32) => Int32 @ {Console}
+g : (Int32) => Int32 @ {Console}
+[exit 0]
+### p02_both_fn.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b(n: Int32): Int32 @ Console = a(n)
+--- --type-check
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### p03_fwd_val.kel
+let rec a: (Int32) => Int32 @ Console = fn(n) => b(n)
+and b: (Int32) => Int32 @ Console = fn(n) => { echo("b"); n }
+--- --type-check
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### p04_fwd_fn.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b(n: Int32): Int32 @ Console = { echo("b"); n }
+--- --type-check
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### p05_fwd_diff.kel
+let rec b(n: Int32): Int32 @ {Console, Print} = a(n)
+and a(n: Int32): Int32 @ Console = { echo("a "); n }
+--- --type-check
+b : (Int32) => Int32 @ {Console, Print}
+a : (Int32) => Int32 @ {Console}
+[exit 0]
+### p06_mutual_diff.kel
+let rec a(n: Int32): Int32 @ {Console, Print} = { println("a"); n match { case 0 => 0 case m => b(m - 1) } }
+and b(n: Int32): Int32 @ Console = { echo("b"); n match { case 0 => 0 case m => a(m - 1) } }
+--- --type-check
+! p06_mutual_diff.kel:2:81: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+### p07_mutual_diff_rev.kel
+let rec b(n: Int32): Int32 @ Console = { echo("b"); n match { case 0 => 0 case m => a(m - 1) } }
+and a(n: Int32): Int32 @ {Console, Print} = { println("a"); n match { case 0 => 0 case m => b(m - 1) } }
+--- --type-check
+! p07_mutual_diff_rev.kel:1:85: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+### p08_both_run.kel
+let rec f(n: Int32): Int32 @ Console = n match { case 0 => { echoln("f0"); 0 } case m => g(m - 1) }
+and g(n: Int32): Int32 @ Console = n match { case 0 => { echoln("g0"); 0 } case m => f(m - 1) }
+let use(): Int32 @ {Console, Print} = { println("p"); f(3) + g(2) }
+with_stdout(fn() => use())
+--- --type-check
+f : (Int32) => Int32 @ {Console}
+g : (Int32) => Int32 @ {Console}
+use : () => Int32 @ {Console, Print}
+_ : Int32
+[exit 0]
+### p09_extends_both.kel
+let rec a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+and b[E](n: Int32): Int32 @ {Console extends E} = a(n)
+--- --type-check
+! p09_extends_both.kel:1:55: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p10_extends_fwd.kel
+let rec a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+--- --type-check
+! p10_extends_fwd.kel:1:55: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p11_three.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b(n: Int32): Int32 @ Console = c(n)
+and c(n: Int32): Int32 @ Console = n match { case 0 => 0 case m => a(m - 1) }
+--- --type-check
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+c : (Int32) => Int32 @ {Console}
+[exit 0]
+### p12_pure_fwd.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b(n: Int32): Int32 @ {} = n
+--- --type-check
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {}
+[exit 0]
+### p13_fwd_wider.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b(n: Int32): Int32 @ {Console, Print} = n
+--- --type-check
+! p13_fwd_wider.kel:1:40: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+### p14_tpflow.kel
+let rec f[A](x: A): Unit @ Print = { println("f"); g(x) }
+and g[A](x: A): Unit @ {} = ()
+--- --type-check
+! p14_tpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p15_extends_rev.kel
+let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+and a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+--- --type-check
+b : (Int32) => Int32 @ {Console extends R1}
+a : (Int32) => Int32 @ {Console extends R1}
+[exit 0]
+### p16_extends_mutual_rev.kel
+let rec b[F](n: Int32): Int32 @ {Console extends F} = n match { case 0 => 0 case m => a(m - 1) }
+and a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+--- --type-check
+! p16_extends_mutual_rev.kel:1:87: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p17_extends_one.kel
+let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }
+and b(n: Int32) = { echo("b"); a(n) }
+let use(): Int32 @ {Console, Print} = { println("p"); a(1) + b(2) }
+--- --type-check
+a : (Int32) => Int32 @ {Console extends R1}
+b : (Int32) => Int32 @ {Console extends R1}
+use : () => Int32 @ {Console, Print}
+[exit 0]
+### p18_extends_one_rev.kel
+let rec b(n: Int32) = { echo("b"); a(n) }
+and a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }
+let use(): Int32 @ {Console, Print} = { println("p"); a(1) + b(2) }
+--- --type-check
+b : (Int32) => Int32 @ {Console extends R1}
+a : (Int32) => Int32 @ {Console extends R1}
+use : () => Int32 @ {Console, Print}
+[exit 0]
+### p19_tp_mutual.kel
+let rec f[A](x: A): A = g(x)
+and g[B](y: B): B = f(y)
+--- --type-check
+! p19_tp_mutual.kel:2:23: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p21_three_mid.kel
+let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => c(m - 1) }
+and c(n: Int32) = { echo("c"); b(n) }
+and b[F](n: Int32): Int32 @ {Console extends F} = a(n)
+--- --type-check
+! p21_three_mid.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]

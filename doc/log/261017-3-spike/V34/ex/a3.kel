@@ -1,0 +1,2 @@
+let f[E](g: () => Int32 @ {}): Int32 @ E = g()
+let h[E](g: () => Int32 @ E): () => Int32 @ {} = g

@@ -1,0 +1,6 @@
+prog : () => String @ {File}
+! r9_typo.kel:4:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+prog : () => String @ {File}
+! r9_typo.kel:4:19: 型エラー: 操作 wirte はエフェクト File に属しません
+[exit 1]

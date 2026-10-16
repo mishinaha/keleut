@@ -1,0 +1,2 @@
+pub type class Show[A] { val show: (A) => Boolean }
+pub let k: Int32 = 1

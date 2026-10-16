@@ -1,0 +1,7 @@
+let g[A](a: A): A = {
+  let h = fn(y) => {
+    let f[A](x: A): A = { let z: A = y; x }
+    f
+  }
+  a
+}

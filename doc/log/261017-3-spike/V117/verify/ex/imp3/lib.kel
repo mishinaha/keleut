@@ -1,0 +1,2 @@
+type G = (Int32) => Int32 @ {}
+pub type F = G

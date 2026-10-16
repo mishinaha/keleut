@@ -1,0 +1,2 @@
+newtype Box[A] = Box(A)
+module M { pub type B = Box }

@@ -1,0 +1,5 @@
+let id[A](x: A): A = x
+let w = id(Ref.new)
+let g[k](r: Ref[k, Int32]): Int32 @ Heap[k] = Ref.get(r)
+Ref.new
+run k { Ref.get(Ref.new(5)) }

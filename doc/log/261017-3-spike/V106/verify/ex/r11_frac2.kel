@@ -1,0 +1,1 @@
+type class C4[A] { val m[B: Show + Fractional]: (A) => A }

@@ -1,0 +1,4 @@
+module Q {
+  type P = Int32
+}
+let f(): Int32 @ P = 1

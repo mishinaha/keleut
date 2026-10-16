@@ -1,0 +1,3 @@
+type W[E: EffectRow]: EffectRow = {Console extends E}
+pub let h[E: EffectRow](f: () => Unit @ W[E]): Unit @ W[E] = f()
+h(fn() => echoln("ok"))

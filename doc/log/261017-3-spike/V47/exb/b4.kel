@@ -1,0 +1,2 @@
+module M { pub type W: EffectRow = {Print} }
+let g(x: Int32): Int32 @ M.W[Console] = x

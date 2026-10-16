@@ -1,0 +1,5 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype H[E] = MkH(Cb[{Print extends E}])

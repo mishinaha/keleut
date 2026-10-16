@@ -1,0 +1,8 @@
+let count(xs: Int32): Int32 = xs * 100
+let go(k: Int32): Int32 = k + 1
+type class Sz[A] {
+  val size: (A) => Int32
+}
+type instance Sz[Int32] { let size(x) = x }
+echoln(show(Cons(count(1), Cons(go(2), Nil))))
+echoln(show(Cons(Sz.size(5), Nil)))

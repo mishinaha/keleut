@@ -1,0 +1,7 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+let twice[E](f: () => Int32 @ E): () => Int32 @ E = fn() => f() + f()
+type instance Sz[Foo] {
+  let sz = { let t = twice(fn() => 2i32); fn(x: Foo) => t() }
+}
+echoln(show(sz(Foo)))

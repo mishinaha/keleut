@@ -1,0 +1,2 @@
+let f[A, B](x: A): B = x match {}
+echoln("ok")

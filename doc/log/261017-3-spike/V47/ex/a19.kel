@@ -1,0 +1,1 @@
+let g(x: Int32): Int32 @ Int64[Console] = x

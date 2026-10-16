@@ -1,0 +1,23 @@
+patching file lib/elab.ml
+Hunk #1 FAILED at 34.
+Hunk #11 FAILED at 3613.
+Hunk #12 succeeded at 3717 (offset -11 lines).
+Hunk #13 FAILED at 3740.
+Hunk #14 succeeded at 3740 (offset -13 lines).
+Hunk #15 FAILED at 4648.
+Hunk #16 FAILED at 4681.
+Hunk #17 succeeded at 4693 (offset -1 lines).
+Hunk #18 succeeded at 4835 with fuzz 1 (offset 2 lines).
+Hunk #19 succeeded at 4916 (offset 2 lines).
+5 out of 19 hunks FAILED -- saving rejects to file lib/elab.ml.rej
+patching file test/invariants.t
+patching file test/kinds.t
+Hunk #1 FAILED at 161.
+Hunk #2 FAILED at 219.
+Hunk #3 FAILED at 244.
+Hunk #4 FAILED at 269.
+Hunk #5 FAILED at 284.
+Hunk #6 FAILED at 304.
+Hunk #7 FAILED at 319.
+Hunk #8 succeeded at 350 with fuzz 2 (offset 19 lines).
+7 out of 8 hunks FAILED -- saving rejects to file test/kinds.t.rej

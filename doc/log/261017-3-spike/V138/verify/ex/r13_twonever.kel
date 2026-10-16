@@ -1,0 +1,14 @@
+effect E = { a: (Int32) => Never, b: (Int32) => Never, ask: () => Int32 }
+effect Res = { use: () => Unit }
+let rec go(n: Int32): Int32 = ({ perform use(); if n % 2 == 0 then perform a(n) else perform b(n) }) handle {
+  case use() => resume()
+  case cancel => { let q = perform ask(); if q > 1 then perform a(100 + q) else perform b(200 + q) }
+} handle {
+  case a(x) => { echoln("a " + show(x)); x }
+  case b(x) => { echoln("b " + show(x)); x + 1 }
+  case ask() => { let y = resume(n); echoln("ask " + show(n) + " -> " + show(y)); y * 3 }
+}
+echoln(show(go(0)))
+echoln(show(go(1)))
+echoln(show(go(2)))
+echoln(show(go(3)))

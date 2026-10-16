@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let f(): String @ Fail = show(Some(perform throw("x")))
+echoln(f() handle { case throw(m) => "caught " + m })

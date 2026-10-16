@@ -1,0 +1,437 @@
+diff -ruN -x _build diktor.orig/lib/elab.ml diktor/lib/elab.ml
+--- diktor.orig/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:45:42.011017433 +0900
+@@ -3137,7 +3137,7 @@
+   (* 網羅性の遅延キューは generalize の直前に drain する *)
+   match snd b.T.lb_name with
+   | T.PVar x ->
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:level ~tys:[ fn_ty ] ~gen ());
+       if gen then (
+         (* 一般化の直前に曖昧性を調べる。generalize より前でなければならない。
+            後では Unbound が Generic に変わっていて判定できない *)
+@@ -3150,7 +3150,7 @@
+       finish_binding_dicts node ~gen ~rigids hmark fn_ty;
+       add_local env x fn_ty
+   | T.PWildcard ->
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:level ~tys:[ fn_ty ] ~gen ());
+       if gen then (
+         Unify.check_ambiguity ~all:false ~level [ fn_ty ];
+         Unify.generalize level fn_ty)
+@@ -3171,7 +3171,7 @@
+       let seen = ref [] in
+       let env' = elab_pat env level seen fn_ty b.T.lb_name in
+       Exhaust.queue [ (b.T.lb_name, false) ] fn_ty;
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:level ~tys:[ fn_ty ] ~gen:false ());
+       release_rigids rigids;
+       finish_binding_dicts node ~gen:false ~rigids hmark fn_ty;
+       env'
+@@ -3416,7 +3416,7 @@
+     (fun (params, param_tys) ->
+       List.iter2 (fun p t -> if not (irrefutable_pat p) then Exhaust.queue [ (p, false) ] t) params param_tys)
+     (List.rev !rec_arg_queue);
+-  List.iter warn (Exhaust.drain ());
++  List.iter warn (Exhaust.drain ~level:level ~tys:(List.map snd names) ());
+   (* 群として一括で曖昧性を調べる。相互再帰の制約は、群のどれかの型から
+      到達できればよい *)
+   Unify.check_ambiguity ~all:false ~level (List.map snd names);
+@@ -5007,7 +5007,7 @@
+           let mark = Unify.class_mark () in
+           let value = is_value e in
+           let t = elab_exp env (if value then 1 else 0) eff0 e in
+-          List.iter warn (Exhaust.drain ());
++          List.iter warn (Exhaust.drain ~level:0 ~tys:[ t ] ());
+           if value && has_constrained_unbound t then (
+             Unify.check_ambiguity ~all:false ~level:0 [ t ];
+             Unify.generalize 0 t;
+@@ -5587,7 +5587,7 @@
+       let eff0 = toplevel_eff ~extra:toplevel_extra () in
+       let mark = Unify.class_mark () in
+       let t = elab_exp env 1 eff0 e in
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:0 ~tys:[ t ] ());
+       if is_value e then (
+         Unify.check_ambiguity ~all:false ~level:0 [ t ];
+         Unify.generalize 0 t)
+diff -ruN -x _build diktor.orig/lib/exhaust.ml diktor/lib/exhaust.ml
+--- diktor.orig/lib/exhaust.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/exhaust.ml	2026-10-17 04:45:58.095542857 +0900
+@@ -875,7 +875,25 @@
+ 
+    `reset` は、宣言の処理を始める前にキューを空にする。
+    キューは大域状態である。
+-   空にしないと、前のファイルの処理やエラーで中断した推論が積んだエントリが残る。 *)
++   空にしないと、前のファイルの処理やエラーで中断した推論が積んだエントリが残る。
++
++   ### 照合対象の型が検査の時点で未定の節のない `match`
++
++   節のない `match {}` の照合対象の型が、検査の時点で未束縛の型変数のままのことがある。
++   注釈のない引数を照合する `fn(x) => x match {}` がその例である。
++   照合対象の型変数が束縛の型に現れるので、上の規則で `Never` に決めない。
++   型変数の完全シグネチャは `None` なので、§10.10 の反例は `_` になる。
++   ただ、「例えば _ が漏れています」という文面は、節を足せば直ると読める。
++   この場合の原因は、検査の時点で照合対象の型がコンストラクタを持たない型と分かっていないことなので、
++   その事実を言う文面に替える。
++   検査の後で同じ宣言の中の単一化が変数を `Int32` などに決めることもある。
++   文面は検査の時点の事実に限って言い、型が決まらないとは言わない。
++
++   対象は、節が 1 つもなく、照合対象が述語を持たない未束縛の型変数のときに限る。
++   `Integral` や `Fractional` の述語を持つ変数は宣言の終わりに数値型へ既定化されるので、
++   型が決まらないとは言えない。
++   型パラメータ(`Rigid`)の値の照合は型が決まっているので、従来の文面のままにする。
++   ガード付きの節だけを持つ `match` も、原因はガードの側にあるので従来の文面のままにする。 *)
+ 
+ type entry = { qe_rows : (T.pat * bool (* ガードつき *)) list; qe_ty : ty }
+ 
+@@ -885,6 +903,30 @@
+    積んだ数の二乗の時間がかかる(§10.13) *)
+ let queue rows ty = pending := { qe_rows = rows; qe_ty = ty } :: !pending
+ 
++(* 節のない match の照合対象の型が、制約の付かない未定の型変数であるかどうか。
++   そうなら、その変数のレベルを返す *)
++let empty_open_scrutinee { qe_rows; qe_ty } =
++  if qe_rows <> [] then None
++  else match repr qe_ty with TVar { contents = Unbound i } when i.vcls = [] -> Some i.vlevel | _ -> None
++
++(* 残った変数は Never に決める(§10.13)。カインドが合わなければ決めずに、
++   網羅性の検査に任せる *)
++let settle_empty e =
++  match empty_open_scrutinee e, repr e.qe_ty with
++  | Some _, (TVar _ as v) -> ( try Unify.unify v t_never with Type_error _ -> ())
++  | _ -> ()
++
++(* 節のない match の照合対象が、述語を持たない未束縛の型変数か。
++   数値の述語を持つ変数は宣言の終わりに既定化されるので、型が決まらないとは言えない *)
++let undetermined ty =
++  match repr ty with
++  | TVar { contents = Unbound i } -> not (List.exists Unify.is_predicate i.vcls)
++  | _ -> false
++
++let undetermined_msg =
++  "match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません"
++  ^ "(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)"
++
+ let check_entry { qe_rows; qe_ty } =
+   let out = ref [] in
+   let all = List.map (fun (p, guarded) -> ([ convert p ], guarded)) qe_rows in
+@@ -898,6 +940,7 @@
+   let single = match qe_rows with [ _ ] -> true | _ -> false in
+   (* ガード付き節は必ず一致する節として数えない(sample.kel:322-324)ので、網羅性の判定から除く *)
+   (match missing unguarded tys with
++  | Some _ when qe_rows = [] && undetermined qe_ty -> out := !out @ [ undetermined_msg ]
+   | Some w -> out := !out @ [ "match が非網羅的です。例えば " ^ String.concat ", " (List.map show_ipat w) ^ " が漏れています" ]
+   | None -> ());
+   (* 到達不能の判定では、先行するガードのない節だけを被覆として数える *)
+@@ -915,9 +958,28 @@
+     all;
+   !out
+ 
+-let drain () =
++let rec mentions_var r t =
++  match repr t with
++  | TVar v -> v == r
++  | TCon (_, args) -> List.exists (mentions_var r) args
++  | TApp (f, a) -> mentions_var r f || mentions_var r a
++  | TArrow (a, ret, e) -> mentions_var r a || mentions_var r ret || mentions_var r e
++  | TRecord row | TVariant row -> mentions_var r row
++  | TRowEmpty -> false
++  | TRowExtend (_, f, rest) -> mentions_var r f || mentions_var r rest
++
++let drain ~level ?(tys = []) ?(gen = true) () =
+   let entries = List.rev !pending in
+   pending := [];
+-  List.concat_map check_entry entries
++  let visible e = match repr e.qe_ty with TVar r -> List.exists (mentions_var r) tys | _ -> false in
++  let defer e =
++    match empty_open_scrutinee e with
++    | None -> false
++    | Some l -> level > 0 && (l <= level || (visible e && not gen))
++  in
++  let later, now = List.partition defer entries in
++  pending := List.rev later;
++  List.iter (fun e -> match empty_open_scrutinee e with Some l when l > level && not (visible e) -> settle_empty e | _ -> ()) now;
++  List.concat_map check_entry now
+ 
+ let reset () = pending := []
+diff -ruN -x _build diktor.orig/test/empty_match.t diktor/test/empty_match.t
+--- diktor.orig/test/empty_match.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/empty_match.t	2026-10-17 04:47:51.035761913 +0900
+@@ -0,0 +1,173 @@
++節のない match {} の照合対象の型がまだ決まっていない型変数で、制約が付いておらず、match を
++含む束縛の型に現れなければ、処理系はその型を Never に決める(§11.2)。再開しない操作の
++perform の結果を直接照合する形は網羅的で、--strict-exhaustive でも終了コードは 0 である:
++
++  $ cat > direct.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let get(o: Option[Int32]): Int32 @ Fail = o match {
++  >   case Some(v) => v
++  >   case None => perform throw("none") match {}
++  > }
++  > echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
++  > EOF
++  $ diktor direct.kel
++  -1
++  $ diktor --strict-exhaustive direct.kel
++  -1
++
++返り値を注釈しない補助関数、値束縛、型パラメータを返り値にした補助関数、let rec の群を
++経由しても同じである:
++
++  $ cat > helper.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let fail(m: String) = perform throw(m)
++  > let get(o: Option[Int32]): Int32 @ Fail = o match {
++  >   case Some(v) => v
++  >   case None => fail("none") match {}
++  > }
++  > echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
++  > EOF
++  $ diktor helper.kel
++  -1
++  $ diktor --strict-exhaustive helper.kel
++  -1
++  $ cat > valbind.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let get(o: Option[Int32]): Int32 @ Fail = o match {
++  >   case Some(v) => v
++  >   case None => { let z = perform throw("none"); z match {} }
++  > }
++  > echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
++  > EOF
++  $ diktor valbind.kel
++  -1
++  $ cat > abort.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let abort[A](m: String): A @ Fail = perform throw(m)
++  > let get(o: Option[Int32]): Int32 @ Fail = o match {
++  >   case Some(v) => v
++  >   case None => abort("none") match {}
++  > }
++  > echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
++  > EOF
++  $ diktor abort.kel
++  -1
++  $ cat > mutual.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let rec f(n: Int32): Int32 @ Fail = if n == 0 then { perform throw("z") match {} } else g(n - 1)
++  > and g(n: Int32): Int32 @ Fail = f(n)
++  > echoln(show({ f(2) } handle { case throw(e) => -1 }))
++  > EOF
++  $ diktor mutual.kel
++  -1
++
++match の後に無関係な局所の let があっても、照合対象は外側の束縛で決まる:
++
++  $ cat > laterlet2.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let get(o: Option[Int32]): Int32 @ Fail = {
++  >   if o == None then perform throw("none") match {} else ()
++  >   let m = 1
++  >   m
++  > }
++  > echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
++  > EOF
++  $ diktor laterlet2.kel
++  -1
++  $ diktor --strict-exhaustive laterlet2.kel
++  -1
++
++Never に決まった積載値の腕は、値の無い型の節なので到達不能と報告する:
++
++  $ cat > okarm.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > let mk(b: Boolean) = if b then #Ok(perform throw("x")) else #Err(3)
++  > let go(b: Boolean): Int32 @ Fail = mk(b) match {
++  >   case #Ok(v) => v match {}
++  >   case #Err(n) => n
++  > }
++  > echoln(show(go(false) handle { case throw(e) => 0 - 1 }))
++  > echoln(show(go(true) handle { case throw(e) => 0 - 1 }))
++  > EOF
++  $ diktor okarm.kel
++  ⚠ 第 1 節は到達不能です(冗長)
++  3
++  -1
++
++照合対象の型変数が束縛の型に現れるときは決めず、網羅性を通常どおり検査する。型注釈の
++ない引数を照合する関数はその例で、型は (A) => B のままである:
++
++  $ cat > unannparam.kel <<'EOF'
++  > let f(x) = x match {}
++  > echoln("ok")
++  > EOF
++  $ diktor unannparam.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ok
++  $ diktor --type-check unannparam.kel
++  f : (A) => B
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  _ : {}
++
++右辺のない newtype の値を消す補助関数も、型を変えずに受理する(警告の後で実行する):
++
++  $ cat > r11_void_helper.kel <<'EOF'
++  > newtype Void
++  > let elim(x) = x match {}
++  > let use(v: Void): Int32 = elim(v)
++  > echoln("ok")
++  > EOF
++  $ diktor r11_void_helper.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ok
++
++値制限で一般化しない束縛と、前の束縛の弱い型変数も決めない:
++
++  $ cat > r1_nongen_top.kel <<'EOF'
++  > let id(x) = x
++  > let h = id(fn(y) => y match {})
++  > let k(b: Boolean): Int32 = if b then h(3) else 0
++  > echoln(show(k(false)))
++  > EOF
++  $ diktor r1_nongen_top.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  0
++  $ cat > w1.kel <<'EOF'
++  > let id(x) = x
++  > let p = id(fn(y) => y)
++  > fn(u: Int32) => { let g = fn(v) => p(v) match {}; u }
++  > echoln(show(p(3)))
++  > EOF
++  $ diktor w1.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  3
++
++利用者が明示した型パラメータと、制約が付いた型変数も決めない:
++
++  $ cat > rigid.kel <<'EOF'
++  > let f[A, B](x: A): B = x match {}
++  > echoln("ok")
++  > EOF
++  $ diktor rigid.kel
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ok
++  $ cat > numvar.kel <<'EOF'
++  > let f(x) = { let a = x match {}; x + 1 }
++  > echoln("ok")
++  > EOF
++  $ diktor numvar.kel
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ok
++
++最上位の値でない式文に、局所の束縛で包まずに直接書いた match {} も、型を決めない:
++
++  $ cat > toplevelstmt.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > { perform throw("x") match {} } handle { case throw(e) => echoln(e) }
++  > EOF
++  $ diktor toplevelstmt.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  x
++  $ diktor --strict-exhaustive toplevelstmt.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  [1]
+diff -ruN -x _build diktor.orig/test/never_ops.t diktor/test/never_ops.t
+--- diktor.orig/test/never_ops.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/never_ops.t	2026-10-17 04:46:17.515796632 +0900
+@@ -74,8 +74,9 @@
+   caught x
+   0
+ 
+-従来の書き方 perform op(..) match {} は、照合対象の型が決まらないので網羅漏れの警告になる。
+-同じ形から match {} を外すか、照合対象を Never と注釈すると警告は出ず、出力は同じである:
++従来の書き方 perform op(..) match {} は、照合対象の型が束縛の型に現れないので Never に
++決まり(§11.2)、網羅漏れの警告は出ない。同じ形から match {} を外しても、照合対象を Never と
++注釈しても、出力は同じである:
+ 
+   $ cat > absurd.kel <<'EOF'
+   > effect Fail = { throw: (String) => Never }
+@@ -89,7 +90,6 @@
+   > echoln(show(r2))
+   > EOF
+   $ diktor absurd.kel
+-  ⚠ match が非網羅的です。例えば _ が漏れています
+   3
+   -1
+   $ cat > absurdplain.kel <<'EOF'
+@@ -118,6 +118,79 @@
+   $ diktor absurdann.kel
+   -1
+ 
++照合対象の型が網羅性を調べた時点で未定の型変数なら、節のない match {} の警告は
++「例えば _ が漏れています」ではなく、その型がコンストラクタを持たない型と分かって
++いないことを言う。Show の制約が付いた注釈のない引数がその例で、--strict-exhaustive
++では終了コード 1 になる:
++
++  $ cat > absurdshow.kel <<'EOF'
++  > let h = fn(y) => { echoln(show(y)); y match {} }
++  > let k(x) = { echoln(show(x)); x match {} }
++  > echoln("ok")
++  > EOF
++  $ diktor absurdshow.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ok
++  $ diktor --strict-exhaustive absurdshow.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  [1]
++
++型パラメータの値、数値のリテラル、ガード付きの節だけの match は、型が決まっているか
++原因がほかにあるので、従来の文面のままである:
++
++  $ cat > absurdother.kel <<'EOF'
++  > let f[A](x: A): Int32 = x match {}
++  > let g(): Int32 = 1 match {}
++  > let k(x, b: Boolean): Int32 = x match { case y if b => 1 }
++  > echoln("ok")
++  > EOF
++  $ diktor absurdother.kel
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ok
++
++Never にインスタンスを持つクラスの制約を要求する位置に perform の式を直接置くと、
++穴と同じく型が決まらないので曖昧性エラーになる。注釈しない補助関数を経由しても同じ:
++
++  $ cat > neverclass.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > type class Describe[A] { val describe: (A) => String }
++  > type instance Describe[Never] { let describe(n: Never) = n match {} }
++  > let f(): String @ Fail = describe(perform throw("x"))
++  > EOF
++  $ diktor neverclass.kel
++  ! neverclass.kel:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
++  [1]
++  $ cat > neverclasshelper.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > type class Describe[A] { val describe: (A) => String }
++  > type instance Describe[Never] { let describe(n: Never) = n match {} }
++  > let fail(m: String) = perform throw(m)
++  > let f(): String @ Fail = describe(fail("x"))
++  > EOF
++  $ diktor neverclasshelper.kel
++  ! neverclasshelper.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
++  [1]
++
++補助関数の返り値か値束縛を Never と注釈すると型が決まり、Never のインスタンスが選ばれる:
++
++  $ cat > neverclassann.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > type class Describe[A] { val describe: (A) => String }
++  > type instance Describe[Never] { let describe(n: Never) = n match {} }
++  > let fail(m: String): Never @ Fail = perform throw(m)
++  > let f(): String @ Fail = describe(fail("x"))
++  > let g(): String @ Fail = { let v: Never = perform throw("y"); describe(v) }
++  > echoln(f() handle { case throw(m) => "caught " + m })
++  > echoln(g() handle { case throw(m) => "caught " + m })
++  > EOF
++  $ diktor neverclassann.kel
++  caught x
++  caught y
++
+ 再開しない操作の節に resume は書けない。閉包の本体に書いても、節の中の入れ子の
+ handle の本体に書いても(外側の節の継続を指す)、同じ診断になる:
+ 

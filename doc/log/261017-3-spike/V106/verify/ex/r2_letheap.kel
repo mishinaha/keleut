@@ -1,0 +1,2 @@
+let pp[B: Show](x: Int32): Int32 @ Heap[B] = x
+echoln("ok")

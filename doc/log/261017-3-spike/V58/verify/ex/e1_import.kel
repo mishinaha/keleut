@@ -1,0 +1,2 @@
+from "./lib/bad" import { Log, quiet }
+let r = quiet(fn() => { perform log("x"); 9 })

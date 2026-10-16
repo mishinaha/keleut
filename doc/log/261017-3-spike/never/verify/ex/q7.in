@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let g(n: Int32): Int32 @ Fail = if n == 0 then perform throw("x") match {} else n
+:type fn(u: Int32) => { let t = 1; perform throw("q") match {} }

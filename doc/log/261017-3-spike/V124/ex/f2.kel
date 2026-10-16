@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+newtype N = MkN(Cb[{Log}])
+type Cb[E] = (() => Unit @ E, () => Unit @ {Log})

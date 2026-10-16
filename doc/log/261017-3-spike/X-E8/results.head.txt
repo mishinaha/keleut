@@ -1,0 +1,12 @@
+$ grep -rn "Tree\.data\|data (d, _)\|\`data\`" lib bin test tools  (snap/diktor = 39d4091)
+lib/tree.ml:236:   `data` を呼ぶ箇所はない。
+lib/tree.ml:295:let data (d, _) = d
+
+$ grep -rhoE "Tree\.(data|loc_of|oid_of)" lib bin test | sort | uniq -c
+      9 Tree.loc_of
+     17 Tree.oid_of
+
+$ grep -rn "open Tree$\|include Tree$\|Tree\.(" lib bin  (外側の Tree を開く箇所)
+(なし)
+
+試作(lib/tree.ml から let data と記事の 2 文を消す)後: dune build 成功、dune runtest 差分 0 行(runtest.log は空)

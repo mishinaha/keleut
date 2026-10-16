@@ -1,0 +1,8 @@
+let f[A: Show](x: A): String = show(x)
+let g = (f, f(1))
+let gg = (f, ???)
+gg
+let v = 1
+let w = (show, v)
+w
+let z = { (show, 1) }

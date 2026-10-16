@@ -1,0 +1,10 @@
+newtype Q = Q(Int32)
+type instance Show[Q] { let show(q) = "Q!" }
+let qq = (Q(1), show)
+qq
+Q(2)
+let a = [show, show]
+a
+let e = #E
+let s = (show, "str", 1.5, 'c', true)
+s

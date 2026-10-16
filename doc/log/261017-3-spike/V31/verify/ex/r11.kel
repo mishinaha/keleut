@@ -1,0 +1,5 @@
+type Id[A] = A
+type App[F[_]] = F[Int32]
+let x: Id[Int32] = 3
+let y: App[Option] = Some(1)
+echoln(show(x))

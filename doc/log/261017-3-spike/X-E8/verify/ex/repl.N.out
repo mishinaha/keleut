@@ -1,0 +1,4 @@
+a : Int32 = 1
+g : () => Int32 = <fn>
+_ : Int32 = 2
+! <stdin>:4:9: 型エラー: String は Integral のインスタンスではありません

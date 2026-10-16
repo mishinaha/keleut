@@ -1,0 +1,17 @@
+File "test/pub_effect_note.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub_effect_note.t b/_build/default/test/pub_effect_note.t.corrected
+index 5301e01..ce43260 100644
+--- a/_build/default/test/pub_effect_note.t
++++ b/_build/default/test/pub_effect_note.t.corrected
+@@ -127,7 +127,11 @@ run の本体で、エフェクトを起こす引数の関数を呼ぶ形は、p
+   > }
+   > KEL
+   $ diktor --type-check pubrigidcall.kel
++  ! pubrigidcall.kel:2:31: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}
++  [1]
+   $ cat > purerigidcall.kel <<'KEL'
+   > let f[F](g: F): Int32 @ {} = g()
+   > KEL
+   $ diktor --type-check purerigidcall.kel
++  ! purerigidcall.kel:1:30: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}
++  [1]

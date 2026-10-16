@@ -1,0 +1,9 @@
+== a
+ exit 0
+== t
+0 exit 0
+== s
+! s.kel:2:67: 型エラー: 型が一致しません: Int32 と String
+ exit 1
+== w
+20 exit 0

@@ -1,0 +1,9 @@
+let id[T](x: T): T = x
+let n = run h {
+  let r = Ref.new(5)
+  let get = id(Ref.get)
+  let f(): Int32 @ {Heap[h], Print} = get(r)
+  let k(): Int32 @ {Heap[h], Console} = get(r)
+  k()
+}
+echoln(show(n))

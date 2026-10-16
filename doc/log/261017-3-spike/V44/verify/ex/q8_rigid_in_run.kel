@@ -1,0 +1,3 @@
+module M {
+  pub let f[A](x: A, g: (A) => Int32 @ {}): Int32 = run h { g(x) }
+}

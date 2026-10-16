@@ -1,0 +1,12 @@
+effect E = { throw: (String) => Never, ask: () => Int32 }
+effect Res = { use: () => Unit }
+let rec retry(n: Int32, acc: Int32): Int32 =
+  (if n == 0 then acc else ({ perform use(); perform throw("again") }) handle {
+    case use() => resume()
+    case cancel => { let a = perform ask(); () }
+  }) handle {
+    case throw(e) => retry(n - 1, acc + 1)
+    case ask() => { let x = resume(1); x }
+  }
+let r = retry(7944, 0)
+echoln("ok")

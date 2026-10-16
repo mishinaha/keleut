@@ -1,0 +1,9 @@
+let pick[E](o: Option[Int32], g: () => Int32 @ E): Int32 @ E = o match {
+  case Some(v) if v > 0 => {
+    let k = g
+    v + k()
+  }
+  case _ => 0
+}
+echoln(show(pick(Some(2), fn() => 10)))
+echoln(show(pick(Some(0), fn() => 10)))

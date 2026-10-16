@@ -1,0 +1,10 @@
+type class Describe[A] { val describe: (A) => String }
+type instance[A: Show] Describe[List[_]] {
+  let describe(xs) = xs match {
+    case Nil => "empty"
+    case Cons(x, _) if true => "head " + show(x)
+    case _ => "?"
+  }
+}
+echoln(describe(Cons(1, Nil)))
+echoln(describe(Cons(true, Nil)))

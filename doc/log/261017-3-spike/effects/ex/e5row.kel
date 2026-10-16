@@ -1,0 +1,2 @@
+effect Reg = { reg: ((Int32) => Int32 @ Console) => Unit }
+let use(): Unit @ Reg = perform reg(fn(x, y) => x)

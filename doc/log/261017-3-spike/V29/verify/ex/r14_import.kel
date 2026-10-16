@@ -1,0 +1,4 @@
+from "./lib/cbs" import { Cb, Callback, P }
+newtype H = MkH(Cb[{Print}], P[{}])
+let h = MkH(Callback(fn() => println("imp")), ((), 2))
+with_stdout(fn() => h match { case MkH(Callback(f), _) => f() })

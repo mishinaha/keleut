@@ -1,0 +1,30 @@
+== <一時領域>/bin/diktor-head
+a1 : (W[(Int32) => Never @ {}]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a2 : (W[Array[Never]]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a3 : (W[A]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a4 : (W[String]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a5 : (W[Never]) => Int32
+⚠ このパターンには一致する値がありません
+a6 : (W[#A(Never) | R1]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a7 : (W[#A(Never)]) => Int32
+⚠ match が非網羅的です。例えば Wr(#A(_), false) が漏れています
+rc=0
+== <一時領域>/items/V48/diktor/_build/default/bin/main.exe
+a1 : (W[(Int32) => Never @ {}]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a2 : (W[Array[Never]]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a3 : (W[A]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a4 : (W[String]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a5 : (W[Never]) => Int32
+a6 : (W[#A(Never) | R1]) => Int32
+⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
+a7 : (W[#A(Never)]) => Int32
+rc=0

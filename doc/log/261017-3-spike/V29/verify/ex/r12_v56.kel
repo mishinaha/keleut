@@ -1,0 +1,6 @@
+module M {
+  type T[A] = (A, Int32)
+  pub newtype N = MkN(T[{}])
+}
+let n = M.MkN(((), 1))
+with_stdout(fn() => println("v56"))

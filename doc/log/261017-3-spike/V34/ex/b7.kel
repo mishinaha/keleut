@@ -1,0 +1,2 @@
+let ap(h: () => Int32 @ {}): Int32 = h()
+let f[E](g: () => Int32 @ E): Int32 @ E = ap(g)

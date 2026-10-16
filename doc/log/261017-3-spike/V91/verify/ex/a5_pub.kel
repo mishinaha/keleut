@@ -1,0 +1,5 @@
+pub let k: Int32 = 1
+pub let fr: Float64 = 2.5
+pub let addf(x: Float64): Float64 = x + fr
+echoln(show(k % 2))
+echoln(show(addf(1.0)))

@@ -1,0 +1,7 @@
+pub type class Describe[A] {
+  val describe: (A) => String
+}
+pub newtype Box(Int32)
+type instance Describe[Box] {
+  pub let describe(b: Box): String = "box"
+}

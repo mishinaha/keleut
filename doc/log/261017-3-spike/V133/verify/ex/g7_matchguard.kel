@@ -1,0 +1,3 @@
+effect Ask = { ask: () => Int32 }
+let r = perform ask() handle { case ask() => 1 match { case n if n > 0 => resume(n)  case _ => resume(0) } }
+echoln(show(r))

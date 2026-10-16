@@ -1,0 +1,4 @@
+type Q = L[{Print}]
+newtype M = MkM(L[{}])
+type Cb[E] = () => Unit @ E
+newtype L[E] = LNil | LCons(Cb[E], L[E])

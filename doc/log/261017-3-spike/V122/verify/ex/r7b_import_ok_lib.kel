@@ -1,0 +1,1 @@
+pub let rd[H](r: Ref[H, Int32]): Int32 @ Heap[H] = Ref.get(r)

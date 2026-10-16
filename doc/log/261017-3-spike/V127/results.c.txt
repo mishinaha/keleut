@@ -1,0 +1,42 @@
+== c1.kel
+effect Ask = { ask: (Int32) => Int32 }
+let f(): Int32 @ Ask = perform ask()
+-- head
+! c1.kel:2:24: 型エラー: ラベル _item がありません(行は閉じています)
+[exit 1]
+-- patched
+! c1.kel:2:24: 型エラー: ラベル _item がありません(行は閉じています)
+[exit 1]
+== c2.kel
+effect Ask = { ask: (Int32) => Int32 }
+let g(): Int32 = { perform ask(1) } handle {
+  case ask(x) => resume(1, 2)
+}
+-- head
+c2.kel:4:1: 構文エラー: resume の引数は高々1個です
+[exit 2]
+-- patched
+c2.kel:4:1: 構文エラー: resume の引数は高々1個です
+[exit 2]
+== c3.kel
+effect Ask = { ask: (Int32) => Int32 }
+let g(): Int32 = { perform ask(1) } handle {
+  case ask() => resume(1)
+}
+-- head
+! c3.kel:2:18: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+-- patched
+! c3.kel:2:18: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+== c4.kel
+let f(x: Int32): Int32 = x
+let b(): Int32 = f(x = 1)
+-- head
+f : (Int32) => Int32
+! c4.kel:2:18: 型エラー: ラベル x がありません(行は閉じています)
+[exit 1]
+-- patched
+f : (Int32) => Int32
+! c4.kel:2:18: 型エラー: ラベル x がありません(行は閉じています)
+[exit 1]

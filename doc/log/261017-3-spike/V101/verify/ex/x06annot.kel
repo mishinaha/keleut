@@ -1,0 +1,8 @@
+effect Reg = { reg: ((Int32) => Int32) => Int32 }
+let main(): Unit @ Console = {
+  let n = { perform reg(fn(x: Int32) => x * 2i32) } handle {
+    case reg(f) => resume(f(21i32))
+  }
+  echoln(show(n))
+}
+main()

@@ -1,0 +1,7 @@
+module E {
+  type E = Int32
+}
+let f[E](x: Int32, k: () => Int32 @ E): Int32 @ E = k() + x
+echoln(show(f(1, fn() => { echoln("k"); 2 })))
+let h[E](x: Int32, k: () => Int32 @ {Console extends E}): Int32 @ {Console extends E} = k() + x
+echoln(show(h(5, fn() => 1)))

@@ -1,0 +1,44 @@
+diff a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/interp.ml	2026-10-17 04:10:15.179435105 +0900
+@@ -978,6 +978,13 @@
+         | Sys_error msg -> !cancel_log ("標準出力に書き出せません: " ^ msg)
+         | ex -> !cancel_log (Printexc.to_string ex))
+   in
++  (* 再開する操作の節が resume せずに例外で脱出したとき、継続を自分宛ての Unwind で捨ててから
++     例外を送り直す。自分の cancel 節は走らない *)
++  let discard_raise : type a. (a, Value.t) Effect.Deep.continuation -> exn -> Value.t =
++   fun k ex ->
++    let tok = VPending (fun () -> raise ex) in
++    match Effect.Deep.discontinue k (Unwind (inst, tok)) with VPending f as v when v == tok -> f () | v -> v
++  in
+   let clause_arg_pats (c : T.clause') =
+     match snd c.T.cl_pat with T.PCtor (_, aps) -> List.map (fun (ap : T.ctor_arg_pat) -> ap.T.cap_pat) aps | _ -> []
+   in
+@@ -1083,7 +1090,7 @@
+                                       Effect.Deep.continue k v
+                                   | exception ex ->
+                                       r.r_alive <- false;
+-                                      Effect.Deep.discontinue k ex))
++                                      discard_raise k ex))
+                           | _ when not tail -> (
+                               (* 背骨に resume の無い節は、背骨をたどらずに評価する *)
+                               let r = { r_k = k; r_used = false; r_alive = true } in
+@@ -1093,7 +1100,7 @@
+                                   if r.r_used then v else Effect.Deep.discontinue k (Unwind (inst, v))
+                               | exception ex ->
+                                   r.r_alive <- false;
+-                                  if r.r_used then raise ex else Effect.Deep.discontinue k ex)
++                                  if r.r_used then raise ex else discard_raise k ex)
+                           | _ -> (
+                               let r = { r_k = k; r_used = false; r_alive = true } in
+                               match eval_clause_tail { env with locals; resume = Some r } c.T.cl_body with
+@@ -1112,7 +1119,7 @@
+                                      discontinue して、捨てた継続の中の cancel 節を走らせる。
+                                      落とすと資源が漏れる *)
+                                   r.r_alive <- false;
+-                                  if r.r_used then raise ex else Effect.Deep.discontinue k ex))))
++                                  if r.r_used then raise ex else discard_raise k ex))))
+           | _ -> None);
+     }
+ 

@@ -1,0 +1,26 @@
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index d134bf3..922b6d0 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -370,12 +370,20 @@ pub を付けてもエフェクト位置では使えないからである。Effe
+ 
+   $ printf 'module P { type P = Int32 }\nlet f(x: Int32): Int32 @ P = x\n' > visrow16.kel
+   $ diktor --type-check visrow16.kel
++  ! visrow16.kel:2:26: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
++  [1]
+   $ printf 'module P { type P = Int32 }\nlet f(x: Int32): Int32 @ {P} = x\n' > visrow17.kel
+   $ diktor --type-check visrow17.kel
++  ! visrow17.kel:2:26: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
++  [1]
+   $ printf 'module P { type P[A] = A }\nlet f(x: Int32): Int32 @ {P[Int32], Console} = x\n' > visrow18.kel
+   $ diktor --type-check visrow18.kel
++  ! visrow18.kel:2:26: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
++  [1]
+   $ printf 'module P { pub type P = Int32 }\nlet f(x: Int32): Int32 @ P = x\n' > visrow19.kel
+   $ diktor --type-check visrow19.kel
++  ! visrow19.kel:2:26: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
++  [1]
+ 
+ 同名クラスによる可視性の迂回は宣言時に拒否(M16 検証。修飾名 M.f が
+ クラス M のメソッド f と値環境で区別できないため):

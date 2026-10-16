@@ -1,0 +1,2 @@
+let k[h, j](a: Ref[h, Int32], b: Ref[j, Int32]): Unit = ()
+let r(x) = { let a: Ref[_, Int32] = x; k(x, Ref.new(x)) }

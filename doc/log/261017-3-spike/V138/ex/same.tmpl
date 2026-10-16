@@ -1,0 +1,12 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else
+  ({ perform use(); perform throw("first") }) handle {
+    case use() => resume()
+    case cancel => perform throw("from cancel")
+  } handle {
+    case throw(e) => loop(n - 1)
+  }
+let r = loop(NNN)
+echoln("ok")

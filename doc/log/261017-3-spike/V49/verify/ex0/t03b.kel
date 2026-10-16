@@ -1,0 +1,4 @@
+let idf[A](x: A): A = x
+type class C[A] { val cm: (A) => A }
+type instance C[Int32] { let cm: (Int32) => Int32 = idf(fn(x: Int32) => x + 1) }
+echoln(show(cm(1)))

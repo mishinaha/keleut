@@ -1,0 +1,5 @@
+newtype L[A] = N | C(A, L[A])
+effect E = { e: () => Int32 }
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ E = perform e()
+let xs = C(mkp(), C(b, N))

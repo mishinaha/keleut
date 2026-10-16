@@ -1,0 +1,5 @@
+pub module L {
+  pub let inc: (Int32) => Int32 = fn(x) => x + 1
+  pub let rec dec: (Int32) => Int32 = fn(x) => if x <= 0 then 0 else dec(x - 1)
+  pub let run1(n: Int32): Int32 = run h { let r = Ref.new(n); Ref.get(r) }
+}

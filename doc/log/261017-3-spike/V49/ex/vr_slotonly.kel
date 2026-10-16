@@ -1,0 +1,4 @@
+let f(): Int32 = run h {
+  let slot: Ref[h, (Int32) => Int32 @ {Heap[h]}] = Ref.new(fn(x) => x)
+  1
+}

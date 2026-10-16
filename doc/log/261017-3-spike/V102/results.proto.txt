@@ -1,0 +1,70 @@
+=== nnlist.kel
+--- $ diktor-proto --type-check nnlist.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! nnlist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== pairtp.kel
+--- $ diktor-proto --type-check pairtp.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! pairtp.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== nestedname.kel
+--- $ diktor-proto --type-check nestedname.kel
+b : () => Int32 @ {Console}
+ys : List[() => Int32 @ {}]
+! nestedname.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== box.kel
+--- $ diktor-proto --type-check box.kel
+b : () => Int32 @ {Console}
+! box.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== alias.kel
+--- $ diktor-proto --type-check alias.kel
+b : () => Int32 @ {Console}
+! alias.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== nestedfield.kel
+--- $ diktor-proto --type-check nestedfield.kel
+b : () => Int32 @ {Console}
+! nestedfield.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ L のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== rowparam.kel
+--- $ diktor-proto --type-check rowparam.kel
+b : () => Int32 @ {Console}
+mkp : () => () => Int32 @ {}
+! rowparam.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== mixed.kel
+--- $ diktor-proto --type-check mixed.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! mixed.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== mixed2.kel
+--- $ diktor-proto --type-check mixed2.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+k : (() => Int32 @ {}) => Int32
+q : Q[() => A @ {}]
+q2 : Q[() => Int32 @ {}]
+[exit 0]
+=== mixed3.kel
+--- $ diktor-proto --type-check mixed3.kel
+k : (() => Int32 @ {}) => Int32
+k2 : (() => Int32 @ {Console}) => Int32
+! mixed3.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Q のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== pa2.kel
+--- $ diktor-proto --type-check pa2.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+pick : (Boolean, A, A) => A
+! pa2.kel:4:48: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== nonrow.kel
+--- $ diktor-proto --type-check nonrow.kel
+! nonrow.kel:1:10: 型エラー: Boolean は Integral のインスタンスではありません
+[exit 1]

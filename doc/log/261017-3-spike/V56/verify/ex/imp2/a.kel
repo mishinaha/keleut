@@ -1,0 +1,2 @@
+from "./lib/m" import P
+let f(x: Int32): Int32 @ P = x

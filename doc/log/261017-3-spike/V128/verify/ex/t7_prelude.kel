@@ -1,0 +1,10 @@
+effect Nop = { nop: () => Unit }
+let r = with_stdout(fn() => {
+  println("hi")
+  ({ println("boom"); 1 }) handle {
+    case nop() => resume()
+    case return(x) => x
+    case cancel => echoln("cancel inner")
+  }
+})
+echoln(show(r))

@@ -1,0 +1,2 @@
+type Ref[A, B] = { v: A, w: B }
+let f[A, B](x: Ref[A, Int32]): Ref[B, Int32] = x

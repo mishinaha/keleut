@@ -1,0 +1,3 @@
+from "./lib" import F
+pub let h(f: F): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))

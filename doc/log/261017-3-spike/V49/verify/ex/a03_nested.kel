@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+let outer[A](x: A): A = {
+  let inner[B](y: B): B = y
+  inner(x)
+}
+let h[E](body: () => Int32 @ {Ask extends E}): Int32 @ E = body() handle { case ask() => resume(1) case return(v) => v }
+let main(): Unit @ {Console} = echoln(show(h(fn() => h(fn() => perform ask() + outer(2)))))
+main()

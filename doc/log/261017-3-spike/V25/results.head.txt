@@ -1,0 +1,74 @@
+## qual5.kel (--type-check --no-prelude)
+     1	type Unit = {}
+     2	effect File = { read: () => String, write: (String) => Unit }
+     3	effect Sink = { write: (String) => Unit, flush: () => Unit }
+     4	let prog(): String @ File = perform read()
+     5	let h(): String = prog() handle {
+     6	  case File.read() => resume("x")
+     7	  case flush() => resume(())
+     8	}
+--- out
+prog : () => String @ {File}
+! qual5.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+## qual5b.kel (--type-check --no-prelude)
+     1	type Unit = {}
+     2	effect File = { read: () => String, write: (String) => Unit }
+     3	effect Sink = { write: (String) => Unit, flush: () => Unit }
+     4	let prog(): String @ File = perform read()
+     5	let h(): String = prog() handle {
+     6	  case File.read() => resume("x")
+     7	  case File.flush() => resume(())
+     8	}
+--- out
+prog : () => String @ {File}
+! qual5b.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+## qual5c.kel (--type-check --no-prelude)
+     1	type Unit = {}
+     2	effect File = { read: () => String, write: (String) => Unit }
+     3	effect Sink = { write: (String) => Unit, flush: () => Unit }
+     4	let prog(): String @ File = perform read()
+     5	let h(): String = prog() handle {
+     6	  case File.read() => resume("x")
+     7	  case flush() => resume(())
+     8	  case close() => resume(())
+     9	}
+--- out
+prog : () => String @ {File}
+! qual5c.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+## unq.kel (--type-check --no-prelude)
+     1	type Unit = {}
+     2	effect File = { read: () => String, write: (String) => Unit }
+     3	effect Sink = { write: (String) => Unit, flush: () => Unit }
+     4	let prog(): String @ File = perform read()
+     5	let h(): String = prog() handle {
+     6	  case read() => resume("x")
+     7	  case flush() => resume(())
+     8	}
+--- out
+prog : () => String @ {File}
+! unq.kel:5:19: 型エラー: この操作の組を宣言するエフェクトがありません: read, flush
+[exit 1]
+## prelude5.kel (--type-check)
+     1	effect Ask = { ask: () => String, tell: (String) => Unit }
+     2	let g(): String = (perform Ask.ask()) handle {
+     3	  case Ask.ask() => resume("k")
+     4	  case print(s) => resume(())
+     5	}
+--- out
+! prelude5.kel:2:19: 型エラー: ハンドラが操作を網羅していません: Ask の tell が漏れています
+[exit 1]
+## qual5w.kel (--type-check --no-prelude)
+     1	type Unit = {}
+     2	effect File = { read: () => String, write: (String) => Unit }
+     3	effect Sink = { write: (String) => Unit, flush: () => Unit }
+     4	let prog(): String @ File = perform read()
+     5	let h(): String = prog() handle {
+     6	  case File.read() => resume("x")
+     7	}
+--- out
+prog : () => String @ {File}
+! qual5w.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]

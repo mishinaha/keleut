@@ -1,0 +1,2 @@
+module M { pub type T[A] = (A, A) }
+let g(x: T[Int32]): Int32 = 0

@@ -1,0 +1,8 @@
+let idf[A](x: A): A = x
+let f(): Unit @ {Console} = {
+  let x = idf(fn(y) => y)
+  let k = fn(u) => x(u)
+  echoln(k("s"))
+  echoln(show(k(1)))
+}
+f()

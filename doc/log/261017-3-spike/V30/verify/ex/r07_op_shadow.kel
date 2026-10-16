@@ -1,0 +1,5 @@
+effect L1 = { op: () => Int32 }
+newtype N = N(() => Int32 @ {L2})
+effect L2 = { op2: () => Int32 }
+let x: Int32 = (perform op()) handle { case op() => resume(3) }
+echoln(show(x))

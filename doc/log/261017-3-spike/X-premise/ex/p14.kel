@@ -1,0 +1,2 @@
+newtype Opaque = MkOpaque(Int32)
+let ng(xs: List[Opaque]): Boolean = Nil == xs

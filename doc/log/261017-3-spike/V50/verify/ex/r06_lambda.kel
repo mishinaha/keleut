@@ -1,0 +1,3 @@
+type W: EffectRow = {Print}
+let twice[W](g: () => Unit @ {W}): Unit @ {W} = { g(); g() }
+with_stdout(fn() => twice(fn() => println("tw")))

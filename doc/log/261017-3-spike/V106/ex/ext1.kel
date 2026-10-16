@@ -1,0 +1,2 @@
+extern "prim" let int_to_string[A: Show](x: Int32): String
+echoln(int_to_string(3i32))

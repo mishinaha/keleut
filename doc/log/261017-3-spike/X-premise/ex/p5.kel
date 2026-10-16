@@ -1,0 +1,2 @@
+newtype Opaque = MkOpaque(Int32)
+let s = show(Cons(MkOpaque(1i32), Nil))

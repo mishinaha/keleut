@@ -1,0 +1,7 @@
+let f(): Int32 @ Console = { echoln("a"); 1 + 2 * 3 - -4 }
+let s(): String @ Print = { println("b"); show(1 < 2) + show(3 % 2) }
+echoln(show(with_stdout(fn() => s())))
+echoln(show(f()))
+let xs = run h { let m = MutableArray.new(3, 7); MutableArray.set(m, 0, 1); MutableArray.freeze(m) }
+let t(): Unit @ Console = Array.each(xs, fn(x) => echoln(show(x + Array.length(xs) + Array.get(xs, 0))))
+t()

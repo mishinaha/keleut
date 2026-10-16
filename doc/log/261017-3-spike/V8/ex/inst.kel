@@ -1,0 +1,9 @@
+type class Pick[A] {
+  val pick: (A) => Int32
+}
+type instance Pick[Int32] {
+  let pick(x) = x match {
+    case 4294967295 => 1
+    case _ => 2
+  }
+}

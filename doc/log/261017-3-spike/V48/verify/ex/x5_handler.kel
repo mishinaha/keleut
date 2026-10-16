@@ -1,0 +1,8 @@
+effect Nop = { nop: () => Int32 }
+effect Fail = { throw: (String) => Never }
+let r1(t: () => Option[Never] @ Nop): Int32 = t() handle { case nop() => resume(1)  case return(Some(n)) => 1 }
+let r2(t: () => (Int32, Never) @ {Nop, Fail}): Int32 = {
+  { t() handle { case nop() => resume(1)  case return((0, n)) => 1 } } handle { case throw(s) => 2 }
+}
+let r3(): Int32 = { perform throw("x") } handle { case throw(s) => 5  case return(n) => 6 }
+echo(show(r3()))

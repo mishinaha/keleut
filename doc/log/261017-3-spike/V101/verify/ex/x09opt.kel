@@ -1,0 +1,11 @@
+effect Reg = { reg: ((Option[Int32]) => Int32) => Int32 }
+let main(): Unit @ Console = {
+  let r = { perform reg(fn(o) => o match {
+    case Some(v) => v
+    case None => 0i32
+  }) } handle {
+    case reg(f) => resume(f(Some(5i32)) + f(None))
+  }
+  echoln(show(r))
+}
+main()

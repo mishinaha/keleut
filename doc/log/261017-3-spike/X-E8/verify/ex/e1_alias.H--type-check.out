@@ -1,0 +1,4 @@
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+_ : {}
+rc=0

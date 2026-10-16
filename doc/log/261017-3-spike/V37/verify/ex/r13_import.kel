@@ -1,0 +1,2 @@
+from "./r13_import_lib" import pairs
+echoln(show(pairs()))

@@ -1,0 +1,8 @@
+let id[T](x: T): T = x
+let mk() = id(Array.length)
+let xs: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(4, 0)) }
+let k: Option[(Array[Int32]) => Int32 @ Console] = Some(mk())
+k match {
+  case Some(f) => echoln(show(f(xs)))
+  case None => ()
+}

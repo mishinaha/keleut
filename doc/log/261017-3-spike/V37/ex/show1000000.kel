@@ -1,0 +1,2 @@
+let rec build(i: Int32, acc: List[Int32]): List[Int32] = if i == 0 then acc else build(i - 1, Cons(i, acc))
+echoln(show(build(1000000, Nil)))

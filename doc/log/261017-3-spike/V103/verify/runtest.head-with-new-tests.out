@@ -1,0 +1,83 @@
+File "test/std_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/std_rows.t b/_build/default/test/std_rows.t.corrected
+index 3a3ff59..ce054c7 100644
+--- a/_build/default/test/std_rows.t
++++ b/_build/default/test/std_rows.t.corrected
+@@ -18,13 +18,14 @@
+   > KEL
+   $ diktor --type-check stdlen.kel
+   id : (A) => A
+-  g : (Array[_A]) => Int32 @ {}
++  g : (Array[_A]) => Int32
+   xs : Array[Int32]
+   p : () => {} @ {Print}
+-  c : () => {} @ {Console}
+-  _ : {}
++  ! stdlen.kel:5:39: 型エラー: ラベル Print がありません(行は閉じています)
++  [1]
+   $ diktor stdlen.kel
+-  2
++  ! stdlen.kel:5:39: 型エラー: ラベル Print がありません(行は閉じています)
++  [1]
+ 
+ 組み込みのクラスのメソッドも同じで、利用者のクラスのメソッドと区別しない:
+ 
+@@ -36,7 +37,8 @@
+   > c()
+   > KEL
+   $ diktor stdshow.kel
+-  2
++  ! stdshow.kel:4:34: 型エラー: ラベル Print がありません(行は閉じています)
++  [1]
+ 
+ 参照の操作の行は @ {Heap[h]} である:
+ 
+@@ -52,7 +54,8 @@
+   > echoln(show(n))
+   > KEL
+   $ diktor stdref.kel
+-  5
++  ! stdref.kel:6:41: 型エラー: ラベル Print がありません(行は閉じています)
++  [1]
+ 
+ プリミティブ(extern "prim")で省略した @ は、使うたびに新しい行変数になる。
+ 一般化しない束縛では最初の使用で行が決まり、2 つ目の文脈で落ちる:
+@@ -96,7 +99,7 @@
+   > echoln(show(N(1)))
+   > KEL
+   $ diktor stdinst.kel
+-  ! stdinst.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
++  ! stdinst.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+   [1]
+ 
+ 無名関数の本体が演算子を使うと、開いた尾部が無名関数の行になり、一般化しない
+@@ -119,4 +122,5 @@
+   > main()
+   > KEL
+   $ diktor stdopbody.kel
+-  20
++  ! stdopbody.kel:11:15: 型エラー: ラベル Ask がありません(行は閉じています)
++  [1]
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 9922562..a8875bd 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -49,7 +49,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String @ {}
++  weak : [_A: Show] (_A) => String
+   _ : String
+ 
+ ファイルの終わりまでに型が決まらなければ、曖昧性エラーになる。辞書はファイルごとに
+@@ -61,7 +61,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e2.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String @ {}
++  weak : [_A: Show] (_A) => String
+   ! ml9e2.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+   [1]
+ 

@@ -1,0 +1,2 @@
+let f[h1, h](r: Ref[h1, h], s: Ref[h, h1]): Int32 = 0
+let g[A, B, C, D, E, F](a: A, b: B, c: C, d: D, e: E, r: Ref[F, Int32]): Int32 = 0

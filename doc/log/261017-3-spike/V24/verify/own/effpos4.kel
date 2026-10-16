@@ -1,0 +1,5 @@
+effect Log = {
+  log: (String) => Unit,
+  flush: () => Unit,
+  log: () => Unit
+}

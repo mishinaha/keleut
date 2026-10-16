@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+newtype Callback[F[_]] = Callback(F[Int32])
+newtype Box[A] = Box(() => A @ {Log})
+let c: Callback[Box] = Callback(Box(fn() => { perform log("b"); 3 }))
+let _ = c match { case Callback(Box(g)) => echoln(show(g() handle { case log(s) => { echoln(s); resume(()) } })) }

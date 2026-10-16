@@ -1,0 +1,8 @@
+let rec sm[A: Add](xs: List[A], z: A): A = xs match { case Nil => z case Cons(h, t) => h + sm(t, z) }
+sm(Cons(1, Cons(2, Nil)), 0)
+let mk[A: Show](x: A) = fn() => show(x)
+let k = mk(Cons(1, Nil))
+k()
+newtype Box[A] = Box(A)
+Box(sm(Cons(1.5, Nil), 0.5))
+let p = (show, 1)

@@ -1,0 +1,188 @@
+===== fwd.kel
+newtype Cb = Cb((String) => Unit @ {Log})
+effect Log = { log: (String) => Unit }
+let call(c: Cb): Unit @ {Log} = c match { case Cb(g) => g("hi") }
+let n: Int32 = {
+  call(Cb(fn(s) => perform log(s))) handle { case log(s) => resume(()) }
+  42
+}
+echoln(show(n))
+----- diktor-head fwd.kel
+! fwd.kel:1:36: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== bwd.kel
+effect Log = { log: (String) => Unit }
+newtype Cb = Cb((String) => Unit @ {Log})
+let call(c: Cb): Unit @ {Log} = c match { case Cb(g) => g("hi") }
+let n: Int32 = {
+  call(Cb(fn(s) => perform log(s))) handle { case log(s) => resume(()) }
+  42
+}
+echoln(show(n))
+----- diktor-head bwd.kel
+42
+[exit 0]
+===== v_alias.kel
+type T = () => Unit @ {Log}
+effect Log = { log: (String) => Unit }
+let f(x: T): Unit @ {Log} = x()
+----- diktor-head --type-check  v_alias.kel
+f : (() => {} @ {Log}) => {} @ {Log}
+[exit 0]
+===== v_class.kel
+type class C[T] { val m: (T) => Unit @ {Log} }
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_class.kel
+! v_class.kel:1:40: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_comp1.kel
+effect Foo = { foo: () => Int32 }
+module Foo { pub type Foo = Int32 }
+----- diktor-head --type-check  v_comp1.kel
+! v_comp1.kel:2:14: 型エラー: module Foo のコンパニオン型 Foo は既存の型 Foo と同名です(module 内の型とトップレベルの型は同名にできません)
+[exit 1]
+===== v_comp2.kel
+module Foo { pub type Foo = Int32 }
+effect Foo = { foo: () => Int32 }
+----- diktor-head --type-check  v_comp2.kel
+! v_comp2.kel:1:14: 型エラー: module Foo のコンパニオン型 Foo は既存の型 Foo と同名です(module 内の型とトップレベルの型は同名にできません)
+[exit 1]
+===== v_dup.kel
+effect Log = { log: (String) => Unit }
+newtype N = N(() => Unit @ {Log})
+effect Log = { log2: (String) => Unit }
+----- diktor-head --type-check  v_dup.kel
+! v_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています
+[exit 1]
+===== v_effop.kel
+effect A = { a: (() => Unit @ {B}) => Unit }
+effect B = { b: () => Unit }
+----- diktor-head --type-check  v_effop.kel
+! v_effop.kel:1:31: 型エラー: 未知のエフェクト: B
+[exit 1]
+===== v_fun.kel
+let f(): Unit @ {Log} = perform log("a")
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_fun.kel
+f : () => {} @ {Log}
+[exit 0]
+===== v_mod_inner.kel
+module M {
+  pub newtype N = N(() => Unit @ {Log})
+  pub effect Log = { log: (String) => Unit }
+}
+----- diktor-head --type-check  v_mod_inner.kel
+! v_mod_inner.kel:3:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+===== v_mod_outer.kel
+module M { pub newtype N = N(() => Unit @ {Log}) }
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_mod_outer.kel
+! v_mod_outer.kel:1:43: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_mod_qual.kel
+newtype N = N(() => Unit @ {M.Log})
+module M { pub effect Log = { log: (String) => Unit } }
+----- diktor-head --type-check  v_mod_qual.kel
+! v_mod_qual.kel:2:12: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+===== v_newtype2.kel
+newtype N = N(Int32)
+newtype M = M(() => Unit @ {Log})
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_newtype2.kel
+! v_newtype2.kel:2:28: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_newtype_bare.kel
+newtype N = N(() => Unit @ Log)
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_newtype_bare.kel
+! v_newtype_bare.kel:1:28: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_newtype_ext.kel
+newtype N[E] = N(() => Unit @ {Log extends E})
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_newtype_ext.kel
+! v_newtype_ext.kel:1:31: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_newtype.kel
+newtype N = N(() => Unit @ {Log})
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_newtype.kel
+! v_newtype.kel:1:28: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_newtype_sum.kel
+newtype N = A | B(() => Unit @ {Log})
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_newtype_sum.kel
+! v_newtype_sum.kel:1:32: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_nolabel.kel
+newtype N = N(() => Unit @ {Heap[Int32]})
+----- diktor-head --type-check  v_nolabel.kel
+[exit 0]
+===== v_notlabel.kel
+newtype N = N(() => Unit @ {Int32})
+----- diktor-head --type-check  v_notlabel.kel
+! v_notlabel.kel:1:28: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+===== v_order_dup.kel
+newtype N = N(() => Unit @ {Nope})
+effect Log = { log: (String) => Unit }
+effect Log = { log: (String) => Unit }
+----- diktor-head --type-check  v_order_dup.kel
+! v_order_dup.kel:1:28: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+===== v_order_std.kel
+newtype N = N(() => Unit @ {Nope})
+effect Console = { w: (String) => Unit }
+----- diktor-head --type-check  v_order_std.kel
+! v_order_std.kel:1:28: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+===== v_params.kel
+newtype N = N(() => Unit @ {Log})
+effect Log[A] = { log: (String) => Unit }
+----- diktor-head --type-check  v_params.kel
+! v_params.kel:1:28: 型エラー: 未知のエフェクト: Log
+[exit 1]
+===== v_rowalias.kel
+type R: EffectRow = {Log}
+effect Log = { log: (String) => Unit }
+let f(): Unit @ R = perform log("a")
+----- diktor-head --type-check  v_rowalias.kel
+f : () => {} @ {Log}
+[exit 0]
+===== v_unknown.kel
+newtype N = N(() => Unit @ {Nope})
+----- diktor-head --type-check  v_unknown.kel
+! v_unknown.kel:1:28: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+===== v22_alias1.kel
+type Unit = {}
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype A = MkA(B[{}])
+newtype B[E] = MkB(Cb[E])
+----- diktor-head --type-check --no-prelude v22_alias1.kel
+[exit 0]
+===== v22_alias2.kel
+type Unit = {}
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype B[E] = MkB(Cb[E])
+newtype A = MkA(B[{}])
+----- diktor-head --type-check --no-prelude v22_alias2.kel
+[exit 0]
+===== repl.in
+effect Log = { log: (String) => Unit }; newtype N = N(() => Unit @ {Nope})
+effect Log = { log: (String) => Unit }
+effect Bad[A] = { op: () => Unit }; newtype M = M(() => Unit @ {Bad})
+effect Bad = { op: () => Unit }
+newtype P = P(() => Unit @ {Later})
+effect Later = { later: () => Unit }
+newtype P = P(() => Unit @ {Later})
+----- diktor-head --repl < repl.in
+! <stdin>:1:68: 型エラー: 未知のエフェクト: Nope
+! <stdin>:3:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+! <stdin>:5:28: 型エラー: 未知のエフェクト: Later
+[exit 0]

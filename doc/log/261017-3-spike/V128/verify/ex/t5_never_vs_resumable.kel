@@ -1,0 +1,15 @@
+effect E = { ask: () => Int32, quit: () => Never }
+effect Q = { q: () => Never }
+let r = ({ echoln(show(perform ask())); perform quit() }) handle {
+  case ask() => resume(1)
+  case quit() => { echoln("quit"); 9 }
+  case return(x) => x
+  case cancel => echoln("cancel E")
+}
+echoln(show(r))
+let r2 = ((perform ask() + 1) handle {
+  case ask() => { echoln("abandon"); perform q() }
+  case quit() => 0
+  case cancel => echoln("cancel E2")
+}) handle { case q() => 42 }
+echoln(show(r2))

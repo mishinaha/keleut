@@ -1,0 +1,5 @@
+effect Op = { op: (Int32, Int32) => Int32 }
+let k(): Int32 @ Op = perform op(1, 2)
+let r = k() handle {
+  case op(a) => resume(a)
+}

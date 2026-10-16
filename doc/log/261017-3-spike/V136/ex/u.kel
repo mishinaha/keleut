@@ -1,0 +1,2 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe = fn(n) => __string_concat(n, "x") }

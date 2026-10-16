@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+type R[E]: EffectRow = {Ask extends E}
+let two(): Int32 @ R[{}] = perform ask() + perform ask()
+let guarded(n: Int32): Int32 @ R[{Ask}] = n match {
+  case k if k > 0 => k + perform ask()
+  case _ => 0
+}
+let v: Int32 = (((two() + guarded(1)) handle { case ask() => resume(10) }) handle { case ask() => resume(100) })
+with_stdout(fn() => println(show(v)))

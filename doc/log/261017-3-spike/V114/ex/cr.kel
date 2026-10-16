@@ -1,0 +1,5 @@
+let ok = 1 + 2
+let r = ({ echoln("x"); 1 }) handle {
+  case echo(m) => resume(())
+  case cancel(e) => ()
+}

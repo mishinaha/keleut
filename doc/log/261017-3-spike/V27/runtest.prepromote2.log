@@ -1,0 +1,29 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 133ff11..fffa857 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -801,10 +801,14 @@ newtype の本体と EffectRow エイリアスへの型引数も同じ:
+   > let f[G](r: {x: Int32 extends G[Int32]}, c: Callback[G[Int32]]): Int32 = r.x
+   > EOF
+   $ diktor --type-check hktrow6.kel
++  ! hktrow6.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
++  [1]
+   $ cat > hktrow7.kel <<'EOF'
+   > let f[G](v: #A(Int32) | G[Int32]): Int32 = 0
+   > EOF
+   $ diktor --type-check hktrow7.kel
++  ! hktrow7.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
++  [1]
+ 
+ Type エイリアスの本体に書いた形は、エイリアスの宣言で落ちる。パラメータの
+ カインドの推論が本体を読めずに F を Type を取って Type を返す形に既定化する
+@@ -839,6 +843,8 @@ newtype の先頭で報告する:
+   > newtype Box[R] = MkBox({x: Int32 extends R})
+   > EOF
+   $ diktor --type-check hktrow8.kel
++  ! hktrow8.kel:1:1: 型エラー: newtype H の型パラメータ G への適用が行として使われています(行を返す型構成子はありません)
++  [1]
+ 
+ 落とすのは型変数への適用だけである。エイリアスの展開結果が型パラメータ
+ そのものになる形は、行変数のカインドの推論として Row に決まって通る。

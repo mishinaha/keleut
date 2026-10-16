@@ -1,0 +1,33 @@
+let id[T](x: T): T = x
+let s = id(Sub.sub)
+let m = id(Mul.mul)
+let d = id(Div.div)
+let r = id(Rem.rem)
+let e = id(Eq.eq)
+let l = id(Ord.lt)
+let ng = id(Neg.neg)
+let ad = id(Add.add)
+let p(): Unit @ Print = println(show(s(9, 2)) + show(m(3, 4)) + show(d(9, 2)) + show(r(9, 2)) + show(e("a", "a")) + show(l(1, 2)) + show(ng(1)) + ad("x", "y"))
+let main(): Unit @ Console = {
+  with_stdout(fn() => p())
+  echoln(show(s(9, 2)) + show(m(3, 4)) + show(d(9, 2)) + show(r(9, 2)) + show(e("a", "b")) + show(l(2, 1)) + show(ng(1)) + ad("x", "y"))
+  let n = run h {
+    let mg = id(MutableArray.get)
+    let ms = id(MutableArray.set)
+    let ml = id(MutableArray.length)
+    let mf = id(MutableArray.freeze)
+    let rs = id(Ref.set)
+    let a = MutableArray.new(3, 1)
+    let rr = Ref.new(0)
+    let k(): Int32 @ {Heap[h], Console} = { ms(a, 0, 5); rs(rr, 1); echoln("k"); mg(a, 0) + ml(a) }
+    let q(): Int32 @ {Heap[h], Print} = { println("q"); ms(a, 1, 2); rs(rr, 2); mg(a, 0) + Array.length(mf(a)) }
+    k() + with_stdout(fn() => q()) + Ref.get(rr)
+  }
+  echoln(show(n))
+  let ag = id(Array.get)
+  let xs = run h { MutableArray.freeze(MutableArray.new(2, 4)) }
+  let pp(): Unit @ Print = println(show(ag(xs, 0)))
+  with_stdout(fn() => pp())
+  echoln(show(ag(xs, 1)))
+}
+main()

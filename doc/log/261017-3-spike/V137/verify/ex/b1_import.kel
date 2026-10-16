@@ -1,0 +1,6 @@
+from "./imp/lib" import { Fail, loop }
+let r = loop(3) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+  case return(x) => { echoln("ret " + show(x)); x + 5 }
+}
+echoln(show(r))

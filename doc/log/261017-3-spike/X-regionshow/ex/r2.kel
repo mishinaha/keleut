@@ -1,0 +1,2 @@
+let f[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let g[h](r: Ref[h, String]): Int32 @ Heap[h] = f(r)

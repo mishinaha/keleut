@@ -1,0 +1,4 @@
+type R[E] = {Print extends E}
+type Cb[E] = () => Unit @ E
+let f(c: Cb[{}]): Int32 = 0
+with_stdout(fn() => println(show(f(fn() => ()))))

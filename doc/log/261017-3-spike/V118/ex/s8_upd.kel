@@ -1,0 +1,5 @@
+let r = {a = 1}
+let s = {Foo with a = 2}
+
+
+let b = 2

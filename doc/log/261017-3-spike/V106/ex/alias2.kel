@@ -1,0 +1,8 @@
+type Pair[X] = (X, X)
+type class Pp[A] {
+  val pp[B: Show]: (A, Pair[B]) => String
+}
+type instance Pp[Int32] {
+  let pp(x, p) = show(x) + (p match { case (a, _) => show(a) })
+}
+echoln(pp(3i32, (true, false)))

@@ -1,0 +1,3 @@
+newtype H = MkH(Bad[{}])
+type Bad[E] = (E, Cb[E])
+type Cb[E] = () => Unit @ E

@@ -1,0 +1,2 @@
+module M { pub type W[E]: EffectRow = {Print extends E} }
+type X: EffectRow = W[Console]

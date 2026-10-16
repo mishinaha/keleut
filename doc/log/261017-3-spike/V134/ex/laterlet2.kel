@@ -1,0 +1,7 @@
+effect Fail = { throw: (String) => Never }
+let get(o: Option[Int32]): Int32 @ Fail = {
+  if o == None then perform throw("none") match {} else ()
+  let m = 1
+  m
+}
+echoln(show(get(None) handle { case throw(e) => 0 - 1 }))

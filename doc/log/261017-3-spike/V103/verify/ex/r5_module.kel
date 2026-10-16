@@ -1,0 +1,11 @@
+module M {
+  pub let id[T](x: T): T = x
+  pub let g[h, A](r: Ref[h, A]): A @ Heap[h] = id(Ref.get)(r)
+  pub let plus[A: Add](x: A, y: A): A = x + y
+}
+let n = run h {
+  let r = Ref.new(5)
+  let k(): Int32 @ {Heap[h], Console} = { echoln("k"); M.plus(M.g(r), 1) }
+  k()
+}
+echoln(show(n))

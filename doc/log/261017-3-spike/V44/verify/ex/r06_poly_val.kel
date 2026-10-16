@@ -1,0 +1,8 @@
+let idf[A](x: A): A = x
+module M {
+  pub let k: (Int32) => Int32 = idf(fn(x) => x + 1)
+  pub let r: {go: (Int32) => Int32 @ {}} = {go = k}
+  pub let v: (Int32) => #A | #B = fn(x) => if x > 0 then #A else #B
+  pub let w: ({a: Int32}) => Int32 = fn(q) => q.a
+}
+with_stdout(fn() => { echoln(show(M.r.go(1))); echoln(show(M.w({a = 7}))); echoln(M.v(1) match { case #A => "A" case #B => "B" }) })

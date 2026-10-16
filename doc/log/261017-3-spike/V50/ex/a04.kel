@@ -1,0 +1,5 @@
+module M {
+  type W: EffectRow = {Print}
+  pub let f[W](u: Unit): Unit @ {W} = println("a")
+  pub let g[W](x: Int32): Int32 @ W = x
+}

@@ -1,0 +1,73 @@
+File "test/typecheck_sample.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_sample.t b/_build/default/test/typecheck_sample.t.corrected
+index 0a899f2..d976c07 100644
+--- a/_build/default/test/typecheck_sample.t
++++ b/_build/default/test/typecheck_sample.t.corrected
+@@ -9,7 +9,9 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+   each : (List[A], (A) => {}) => {}
+   heavy : (Int32) => Int32
+   audit_log : ({query: String}, Resp) => {}
++  ⚠ このパターンには一致する値がありません
+   handle_client : (Conn) => {} @ {Async}
++  ⚠ このパターンには一致する値がありません
+   a : Int32
+   b : Int64
+   c : Int64
+@@ -60,21 +62,31 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+   par : (() => A @ {}, () => B @ {}) => (A, B)
+   scope : (() => A @ {Nursery, Async extends R1}) => A @ {Async extends R1}
+   serve : (List[Conn]) => {} @ {Async}
++  ⚠ このパターンには一致する値がありません
+   with_timeout : (Int64, () => A @ {Deadline extends R1}) => Option[A] @ {Async extends R1}
+   handle_audited : ({query: String}) => Resp @ {ReqId, Logger, Tracer, Db, Background, Async}
+   crunch : (Array[Int32]) => Int32 @ {Async}
+   channel : (Int32) => Chan[A]
+   send : (Chan[A], A) => {} @ {Async}
++  ⚠ このパターンには一致する値がありません
+   recv : (Chan[A]) => A @ {Async}
++  ⚠ このパターンには一致する値がありません
+   sin : (Float64) => Float64 @ {}
+   sqlite_step : (Stmt) => Int32 @ {Blocking}
+   pinned : (() => A @ {Blocking extends R1}) => A
+   BigInt.parse : (String) => BigInt.BigInt @ {}
+   BigInt.normalize : (BigInt.BigInt) => BigInt.BigInt
++  ⚠ このパターンには一致する値がありません
+   big_sum : () => BigInt.BigInt
+ 
+ 実行(トップレベル式文: sample.kel:550 の handle と :662 の capture):
+ 
+   $ diktor sample/stubs.kel sample/sample.kel
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
+   test
+   test
+File "test/typecheck_m5.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m5.t b/_build/default/test/typecheck_m5.t.corrected
+index 616bf47..6eda7ad 100644
+--- a/_build/default/test/typecheck_m5.t
++++ b/_build/default/test/typecheck_m5.t.corrected
+@@ -114,6 +114,7 @@ Never は節ゼロの match で網羅(§7.5):
+   > EOF
+   $ diktor --type-check --no-prelude never.kel
+   absurd : (Never) => A
++  ⚠ このパターンには一致する値がありません
+ 
+ パターン束縛の網羅性警告(§6.4)とラベル指定パターンの _ 補完:
+ 
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index 4d7271b..567f203 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -273,6 +273,7 @@ default へ降りる。M19 / G3a の sig_complete):
+   > KEL
+   $ diktor --type-check --no-prelude sigc.kel
+   absurd : (Never) => A
++  ⚠ このパターンには一致する値がありません
+   allwild : (Boolean) => Int32
+ 
+ 網羅性警告は宣言をまたいでソース順に並ぶ(§10.13 の遅延キュー。

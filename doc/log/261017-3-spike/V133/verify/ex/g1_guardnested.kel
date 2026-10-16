@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = perform ask() handle {
+  case ask() if (perform ask2() handle { case ask2() => resume(5) }) > 3 => resume(10)
+  case ask() => resume(0)
+}
+echoln(show(r))

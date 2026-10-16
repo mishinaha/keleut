@@ -1,0 +1,2 @@
+type class C[A] { val c: (A) => Int32 }
+type class C[A] { val c: (A) => Boolean }

@@ -1,0 +1,9 @@
+type Boom = Never
+effect Fail = { throw: (String) => Boom }
+let get(o: Option[Int32]): Int32 @ Fail = o match {
+  case Some(v) if v > 0 => v
+  case Some(v) => 0 - v
+  case None => perform throw("none")
+}
+echoln(show(get(None) handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }))
+echoln(show(get(Some(0 - 5)) handle { case throw(e) => 0 }))

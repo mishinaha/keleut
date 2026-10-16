@@ -1,0 +1,30 @@
+== c7.kel
+type class Sz[A] { val sz[E]: (A) => Int32 @ E }
+newtype Foo = Foo
+let idf[A](x: A): A = x
+type instance Sz[Foo] {
+  let sz = idf(fn(x: Foo) => 1i32)
+}
+echoln(show(sz(Foo)))
+-- HEAD
+! c7.kel:5:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド sz の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+exit 1
+-- 試作
+1
+exit 0
+== c8.kel
+newtype Foo = Foo
+type instance Show[Foo] {
+  let show = { echoln("init"); fn(x: Foo) => "foo" }
+}
+let s = show
+echoln(s(Foo))
+echoln(show(Foo))
+-- HEAD
+! c8.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+exit 1
+-- 試作
+init
+foo
+foo
+exit 0

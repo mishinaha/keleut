@@ -1,0 +1,6 @@
+effect Log = { log: (String) => Unit }
+newtype B12[E] = MkB12((() => Unit @ E, () => Unit @ {Log}))
+newtype A12[X] = MkA12(B12[{Log extends X}])
+newtype C12 = MkC12(B12[{}])
+let f[E](x: A12[E]): A12[E] = x
+let g(x: C12): C12 = x

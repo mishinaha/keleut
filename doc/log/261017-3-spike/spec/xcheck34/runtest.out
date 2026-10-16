@@ -1,0 +1,23 @@
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index aa2381c..199913e 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -1077,7 +1077,7 @@ rectpflowrev):
+   > and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+   > KEL
+   $ diktor --type-check recrowclosed.kel
+-  ! recrowclosed.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
++  ! recrowclosed.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+   [1]
+   $ cat > recrowrev.kel <<'KEL'
+   > let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+@@ -1111,7 +1111,7 @@ rectpflowrev):
+   > and a[E](n: Int32): Int32 @ {Console extends E} = { echo("a"); b(n) }
+   > KEL
+   $ diktor --type-check recrowclosedmutrev.kel
+-  ! recrowclosedmutrev.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
++  ! recrowclosedmutrev.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+   [1]
+   $ cat > recrowone.kel <<'KEL'
+   > let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }

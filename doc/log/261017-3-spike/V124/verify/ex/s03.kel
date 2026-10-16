@@ -1,0 +1,4 @@
+type U = (() => Unit @ {Wr[{}]}, Int32)
+type Wr[E]: EffectRow = {Console extends E}
+let f(u: U): Unit = u match { case (g, n) if n > 0 => g() case _ => () }
+f((fn() => echoln("w"), 1))

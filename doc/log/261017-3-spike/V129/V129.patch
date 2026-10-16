@@ -1,0 +1,110 @@
+diff a/lib/exhaust.ml b/lib/exhaust.ml
+--- a/lib/exhaust.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/exhaust.ml	2026-10-17 04:29:08.678534202 +0900
+@@ -875,7 +875,26 @@
+ 
+    `reset` は、宣言の処理を始める前にキューを空にする。
+    キューは大域状態である。
+-   空にしないと、前のファイルの処理やエラーで中断した推論が積んだエントリが残る。 *)
++   空にしないと、前のファイルの処理やエラーで中断した推論が積んだエントリが残る。
++
++   ### 照合対象の型が検査の時点で未定の節のない `match`
++
++   節のない `match {}` の照合対象の型が、検査の時点で未束縛の型変数のままのことがある。
++   注釈のない引数を照合する `fn(x) => x match {}` や、
++   返り値が `Never` の操作を起こす `perform throw(e) match {}` がその例である。
++   後者の `perform` の型は、どの型にも単一化できる新しい型変数になる。
++   型変数の完全シグネチャは `None` なので、§10.10 の反例は `_` になる。
++   ただ、「例えば _ が漏れています」という文面は、節を足せば直ると読める。
++   この場合の原因は、検査の時点で照合対象の型がコンストラクタを持たない型と分かっていないことなので、
++   その事実を言う文面に替える。
++   検査の後で同じ宣言の中の単一化が変数を `Int32` などに決めることもある。
++   文面は検査の時点の事実に限って言い、型が決まらないとは言わない。
++
++   対象は、節が 1 つもなく、照合対象が述語を持たない未束縛の型変数のときに限る。
++   `Integral` や `Fractional` の述語を持つ変数は宣言の終わりに数値型へ既定化されるので、
++   型が決まらないとは言えない。
++   型パラメータ(`Rigid`)の値の照合は型が決まっているので、従来の文面のままにする。
++   ガード付きの節だけを持つ `match` も、原因はガードの側にあるので従来の文面のままにする。 *)
+ 
+ type entry = { qe_rows : (T.pat * bool (* ガードつき *)) list; qe_ty : ty }
+ 
+@@ -885,6 +904,17 @@
+    積んだ数の二乗の時間がかかる(§10.13) *)
+ let queue rows ty = pending := { qe_rows = rows; qe_ty = ty } :: !pending
+ 
++(* 節のない match の照合対象が、述語を持たない未束縛の型変数か。
++   数値の述語を持つ変数は宣言の終わりに既定化されるので、型が決まらないとは言えない *)
++let undetermined ty =
++  match repr ty with
++  | TVar { contents = Unbound i } -> not (List.exists Unify.is_predicate i.vcls)
++  | _ -> false
++
++let undetermined_msg =
++  "match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません"
++  ^ "(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)"
++
+ let check_entry { qe_rows; qe_ty } =
+   let out = ref [] in
+   let all = List.map (fun (p, guarded) -> ([ convert p ], guarded)) qe_rows in
+@@ -898,6 +928,7 @@
+   let single = match qe_rows with [ _ ] -> true | _ -> false in
+   (* ガード付き節は必ず一致する節として数えない(sample.kel:322-324)ので、網羅性の判定から除く *)
+   (match missing unguarded tys with
++  | Some _ when qe_rows = [] && undetermined qe_ty -> out := !out @ [ undetermined_msg ]
+   | Some w -> out := !out @ [ "match が非網羅的です。例えば " ^ String.concat ", " (List.map show_ipat w) ^ " が漏れています" ]
+   | None -> ());
+   (* 到達不能の判定では、先行するガードのない節だけを被覆として数える *)
+diff a/test/never_ops.t b/test/never_ops.t
+--- a/test/never_ops.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/never_ops.t	2026-10-17 04:29:10.827740626 +0900
+@@ -89,7 +89,7 @@
+   > echoln(show(r2))
+   > EOF
+   $ diktor absurd.kel
+-  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+   3
+   -1
+   $ cat > absurdplain.kel <<'EOF'
+@@ -118,6 +118,40 @@
+   $ diktor absurdann.kel
+   -1
+ 
++照合対象の型が網羅性を調べた時点で未定の型変数なら、節のない match {} の警告は
++「例えば _ が漏れています」ではなく、その型がコンストラクタを持たない型と分かって
++いないことを言う。Show の制約が付いた注釈のない引数がその例で、--strict-exhaustive
++では終了コード 1 になる:
++
++  $ cat > absurdshow.kel <<'EOF'
++  > let h = fn(y) => { echoln(show(y)); y match {} }
++  > let k(x) = { echoln(show(x)); x match {} }
++  > echoln("ok")
++  > EOF
++  $ diktor absurdshow.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ok
++  $ diktor --strict-exhaustive absurdshow.kel
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  [1]
++
++型パラメータの値、数値のリテラル、ガード付きの節だけの match は、型が決まっているか
++原因がほかにあるので、従来の文面のままである:
++
++  $ cat > absurdother.kel <<'EOF'
++  > let f[A](x: A): Int32 = x match {}
++  > let g(): Int32 = 1 match {}
++  > let k(x, b: Boolean): Int32 = x match { case y if b => 1 }
++  > echoln("ok")
++  > EOF
++  $ diktor absurdother.kel
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ok
++
+ 再開しない操作の節に resume は書けない。閉包の本体に書いても、節の中の入れ子の
+ handle の本体に書いても(外側の節の継続を指す)、同じ診断になる:
+ 

@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32, tell: (Int32) => {} }
+(perform Ask.ask()) handle { case Ask.ask() => resume(5) case Ask.tell(n) => resume({}) }
+(perform Ask.ask()) handle { case Ask.ask() => resume(5) case print(s) => resume({}) }
+(perform Ask.ask()) handle { case Ask.ask() => resume(5) case Ask.tell(n) => resume({}) }

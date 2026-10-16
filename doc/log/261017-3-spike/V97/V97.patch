@@ -1,0 +1,493 @@
+diff a/lib/decls.ml b/lib/decls.ml
+--- a/lib/decls.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/decls.ml	2026-10-17 04:09:02.261724888 +0900
+@@ -862,16 +862,15 @@
+ 
+    メソッドのスキーマは、§6.12 の `arrow1` / `arrow2` がその場で組み立てる。
+    要点は 2 つある。
+-   1 つ目は、最外の矢印の行を Generic の行変数にすることである。
++   1 つ目は、最外の矢印の行を閉じた空の行にすることである。
+    仕様は、メソッドの最外の矢印で省略した `@` を `@ {}` と読み、
+    どのインスタンスの実装も純粋でなければならないと定めている(仕様 §9、sample.kel:437-438)。
+-   利用者が宣言したクラスのメソッドは、この読みどおり閉じた空の行を持つ(第11章 §11.33)。
+-   組み込みのメソッドだけを行変数にするのは、演算子がこのスキーマを使うからである。
++   利用者が宣言したクラスのメソッドも、この読みどおり閉じた空の行を持つ(第11章 §11.33)。
++   閉じた行の関数は、使うたびに尾部を新しい行変数で開いてから呼ぶ側の行と一致させるので
++   (第11章 §11.26)、どの行の文脈からも呼べる。
+    `+` や前置の `-` は `T.BinOp` と `T.Neg` のノードで、
+-   呼び出しの経路(第11章 §11.12)を通らずに、スキーマを呼ぶ側の行と直接単一化する(第11章 §11.13)。
+-   使用時の開き(第11章 §11.26)が掛からないので、スキーマの行を閉じた空の行にすると、
+-   `1 + 2` が `@ Console` の本体で型検査に通らなくなる。
+-   行変数にしても、純粋な実装をどの行の文脈からも呼べることは、閉じた空の行と変わらない。
++   呼び出しの経路(第11章 §11.12)を通らずにこのスキーマを使うので、
++   この 2 つのノードもスキーマを単一化する前に同じ開きを掛ける(第11章 §11.13)。
+    インスタンスの実装が純粋であることは、第11章の包摂検査(§11.38)が確かめる。
+    入れ子の矢印で省略した `@` を `@ {}` と読む規則(sample.kel:498-504)もあるが、
+    組み込みのメソッドはどれも高階ではないので、この規則が効く箇所は無い。
+@@ -893,13 +892,12 @@
+    それでも組み込みにするのは、実装が OCaml 側の値(§14.10)と切り離せず、
+    プレリュードに型を置くと型と実装を別々に管理することになるからである(§15.1 の基準)。
+ 
+-   ### 行を開いておく
++   ### 行は書いたとおりに閉じて持つ
+ 
+-   `heap_row h` は、`Heap[h]` を Generic の行変数の尾部の上に載せ、行を開いておく。
+-   行を `Heap[h]` だけの閉じた行にすると、
+-   `Console` の下でも `Print` の下でも `Ref.get` を呼べなくなる。
+-   プログラムのほとんどは何かのエフェクトの下で走るので、
+-   行を閉じるとこれらの操作は実質的に使えない。
++   `heap_row h` は、`Heap[h]` だけからなる閉じた行である。
++   仕様の署名の一覧(sample.kel:680-690)が `@ Heap[h]` と書く行を、書いたとおりに持つ。
++   閉じた行の関数は、使うたびに尾部を新しい行変数で開いてから呼ぶ側の行と一致させるので
++   (第11章 §11.26)、`Console` の下でも `Print` の下でも `Ref.get` を呼べる。
+ 
+    ### `Ref` はリージョンを型に持つ
+ 
+@@ -947,9 +945,8 @@
+    nested2 は、この持ち出しが「スコープ付きの型 ς1 がスコープの外に漏れています」で落ちることを確かめる。
+    flat は、要素が可変配列でなければ同じ形が通ることを確かめる。
+ 
+-   `Array.length` と `Array.get` は純粋な操作なので、行に何も足さない。
+-   ただし、これらの行は `TRowEmpty` ではなく Generic の行変数にする。
+-   `TRowEmpty` にすると呼び出し側の行まで空に縛られ、`Console` の下から読めなくなる。
++   `Array.length` と `Array.get` は純粋な操作なので、行は閉じた空の行 `TRowEmpty` である。
++   この行も使うたびに開くので、`Console` の下からも読める。
+    `MutableArray.length` は、長さが変わらないのに `Heap[h]` を要求する。
+    これは仕様の署名の一覧のとおりで、仕様はその理由も定めている。
+    `Heap[h]` を要求するのは、長さが変わりうるからではなく(長さを変える操作は無い)、
+@@ -986,21 +983,21 @@
+   add_effect { ef_name = Type.eff_heap; ef_ops = [] };
+   add_effect { ef_name = Type.eff_blocking; ef_ops = [] };
+   let arrow args ret eff = Type.TArrow (Type.TRecord (closed_args_row args), ret, eff) in
+-  let heap_row h = Type.TRowExtend (Type.eff_heap, h, generic ~kind:Type.KRow ()) in
++  let heap_row h = Type.TRowExtend (Type.eff_heap, h, Type.TRowEmpty) in
+   let def name ty = builtin_ops := !builtin_ops @ [ (name, ty) ] in
+-  (* Ref.new : [h, A] (A) => Ref[h, A] @ {Heap[h] extends ρ} *)
++  (* Ref.new : [h, A] (A) => Ref[h, A] @ Heap[h] *)
+   (let h = generic () and a = generic () in
+    def "Ref.new" (arrow [ a ] (Type.TCon (ref_oid, [ h; a ])) (heap_row h)));
+   (let h = generic () and a = generic () in
+    def "Ref.get" (arrow [ Type.TCon (ref_oid, [ h; a ]) ] a (heap_row h)));
+   (let h = generic () and a = generic () in
+    def "Ref.set" (arrow [ Type.TCon (ref_oid, [ h; a ]); a ] Type.t_unit (heap_row h)));
+-  (* Array は不変(仕様 §10)。読み出しは行に何も足さない。TRowEmpty ではなく Generic の
+-     行変数にするのは、行を閉じると Console の下から読めなくなるため *)
++  (* Array は不変(仕様 §10)。読み出しは行に何も足さない。行は閉じた空の行で、
++     使うたびに開く *)
+   (let a = generic () in
+-   def "Array.length" (arrow [ Type.TCon (arr_oid, [ a ]) ] Type.t_int32 (generic ~kind:Type.KRow ())));
++   def "Array.length" (arrow [ Type.TCon (arr_oid, [ a ]) ] Type.t_int32 Type.TRowEmpty));
+   (let a = generic () in
+-   def "Array.get" (arrow [ Type.TCon (arr_oid, [ a ]); Type.t_int32 ] a (generic ~kind:Type.KRow ())));
++   def "Array.get" (arrow [ Type.TCon (arr_oid, [ a ]); Type.t_int32 ] a Type.TRowEmpty));
+   (let a = generic () and e = generic ~kind:Type.KRow () in
+    def "Array.each" (arrow [ Type.TCon (arr_oid, [ a ]); arrow [ a ] Type.t_unit e ] Type.t_unit e));
+   (* MutableArray は h を型に持つ。すべての操作が Heap[h] を要求する。length も
+@@ -1120,8 +1117,8 @@
+       };
+     List.iter (fun con -> add_instance ~cls ~con:(intern con) []) insts
+   in
+-  let arrow2 a ret = Type.TArrow (Type.TRecord (closed_args_row [ a; a ]), ret, generic ~kind:Type.KRow ()) in
+-  let arrow1 a ret = Type.TArrow (Type.TRecord (closed_args_row [ a ]), ret, generic ~kind:Type.KRow ()) in
++  let arrow2 a ret = Type.TArrow (Type.TRecord (closed_args_row [ a; a ]), ret, Type.TRowEmpty) in
++  let arrow1 a ret = Type.TArrow (Type.TRecord (closed_args_row [ a ]), ret, Type.TRowEmpty) in
+   def_class "Add" ~derive:false ~methods:(fun a -> [ ("add", arrow2 a a) ]) ~instances:("String" :: numerics);
+   def_class "Sub" ~derive:false ~methods:(fun a -> [ ("sub", arrow2 a a) ]) ~instances:numerics;
+   def_class "Mul" ~derive:false ~methods:(fun a -> [ ("mul", arrow2 a a) ]) ~instances:numerics;
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:09:20.851693806 +0900
+@@ -1742,6 +1742,8 @@
+    前置の `-` は `Neg` のノードで表し、クラス `Neg` のメソッド `neg` の呼び出しと同じ型付けをする。
+    `method_scheme` がクラス表からメソッドの型スキーマを引き、
+    それを `(左辺, 右辺)` の行に対する矢印と単一化するだけで、演算子のためだけの推論規則は持たない。
++   スキーマの最外の行は閉じた空の行なので(第6章 §6.10)、
++   単一化の前に、呼び出すときと同じく尾部を開く(§11.26)。
+    この対応には例外が 2 つある。
+    `&&` と `||` は短絡するので、両辺を Boolean とする組み込みである。
+    `!=` は `Eq.eq` の否定である。
+@@ -1773,7 +1775,7 @@
+           (* 演算子のスキーマの制約はクラスパラメータの 1 つなので、穴はちょうど 1 つである *)
+           let it, hs = Unify.instantiate_ev ~loc:(Tree.loc_of node) level scheme in
+           Tree.set_dict node (Tree.DUse hs);
+-          Unify.unify it (TArrow (TRecord (closed_item_row [ tl; tr ]), ret, eff));
++          Unify.unify (open_closed_arrow level it) (TArrow (TRecord (closed_item_row [ tl; tr ]), ret, eff));
+           ret)
+   | T.Not e ->
+       Unify.unify (elab_exp env level eff e) t_boolean;
+@@ -1784,7 +1786,7 @@
+       let ret = new_var level in
+       let it, hs = Unify.instantiate_ev ~loc:(Tree.loc_of node) level (method_scheme cls m) in
+       Tree.set_dict node (Tree.DUse hs);
+-      Unify.unify it (TArrow (TRecord (closed_item_row [ te ]), ret, eff));
++      Unify.unify (open_closed_arrow level it) (TArrow (TRecord (closed_item_row [ te ]), ret, eff));
+       ret
+   | T.RecordEmpty -> t_unit
+   | T.RecordExtend (rest, l, v) ->
+@@ -2838,7 +2840,7 @@
+    | 場面 | 開く箇所 | 節 |
+    |---|---|---|
+    | 名前で参照するとき | `elab_exp` が `T.Ident` の型を木に書く直前 | §11.11 |
+-   | 呼び出すとき | `T.Apply` が呼び出し先の型を分解する直前 | §11.12 |
++   | 呼び出すとき | `T.Apply` が呼び出し先の型を分解する直前と、`T.BinOp` と `T.Neg` がメソッドのスキーマを単一化する直前 | §11.12、§11.13 |
+    | 関数型を要求する位置に置くとき | `subsume_closed`(期待型の頭が矢印のときだけ開く) | §11.19、§11.28、§11.29 |
+ 
+    関数型を要求する位置は、仮引数の型が関数型である実引数、
+@@ -4401,10 +4403,11 @@
+    実装の行が空なら、宣言の行とは単一化せずに受理する。
+    空の行は行の最小元で、純粋な実装は、宣言がどの行を名乗っていても、
+    その行の下で呼んでよいからである。
+-   宣言の行が閉じた空の行(最外の `@` を省略した利用者のメソッド。§11.33)なら、
++   宣言の行が閉じた空の行(最外の `@` を省略した利用者のメソッドと、
++   組み込みのクラスのメソッド。§11.33、第6章 §6.10)なら、
+    空の実装の行は単一化してもそのまま一致する。
+    この扱いが効くのは、宣言の行が空でないときである。
+-   宣言の行が行変数の剛定数(`@ E` と書いたメソッドと、組み込みのクラスのメソッド。第6章 §6.10)なら、
++   宣言の行が行変数の剛定数(`@ E` と書いたメソッド)なら、
+    空の実装の行と単一化すると、剛定数に空の行を代入しようとして落ちる。
+    宣言が `@ Print` のようにラベルを書いていれば、閉じた行どうしのラベルの食い違いで落ちる。
+ 
+@@ -4459,7 +4462,8 @@
+    ラベルを持たないかどうかの判定は、期待型を剛定数に写した行の形に依存している。
+    最外の `@` を省略した利用者のメソッドの行は、登録で `TRowEmpty` に置き換えるので(§11.33)、
+    閉じた空の行のまま届く。
+-   `@ E` と書いたメソッドと組み込みのクラスのメソッドの行は、
++   組み込みのクラスのメソッドの行も、登録の時点から `TRowEmpty` である(第6章 §6.12)。
++   `@ E` と書いたメソッドの行は、
+    `generalize` が `Generic` にした行変数を、剛定数への写しが `Rigid` に戻して届く。
+    この経路のどこかが変わると名指しが黙って働かなくなるので、
+    clsimpure と clsbarerow がこれを見張っている。
+@@ -4537,8 +4541,8 @@
+     (* 最外の行は最後に見る。仕様 §9 は、型クラスのメソッドの実装は純粋でなければ
+        ならないと定める。引数と返り値を先に合わせたあと、
+        実装の行が空(純粋)なら、宣言の行と単一化せずに受理する。
+-       空の行は行の最小元なので、宣言の行が剛定数(@ E と書いたメソッドや組み込みの
+-       メソッド)でも、純粋な実装はその行の下で呼んでよい。メソッドの引数に @ を省略した
++       空の行は行の最小元なので、宣言の行が剛定数(@ E と書いたメソッド)でも、
++       純粋な実装はその行の下で呼んでよい。メソッドの引数に @ を省略した
+        矢印があると、実装の行は {} に固まるので、この扱いが無いと、宣言できるのに
+        実装できないメソッドが生じる *)
+     match (repr inf, repr skol) with
+@@ -4573,12 +4577,14 @@
+       match d with
+       | T.DLet ((_, b) as bnode) ->
+           let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+-          let env2 = elab_binding env 0 (new_row_var 0) bnode in
++          (* 値束縛の初期化式は空の行の下で検査する。メソッドの実装は純粋でなければならず、
++             初期化式の評価もその実装に含まれるからである *)
++          let env2 = elab_binding env 0 TRowEmpty bnode in
+           (* 包摂のエラーは、そのメソッドの束縛を指す。宣言の先頭を指すと、複数のメソッドの
+              どれが悪いかを位置から読めない *)
+           at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values))
+       | T.DLetRec bs ->
+-          let env2 = elab_rec_bindings env 0 (new_row_var 0) bs in
++          let env2 = elab_rec_bindings env 0 TRowEmpty bs in
+           List.iter
+             (fun (((_, b) as bnode) : T.let_binding) ->
+               let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+diff a/test/annot_rows.t b/test/annot_rows.t
+--- a/test/annot_rows.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/annot_rows.t	2026-10-17 04:10:35.325144794 +0900
+@@ -1074,8 +1074,8 @@
+ 
+ 組み込みの Show のインスタンスで、構文上の値でない初期化式を持ち注釈の最外の @ を
+ 省略した値束縛 k をメソッドの本体から呼ぶ形と、同じ形の値束縛でメソッド show そのものを
+-書く形も通る。k の行は初期化式の閉じた {} に決まるので、組み込みのメソッドの行変数と
+-単一化しても剛定数のスコープの外に漏れない:
++書く形も通る。k の行は初期化式の閉じた {} に決まり、組み込みのクラスのメソッドの行も
++閉じた {} なので、利用者のクラスと同じく通る:
+ 
+   $ cat > instmonorow.kel <<'KEL'
+   > newtype N = N(Int32)
+diff a/test/builtin_rows.t b/test/builtin_rows.t
+--- a/test/builtin_rows.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/builtin_rows.t	2026-10-17 04:10:25.098503648 +0900
+@@ -0,0 +1,107 @@
++組み込みのクラスのメソッド(show、add など)と、Ref、MutableArray、Array.length、
++Array.get の署名の最外の行は、LangSpec の書き方どおり閉じた行である(§12.4、§13.2、
++§14.2、§14.3)。使うたびに尾部を開くので、どの行の文脈からも呼べ、利用者が同じ型を
++閉じた行で宣言したときと振る舞いが同じになる。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++一般化しない値束縛に組み込みのメソッド show を入れると、束縛の行は名前の参照で開いた
++尾部のまま残り、束縛の終わりに閉じた {} に戻る(LangSpec §13.2)。そのため Console の
++文脈と Print の文脈の両方から呼べる。利用者のクラスのメソッドでも同じである:
++
++  $ cat > bshowweak.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > let f = idf(show)
++  > let p(): Unit @ Console = echoln(f(1i32))
++  > let q(): Unit @ Print = println(f(2i32))
++  > p()
++  > with_stdout(q)
++  > KEL
++  $ diktor bshowweak.kel
++  1
++  2
++
++注釈で型を決めた形も同じである:
++
++  $ cat > bshowann.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > let f: (Int32) => String = idf(show)
++  > let p(): Unit @ Console = echoln(f(1i32))
++  > let q(): Unit @ Print = println(f(2i32))
++  > p()
++  > with_stdout(q)
++  > KEL
++  $ diktor --type-check bshowann.kel
++  idf : (A) => A
++  f : (Int32) => String @ {}
++  p : () => {} @ {Console}
++  q : () => {} @ {Print}
++  _ : {}
++  _ : {}
++
++Array.length は @ を省いた署名で、閉じた {} と読む(LangSpec §14.3):
++
++  $ cat > barrlen.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > let arr: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(3, 7)) }
++  > let len = idf(Array.length)
++  > let p(): Unit @ Console = echoln(show(len(arr)))
++  > let q(): Unit @ Print = println(show(len(arr)))
++  > p()
++  > with_stdout(q)
++  > KEL
++  $ diktor barrlen.kel
++  3
++  3
++
++Ref.get の行は閉じた {Heap[h]} で、run の本体の中の行の違う 2 つの関数から呼べる:
++
++  $ cat > brefget.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > let main(): Unit @ Console = {
++  >   let n = run h {
++  >     let r = Ref.new(1i32)
++  >     let g = idf(Ref.get)
++  >     let k(): Int32 @ {Heap[h], Console} = { echoln("k"); g(r) }
++  >     let m(): Int32 @ {Heap[h], Print} = { println("m"); g(r) }
++  >     k() + with_stdout(m)
++  >   }
++  >   echoln(show(n))
++  > }
++  > main()
++  > KEL
++  $ diktor brefget.kel
++  k
++  m
++  2
++
++演算子 + と前置の - は、メソッドの呼び出しと同じく閉じたスキーマの尾部を開く。
++x + 1 だけを本体に持つ無名関数の行はその開いた尾部なので、束縛の終わりに閉じた {}
++に戻り、g は Ask を起こす文脈から先に呼んでも、後で Console の文脈から呼べる
++(行が本当に決まっていない fn(x) => x の形は spec_gaps.t の ordervr が見張る):
++
++  $ cat > bopweak.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > let idf[A](x: A): A = x
++  > let main(): Unit @ {Console} = {
++  >   let g: (Int32) => Int32 = idf(fn(x) => x + 1)
++  >   let h: (Int32) => Int32 = idf(fn(x) => -x)
++  >   let b = (g(2) + h(3) + perform ask()) handle {
++  >     case ask() => resume(10)
++  >     case return(x) => x
++  >   }
++  >   let a = g(1) + h(1)
++  >   echoln(show(a + b))
++  > }
++  > main()
++  > KEL
++  $ diktor bopweak.kel
++  11
++
++演算子を本体に持つ無名関数を選ぶ条件式の束縛も、閉じた {} の行と表示する:
++
++  $ cat > bopdisp.kel <<'KEL'
++  > let g = if true then fn(x: Int32) => x + 1 else fn(x: Int32) => x - 1
++  > KEL
++  $ diktor --type-check bopdisp.kel
++  g : (Int32) => Int32 @ {}
+diff a/test/classes.t b/test/classes.t
+--- a/test/classes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/classes.t	2026-10-17 04:10:43.443962590 +0900
+@@ -49,7 +49,7 @@
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  weak : [_A: Show] (_A) => String @ {}
+   _ : String
+ 
+ ファイルの終わりまでに型が決まらなければ、曖昧性エラーになる。辞書はファイルごとに
+@@ -61,7 +61,7 @@
+   > KEL
+   $ diktor --type-check --no-prelude ml9e2.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  weak : [_A: Show] (_A) => String @ {}
+   ! ml9e2.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+   [1]
+ 
+diff a/test/inst_init_pure.t b/test/inst_init_pure.t
+--- a/test/inst_init_pure.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/inst_init_pure.t	2026-10-17 04:31:08.731740833 +0900
+@@ -0,0 +1,112 @@
++インスタンスのメソッドを値束縛で書いたときの初期化式は、空の行の下で検査する。
++型クラスのメソッドの実装は純粋でなければならず(LangSpec §13.2 の表)、初期化式の
++評価もその実装に含まれる。利用者のクラスと組み込みのクラスで同じ扱いである。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++初期化式で操作を起こす形は、利用者のクラスでも型検査で拒否する:
++
++  $ cat > iniask.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > type class Sh[A] { val sh: (A) => String }
++  > newtype Foo = Foo
++  > type instance Sh[Foo] {
++  >   let sh: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
++  > }
++  > echoln(sh(Foo))
++  > KEL
++  $ diktor iniask.kel
++  ! iniask.kel:5:39: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  [1]
++
++組み込みのクラス Show のインスタンスでも同じである:
++
++  $ cat > iniaskb.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > newtype Foo = Foo
++  > type instance Show[Foo] {
++  >   let show: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
++  > }
++  > echoln(show(Foo))
++  > KEL
++  $ diktor iniaskb.kel
++  ! iniaskb.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  [1]
++
++トップレベルで許される Console も、初期化式では起こせない:
++
++  $ cat > inicon.kel <<'KEL'
++  > type class Sh[A] { val sh: (A) => String }
++  > newtype Foo = Foo
++  > type instance Sh[Foo] {
++  >   let sh: (Foo) => String = { echoln("init"); fn(x) => "foo" }
++  > }
++  > echoln(sh(Foo))
++  > KEL
++  $ diktor inicon.kel
++  ! inicon.kel:4:31: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++
++ゼロ除算は行に現れないので、初期化式に書いても型検査を通る。前提を持たない
++インスタンスでは、インスタンス宣言を実行する時点で実行時エラーになる(LangSpec §15.5):
++
++  $ cat > inidiv.kel <<'KEL'
++  > newtype N = N(Int32)
++  > let z = 0
++  > echoln("a")
++  > type instance Show[N] { let show: (N) => String = { let q = 1 / z; fn(x) => "n" } }
++  > echoln("b")
++  > KEL
++  $ diktor inidiv.kel
++  a
++  実行時エラー: ゼロ除算です
++  [3]
++
++前提を持つインスタンスでは初期化式をメソッドを使うたびに評価するので、実行時エラーは
++メソッドを使う時点で起きる(LangSpec §6.4):
++
++  $ cat > inipremdiv.kel <<'KEL'
++  > newtype Box[A] = Box(A)
++  > let z = 0
++  > echoln("a")
++  > type instance [A: Show] Show[Box[_]] {
++  >   let show: (Box[A]) => String = { let q = 1 / z; fn(b) => "box" }
++  > }
++  > echoln("b")
++  > echoln(show(Box(1)))
++  > KEL
++  $ diktor inipremdiv.kel
++  a
++  b
++  実行時エラー: ゼロ除算です
++  [3]
++
++エフェクトを起こさない初期化式は、構文上の値でなくても受理する。組み込みのクラスでも
++利用者のクラスと同じである:
++
++  $ cat > inipure.kel <<'KEL'
++  > newtype N = N(Int32)
++  > let pre = "n"
++  > type instance Show[N] { let show: (N) => String = { let k = 1 + 2; fn(v) => pre + Show.show(k) } }
++  > echoln(show(N(0)))
++  > KEL
++  $ diktor inipure.kel
++  n3
++
++初期化式から呼ぶ一般化しない束縛の行が先の使用で Console に決まっていれば、その呼び出しも
++エフェクトを起こす呼び出しとして拒否する:
++
++  $ cat > iniweak.kel <<'KEL'
++  > type class Sh[A] { val sh: (A) => String }
++  > newtype Foo = Foo
++  > let idf[A](x: A): A = x
++  > let w = idf(fn(x: Int32) => x)
++  > echoln(show(w(1)))
++  > type instance Sh[Foo] {
++  >   let sh: (Foo) => String = { let n = w(2); fn(x) => "foo" }
++  > }
++  > echoln(sh(Foo))
++  > KEL
++  $ diktor iniweak.kel
++  ! iniweak.kel:7:39: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
+diff a/test/spec_gaps.t b/test/spec_gaps.t
+--- a/test/spec_gaps.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/spec_gaps.t	2026-10-17 04:10:35.324638377 +0900
+@@ -90,7 +90,9 @@
+   h : (() => {} @ {}, {k: () => {} @ {}}) => {} @ {Console extends R1}
+ 
+ 構文上の値でない初期化式を持ち、注釈の最外の @ を省略した値束縛 g は一般化しない
+-ので、行は最初の呼び出しで決まる。perform ask() と同じ式の中で先に呼ぶと g の行に
++ので、本体の無名関数 fn(x) => x の行は何にも決まらないまま残り、最初の呼び出しで決まる
++(本体が演算子を使う x + 1 なら、行は閉じたスキーマの開いた尾部なので束縛の終わりに
++閉じた {} に戻り、どちらの順序でも通る。test/builtin_rows.t の bopweak)。perform ask() と同じ式の中で先に呼ぶと g の行に
+ Ask が入り、後の Console の文脈からの呼び出しが落ちる(逆の順序は
+ test/verify_fixes.t の vrgen が通す):
+ 
+@@ -98,7 +100,7 @@
+   > effect Ask = { ask: () => Int32 }
+   > let idf[A](x: A): A = x
+   > let main(): Unit @ {Console} = {
+-  >   let g: (Int32) => Int32 = idf(fn(x) => x + 1)
++  >   let g: (Int32) => Int32 = idf(fn(x) => x)
+   >   let b = (g(2) + perform ask()) handle {
+   >     case ask() => resume(10)
+   >     case return(x) => x
+diff a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:10:43.444950956 +0900
+@@ -46,7 +46,7 @@
+   > effect Ask = { ask: () => Int32 }
+   > let idf[A](x: A): A = x
+   > let main(): Unit @ {Console} = {
+-  >   let g: (Int32) => Int32 = idf(fn(x) => x + 1)
++  >   let g: (Int32) => Int32 = idf(fn(x) => x)
+   >   let a = g(1)
+   >   let b = (g(2) + perform ask()) handle {
+   >     case ask() => resume(10)
+@@ -57,7 +57,7 @@
+   > main()
+   > EOF
+   $ diktor vrgen.kel
+-  15
++  13
+ 
+ g の本体を無名関数(値)に替えると、g は一般化され、同じく 2 つの文脈から呼べる:
+ 

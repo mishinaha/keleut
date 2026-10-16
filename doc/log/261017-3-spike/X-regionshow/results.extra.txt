@@ -1,0 +1,47 @@
+== r10.kel
+module M {
+  pub newtype Ref[A, B] = MkR(A, B)
+  pub let f[A](r: Ref[A, Int32]): Int32 = 0
+}
+let g[A](r: M.Ref[A, Int32]): Int32 = 0
+-- diktor-head --type-check r10.kel
+M.f : (M.Ref[A, Int32]) => Int32 @ {}
+g : (M.Ref[A, Int32]) => Int32
+[exit 0]
+-- main.exe --type-check r10.kel
+M.f : (M.Ref[A, Int32]) => Int32 @ {}
+g : (M.Ref[A, Int32]) => Int32
+[exit 0]
+== r11.kel
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let f[h](w: Wrap[Ref, h]): Int32 = 0
+let u[h](r: Ref[h, Int32]) = W(r)
+-- diktor-head --type-check r11.kel
+! r11.kel:2:18: 型エラー: 型構成子 Ref には型引数が必要です
+[exit 1]
+-- main.exe --type-check r11.kel
+! r11.kel:2:18: 型エラー: 型構成子 Ref には型引数が必要です
+[exit 1]
+== r12.kel
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let u[h](r: Ref[h, Int32]): Wrap[Ref, h] = W(r)
+let v = fn(r) => W(r)
+let x[h](r: Ref[h, Int32]) = v(r)
+-- diktor-head --type-check r12.kel
+! r12.kel:2:34: 型エラー: 型構成子 Ref には型引数が必要です
+[exit 1]
+-- main.exe --type-check r12.kel
+! r12.kel:2:34: 型エラー: 型構成子 Ref には型引数が必要です
+[exit 1]
+== r13.kel
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let v = fn(r) => W(r)
+let x[h](r: Ref[h, Int32]) = v(r)
+-- diktor-head --type-check r13.kel
+v : (F[A, Int32]) => Wrap[F, A]
+x : (Ref[A, Int32]) => Wrap[Ref, A]
+[exit 0]
+-- main.exe --type-check r13.kel
+v : (F[A, Int32]) => Wrap[F, A]
+x : (Ref[h, Int32]) => Wrap[Ref, h]
+[exit 0]

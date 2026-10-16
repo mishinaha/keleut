@@ -1,0 +1,8 @@
+type class Combine[A] {
+  val combine: (A, A) => A
+}
+type instance Combine[Int32] {
+  let combine(a, b) = a + b
+}
+let twice[A: Combine](x: A): A = combine(x, x)
+echoln(show(twice(21i32)))

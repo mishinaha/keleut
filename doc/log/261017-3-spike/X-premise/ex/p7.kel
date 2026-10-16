@@ -1,0 +1,3 @@
+newtype Opaque = MkOpaque(Int32)
+let same[A: Eq](x: A, y: A): Boolean = x == y
+let ng = same(Cons(MkOpaque(1i32), Nil), Nil)

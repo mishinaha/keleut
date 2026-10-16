@@ -1,0 +1,2 @@
+let f(x: Int32): Int32 = x
+let b(): Int32 = f(nosuch, 2)

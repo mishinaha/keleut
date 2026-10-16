@@ -1,0 +1,73 @@
+===== r4_display.kel
+-- HEAD tc
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+p : [A: Show] (A) => String @ {}
+q : ((Int32) => Int32, Int32)
+idf2 : (A) => A
+w : (Int32) => Int32
+_ : {}
+exit=0
+-- proto tc
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+p : [A: Show] (A) => String @ {}
+q : ((Int32) => Int32, Int32)
+idf2 : (A) => A
+w : (Int32) => Int32 @ {}
+_ : {}
+exit=0
+-- HEAD run
+81!true
+exit=0
+-- proto run
+81!true
+exit=0
+===== r6_handler.kel
+-- HEAD tc
+f : () => Int32 @ {Ask}
+v : Int32
+w : Int32
+z : Int32
+_ : {}
+exit=0
+-- proto tc
+f : () => Int32 @ {Ask}
+v : Int32
+w : Int32
+z : Int32
+_ : {}
+exit=0
+-- HEAD run
+20 -6 10
+exit=0
+-- proto run
+20 -6 10
+exit=0
+===== r13_ifmatch.kel
+-- HEAD tc
+id : (A) => A
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+1
+-5
+exit=0
+-- proto run
+1
+-5
+exit=0

@@ -1,0 +1,41 @@
+File "test/region.t", line 1, characters 0-0:
+diff --git a/_build/default/test/region.t b/_build/default/test/region.t.corrected
+index 15d2bac..ea867d1 100644
+--- a/_build/default/test/region.t
++++ b/_build/default/test/region.t.corrected
+@@ -324,7 +324,7 @@ Heap でも同じである:
+   > }
+   > KEL
+   $ diktor --type-check regesc.kel
+-  mk : (A) => Ref[A, Int32]
++  mk : (h) => Ref[h, Int32]
+   ! regesc.kel:3:53: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+   [1]
+   $ cat > regheapesc.kel <<'KEL'
+@@ -335,7 +335,7 @@ Heap でも同じである:
+   > }
+   > KEL
+   $ diktor --type-check regheapesc.kel
+-  mk : (A) => () => Int32 @ {Heap[A]}
++  mk : (h) => () => Int32 @ {Heap[h]}
+   ! regheapesc.kel:3:45: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+   [1]
+ 
+@@ -348,7 +348,7 @@ Heap でも同じである:
+   > let t(x) = g(x, x)
+   > KEL
+   $ diktor --type-check regoccurs.kel
+-  g : (Ref[A, Int32], Ref[Ref[A, Int32], Int32]) => {}
++  g : (Ref[h, Int32], Ref[Ref[h, Int32], Int32]) => {}
+   ! regoccurs.kel:2:17: 型エラー: occurs check に失敗しました(無限型が発生します)
+   [1]
+   $ cat > regescref.kel <<'KEL'
+@@ -360,7 +360,7 @@ Heap でも同じである:
+   > }
+   > KEL
+   $ diktor --type-check regescref.kel
+-  mk : (A) => Ref[A, Int32]
++  mk : (h) => Ref[h, Int32]
+   eq : (A, A) => {}
+   ! regescref.kel:4:71: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+   [1]

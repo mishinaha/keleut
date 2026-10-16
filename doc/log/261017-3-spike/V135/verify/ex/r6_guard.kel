@@ -1,0 +1,11 @@
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+type instance Describe[Int32] { let describe(n: Int32) = "int" }
+let f(o: Option[Int32]): String @ Fail = o match {
+  case Some(v) if v > 0 => describe(v)
+  case _ => { let z: Never = perform throw("neg"); describe(z) }
+}
+let r = (f(Some(0))) handle { case throw(m) => "caught " + m }
+echoln(r)
+echoln(f(Some(3)) handle { case throw(m) => "caught " + m })

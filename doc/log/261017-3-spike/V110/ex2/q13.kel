@@ -1,0 +1,8 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Box[A] = Box(A)
+type instance Sz[Int32] { let sz(x: Int32) = x }
+let rec loop(n: Int32): (Box[Int32]) => Int32 = loop(n)
+type instance[A: Sz] Sz[Box[_]] {
+  let sz = { let g = loop(0i32); fn(b: Box[A]) => b match { case Box(x) => sz(x) } }
+}
+echoln("done")

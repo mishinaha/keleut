@@ -1,0 +1,4 @@
+newtype Empt
+let absurd[A](n: Never): A = n match {}
+let elim[A](e: Empt): A = e match {}
+let main() = println("ok")

@@ -1,0 +1,7 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+let apply[A, E](f: () => A @ E): A @ E = f()
+type instance Sz[Foo] {
+  let sz = apply(fn() => fn(x: Foo) => 1i32)
+}
+echoln(show(sz(Foo)))

@@ -1,0 +1,141 @@
+## a10.kel
+type P = Int32
+let f(): Int32 @ P = 1
+-- out:
+! a10.kel:2:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+exit=1
+## a11.kel
+module P {
+  type P = Int32
+}
+let x: P = 1
+-- out:
+! a11.kel:4:8: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+exit=1
+## a12.kel
+module P {
+  type P[A] = A
+}
+let f(): Int32 @ {P[Int32]} = 1
+-- out:
+! a12.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+exit=1
+## a1.kel
+module P {
+  type P = Int32
+}
+let f(): Int32 @ P = 1
+-- out:
+! a1.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+exit=1
+## a2.kel
+module P {
+  pub type P = Int32
+}
+let f(): Int32 @ P = 1
+-- out:
+! a2.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+exit=1
+## a3.kel
+module P {
+  type P = Int32
+}
+let f(): Int32 @ {P} = 1
+-- out:
+! a3.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+exit=1
+## a4.kel
+module P {
+  pub type P = Int32
+}
+let f(): Int32 @ {P} = 1
+-- out:
+! a4.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+exit=1
+## a5.kel
+module Q {
+  type P = Int32
+}
+let f(): Int32 @ P = 1
+-- out:
+! a5.kel:4:18: 型エラー: 未知のエフェクト: P
+exit=1
+## a6.kel
+module P {
+  newtype P(Int32)
+}
+let f(): Int32 @ P = 1
+-- out:
+! a6.kel:4:18: 型エラー: 型 P はエフェクトではありません(ここにはエフェクト行が要ります)
+exit=1
+## a7.kel
+module P {
+  type P = Int32
+}
+let f(): Int32 @ P.P = 1
+-- out:
+! a7.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+exit=1
+## a8.kel
+module P {
+  type P: EffectRow = {Print}
+}
+let f(): Int32 @ P = 1
+-- out:
+! a8.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+exit=1
+## a9.kel
+module P {
+  pub type P: EffectRow = {Print}
+}
+let f(): Unit @ P = println("x")
+f()
+-- out:
+f : () => {} @ {Print}
+! a9.kel:5:1: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+## b1.kel
+module E {
+  type E = Int32
+}
+let f[E](x: Int32): Int32 @ {E, Console} = x
+-- out:
+! b1.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+exit=1
+## b2.kel
+module M {
+  type T = Int32
+  let f(x: Int32): Int32 @ {T} = x
+}
+module N {
+  let g(x: Int32): Int32 @ T = x
+}
+-- out:
+! b2.kel:3:28: 型エラー: エフェクト行に Type エイリアス T は置けません(: EffectRow を付けてください)
+exit=1
+## a13.kel
+module P {
+  pub type P = Int32
+}
+let f(): Int32 @ P.P = 1
+-- out:
+! a13.kel:4:18: 型エラー: エフェクト位置の型のカインドが Row ではありません: Int32 :: Type
+exit=1
+## a14.kel
+module M {
+  type T = Int32
+}
+let f(): Int32 @ M.T = 1
+-- out:
+! a14.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+exit=1
+## b3.kel
+module M {
+  type T = Int32
+}
+module N {
+  let g(x: Int32): Int32 @ T = x
+}
+-- out:
+! b3.kel:5:28: 型エラー: 未知のエフェクト: T
+exit=1

@@ -1,0 +1,2 @@
+from "./lib3" import { Id }
+let x: Id[Int32] = 4

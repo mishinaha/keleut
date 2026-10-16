@@ -1,0 +1,3 @@
+module M { pub newtype N = N(() => Unit @ {Log}) }
+effect Log = { log: (String) => Unit }
+let f(n: M.N): Int32 = 1

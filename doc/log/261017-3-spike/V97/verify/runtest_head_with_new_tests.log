@@ -1,0 +1,138 @@
+File "test/builtin_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/builtin_rows.t b/_build/default/test/builtin_rows.t.corrected
+index 8991886..b52c0ea 100644
+--- a/_build/default/test/builtin_rows.t
++++ b/_build/default/test/builtin_rows.t.corrected
+@@ -18,8 +18,8 @@ Array.get の署名の最外の行は、LangSpec の書き方どおり閉じた
+   > with_stdout(q)
+   > KEL
+   $ diktor bshowweak.kel
+-  1
+-  2
++  ! bshowweak.kel:4:33: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ 注釈で型を決めた形も同じである:
+ 
+@@ -33,11 +33,10 @@ Array.get の署名の最外の行は、LangSpec の書き方どおり閉じた
+   > KEL
+   $ diktor --type-check bshowann.kel
+   idf : (A) => A
+-  f : (Int32) => String @ {}
++  f : (Int32) => String
+   p : () => {} @ {Console}
+-  q : () => {} @ {Print}
+-  _ : {}
+-  _ : {}
++  ! bshowann.kel:4:33: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ Array.length は @ を省いた署名で、閉じた {} と読む(LangSpec §14.3):
+ 
+@@ -51,8 +50,8 @@ Array.length は @ を省いた署名で、閉じた {} と読む(LangSpec §14.
+   > with_stdout(q)
+   > KEL
+   $ diktor barrlen.kel
+-  3
+-  3
++  ! barrlen.kel:5:38: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ Ref.get の行は閉じた {Heap[h]} で、run の本体の中の行の違う 2 つの関数から呼べる:
+ 
+@@ -71,9 +70,8 @@ Ref.get の行は閉じた {Heap[h]} で、run の本体の中の行の違う 2
+   > main()
+   > KEL
+   $ diktor brefget.kel
+-  k
+-  m
+-  2
++  ! brefget.kel:7:57: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ 演算子 + と前置の - は、メソッドの呼び出しと同じく閉じたスキーマの尾部を開く。
+ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なので、束縛の終わりに閉じた {}
+@@ -96,7 +94,8 @@ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なの
+   > main()
+   > KEL
+   $ diktor bopweak.kel
+-  11
++  ! bopweak.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
++  [1]
+ 
+ 演算子を本体に持つ無名関数を選ぶ条件式の束縛も、閉じた {} の行と表示する:
+ 
+@@ -104,4 +103,4 @@ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なの
+   > let g = if true then fn(x: Int32) => x + 1 else fn(x: Int32) => x - 1
+   > KEL
+   $ diktor --type-check bopdisp.kel
+-  g : (Int32) => Int32 @ {}
++  g : (Int32) => Int32
+File "test/inst_init_pure.t", line 1, characters 0-0:
+diff --git a/_build/default/test/inst_init_pure.t b/_build/default/test/inst_init_pure.t.corrected
+index ef3b8e1..527d162 100644
+--- a/_build/default/test/inst_init_pure.t
++++ b/_build/default/test/inst_init_pure.t.corrected
+@@ -16,8 +16,8 @@
+   > echoln(sh(Foo))
+   > KEL
+   $ diktor iniask.kel
+-  ! iniask.kel:5:39: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+-  [1]
++  未処理のエフェクト操作: Ask.ask
++  [3]
+ 
+ 組み込みのクラス Show のインスタンスでも同じである:
+ 
+@@ -30,7 +30,7 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor iniaskb.kel
+-  ! iniaskb.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  ! iniaskb.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+   [1]
+ 
+ トップレベルで許される Console も、初期化式では起こせない:
+@@ -44,8 +44,8 @@
+   > echoln(sh(Foo))
+   > KEL
+   $ diktor inicon.kel
+-  ! inicon.kel:4:31: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+-  [1]
++  init
++  foo
+ 
+ ゼロ除算は行に現れないので、初期化式に書いても型検査を通り、インスタンス宣言を
+ 実行する時点で実行時エラーになる(LangSpec §15.5):
+@@ -58,6 +58,5 @@
+   > echoln("b")
+   > KEL
+   $ diktor inidiv.kel
+-  a
+-  実行時エラー: ゼロ除算です
+-  [3]
++  ! inidiv.kel:4:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 9922562..a8875bd 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -49,7 +49,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String @ {}
++  weak : [_A: Show] (_A) => String
+   _ : String
+ 
+ ファイルの終わりまでに型が決まらなければ、曖昧性エラーになる。辞書はファイルごとに
+@@ -61,7 +61,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e2.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String @ {}
++  weak : [_A: Show] (_A) => String
+   ! ml9e2.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+   [1]
+ 

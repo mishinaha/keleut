@@ -1,0 +1,12 @@
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+module M {
+  pub let go(): Unit @ {Reg} = perform reg(fn() => echoln("m"))
+  pub let mk(): () => Unit @ Console = fn() => echoln("k")
+}
+let main(): Unit @ Console = {
+  M.go()
+  perform Reg.reg(M.mk())
+} handle {
+  case reg(f) => { f(); resume() }
+}
+main()

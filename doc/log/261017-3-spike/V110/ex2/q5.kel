@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+type class Two[A] { val f: (A) => Int32
+  val g: (A) => Int32 }
+type instance Two[Int32] {
+  let rec f(n: Int32): Int32 = if n == 0i32 then 0i32 else g(n - 1i32)
+  and g(n: Int32): Int32 = if n == 0i32 then 1i32 else f(n - 1i32)
+}
+echoln(show(f(3i32)))

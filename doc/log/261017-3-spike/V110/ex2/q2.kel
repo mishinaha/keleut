@@ -1,0 +1,5 @@
+type class Cnt[A] { val cnt: (A) => Int32 }
+type instance Cnt[Int32] {
+  let rec cnt(n: Int32): Int32 = if n == 0i32 then 0i32 else 1i32 + cnt(n - 1i32)
+}
+echoln(show(cnt(3i32)))

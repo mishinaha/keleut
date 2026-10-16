@@ -1,0 +1,3 @@
+module M {
+  pub let h: (Int32) => Int32 = fn() => { echoln("a"); 1 }
+}

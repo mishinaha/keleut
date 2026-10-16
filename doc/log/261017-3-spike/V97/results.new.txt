@@ -1,0 +1,295 @@
+=== b1.kel
+let id[A](x: A): A = x
+let f = id(show)
+let p(): Unit @ Console = echoln(f(1i32))
+let q(): Unit @ Print = println(f(2i32))
+p()
+with_stdout(q)
+--- $ diktor b1.kel
+1
+2
+[exit 0]
+
+=== u1.kel
+type class Sh[A] { val sh: (A) => String }
+type instance Sh[Int32] { let sh(x: Int32): String = show(x) }
+let id[A](x: A): A = x
+let f = id(sh)
+let p(): Unit @ Console = echoln(f(1i32))
+let q(): Unit @ Print = println(f(2i32))
+p()
+with_stdout(q)
+--- $ diktor u1.kel
+1
+2
+[exit 0]
+
+=== b2.kel
+let id[A](x: A): A = x
+let f: (Int32) => String = id(show)
+let p(): Unit @ Console = echoln(f(1i32))
+let q(): Unit @ Print = println(f(2i32))
+p()
+with_stdout(q)
+--- $ diktor b2.kel
+1
+2
+[exit 0]
+
+=== u2.kel
+type class Sh[A] { val sh: (A) => String }
+type instance Sh[Int32] { let sh(x: Int32): String = show(x) }
+let id[A](x: A): A = x
+let f: (Int32) => String = id(sh)
+let p(): Unit @ Console = echoln(f(1i32))
+let q(): Unit @ Print = println(f(2i32))
+p()
+with_stdout(q)
+--- $ diktor u2.kel
+1
+2
+[exit 0]
+
+=== b3_array.kel
+let idf[A](x: A): A = x
+let arr: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(3, 7)) }
+let len = idf(Array.length)
+let p(): Unit @ Console = echoln(show(len(arr)))
+let q(): Unit @ Print = println(show(len(arr)))
+p()
+with_stdout(q)
+--- $ diktor b3_array.kel
+3
+3
+[exit 0]
+
+=== u3_array.kel
+let idf[A](x: A): A = x
+pub let alen[A](a: Array[A]): Int32 = Array.length(a)
+let arr: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(3, 7)) }
+let len = idf(alen)
+let p(): Unit @ Console = echoln(show(len(arr)))
+let q(): Unit @ Print = println(show(len(arr)))
+p()
+with_stdout(q)
+--- $ diktor u3_array.kel
+3
+3
+[exit 0]
+
+=== b4_ref.kel
+let idf[A](x: A): A = x
+let main(): Unit @ Console = {
+  let n = run h {
+    let r = Ref.new(1i32)
+    let g = idf(Ref.get)
+    let k(): Int32 @ {Heap[h], Console} = { echoln("k"); g(r) }
+    let m(): Int32 @ {Heap[h], Print} = { println("m"); g(r) }
+    k() + with_stdout(m)
+  }
+  echoln(show(n))
+}
+main()
+--- $ diktor b4_ref.kel
+k
+m
+2
+[exit 0]
+
+=== u4_ref.kel
+let idf[A](x: A): A = x
+let rget[h, A](r: Ref[h, A]): A @ Heap[h] = Ref.get(r)
+let main(): Unit @ Console = {
+  let n = run h {
+    let r = Ref.new(1i32)
+    let g = idf(rget)
+    let k(): Int32 @ {Heap[h], Console} = { echoln("k"); g(r) }
+    let m(): Int32 @ {Heap[h], Print} = { println("m"); g(r) }
+    k() + with_stdout(m)
+  }
+  echoln(show(n))
+}
+main()
+--- $ diktor u4_ref.kel
+k
+m
+2
+[exit 0]
+
+=== ordervr.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let inc(x: Int32): Int32 = x + 1
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => x + 1)
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  let a = g(1)
+  echoln(show(a + b))
+}
+main()
+--- $ diktor ordervr.kel
+15
+[exit 0]
+
+=== ordervr_neg.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let inc(x: Int32): Int32 = x + 1
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => -x)
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  let a = g(1)
+  echoln(show(a + b))
+}
+main()
+--- $ diktor ordervr_neg.kel
+7
+[exit 0]
+
+=== ordervr_call.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let inc(x: Int32): Int32 = x + 1
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => inc(x))
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  let a = g(1)
+  echoln(show(a + b))
+}
+main()
+--- $ diktor ordervr_call.kel
+! ordervr_call.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+[exit 1]
+
+=== ordervr_callc.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let inc(x: Int32): Int32 @ {} = x + 1
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => inc(x))
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  let a = g(1)
+  echoln(show(a + b))
+}
+main()
+--- $ diktor ordervr_callc.kel
+15
+[exit 0]
+
+=== ordervr_id.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let inc(x: Int32): Int32 = x + 1
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => x)
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  let a = g(1)
+  echoln(show(a + b))
+}
+main()
+--- $ diktor ordervr_id.kel
+! ordervr_id.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+[exit 1]
+
+=== vrgen_id.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => x)
+  let a = g(1)
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  echoln(show(a + b))
+}
+main()
+--- $ diktor vrgen_id.kel
+13
+[exit 0]
+
+=== disp.kel
+let f = show
+let g = Ref.new
+let h2 = Array.get
+let k(x: Int32): Int32 = x + 1
+let n(x: Int32): Int32 = -x
+let e(x: Int32, y: Int32): Boolean = x == y
+--- $ diktor disp.kel
+[exit 0]
+
+=== instinit_user.kel
+effect Ask = { ask: () => Int32 }
+type class Sh[A] { val sh: (A) => String }
+newtype Foo = Foo
+type instance Sh[Foo] {
+  let sh: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
+}
+echoln(sh(Foo))
+--- $ diktor instinit_user.kel
+! instinit_user.kel:5:39: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+
+=== instinit_user2.kel
+type class Sh[A] { val sh: (A) => String }
+newtype Foo = Foo
+type instance Sh[Foo] {
+  let sh: (Foo) => String = { echoln("init"); fn(x) => "foo" }
+}
+echoln(sh(Foo))
+--- $ diktor instinit_user2.kel
+! instinit_user2.kel:4:31: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+
+=== instinit_builtin.kel
+effect Ask = { ask: () => Int32 }
+newtype Foo = Foo
+type instance Show[Foo] {
+  let show: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
+}
+echoln(show(Foo))
+--- $ diktor instinit_builtin.kel
+! instinit_builtin.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+
+=== instdiv.kel
+newtype N = N(Int32)
+let z = 0
+echoln("a")
+type instance Show[N] { let show: (N) => String = { let q = 1 / z; fn(x) => "n" } }
+echoln("b")
+--- $ diktor instdiv.kel
+a
+実行時エラー: ゼロ除算です
+[exit 3]
+
+=== instfn_user.kel
+type class Sh[A] { val sh: (A) => String }
+newtype Foo = Foo
+type instance Sh[Foo] { let sh(x: Foo): String = { echoln("x"); "foo" } }
+--- $ diktor instfn_user.kel
+! instfn_user.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド sh の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+[exit 1]
+
+=== impureshow.kel
+newtype N = N(Int32)
+type instance Show[N] { let show(x: N): String @ Print = { println("p"); "n" } }
+--- $ diktor --type-check impureshow.kel
+! impureshow.kel:2:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+

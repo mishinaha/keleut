@@ -1,0 +1,20 @@
+##### diktor 26c9057
+--- a_at_W.kel
+! a_at_W.kel:3:28: 型エラー: 未知のエフェクト: W
+exit=1
+--- b_at_WE.kel
+M.f : (Int32) => Int32 @ {Print extends R1}
+exit=0
+--- c_brace_WE.kel
+! c_brace_WE.kel:3:31: 型エラー: 未知のエフェクト: WE
+exit=1
+##### diktor 0ab39c6
+--- a_at_W.kel
+M.f : (Int32) => Int32 @ {Print extends R1}
+exit=0
+--- b_at_WE.kel
+M.f : (Int32) => Int32 @ {Print extends R1}
+exit=0
+--- c_brace_WE.kel
+M.f : (Int32) => Int32 @ {Print extends R1}
+exit=0

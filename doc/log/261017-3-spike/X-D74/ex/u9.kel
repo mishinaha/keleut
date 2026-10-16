@@ -1,0 +1,5 @@
+let mk[B](x: B): () => Int32 @ Heap[B] = ???
+let f(): Unit = {
+  let k = fn(z) => { let s = mk(z); run h { s(); () } }
+  ()
+}

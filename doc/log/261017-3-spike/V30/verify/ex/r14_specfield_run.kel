@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+newtype B10[E] = MkB10(() => Unit @ {Log}, () => Unit @ E)
+newtype A10 = MkA10(B10[{}])
+let x: A10 = MkA10(MkB10(fn() => perform log("L"), fn() => ()))
+let _ = x match { case MkA10(MkB10(g, h)) => { g() handle { case log(s) => { echoln(s); resume(()) } }; h() } }

@@ -1,0 +1,4 @@
+let r =
+  1 handle {
+    case return(v) => v
+  }

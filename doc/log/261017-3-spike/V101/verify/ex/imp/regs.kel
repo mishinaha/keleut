@@ -1,0 +1,3 @@
+pub effect Reg = { reg: (() => Unit @ Console) => Unit }
+pub let a(): Unit @ {} = ()
+pub let mk(): () => Unit @ {} = a

@@ -1,0 +1,2 @@
+newtype Opaque = MkOpaque(Int32)
+let ng(p: {xs: List[Opaque]}, q: {xs: List[Opaque]}): Boolean = p == q

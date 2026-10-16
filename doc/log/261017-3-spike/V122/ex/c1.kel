@@ -1,0 +1,1 @@
+let f[A](g: () => Int32 @ Heap[A]): Int32 = run h { g() }

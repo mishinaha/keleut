@@ -1,0 +1,143 @@
+=== b0.kel
+module M {
+  let f[E](x: Int32): Int32 @ {E} = x
+}
+--- out
+! b0.kel:2:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b7.kel
+let f[E](x: Int32): Int32 @ {E} = x
+--- out
+! b7.kel:1:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b1.kel
+module M {
+  type E = Int32
+  let f[E](x: Int32): Int32 @ {E} = x
+}
+--- out
+! b1.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b2.kel
+module E {
+  pub type E = Int32
+}
+let f[E](x: Int32): Int32 @ {E} = x
+--- out
+! b2.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b3.kel
+module E {
+  type E = Int32
+}
+let f[E](x: Int32): Int32 @ {E} = x
+--- out
+! b3.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+[exit 1]
+=== b4.kel
+module M {
+  newtype E(Int32)
+  let f[E](x: Int32): Int32 @ {E} = x
+}
+--- out
+! b4.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b5.kel
+module E {
+  pub newtype E(Int32)
+}
+let f[E](x: Int32): Int32 @ {E} = x
+--- out
+! b5.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b6.kel
+type E = Int32
+let f[E](x: Int32): Int32 @ {E} = x
+--- out
+! b6.kel:2:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b8.kel
+module M {
+  type E = Int32
+  let f[E](x: Int32): Int32 @ {Print, E} = x
+}
+--- out
+! b8.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b9.kel
+module M {
+  type E = Int32
+  let f[E](x: Int32): Int32 @ E = x
+}
+--- out
+M.f : (Int32) => Int32
+[exit 0]
+=== b10.kel
+module M {
+  type E = Int32
+  let f[E](x: Int32): Int32 @ {Print extends E} = x
+}
+--- out
+M.f : (Int32) => Int32 @ {Print extends R1}
+[exit 0]
+=== b11.kel
+module M {
+  type E: EffectRow = {Print}
+  let f[E](x: Int32): Int32 @ {E} = x
+}
+--- out
+M.f : (Int32) => Int32 @ {Print}
+[exit 0]
+=== b12.kel
+let f[Print](x: Int32): Int32 @ {Print} = x
+--- out
+! b12.kel:1:33: 型エラー: 行変数 Print は extends の位置にのみ書けます
+[exit 1]
+=== b13.kel
+module Q {
+  pub type E = Int32
+}
+let f[E](x: Int32): Int32 @ {E} = x
+--- out
+! b13.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== b14.kel
+module M {
+  type E = Int32
+  type W[E]: EffectRow = {Print, E}
+}
+--- out
+! b14.kel:3:26: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b15.kel
+module M {
+  type E = Int32
+  newtype N[E](() => Unit @ {E})
+}
+--- out
+! b15.kel:3:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b16.kel
+module E {
+  pub type E[A] = A
+}
+let f[E](x: Int32): Int32 @ {E[Int32]} = x
+--- out
+! b16.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== b17.kel
+module M {
+  type E = Int32
+  let f[E](x: Int32): Int32 @ {E, Nope} = x
+}
+--- out
+! b17.kel:3:31: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== b18.kel
+module W {
+  type W: EffectRow = {Print}
+}
+let f[W](x: Int32): Int32 @ {W} = x
+--- out
+! b18.kel:4:29: 型エラー: 型 W.W は module W の外からは参照できません(pub を付けてください)
+[exit 1]

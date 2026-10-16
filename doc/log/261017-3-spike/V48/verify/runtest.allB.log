@@ -1,0 +1,152 @@
+File "test/instance_param_types.t", line 1, characters 0-0:
+diff --git a/_build/default/test/instance_param_types.t b/_build/default/test/instance_param_types.t.corrected
+index 28b111b..7be520b 100644
+--- a/_build/default/test/instance_param_types.t
++++ b/_build/default/test/instance_param_types.t.corrected
+@@ -17,6 +17,10 @@
+   > type instance D3[Never] { let rec d3(n) = n match {} }
+   > KEL
+   $ diktor --strict-exhaustive --type-check insnever.kel
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  [1]
+ 
+ 同じ理由で、署名の引数が Never か閉じた構造的ヴァリアントのとき、case _ の節には
+ 一致する値が無いという警告や冗長の警告が出る:
+@@ -32,10 +36,12 @@
+   > KEL
+   $ diktor inswild.kel
+   ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
+   ⚠ 第 3 節は到達不能です(冗長)
+   3hi
+   $ diktor --strict-exhaustive --type-check inswild.kel
+   ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
+   ⚠ 第 3 節は到達不能です(冗長)
+   _ : {}
+   _ : {}
+File "test/typecheck_sample.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_sample.t b/_build/default/test/typecheck_sample.t.corrected
+index 0a899f2..72adff3 100644
+--- a/_build/default/test/typecheck_sample.t
++++ b/_build/default/test/typecheck_sample.t.corrected
+@@ -9,7 +9,9 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+   each : (List[A], (A) => {}) => {}
+   heavy : (Int32) => Int32
+   audit_log : ({query: String}, Resp) => {}
++  ⚠ このパターンには一致する値がありません
+   handle_client : (Conn) => {} @ {Async}
++  ⚠ このパターンには一致する値がありません
+   a : Int32
+   b : Int64
+   c : Int64
+@@ -60,21 +62,39 @@ stubs.kel を前置した無改変 sample.kel の全文が --type-check を通
+   par : (() => A @ {}, () => B @ {}) => (A, B)
+   scope : (() => A @ {Nursery, Async extends R1}) => A @ {Async extends R1}
+   serve : (List[Conn]) => {} @ {Async}
++  ⚠ このパターンには一致する値がありません
+   with_timeout : (Int64, () => A @ {Deadline extends R1}) => Option[A] @ {Async extends R1}
+   handle_audited : ({query: String}) => Resp @ {ReqId, Logger, Tracer, Db, Background, Async}
+   crunch : (Array[Int32]) => Int32 @ {Async}
+   channel : (Int32) => Chan[A]
+   send : (Chan[A], A) => {} @ {Async}
++  ⚠ このパターンには一致する値がありません
+   recv : (Chan[A]) => A @ {Async}
++  ⚠ このパターンには一致する値がありません
+   sin : (Float64) => Float64 @ {}
+   sqlite_step : (Stmt) => Int32 @ {Blocking}
+   pinned : (() => A @ {Blocking extends R1}) => A
+   BigInt.parse : (String) => BigInt.BigInt @ {}
+   BigInt.normalize : (BigInt.BigInt) => BigInt.BigInt
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
+   big_sum : () => BigInt.BigInt
+ 
+ 実行(トップレベル式文: sample.kel:550 の handle と :662 の capture):
+ 
+   $ diktor sample/stubs.kel sample/sample.kel
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
+   test
+   test
+File "test/empty_match.t", line 1, characters 0-0:
+diff --git a/_build/default/test/empty_match.t b/_build/default/test/empty_match.t.corrected
+index ac1c971..9f2f607 100644
+--- a/_build/default/test/empty_match.t
++++ b/_build/default/test/empty_match.t.corrected
+@@ -119,6 +119,7 @@ Never に決まった積載値の腕は、値の無い型の節なので到達
+   > EOF
+   $ diktor r11_void_helper.kel
+   ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
++  ⚠ このパターンには一致する値がありません
+   ok
+ 
+ 値制限で一般化しない束縛と、前の束縛の弱い型変数も決めない:
+File "test/typecheck_m5.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m5.t b/_build/default/test/typecheck_m5.t.corrected
+index 616bf47..6eda7ad 100644
+--- a/_build/default/test/typecheck_m5.t
++++ b/_build/default/test/typecheck_m5.t.corrected
+@@ -114,6 +114,7 @@ Never は節ゼロの match で網羅(§7.5):
+   > EOF
+   $ diktor --type-check --no-prelude never.kel
+   absurd : (Never) => A
++  ⚠ このパターンには一致する値がありません
+ 
+ パターン束縛の網羅性警告(§6.4)とラベル指定パターンの _ 補完:
+ 
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index 86bcace..1f885da 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -273,6 +273,7 @@ default へ降りる。M19 / G3a の sig_complete):
+   > KEL
+   $ diktor --type-check --no-prelude sigc.kel
+   absurd : (Never) => A
++  ⚠ このパターンには一致する値がありません
+   allwild : (Boolean) => Int32
+ 
+ 網羅性警告は宣言をまたいでソース順に並ぶ(§10.13 の遅延キュー。
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/_build/default/test/never_ops.t b/_build/default/test/never_ops.t.corrected
+index a5b0dd5..c7f49b1 100644
+--- a/_build/default/test/never_ops.t
++++ b/_build/default/test/never_ops.t.corrected
+@@ -162,6 +162,7 @@ Never にインスタンスを持つクラスの制約を要求する位置に p
+   > let f(): String @ Fail = describe(perform throw("x"))
+   > EOF
+   $ diktor neverclass.kel
++  ⚠ このパターンには一致する値がありません
+   ! neverclass.kel:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+   $ cat > neverclasshelper.kel <<'EOF'
+@@ -172,6 +173,7 @@ Never にインスタンスを持つクラスの制約を要求する位置に p
+   > let f(): String @ Fail = describe(fail("x"))
+   > EOF
+   $ diktor neverclasshelper.kel
++  ⚠ このパターンには一致する値がありません
+   ! neverclasshelper.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+   [1]
+ 
+@@ -188,6 +190,7 @@ Never にインスタンスを持つクラスの制約を要求する位置に p
+   > echoln(g() handle { case throw(m) => "caught " + m })
+   > EOF
+   $ diktor neverclassann.kel
++  ⚠ このパターンには一致する値がありません
+   caught x
+   caught y
+ 

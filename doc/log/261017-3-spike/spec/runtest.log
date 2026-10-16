@@ -1,0 +1,31 @@
+分野 spec の合成(写しは diktor 39d4091)
+差分の見出しを a/<path> b/<path> の形に置き換えた(一時領域の絶対パスを除く。中身のハンクは変えていない)。
+写しの diktor の中で patch -p1 で当てる。--dry-run で 2 ファイルとも当たることを確かめた。
+1. V83  clusters/spec/clean/V83.patch(65 行、lib/prelude.kel)
+2. V32  clusters/spec/clean/V32.patch(73 行、test/annot_rows.t。足す行は 63)
+V28、X-effsuffix は差分なし(解消の確認のみ)
+2 つの差分はファイルが別で、順序は結果に影響しない。
+合成差分: clusters/spec/spec.patch(ファイルは 138 行 = 65 + 73、2 ファイル)
+
+見出しを置き換えた後に新しい写しで再実行した結果:
+合成後(V83 + V32)の dune build: 成功(lib/parser.mly 88 行の Warning 60 は HEAD からある警告)
+合成後の dune runtest: 差分なし、終了状態 0(出力 0 バイト)
+- 新しく落ちるブロック: 0
+- 期待値が変わる既存のブロック: 0
+- 新しいブロック: annot_rows.t に 7 ブロック(V32。recrowfwd recrowclosed recrowrev recrowmutual recrowclosedmut recrowclosedmutrev recrowone)、すべて緑
+- annot_rows.t の $ 行は 207 から 221 に(7 ブロック x 2 コマンド)
+litcheck.py --old <HEAD の prelude.kel> lib/prelude.kel: code 一致(641 トークン) / marker 0 件、終了状態 0
+litwrap.py --check lib/prelude.kel: 報告なし、終了状態 0
+prelude.kel 488 -> 491 行、annot_rows.t 1188 -> 1251 行
+
+分野をまたぐ確認(参考、xcheck の写し: 合成 + V37 + V111 + V33)
+- V37: prelude.kel の 2 ハンクが offset 3 行で当たる(V83 の折り返し 3 行の分)
+- V33: elab.ml に offset 89 で当たる(V111 の後)。annot_rows.t の V32 のブロックは変わらない
+- V111: 期待値が変わるのは annot_rows.t の recrejtpflow 1 行だけ。V32 の recrowfwd と recrowmutual の「ς1 と ς2」には説明が付かない(行変数の剛定数は V111 の判定の対象外)
+- V34: V111 の後に当てると lib/unify.ml の 2 ハンクが当たらない(diagtext 分野の合成の問題)。
+
+分野をまたぐ確認(参考、xcheck34 の写し: 合成 + V34 だけ、手直しなし)
+- runtest の差分は annot_rows.t の V32 の 2 ブロックだけ:
+  recrowclosed: 「…この行と一致させられません(注釈を extends 付きの形にしてください)」->「…空の行と一致させられません」
+  recrowclosedmutrev: 同じ変化(位置 1:72 は不変)
+- recrowfwd と recrowmutual(「ς1 と ς2」)は変わらない

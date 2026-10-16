@@ -1,0 +1,33 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 8b8f7f1..1a2e462 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -304,8 +304,6 @@ C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそ
+   > newtype B16[E] = MkB16((() => Unit @ E, () => Unit @ {Log}))
+   > EOF
+   $ diktor --type-check --no-prelude specunit2.kel
+-  ! specunit2.kel:4:38: 型エラー: 行カインドではない型パラメータです: E
+-  [1]
+ 
+ 投機がパラメータに届かない形では、型引数にラベルを書いても宣言順に依存する。
+ 同じ 2 つの宣言を入れ替えれば通るので、効いているのは型引数の字面ではなく、
+@@ -319,8 +317,7 @@ C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそ
+   > let f[E](x: A17[E]): A17[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude speclab.kel
+-  ! speclab.kel:3:28: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+-  [1]
++  f : (A17[R1]) => A17[R1]
+   $ cat > speclab2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -540,8 +537,6 @@ newtype の投機がエイリアスを読んでパラメータに届く形に効
+   > newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+   > EOF
+   $ diktor --type-check aliasrow6.kel
+-  ! aliasrow6.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+-  [1]
+ 
+ 行カインドのパラメータに型を渡すと、エイリアスの側の診断で落ちる:
+ 

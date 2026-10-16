@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+newtype Box[A] = Box(A)
+type class Named[A] { val name: (A) => String }
+type instance[A: Show] Named[Box[_]] { let rec name(b) = b match { case Box(x) => "box(" + show(x) + ")" } }
+echoln(name(Box(3)))
+echoln(name(Box(perform ask()))) handle { case ask() => resume(9) }

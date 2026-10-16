@@ -1,0 +1,54 @@
+== a.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n) = n match {} }
+-- --type-check
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 0
+-- --strict-exhaustive --type-check
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 1
+== b.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+-- --type-check
+exit 0
+-- --strict-exhaustive --type-check
+exit 0
+== c.kel
+let describe(n: Never): String = n match {}
+let d2: (Never) => String = fn(n) => n match {}
+-- --type-check
+describe : (Never) => String
+d2 : (Never) => String
+exit 0
+-- --strict-exhaustive --type-check
+describe : (Never) => String
+d2 : (Never) => String
+exit 0
+== d.kel
+newtype Color = Red | Green
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Color] { let describe(c) = c match { case Red => "r" } }
+-- --type-check
+⚠ match が非網羅的です。例えば Green が漏れています
+exit 0
+-- --strict-exhaustive --type-check
+⚠ match が非網羅的です。例えば Green が漏れています
+exit 1
+== e.kel
+newtype Color = Red | Green
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Color] { let describe(c) = c match { case Red => "r" case Green => "g" } }
+-- --type-check
+exit 0
+-- --strict-exhaustive --type-check
+exit 0
+== f.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe = fn(n) => n match {} }
+-- --type-check
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 0
+-- --strict-exhaustive --type-check
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 1

@@ -1,0 +1,1 @@
+newtype H[G] = MkH({x: Int32 extends G[Int32]})

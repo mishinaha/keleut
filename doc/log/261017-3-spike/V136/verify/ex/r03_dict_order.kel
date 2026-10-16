@@ -1,0 +1,4 @@
+type class Fmt[A] { val fmt[B: Show, C: Show]: (A, B, C) => String }
+type instance Fmt[Int32] { let fmt(a, b, c) = show(c) + "/" + show(b) + "/" + show(a) }
+echo(fmt(1i32, true, "s"))
+echo(fmt(2i32, "t", 5i64))

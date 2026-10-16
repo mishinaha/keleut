@@ -1,0 +1,7 @@
+newtype Box = Box(Th[{}])
+type Use = A[{}]
+type Th[E] = () => Unit @ E
+type A[E] = (Int32) => Unit @ E
+let u: Use = fn(x) => ()
+Box(fn() => u(1)) match { case Box(g) => g() }
+echoln("ok")

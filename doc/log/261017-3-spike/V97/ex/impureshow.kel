@@ -1,0 +1,2 @@
+newtype N = N(Int32)
+type instance Show[N] { let show(x: N): String @ Print = { println("p"); "n" } }

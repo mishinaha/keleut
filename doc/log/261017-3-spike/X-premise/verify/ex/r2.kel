@@ -1,0 +1,12 @@
+module M {
+  pub type L2[A] = List[List[A]]
+  pub let same[A: Eq](xs: L2[A], ys: L2[A]): Boolean = xs == ys
+  pub newtype Box[A] = MkBox(A)
+  type instance[A: Eq] Eq[Box[_]] {
+    let eq(p, q) = (p, q) match { case (MkBox(x), MkBox(y)) => x == y }
+  }
+}
+let x: M.L2[Int32] = Cons(Cons(1i32, Nil), Nil)
+echoln(show(M.same(x, x)))
+echoln(show(M.MkBox(Cons(1i32, Nil)) == M.MkBox(Nil)))
+echoln(show(Cons(M.MkBox(Nil), Nil) == Cons(M.MkBox(Cons(3i32, Nil)), Nil)))

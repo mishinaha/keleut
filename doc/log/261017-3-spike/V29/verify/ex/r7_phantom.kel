@@ -1,0 +1,7 @@
+newtype H = MkH(Ph[{}], Ph[Int32])
+type Ph[E] = Int32
+type Rec = {a: Int32}
+newtype G = MkG(Id[Rec])
+type Id[A] = A
+let g = MkG({a = 5})
+with_stdout(fn() => g match { case MkG(r) => println(show(r.a)) })

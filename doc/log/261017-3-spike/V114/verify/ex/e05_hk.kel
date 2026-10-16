@@ -1,0 +1,2 @@
+newtype Int8[A] = Int8(A)
+let f(x: Int8): Int32 = 1

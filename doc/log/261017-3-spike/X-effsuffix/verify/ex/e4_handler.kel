@@ -1,0 +1,11 @@
+effect Ask = { ask: () => Int32 }
+let runa[A, E](f: () => A @ {Ask extends E}): A @ E =
+  f() handle {
+    case ask() => resume(1)
+    case return(x) => x
+  }
+let both(): Int32 = runa(fn() => runa(fn() => perform ask() + perform ask()))
+let id[A](x: A): A = x
+let weak = id(fn() => 1)
+let lam = fn() => 1
+let main() = println(show(both()))

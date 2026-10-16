@@ -1,0 +1,6 @@
+type Pure = (Int32) => Int32
+type W: EffectRow = {}
+let a: Pure = fn(x) => x
+let b(x: Int32): Int32 @ W = x
+let c[E](f: () => Int32 @ {W extends E}): Int32 @ E = f()
+pub let d: Pure = fn(x) => x + 1

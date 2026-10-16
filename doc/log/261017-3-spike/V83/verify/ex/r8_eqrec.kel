@@ -1,0 +1,4 @@
+let xs = Cons(Cons(1, Nil), Nil)
+echoln(show(xs))
+echoln(show(xs == xs))
+echoln(show(Some(Some(2)) == Some(None)))

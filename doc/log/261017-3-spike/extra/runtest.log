@@ -1,0 +1,39 @@
+合成後(V47 → V50 → V44 → V49 → V53 → V48 を all/diktor に当てた木)の dune runtest の分類
+
+新しく落ちるブロック: 0
+
+期待値が変わるブロック(差分に含まれず、runtest で現れたもの): 1
+  test/typecheck.t ml5c(119 行) V49
+    - ! ml5c.kel:2:7: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+    + ! ml5c.kel:2:7: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています(ς1 は型パラメータ A です。A のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に A を入れようとしています))
+  V49 の final.md (5) の予告どおり(V49.patch は ml5c の期待値を含まず、コミット 2 で promote する計画)。promote した。
+
+期待値が変わるブロック(各項目の差分に含まれ、そのまま通ったもの):
+  test/visibility.t visrow26(V57 の追加分。V50 が 1 コマンドの期待値と前書きを改める)
+  test/eval.t solelit/soleopt、solevar2、opcover の 3 ブロック 4 コマンド(V53)
+  test/verify_fixes.t guardonly(V53)
+  test/typecheck_m7.t v10h(V48)
+  test/instance_param_types.t inswild(V48。V136 の新設ブロック)
+
+新しいブロック(すべて通る):
+  test/visibility.t 2 ブロック(V47: vis4c〜vis4e、visrow4b〜visrow4e と visrow5b)
+  test/visibility.t 2 ブロック追加と visrow26 のブロックの書き換え(V50: visrow27〜visrow30)
+  test/pub_effect_note.t 8 ブロック(V44)
+  test/scope_escape_tparam.t 5 ブロック(V49)
+  test/eval.t 1 ブロック(V53: opnone0、opnone2、opnone2ok)
+  test/uninhabited_pattern.t 7 ブロック(V48)
+
+変わらない: そのほかの全ブロック。promote 後の dune runtest は差分 0。
+
+例の対照(cmp.txt。各項目の ex/、exb/、ex2/、verify/ex/ の .kel 327 本を --type-check で、all/diktor、各項目の試作、合成の木で走らせた):
+  試作と合成の木で出力が違うのは V44/ex/a4.kel の 1 本だけ。
+    試作: ! a4.kel:4:29: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+    合成: 同じ文の後ろに V49 の注記「(ς1 は型パラメータ A です。…)」が付く。V49 の final.md (6) の予告どおり。終了コードは同じ 1。
+  all/diktor と試作の差の件数は各 final.md の主張と一致: V47 は ex 12 本と exb 2 本(14 例)、V50 は ex 10 本、V44 は ex 8 本、V49 は ex 6 本、V53 は ex 7 本。
+  V48: run.kel を --strict-exhaustive で実行して 42、終了状態 0。ex2/valued.kel の出力は試作の valued.out と同一。
+       deep.kel と blow_c_200、blow_f_200、blow_t_200 の型検査は各 0.01 秒以下。
+  V50: visrow30 は合成後も「2:32 未知のエフェクト: E」(V47 の案内は付かない。トップレベルのエイリアスには pub の修飾の候補が無い)。
+
+コメントの検査(合成の木):
+  litcheck --old(all/diktor の同名ファイル): lib/elab.ml、lib/unify.ml、lib/exhaust.ml とも marker 0 件(code はコードを変えたので不一致)。
+  litwrap: 3 ファイルとも変更なし(既存の表の幅の報告だけ)。

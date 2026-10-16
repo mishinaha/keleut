@@ -1,0 +1,11 @@
+effect Mixed = { ask: () => Int32, abort: (String) => Never }
+effect Res = { use: () => Unit }
+let r = ({ perform use(); perform abort("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel res"); let a = perform ask(); echoln("cancel got " + show(a)); perform abort("second") }
+} handle {
+  case abort(e) if { echoln("guard " + e); e == "zzz" } => 0
+  case abort(e) => { echoln("H abort " + e); 9 }
+  case ask() => { let x = resume(3); echoln("ask got " + show(x)); x + 100 }
+}
+echoln(show(r))

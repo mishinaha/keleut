@@ -1,0 +1,5 @@
+from "./lib/k" import { Log, run_log }
+let r = with_stdout { run_log { perform log("x"); perform Log.flush(); 3 } }
+echoln(show(r))
+let s = with_stdout { ({ perform Log.log("y"); 4 }) handle { case Log.log(m) => { println("h:" + m); resume({}) } case Log.flush() => resume({}) } }
+echoln(show(s))

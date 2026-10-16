@@ -1,0 +1,7 @@
+let g(x: Int32): Int32 = x
+let a = 1 match {
+  case 1 => g
+    (2)
+  case _ => 0
+}
+echoln(show(a))

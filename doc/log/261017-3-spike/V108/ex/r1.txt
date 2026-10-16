@@ -1,0 +1,13 @@
+let p = (show, 1)
+p
+let sh = show
+sh
+show
+(show, 1)
+let r = { f: show, n: 1 }
+r
+let idf[A](x: A): A = x
+let t = idf(show); t(2i32)
+t
+let q = (1, 2)
+q

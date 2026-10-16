@@ -1,0 +1,23 @@
+File "test/literal_default.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t b/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t.corrected
+index 4121ed4..7848c21 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t.corrected
+@@ -53,7 +53,7 @@
+   > let z = c(Box(1.5))
+   > KEL
+   $ diktor premlit.kel
+-  ! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません
++  ! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません。Box[Float64] が C であるための前提として要求されました
+   [1]
+ 
+ 一般化しない束縛を経由して前の宣言から伝わった制約は、前の宣言の位置ではなく、
+@@ -72,7 +72,7 @@
+   $ diktor --type-check weaklit.kel
+   ident : (A) => A
+   g : [_A: C] (_A) => Int32 @ {}
+-  ! weaklit.kel:7:15: 型エラー: Float64 は C のインスタンスではありません
++  ! weaklit.kel:7:15: 型エラー: Float64 は C のインスタンスではありません。Box[Float64] が C であるための前提として要求されました
+   [1]
+ 
+ 同じ宣言に既定化の失敗が 2 つあるときは、先に書いた方を報告する:

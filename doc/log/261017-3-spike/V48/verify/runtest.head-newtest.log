@@ -1,0 +1,48 @@
+File "test/uninhabited_pattern.t", line 1, characters 0-0:
+diff --git a/_build/default/test/uninhabited_pattern.t b/_build/default/test/uninhabited_pattern.t.corrected
+index 139cef3..1b5aba7 100644
+--- a/_build/default/test/uninhabited_pattern.t
++++ b/_build/default/test/uninhabited_pattern.t.corrected
+@@ -24,9 +24,14 @@ Never や右辺を省いた newtype や、値の無い型をフィールドに
+   pr : ({x: Empt}) => Int32
+   pt : ((Int32, Never)) => Int32
+   pc : (Absurd) => Int32
++  ⚠ このパターンには一致する値がありません
+   pnest : ({x: Absurd}) => Int32
++  ⚠ このパターンには一致する値がありません
+   pvar : (#V(Never)) => Int32
++  ⚠ このパターンには一致する値がありません
+   lc : (Absurd) => Int32
++  ⚠ このパターンには一致する値がありません
++  [1]
+ 
+ let のパターン束縛、節が 1 つの match、return 節も同じ:
+ 
+@@ -43,10 +48,16 @@ let のパターン束縛、節が 1 つの match、return 節も同じ:
+   > KEL
+   $ diktor --strict-exhaustive --type-check --no-prelude single.kel
+   bt : () => Int32 @ {Fail}
++  ⚠ このパターンには一致する値がありません
+   bc : () => Int32 @ {Fail}
++  ⚠ このパターンには一致する値がありません
+   mv : (Never) => Int32
++  ⚠ このパターンには一致する値がありません
+   mc : (Absurd) => Int32
++  ⚠ このパターンには一致する値がありません
+   rc : (() => Absurd @ {Nop}) => Int32
++  ⚠ このパターンには一致する値がありません
++  [1]
+ 
+ 値の無いデータ型を、コンストラクタパターンで開いて消去できる。--strict-exhaustive でも
+ 実行する:
+@@ -63,7 +74,9 @@ let のパターン束縛、節が 1 つの match、return 節も同じ:
+   > echo(show(pick(#Ok(41)) + 1))
+   > KEL
+   $ diktor --strict-exhaustive elim.kel
+-  42
++  ⚠ このパターンには一致する値がありません
++  ⚠ このパターンには一致する値がありません
++  [1]
+ 
+ 受ける型に値があれば、どの値にも一致しないパターンに警告を出す。Opt2[Empt] には Nn が
+ あるので、Sm(x) には一致する値が無いと警告する。節が 2 つ以上の match では、値の無い型

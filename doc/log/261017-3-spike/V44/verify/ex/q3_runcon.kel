@@ -1,0 +1,5 @@
+let idf[A](x: A): A = x
+let k = idf(fn(u: Int32) => { echoln("x"); u })
+module M {
+  pub let f(): Int32 = run h { k(1) }
+}

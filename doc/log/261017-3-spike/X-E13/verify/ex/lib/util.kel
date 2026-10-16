@@ -1,0 +1,2 @@
+pub let twice[A](f: (A) => A @ {}, x: A): A @ {} = f(f(x))
+pub newtype Box[A] = Box(A)

@@ -1,0 +1,5 @@
+newtype Bad = Bad
+type instance Show[Bad] {
+  let show(b) = __panic("boom")
+}
+echoln(show(Cons(Bad, Nil)))

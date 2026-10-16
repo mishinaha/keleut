@@ -1,0 +1,48 @@
+checking file lib/decls.ml
+checking file lib/elab.ml
+Hunk #3 succeeded at 444 (offset 107 lines).
+Hunk #4 succeeded at 554 (offset 107 lines).
+Hunk #5 succeeded at 608 (offset 107 lines).
+Hunk #6 succeeded at 691 (offset 108 lines).
+Hunk #7 succeeded at 912 (offset 109 lines).
+Hunk #8 succeeded at 958 (offset 109 lines).
+Hunk #9 succeeded at 1023 (offset 109 lines).
+Hunk #10 succeeded at 1039 (offset 109 lines).
+Hunk #11 succeeded at 1065 (offset 109 lines).
+Hunk #12 succeeded at 1089 (offset 109 lines).
+Hunk #13 succeeded at 1149 (offset 109 lines).
+Hunk #14 succeeded at 1167 (offset 109 lines).
+Hunk #15 succeeded at 1231 (offset 109 lines).
+Hunk #16 succeeded at 1323 (offset 109 lines).
+Hunk #17 succeeded at 1332 (offset 109 lines).
+Hunk #18 succeeded at 1398 (offset 109 lines).
+Hunk #19 succeeded at 1416 (offset 109 lines).
+Hunk #20 succeeded at 1487 (offset 109 lines).
+Hunk #21 succeeded at 3465 (offset 219 lines).
+Hunk #22 succeeded at 3867 (offset 322 lines).
+Hunk #23 succeeded at 4065 (offset 326 lines).
+Hunk #24 succeeded at 4084 (offset 326 lines).
+Hunk #25 succeeded at 4144 (offset 326 lines).
+Hunk #26 succeeded at 4200 (offset 326 lines).
+Hunk #27 succeeded at 4212 (offset 326 lines).
+Hunk #28 succeeded at 4223 (offset 326 lines).
+Hunk #29 FAILED at 3936.
+Hunk #30 succeeded at 4300 (offset 328 lines).
+Hunk #31 FAILED at 4017.
+Hunk #32 succeeded at 4833 (offset 376 lines).
+Hunk #33 succeeded at 5275 (offset 481 lines).
+Hunk #34 succeeded at 5319 (offset 481 lines).
+Hunk #35 succeeded at 5331 (offset 481 lines).
+Hunk #36 succeeded at 5453 (offset 481 lines).
+Hunk #37 FAILED at 4986.
+Hunk #38 succeeded at 5531 (offset 488 lines).
+Hunk #39 succeeded at 5549 (offset 488 lines).
+Hunk #40 succeeded at 5644 (offset 488 lines).
+Hunk #41 succeeded at 5673 (offset 488 lines).
+Hunk #42 succeeded at 5752 (offset 488 lines).
+3 out of 42 hunks FAILED
+checking file test/effect_order.t
+checking file test/invariants.t
+checking file test/kinds.t
+checking file test/pub.t
+checking file test/visibility.t

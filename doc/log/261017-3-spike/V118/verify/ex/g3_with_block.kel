@@ -1,0 +1,14 @@
+let twice(x: Int32, k: (Int32) => Int32): Int32 = k(x) + k(x)
+let g(): Int32 = {
+  with y = twice(3)
+  let z = y * 2
+  z
+}
+echoln(show(g()))
+let h(n: Int32) = n match {
+  case m if m > 0 =>
+    m +
+      1
+  case _ => 0
+}
+echoln(show(h(4)))

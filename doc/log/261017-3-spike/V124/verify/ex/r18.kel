@@ -1,0 +1,3 @@
+type C = A[{}]
+type A[E] = (Int32) => Int32 @ {Log extends E}
+newtype Log = MkLog(Int32)

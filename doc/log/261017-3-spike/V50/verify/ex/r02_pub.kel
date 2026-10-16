@@ -1,0 +1,3 @@
+type W: EffectRow = {Print}
+pub let f[W](u: Unit): Unit @ {W} = println("pub")
+with_stdout(fn() => f(()))

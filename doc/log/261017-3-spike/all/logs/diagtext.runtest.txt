@@ -1,0 +1,61 @@
+File "test/rec_tparam_note.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t b/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t.corrected
+index 1f631bc..ee42230 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t.corrected
+@@ -87,5 +87,5 @@ g の引数の型が f の A に決まる。g の本体が f を呼ぶ位置(引
+   > and bump[k](a: MutableArray[k, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+   > KEL
+   $ diktor --type-check region.kel
+-  ! region.kel:2:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! region.kel:2:74: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+File "test/ctor_field_row.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t b/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t.corrected
+index 315ff5c..6211f67 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t.corrected
+@@ -119,7 +119,7 @@
+   > KEL
+   $ diktor --type-check ctorarity.kel
+   k : () => Int32
+-  ! ctorarity.kel:3:9: 型エラー: ラベル _item がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! ctorarity.kel:3:9: 型エラー: 引数の個数が一致しません: () => Int32 と (Int32) => Int32 @ {}(引数は 0 個と 1 個です)
+   [1]
+   $ cat > ctorrecmiss.kel <<'KEL'
+   > newtype R = R({f: () => Int32, g: Int32})
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t b/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t.corrected
+index 91f544e..a5b0dd5 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t.corrected
+@@ -744,5 +744,5 @@ resume で再開したときは、先の破棄で終わった計算の値、つ
+   > }
+   > KEL
+   $ diktor --type-check clsfailpure.kel
+-  ! clsfailpure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の本体がエフェクトを起こしています。元の報告: ラベル Fail がありません(行は閉じています)
++  ! clsfailpure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の注釈に @ {} 以外の行を書いています。元の報告: ラベル Fail がありません(行は閉じています)
+   [1]
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t b/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t.corrected
+index 07d1bcd..b4a556a 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t.corrected
+@@ -1077,7 +1077,7 @@ rectpflowrev):
+   > and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+   > KEL
+   $ diktor --type-check recrowclosed.kel
+-  ! recrowclosed.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
++  ! recrowclosed.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+   [1]
+   $ cat > recrowrev.kel <<'KEL'
+   > let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+@@ -1111,7 +1111,7 @@ rectpflowrev):
+   > and a[E](n: Int32): Int32 @ {Console extends E} = { echo("a"); b(n) }
+   > KEL
+   $ diktor --type-check recrowclosedmutrev.kel
+-  ! recrowclosedmutrev.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
++  ! recrowclosedmutrev.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+   [1]
+   $ cat > recrowone.kel <<'KEL'
+   > let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }

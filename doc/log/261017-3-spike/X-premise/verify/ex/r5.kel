@@ -1,0 +1,5 @@
+let f(x) = Cons(x, Nil) == Nil
+let g = fn(y) => Cons(Cons(y, Nil), Nil) == Cons(Nil, Nil)
+echoln(show(f(1i32)) + " " + show(f(Cons(1i32, Nil))) + " " + show(g(2i32)))
+let rec go(n: Int32, acc: List[List[Int32]]): Boolean = if n == 0i32 then acc == Nil else go(n - 1i32, Cons(Nil, acc))
+echoln(show(go(3i32, Nil)))

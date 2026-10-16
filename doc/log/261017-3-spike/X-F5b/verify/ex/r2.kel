@@ -1,0 +1,9 @@
+type P[A] = (A, A)
+let swap[A](p: P[A]): P[A] = (p._1, p._0)
+let t: P[Float64] = (1.e5, 1.)
+let u = swap(t)
+{
+  echoln(show(u._0))
+  echoln(show((if true then 0xff else 2)))
+  echoln(show((if false then 1else 2)))
+}

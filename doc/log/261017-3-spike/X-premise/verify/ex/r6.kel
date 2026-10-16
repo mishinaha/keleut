@@ -1,0 +1,4 @@
+let p(r: {xs: List[Int32], o: Option[List[Int32]]}, q: {xs: List[Int32], o: Option[List[Int32]]}): Boolean = r == q
+echoln(show(p({xs = Cons(1i32, Nil), o = None}, {xs = Cons(1i32, Nil), o = None})))
+let v: #A(List[Int32]) | #B = #A(Cons(1i32, Nil))
+echoln(show(v == #A(Nil)))

@@ -1,0 +1,8 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+module M {
+  type Log = Int32
+  pub newtype B[E] = MkB((() => Unit @ E, Log))
+  pub newtype A = MkA(B[{}])
+}
+let f(x: M.A): M.A = x

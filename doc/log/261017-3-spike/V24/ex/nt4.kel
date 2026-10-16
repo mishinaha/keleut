@@ -1,0 +1,4 @@
+newtype T(
+  Int32,
+  (Int32) => Nope
+)

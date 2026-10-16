@@ -1,0 +1,7 @@
+effect Reg = { reg: ((Int32) => String) => Unit }
+let main(): Unit @ Console = {
+  perform reg(fn(x) => show(x))
+} handle {
+  case reg(f) => { echoln(f(3i32)); resume() }
+}
+main()

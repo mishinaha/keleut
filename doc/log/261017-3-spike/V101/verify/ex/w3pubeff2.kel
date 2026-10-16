@@ -1,0 +1,2 @@
+pub effect Reg = { reg: (() => Unit) => Unit }
+let use(): Unit @ {Reg, Console} = perform reg(fn() => echoln("x"))

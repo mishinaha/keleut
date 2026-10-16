@@ -1,0 +1,3 @@
+module M {
+  let f[E](x: Int32): Int32 @ {E} = x
+}

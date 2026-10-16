@@ -1,0 +1,3 @@
+let f(x) = { let a: Int32 = x.a; x match {} }
+let k(x) = x match { case (a, b) => 1i32 }
+echoln("ok")

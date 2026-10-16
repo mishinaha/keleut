@@ -1,0 +1,14 @@
+effect Ask = { ask: () => Int32 }
+let main(): Unit @ Console = {
+  let v = (perform ask() + 1) handle {
+    case ask() if 1 < 2 => resume(-(3 * 2) + 10)
+    case ask() => resume(0)
+    case return(x) => x * 2
+  }
+  let w = (((perform ask() == 5)) handle {
+    case ask() => resume(5)
+    case return(b) => if b then 1 else 0
+  })
+  echoln(show(v) + " " + show(w))
+}
+main()

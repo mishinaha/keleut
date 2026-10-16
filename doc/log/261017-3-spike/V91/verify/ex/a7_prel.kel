@@ -1,0 +1,3 @@
+echoln(show(10 % 3))
+echoln(show(1.5 * 2.0))
+let bad = 1.5 % 2.0

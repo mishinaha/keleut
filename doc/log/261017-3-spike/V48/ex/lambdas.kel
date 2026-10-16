@@ -1,0 +1,8 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let lv = fn(n: Empt) => 1
+let lr = fn({x}: {x: Never}) => 2
+let lt = fn((a, b): (Int32, Never)) => 3
+let lc = fn(MkA(n)) => 4
+let app(f: (Never) => Int32): Int32 = 0
+let lchk = app(fn(n) => 5)

@@ -1,0 +1,1 @@
+let h(g: (Int32) => Int32): Int32 = g(1, 2)

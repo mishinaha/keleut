@@ -1,0 +1,66 @@
+##### <一時領域>/bin/diktor-head
+== t1/main.kel
+! t1/lib/leaf.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+== t2/main.kel
+<3>
+exit 0
+== t3.kel
+! t3.kel:1:1: 型エラー: Integral は予約されたリテラル述語です(ユーザ宣言不可、D8)
+exit 1
+== t4.kel
+1
+exit 0
+== t5/main.kel
+! t5/lib/f.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(ユーザ宣言不可、D8)
+exit 1
+== t7.kel
+t7.kel:3:38: パースエラー(付近のトークンを確認してください)
+exit 2
+== t8.kel
+! t8.kel:2:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+== t9.kel
+! t9.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+== t6
+! t6.kel:1:1: 型エラー: 未束縛の変数: echoln
+exit 1
+== repl
+! <stdin>:2:1: 型エラー: type class Pretty が二重に宣言されています
+! <stdin>:3:1: 型エラー: 標準環境の type class Eq は再宣言できません
+true
+exit 0
+##### <一時領域>/items/X-D7/verify/diktor/_build/install/default/bin/diktor
+== t1/main.kel
+! t1/lib/leaf.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+== t2/main.kel
+<3>
+exit 0
+== t3.kel
+! t3.kel:1:1: 型エラー: Integral は予約されたリテラル述語です(ユーザ宣言不可、D8)
+exit 1
+== t4.kel
+1
+exit 0
+== t5/main.kel
+! t5/lib/f.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(ユーザ宣言不可、D8)
+exit 1
+== t7.kel
+t7.kel:3:38: パースエラー(付近のトークンを確認してください)
+exit 2
+== t8.kel
+! t8.kel:2:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+== t9.kel
+! t9.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+== t6
+! t6.kel:1:1: 型エラー: 未束縛の変数: echoln
+exit 1
+== repl
+! <stdin>:2:1: 型エラー: type class Pretty が二重に宣言されています
+! <stdin>:3:1: 型エラー: 標準環境の type class Eq は再宣言できません
+true
+exit 0

@@ -1,0 +1,1 @@
+let f(x: {run: Int32}): Int32 = 1

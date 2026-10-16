@@ -1,0 +1,8 @@
+effect Log = { log: (String) => Unit }
+type Act[E] = () => Unit @ E
+newtype Job = MkJob(Act[{Log, Print}])
+let runjob(j: Job): Unit @ Print = j match {
+  case MkJob(f) => f() handle { case log(s) => { println("log " + s); resume(()) } }
+}
+let j = MkJob(fn() => { perform log("a"); println("p"); perform log("b") })
+with_stdout(fn() => runjob(j) handle { case log(s) => resume(()) })

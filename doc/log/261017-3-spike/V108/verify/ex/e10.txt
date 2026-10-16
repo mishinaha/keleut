@@ -1,0 +1,10 @@
+type class Pp[A] { val pp[B: Show]: (A, B) => String }
+type instance Pp[Int32] { let pp(a, b) = show(b) }
+pp
+(pp, 1)
+let ppv = (pp, pp)
+type class Df[A] { val df: A }
+type instance Df[Int32] { let df = 7i32 }
+df
+(df, 1)
+let dd = (df, show)

@@ -1,0 +1,6 @@
+xs : List[Int32] = [1, 2, 3]
+_ : String = "[1, 2, 3]"
+_ : String = "[[1, 2, 3], []]"
+s : [A: Show] (A) => String = <fn>
+_ : String = "[a]"
+rc=0

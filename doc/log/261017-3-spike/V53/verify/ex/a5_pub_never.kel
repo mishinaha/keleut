@@ -1,0 +1,9 @@
+effect Fail = { fail: (String) => Never }
+pub let safe(n: Int32): Int32 =
+  (if n > 0 then n else perform fail("neg")) handle {
+    case fail("x") => 0
+    case fail(m) => -1
+    case return(x) => x
+  }
+echoln(show(safe(3)))
+echoln(show(safe(-3)))

@@ -1,0 +1,7 @@
+effect Ask = { ask: (Int32) => Int32 }
+let r = (perform ask(1) + 1) handle {
+  case ask(n) if n > 0 => { echoln("guarded clause"); ??? }
+  case ask(n) => resume(n)
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))

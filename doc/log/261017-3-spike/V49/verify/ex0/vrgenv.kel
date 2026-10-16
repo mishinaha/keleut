@@ -1,0 +1,11 @@
+effect Ask = { ask: () => Int32 }
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = fn(x) => x + 1
+  let a = g(1)
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  echoln(show(a + b))
+}
+main()

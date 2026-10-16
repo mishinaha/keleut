@@ -1,0 +1,2 @@
+newtype Box[A] = Box(A)
+type instance[A] Show[Box[_]] { let show(b) = b match { case Box(x) => "Box(" ++ show(x) ++ ")" } }

@@ -1,0 +1,9 @@
+DIFF <一時領域>/items/V49/ex/v49_rowvar_mono.kel
+DIFF <一時領域>/items/V49/ex/v49_rec.kel
+DIFF <一時領域>/items/V49/ex/v49_top.kel
+DIFF <一時領域>/items/V49/ex/v49_valann2.kel
+DIFF <一時領域>/items/V49/ex/v49_ml5c.kel
+DIFF <一時領域>/items/V49/ex/v49_valann.kel
+DIFF <一時領域>/items/V44/ex/a4.kel
+DIFF <一時領域>/items/V44/verify/exr/a4.kel
+DIFF <一時領域>/items/V111/verify/ex/nestouter.kel

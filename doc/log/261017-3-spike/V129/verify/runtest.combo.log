@@ -1,0 +1,34 @@
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/_build/default/test/never_ops.t b/_build/default/test/never_ops.t.corrected
+index 3711acd..b7b8204 100644
+--- a/_build/default/test/never_ops.t
++++ b/_build/default/test/never_ops.t.corrected
+@@ -89,7 +89,6 @@ perform の式が要求される型になる。match の腕にそのまま置け
+   > echoln(show(r2))
+   > EOF
+   $ diktor absurd.kel
+-  ⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+   3
+   -1
+   $ cat > absurdplain.kel <<'EOF'
+@@ -132,11 +131,9 @@ perform の式が要求される型になる。match の腕にそのまま置け
+   > echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
+   > EOF
+   $ diktor absurdhelper.kel
+-  ⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+   -1
+   $ diktor --strict-exhaustive absurdhelper.kel
+-  ⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+-  [1]
++  -1
+   $ cat > absurdparam.kel <<'EOF'
+   > let f(x) = x match {}
+   > let h = fn(y) => { echoln(show(y)); y match {} }
+@@ -144,7 +141,6 @@ perform の式が要求される型になる。match の腕にそのまま置け
+   > EOF
+   $ diktor absurdparam.kel
+   ⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+-  ⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+   ok
+ 
+ 型パラメータの値、数値のリテラル、ガード付きの節だけの match は、型が決まっているか

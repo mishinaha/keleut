@@ -1,0 +1,5 @@
+newtype Box[A] = Box(A)
+let escape(): Box[() => Int32] = run h {
+  let a = MutableArray.new(1, 41)
+  Box(fn() => MutableArray.get(a, 0))
+}

@@ -1,0 +1,26 @@
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/_build/default/test/never_ops.t b/_build/default/test/never_ops.t.corrected
+index e586598..2090beb 100644
+--- a/_build/default/test/never_ops.t
++++ b/_build/default/test/never_ops.t.corrected
+@@ -440,7 +440,6 @@ cancel 節は走らず、その外側で巻き戻されるハンドラ(oops)の
+   $ diktor fromclause.kel
+   ask clause throws
+   cancel res
+-  cancel ask
+   caught from clause
+   0
+ 
+File "test/eval.t", line 1, characters 0-0:
+diff --git a/_build/default/test/eval.t b/_build/default/test/eval.t.corrected
+index 25f6950..bdd6c71 100644
+--- a/_build/default/test/eval.t
++++ b/_build/default/test/eval.t.corrected
+@@ -344,7 +344,6 @@ Run モードでも網羅性警告は stderr に出る:
+   $ diktor tailresume.kel
+   r1 uses a
+   cancel r1
+-  cancel outer
+   実行時エラー: ??? に到達しました
+   [3]
+ 

@@ -1,0 +1,3 @@
+type C = B[{}]
+type B[E] = A[E]
+type A[E] = (Int32) => Unit @ E

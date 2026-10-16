@@ -1,0 +1,5 @@
+newtype Box = Box(Int32)
+type Fn = (Box) => Int32 @ {}
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size: Fn = fn(b) => b match { case Box(x) => x + 1 } }
+echoln(show(size(Box(41))))

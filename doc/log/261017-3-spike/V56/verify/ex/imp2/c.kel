@@ -1,0 +1,2 @@
+from "./lib/m" import P
+let x: P = 1

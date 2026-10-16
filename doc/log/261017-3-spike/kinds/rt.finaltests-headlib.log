@@ -1,0 +1,491 @@
+File "test/effect_order.t", line 1, characters 0-0:
+diff --git a/_build/default/test/effect_order.t b/_build/default/test/effect_order.t.corrected
+index 621a73d..6420e1b 100644
+--- a/_build/default/test/effect_order.t
++++ b/_build/default/test/effect_order.t.corrected
+@@ -18,7 +18,8 @@ newtype のフィールドが後ろの effect を参照し、実行もできる(
+   > echoln(show(n))
+   > EOF
+   $ diktor effnt.kel
+-  42
++  ! effnt.kel:1:36: 型エラー: 未知のエフェクト: Log
++  [1]
+ 
+ 略記の @ Log、extends つきの行、和の後ろのコンストラクタのフィールドでも同じである(effntforms):
+ 
+@@ -30,7 +31,8 @@ newtype のフィールドが後ろの effect を参照し、実行もできる(
+   > let f[E](x: N2[E]): N2[E] = x
+   > EOF
+   $ diktor --type-check effntforms.kel
+-  f : (N2[R1]) => N2[R1]
++  ! effntforms.kel:1:30: 型エラー: 未知のエフェクト: Log
++  [1]
+ 
+ effect の操作の型と、型クラスのメソッドの型も、後ろの effect を参照できる(effop):
+ 
+@@ -41,7 +43,8 @@ effect の操作の型と、型クラスのメソッドの型も、後ろの eff
+   > let g(): Unit @ {A} = perform a(fn() => {})
+   > EOF
+   $ diktor --type-check effop.kel
+-  g : () => {} @ {A}
++  ! effop.kel:1:31: 型エラー: 未知のエフェクト: B
++  [1]
+ 
+ 型エイリアスの本体のラベルも、エイリアスを newtype のフィールドや effect の操作の型から
+ 使う形で読める(effalias):
+@@ -56,7 +59,8 @@ effect の操作の型と、型クラスのメソッドの型も、後ろの eff
+   > let f(x: N1, y: N2): N1 = x
+   > EOF
+   $ diktor --type-check effalias.kel
+-  f : (N1, N2) => N1
++  ! effalias.kel:1:21: 型エラー: 未知のエフェクト: Log
++  [1]
+ 
+ 値束縛と関数の注釈、インスタンスのメソッドも同じで、実行もできる(effpos):
+ 
+@@ -70,9 +74,8 @@ effect の操作の型と、型クラスのメソッドの型も、後ろの eff
+   > let _ = { v(); k(3); w(Row1(fn() => perform log("w"))) } handle { case log(s) => { echoln(s); resume(()) } }
+   > EOF
+   $ diktor effpos.kel
+-  v
+-  3
+-  w
++  ! effpos.kel:2:40: 型エラー: 未知のエフェクト: Log
++  [1]
+ 
+ どこにも宣言していないラベルは、これまでどおり未知のエフェクトである(effunknown):
+ 
+@@ -88,15 +91,15 @@ effect の名前の検査(重複、標準環境の名前)は名前を置く時
+ 
+   $ printf 'newtype N = N(() => Unit @ {Nope})\neffect Log = { log: (String) => Unit }\neffect Log = { log: (String) => Unit }\n' > effdup.kel
+   $ diktor --type-check effdup.kel
+-  ! effdup.kel:3:1: 型エラー: effect Log が二重に宣言されています
++  ! effdup.kel:1:28: 型エラー: 未知のエフェクト: Nope
+   [1]
+   $ printf 'newtype N = N(() => Unit @ {Nope})\neffect Console = { w: (String) => Unit }\n' > effstd.kel
+   $ diktor --type-check effstd.kel
+-  ! effstd.kel:2:1: 型エラー: 標準環境の effect Console は再宣言できません
++  ! effstd.kel:1:28: 型エラー: 未知のエフェクト: Nope
+   [1]
+   $ printf 'newtype N = N(() => Unit @ {Log})\neffect Log[A] = { log: (String) => Unit }\n' > effparams.kel
+   $ diktor --type-check effparams.kel
+-  ! effparams.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
++  ! effparams.kel:1:28: 型エラー: 未知のエフェクト: Log
+   [1]
+ 
+ 対話的な実行では、前方参照は 1 つの入力の中に限る(LangSpec §6.6)。
+@@ -111,3 +114,4 @@ effect の名前の検査(重複、標準環境の名前)は名前を置く時
+   > EOF2
+   ! <stdin>:1:68: 型エラー: 未知のエフェクト: Nope
+   ! <stdin>:3:28: 型エラー: 未知のエフェクト: Later
++  ! <stdin>:5:65: 型エラー: 未知のエフェクト: Later2
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub.t b/_build/default/test/pub.t.corrected
+index 292fbbd..9d2a691 100644
+--- a/_build/default/test/pub.t
++++ b/_build/default/test/pub.t.corrected
+@@ -144,12 +144,9 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   > pub let h(g: G): Int32 = g(1)
+   > KEL
+   $ diktor --type-check pubalias.kel
+-  ! pubalias.kel:3:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+-  [1]
++  h : ((Int32) => Int32 @ {}) => Int32 @ {}
+   $ printf 'type F = (Int32) => Int32\npub newtype Box = Box(F)\n' > pubaliasnt.kel
+   $ diktor --type-check pubaliasnt.kel
+-  ! pubaliasnt.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+-  [1]
+ 
+ エイリアスの型引数に書いた矢印は、注釈に直接書いた矢印として扱う。本体の矢印が @ を
+ 持っていれば通る。本体で使わないパラメータに渡した型引数の矢印も調べる:
+@@ -190,8 +187,7 @@ import したエイリアスにも、同じ要求が働く:
+   $ printf 'pub type F = (Int32) => Int32\n' > pubaliasimp/lib.kel
+   $ printf 'from "./lib" import F\npub let h(f: F): Int32 = f(1)\n' > pubaliasimp/main.kel
+   $ diktor --type-check pubaliasimp/main.kel
+-  ! pubaliasimp/main.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+-  [1]
++  h : ((Int32) => Int32 @ {}) => Int32 @ {}
+ 
+ 使う位置から見えないエイリアスの本体は見ない。可視性の診断を先に出す:
+ 
+File "test/invariants.t", line 1, characters 0-0:
+diff --git a/_build/default/test/invariants.t b/_build/default/test/invariants.t.corrected
+index d4bba98..afe5d00 100644
+--- a/_build/default/test/invariants.t
++++ b/_build/default/test/invariants.t.corrected
+@@ -362,7 +362,7 @@ r(1) を先に書くと、宣言の終わりの既定化で r が (Int32) => Int
+   > echoln("ok")
+   > KEL
+   $ inv aliasfwd_a.kel aliasfwd_b.kel
+-  same: exit 0
++  differ: exit 0 / 1
+ 
+ §18.4 の 3 つ目の除外。pub のない値束縛の注釈の先頭の矢印で省略した @ は本体からの
+ 推論を表し、エイリアスの本体の矢印で省略した @ は @ {} を表すので、置き換えると型が変わる:
+@@ -390,7 +390,7 @@ r(1) を先に書くと、宣言の終わりの既定化で r が (Int32) => Int
+   > pub let h(f: F): Int32 = f(1)
+   > KEL
+   $ inv aliaspub_a.kel aliaspub_b.kel
+-  same: exit 1
++  differ: exit 1 / 0
+ 
+ §18.4 の 2 つ目の除外。pub の値束縛の注釈の先頭に直接書いた矢印は、@ を省略できる。
+ 注釈の先頭がエイリアスのときは最外の矢印がなく、展開した矢印も型引数に書いた矢印も入れ子の
+@@ -411,7 +411,7 @@ r(1) を先に書くと、宣言の終わりの既定化で r が (Int32) => Int
+   > echoln(show(k(1)))
+   > KEL
+   $ inv aliaspubhead_a.kel aliaspubhead_b.kel
+-  differ: exit 0 / 1
++  same: exit 0
+   $ inv aliaspubhead_a.kel aliaspubhead_c.kel
+   differ: exit 0 / 1
+ 
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index 0b1abdc..f29f43d 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -370,15 +370,15 @@ pub を付けてもエフェクト位置では使えないからである。Effe
+ 
+   $ printf 'module P { type P = Int32 }\nlet f(x: Int32): Int32 @ P = x\n' > visrow16.kel
+   $ diktor --type-check visrow16.kel
+-  ! visrow16.kel:2:26: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
++  ! visrow16.kel:2:26: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+   [1]
+   $ printf 'module P { type P = Int32 }\nlet f(x: Int32): Int32 @ {P} = x\n' > visrow17.kel
+   $ diktor --type-check visrow17.kel
+-  ! visrow17.kel:2:26: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
++  ! visrow17.kel:2:26: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+   [1]
+   $ printf 'module P { type P[A] = A }\nlet f(x: Int32): Int32 @ {P[Int32], Console} = x\n' > visrow18.kel
+   $ diktor --type-check visrow18.kel
+-  ! visrow18.kel:2:26: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
++  ! visrow18.kel:2:26: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+   [1]
+   $ printf 'module P { pub type P = Int32 }\nlet f(x: Int32): Int32 @ P = x\n' > visrow19.kel
+   $ diktor --type-check visrow19.kel
+@@ -390,7 +390,7 @@ pub を付けてもエフェクト位置では使えないからである。Effe
+ 
+   $ printf 'module M { type T = Int32 }\nlet f(x: Int32): Int32 @ {M.T} = x\n' > visrow20.kel
+   $ diktor --type-check visrow20.kel
+-  ! visrow20.kel:2:26: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
++  ! visrow20.kel:2:26: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+   [1]
+   $ printf 'module M { type T = Int32 }\nlet f(x: Int32): Int32 @ M.T = x\n' > visrow21.kel
+   $ diktor --type-check visrow21.kel
+@@ -403,19 +403,19 @@ Type エイリアスのコンパニオンが pub でも pub でなくても、
+ 
+   $ printf 'module M {\n  type E = Int32\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow22.kel
+   $ diktor --type-check visrow22.kel
+-  ! visrow22.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow22.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+   [1]
+   $ printf 'type E = Int32\nlet f[E](x: Int32): Int32 @ {Print, E} = x\n' > visrow23.kel
+   $ diktor --type-check visrow23.kel
+-  ! visrow23.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow23.kel:2:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+   [1]
+   $ printf 'module E { pub type E = Int32 }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow24.kel
+   $ diktor --type-check visrow24.kel
+-  ! visrow24.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow24.kel:2:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+   [1]
+   $ printf 'module E { type E = Int32 }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow25.kel
+   $ diktor --type-check visrow25.kel
+-  ! visrow25.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow25.kel:2:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+   [1]
+ 
+ 同名の EffectRow エイリアスは、行の要素では型パラメータより先に当たる。
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 65d6823..2bdc6ff 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -300,7 +300,8 @@ effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @
+   > let f(x: A16): A16 = x
+   > EOF
+   $ diktor --type-check --no-prelude specunit2.kel
+-  f : (A16) => A16
++  ! specunit2.kel:4:38: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 型引数にラベルを書く形も、宣言順によらず通る(speclab / speclab2):
+ 
+@@ -312,7 +313,8 @@ effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @
+   > let f[E](x: A17[E]): A17[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude speclab.kel
+-  f : (A17[R1]) => A17[R1]
++  ! speclab.kel:3:28: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
++  [1]
+   $ cat > speclab2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -333,7 +335,8 @@ effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @
+   > let f(x: A): A = x
+   > EOF
+   $ diktor --type-check --no-prelude specbare.kel
+-  f : (A) => A
++  ! specbare.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+   $ cat > specmod.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -344,7 +347,8 @@ effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @
+   > let f(x: M.A): M.A = x
+   > EOF
+   $ diktor --type-check --no-prelude specmod.kel
+-  f : (M.A) => M.A
++  ! specmod.kel:5:40: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 相手の本体が、さらに後ろの newtype にラベルつきの行を渡す形。1 周目の投機は
+ C[{Log}] を読む時点で C のパラメータのカインドを知らずに落ちるが、決まった
+@@ -359,7 +363,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > let f(x: A): A = x
+   > EOF
+   $ diktor --type-check --no-prelude specfix.kel
+-  f : (A) => A
++  ! specfix.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 同じ繰り返しは、型エイリアスのパラメータのカインドが決まったことも数える。
+ ここでは Al1 のカインドが Al2 から決まった後の周で、B の E に届く:
+@@ -374,7 +379,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > let f(x: A): A = x
+   > EOF
+   $ diktor --type-check --no-prelude specalias.kel
+-  f : (A) => A
++  ! specalias.kel:4:41: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
++  [1]
+ 
+ 宣言の無いラベル(綴りの誤り)は、投機の中でも読めないので、1b が未知の
+ エフェクトとして報告する:
+@@ -403,7 +409,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > main()
+   > EOF
+   $ diktor specrun.kel
+-  ok
++  ! specrun.kel:3:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 型エイリアスの型引数も、パラメータのカインドが決まる前に読む位置がある。後ろで
+ 宣言するエイリアスに {} を渡しても、エイリアスを先に宣言した形と同じ型になる。
+@@ -416,7 +423,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > let f(g: C19): Unit = g(1)
+   > EOF
+   $ diktor --type-check --no-prelude aliasunit.kel
+-  f : ((Int32) => {} @ {}) => {}
++  ! aliasunit.kel:3:33: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 本体が E を値の型の位置で使うエイリアスでは、同じ {} を空レコード型と読む:
+ 
+@@ -442,8 +450,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > let h(g: D21): Unit = g(2)
+   > EOF
+   $ diktor --type-check --no-prelude aliasunit3.kel
+-  f : ((Int32) => {}) => {}
+-  h : ((Int32) => {} @ {}) => {}
++  ! aliasunit3.kel:5:33: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 本体でパラメータを使わないエイリアスでは、パラメータのカインドが Type に決まる。
+ このとき {extends R} は、宣言の位置で R を行とするレコード型として読む:
+@@ -471,7 +479,8 @@ newtype のフィールドからエイリアスへ行を渡す形も、宣言順
+   > let f(n: N22, m: M22): Int32 = 0
+   > EOF
+   $ diktor --type-check --no-prelude ntalias.kel
+-  f : (N22, M22) => Int32
++  ! ntalias.kel:5:26: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
++  [1]
+ 
+ エイリアスの本体の中で、行のパラメータより右に同じ宣言群のエフェクトラベルがある
+ 形。effect の名前は 1a で宣言表に置くので、投機の中でもラベルを読み、パラメータの
+@@ -486,7 +495,8 @@ newtype のフィールドからエイリアスへ行を渡す形も、宣言順
+   > let f(n: N23, m: M23): Int32 = 0
+   > EOF
+   $ diktor --type-check --no-prelude aliaslab.kel
+-  f : (N23, M23) => Int32
++  ! aliaslab.kel:3:30: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 投機の中でラベルとして読むのは、effect として宣言した名前だけである。宣言の
+ 無い名前と、effect でない型の名前は、投機の外と同じ診断になる:
+@@ -498,7 +508,7 @@ newtype のフィールドからエイリアスへ行を渡す形も、宣言順
+   > type A24[E] = (Int32) => Unit @ {Q24 extends E}
+   > EOF
+   $ diktor --type-check --no-prelude aliaslab2.kel
+-  ! aliaslab2.kel:4:33: 型エラー: 型 Q24 はエフェクトではありません(ここにはエフェクト行が要ります)
++  ! aliaslab2.kel:4:46: 型エラー: 行カインドではない型パラメータです: E
+   [1]
+   $ cat > aliaslab3.kel <<'EOF'
+   > type Unit = {}
+@@ -506,7 +516,7 @@ newtype のフィールドからエイリアスへ行を渡す形も、宣言順
+   > type A25[E] = (Int32) => Unit @ {Nope extends E}
+   > EOF
+   $ diktor --type-check --no-prelude aliaslab3.kel
+-  ! aliaslab3.kel:3:33: 型エラー: 未知のエフェクト: Nope
++  ! aliaslab3.kel:3:47: 型エラー: 行カインドではない型パラメータです: E
+   [1]
+ 
+ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾名で引く):
+@@ -669,7 +679,8 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+   > with_stdout(fn() => fire(h))
+   > EOF
+   $ diktor aliasfw.kel
+-  hello
++  ! aliasfw.kel:1:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
++  [1]
+   $ cat > aliasfw2.kel <<'EOF'
+   > newtype J = MkJ(() => Unit @ Wr[{}])
+   > type Wr[E]: EffectRow = {Print extends E}
+@@ -677,7 +688,8 @@ sample.kel:252-255)。Row のパラメータの位置ではエフェクト行と
+   > with_stdout(fn() => j match { case MkJ(f) => f() })
+   > EOF
+   $ diktor aliasfw2.kel
+-  wr
++  ! aliasfw2.kel:2:40: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ newtype の投機がエイリアスを読んでパラメータに届く形(aliasfw3)と、エイリアスの
+ 本体が後ろの newtype に具体的な行を渡す形(aliasfw4)。どちらも、決まったカインドが
+@@ -689,12 +701,16 @@ newtype の投機がエイリアスを読んでパラメータに届く形(alias
+   > type Th[E] = () => Unit @ E
+   > EOF
+   $ diktor --type-check aliasfw3.kel
++  ! aliasfw3.kel:2:40: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
++  [1]
+   $ cat > aliasfw4.kel <<'EOF'
+   > newtype H = MkH(K[{}])
+   > type K[E] = (() => Unit @ E, Callback[{Print}])
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check aliasfw4.kel
++  ! aliasfw4.kel:2:27: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ エイリアスの先の newtype の本体で、行のパラメータより右に同じ宣言群のエフェクト
+ ラベルがある形も、エイリアスを挟んで通る:
+@@ -706,6 +722,8 @@ newtype の投機がエイリアスを読んでパラメータに届く形(alias
+   > newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+   > EOF
+   $ diktor --type-check aliasfw5.kel
++  ! aliasfw5.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 行カインドのパラメータに型を渡すと、エイリアスの側の診断で落ちる:
+ 
+@@ -1000,7 +1018,8 @@ drop_arrows がカインドを張るので、same_kind で照合すると「Type
+   > let g(c: Callback[{}]): Int32 = f(c)
+   > EOF
+   $ diktor --type-check hktrow.kel
+-  ! hktrow.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
++  f : (Callback[F[A]]) => Int32
++  ! hktrow.kel:3:35: 型エラー: 型が一致しません: {} と _F[_A]
+   [1]
+ 
+ newtype の本体と EffectRow エイリアスへの型引数も同じ:
+@@ -1010,15 +1029,12 @@ newtype の本体と EffectRow エイリアスへの型引数も同じ:
+   > newtype Holder[F, E] = Holder(Callback[F[E]])
+   > EOF
+   $ diktor --type-check hktrow2.kel
+-  ! hktrow2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+-  [1]
+   $ cat > hktrow3.kel <<'EOF'
+   > type W[E]: EffectRow = {Print extends E}
+   > let f[F, E](x: Int32): Int32 @ W[F[E]] = x
+   > EOF
+   $ diktor --type-check hktrow3.kel
+-  ! hktrow3.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+-  [1]
++  f : (Int32) => Int32 @ {Print extends F[A]}
+ 
+ レコード行の extends の右と、ヴァリアント和の末尾も同じ規則で照合する。
+ ここで F のカインドが先に決まると、後ろの Callback[F[Int32]] の照合も
+@@ -1029,14 +1045,12 @@ newtype の本体と EffectRow エイリアスへの型引数も同じ:
+   > let f[G](r: {x: Int32 extends G[Int32]}, c: Callback[G[Int32]]): Int32 = r.x
+   > EOF
+   $ diktor --type-check hktrow6.kel
+-  ! hktrow6.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+-  [1]
++  f : ({x: Int32 extends F[Int32]}, Callback[F[Int32]]) => Int32
+   $ cat > hktrow7.kel <<'EOF'
+   > let f[G](v: #A(Int32) | G[Int32]): Int32 = 0
+   > EOF
+   $ diktor --type-check hktrow7.kel
+-  ! hktrow7.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+-  [1]
++  f : (#A(Int32) | F[Int32]) => Int32
+ 
+ Type エイリアスの本体に書いた形は、エイリアスの宣言で落ちる。パラメータの
+ カインドの推論が本体を読めずに F を Type を取って Type を返す形に既定化する
+@@ -1047,8 +1061,6 @@ Type エイリアスの本体に書いた形は、エイリアスの宣言で落
+   > type Cb[F, E] = Callback[F[E]]
+   > EOF
+   $ diktor --type-check hktrow5.kel
+-  ! hktrow5.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+-  [1]
+ 
+ Callback を後ろで宣言すると、Holder の本体を読む時点では Callback の
+ パラメータのカインドが未確定なので、その場では落とせない。カインドが
+@@ -1060,8 +1072,6 @@ Callback を後ろで宣言すると、Holder の本体を読む時点では Cal
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check hktrow4.kel
+-  ! hktrow4.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+-  [1]
+ 
+ 相手のパラメータが本体でレコード行の extends の右に置かれる形も、同じく
+ newtype の先頭で報告する:
+@@ -1071,8 +1081,6 @@ newtype の先頭で報告する:
+   > newtype Box[R] = MkBox({x: Int32 extends R})
+   > EOF
+   $ diktor --type-check hktrow8.kel
+-  ! hktrow8.kel:1:1: 型エラー: newtype H の型パラメータ G への適用が行として使われています(行を返す型構成子はありません)
+-  [1]
+ 
+ 型エイリアスの本体から後ろの newtype へ渡す形も、エイリアスの先頭で報告する
+ (エイリアスの本体も 1b より前に投機するので、newtype と同じく相手のパラメータが
+@@ -1083,8 +1091,6 @@ F の結果のカインドを Row に決める):
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check hktrow9.kel
+-  ! hktrow9.kel:1:1: 型エラー: 型エイリアス Cb の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+-  [1]
+ 
+ 落とすのは型変数への適用だけである。エイリアスの展開結果が型パラメータ
+ そのものになる形は、行変数のカインドの推論として Row に決まって通る。
+@@ -1148,12 +1154,8 @@ D82 の型引数の読み分けから呼ぶときだけ照合を抑制する(~ch
+   > type Q = P
+   > EOF
+   $ diktor --type-check aliasrow.kel
+-  ! aliasrow.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+-  [1]
+   $ printf 'effect Log = { log: (String) => Unit }\ntype P: EffectRow = {Log}\ntype Q: Type = P\n' > aliasrow2.kel
+   $ diktor --type-check aliasrow2.kel
+-  ! aliasrow2.kel:3:16: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+-  [1]
+ 
+ パラメータを持つエイリアスも同じ。宣言を通すと @ Q[E] と行を取る型引数の位置
+ (Callback[Q[E]])では展開後のカインドで照合されて使えてしまうが、Type エイリアス
+@@ -1166,16 +1168,14 @@ D82 の型引数の読み分けから呼ぶときだけ照合を抑制する(~ch
+   > let f[E](x: Int32): Int32 @ Q[E] = x
+   > EOF
+   $ diktor --type-check aliasrow3.kel
+-  ! aliasrow3.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+-  [1]
++  f : (Int32) => Int32 @ {Log extends R1}
+ 
+ import したファイルのエイリアスでも、診断はファイルの中での名前で出る:
+ 
+   $ printf 'effect Log = { log: (String) => Unit }\npub type P[E]: EffectRow = {Log extends E}\npub type Q[E] = P[E]\npub type Id[A] = A\n' > aliasrowlib.kel
+   $ printf 'from "./aliasrowlib" import { Id }\nlet x: Id[Int32] = 4\n' > aliasrowmain.kel
+   $ diktor --type-check aliasrowmain.kel
+-  ! aliasrowlib.kel:3:17: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+-  [1]
++  x : Int32
+ 
+ 落とすのは本体が行のときだけである。高階カインドのパラメータを裸で書いた本体は
+ Type ではないが、別のエイリアスの引数(App[Q[F]])の形で使えるので、宣言を通す:

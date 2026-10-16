@@ -1,0 +1,3 @@
+module M { pub type W[E]: EffectRow = {Print extends E} }
+newtype Cb[E] = Cb(() => Unit @ E)
+let h(c: Cb[W[Console]]): Int32 = 0

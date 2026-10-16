@@ -1,0 +1,6 @@
+type class Sh[A] {
+  val sh: (A) => Int32
+}
+type instance Sh[Int32] {
+  let sh() = 1
+}

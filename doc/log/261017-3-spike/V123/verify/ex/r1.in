@@ -1,0 +1,8 @@
+"a
+b"
+/* x /* y
+*/ z
+*/ echoln("c")
+let s = "p\u00
+"
+echoln("d")

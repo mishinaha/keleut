@@ -1,0 +1,5 @@
+newtype Void
+let id(x) = x
+let h = id(fn(v) => v match {})
+let k(v: Void): Int32 = h(v)
+echoln("ok")

@@ -1,0 +1,8 @@
+module M {
+  pub type Pair[A] = (A, A)
+  pub let swap[A](p: Pair[A]): Pair[A] = (p._1, p._0)
+  pub let rec len(n: Int32): Int32 = if n == 0 then 0 else 1 + len(n - 1)
+}
+let q = M.swap((1, 2))
+echoln(show(q._0))
+echoln(show(M.len(3)))

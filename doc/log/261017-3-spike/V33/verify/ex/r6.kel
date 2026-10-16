@@ -1,0 +1,4 @@
+newtype Box = Box(Int32)
+type instance Show[Box] { let show(b: Box): String @ {} = b match { case Box(x) => "Box " + show(x) } }
+echoln(show(Box(7)))
+echoln(show(Cons(Box(1), Cons(Box(2), Nil))))

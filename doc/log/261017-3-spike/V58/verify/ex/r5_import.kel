@@ -1,0 +1,3 @@
+from "./lib/h" import { Log, quiet }
+let r = quiet(fn() => { perform log("x"); 9 })
+echoln(show(r))

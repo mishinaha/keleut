@@ -1,0 +1,2 @@
+let rec a(n: Int32): Int32 @ {Console, Print} = { println("a"); n match { case 0 => 0 case m => b(m - 1) } }
+and b(n: Int32): Int32 @ Console = { echo("b"); n match { case 0 => 0 case m => a(m - 1) } }

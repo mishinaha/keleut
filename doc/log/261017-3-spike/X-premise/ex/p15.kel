@@ -1,0 +1,1 @@
+let ng[F[_]](xs: List[F[Int32]]): Boolean = xs == xs

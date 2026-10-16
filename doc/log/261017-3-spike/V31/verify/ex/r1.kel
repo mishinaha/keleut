@@ -1,0 +1,6 @@
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+let f[E](x: Int32): Int32 @ Q[E] = { perform log("hi"); x + 1 }
+let r = f(41) handle { case log(s) => { echoln(s); resume(()) } }
+echoln(show(r))

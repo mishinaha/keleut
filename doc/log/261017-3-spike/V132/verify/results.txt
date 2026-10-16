@@ -1,0 +1,133 @@
+### addinst.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	newtype Money(Int32)
+     3	type instance Add[Money] {
+     4	  let add(a, b) = perform throw("no")
+     5	}
+--- HEAD
+! addinst.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド add の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Fail を足せません(注釈側に Fail を(必要なら引数つきで)書き足してください)
+[exit 1]
+--- proto
+! addinst.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド add の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Fail を足せません(注釈側に Fail を(必要なら引数つきで)書き足してください)
+[exit 1]
+
+### cb.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Runner[A] {
+     3	  val run1[E]: (A, (A) => Int32 @ E) => Int32 @ E
+     4	}
+     5	type instance Runner[Int32] {
+     6	  let run1[E](x: Int32, f: (Int32) => Int32 @ E): Int32 @ E = f(x)
+     7	}
+     8	let r: Int32 = run1(3, fn(x: Int32) => perform throw("boom")) handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+     9	echoln(show(r))
+--- HEAD
+caught boom
+-1
+[exit 0]
+--- proto
+caught boom
+-1
+[exit 0]
+
+### closedcall.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => A @ Fail
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s) = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+     8	let g(): Int32 @ {Fail, Console} = { echoln("in g"); parse("1") }
+     9	echoln(show(g() handle { case throw(e) => 0 }))
+    10	let p[A: Parse](s: String): A @ Fail = parse(s)
+    11	let q: Int32 = p("x") handle { case throw(e) => 5 }
+    12	echoln(show(q))
+--- HEAD
+in g
+1
+5
+[exit 0]
+--- proto
+in g
+1
+5
+[exit 0]
+
+### exceed.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => A @ Fail
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s) = { echoln("x"); if s == "1" then 1 else perform throw("bad: " + s) }
+     7	}
+--- HEAD
+! exceed.kel:6:7: 型エラー: インスタンスメソッド parse がクラス宣言の型を満たしません(ラベル Console がありません(行は閉じています))
+[exit 1]
+--- proto
+! exceed.kel:6:7: 型エラー: インスタンスメソッド parse がクラス宣言の型を満たしません(ラベル Console がありません(行は閉じています))
+[exit 1]
+
+### functor.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Functor[F[_]] {
+     3	  val map[A, B, E]: (F[A], (A) => B @ E) => F[B] @ E
+     4	}
+     5	type instance Functor[List[_]] {
+     6	  let rec map[A, B, E](xs: List[A], f: (A) => B @ E): List[B] @ E =
+     7	    xs match {
+     8	      case Nil => Nil
+     9	      case Cons(x, tail) => Cons(f(x), map(tail, f))
+    10	    }
+    11	}
+    12	let r: List[Int32] = map(Cons(1, Cons(2, Nil)), fn(x: Int32) => if x == 2 then perform throw("two") else x) handle { case throw(e) => { echoln("caught " + e); Nil } }
+    13	echoln(show(r))
+--- HEAD
+caught two
+[]
+[exit 0]
+--- proto
+caught two
+[]
+[exit 0]
+
+### inner.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Mk[A] {
+     3	  val mk: (A) => (() => Int32 @ Fail)
+     4	}
+     5	type instance Mk[Int32] {
+     6	  let mk(x) = fn() => if x == 1 then 1 else perform throw("bad")
+     7	}
+     8	let f = mk(2)
+     9	let r: Int32 = f() handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+    10	echoln(show(r))
+--- HEAD
+caught bad
+-1
+[exit 0]
+--- proto
+caught bad
+-1
+[exit 0]
+
+### openunann.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse[E]: (String) => A @ {Fail extends E}
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s) = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+     8	let r: Int32 = parse("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+     9	echoln(show(r))
+--- HEAD
+caught bad: 2
+-1
+[exit 0]
+--- proto
+caught bad: 2
+-1
+[exit 0]
+

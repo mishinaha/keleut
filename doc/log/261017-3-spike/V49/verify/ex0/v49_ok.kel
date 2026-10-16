@@ -1,0 +1,5 @@
+let ok = fn(y: Int32) => {
+  let f[A](x: A): A = { y + 1; x }
+  f(true)
+}
+echoln(show(ok(1)))

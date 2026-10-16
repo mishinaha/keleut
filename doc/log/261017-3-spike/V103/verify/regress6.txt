@@ -1,0 +1,38 @@
+===== --import-path imp imp/main.kel
+-- HEAD tc
+g : (Array[_A]) => Int32
+xs : Array[Int32]
+n : Int32
+p : () => {} @ {Print}
+_ : {}
+exit=0
+-- proto tc
+g : (Array[_A]) => Int32 @ {}
+xs : Array[Int32]
+n : Int32
+p : () => {} @ {Print}
+_ : {}
+exit=0
+-- HEAD run
+9
+exit=0
+-- proto run
+9
+exit=0
+===== --prelude myprelude.kel usep.kel
+-- HEAD tc
+id : (A) => A
+g : [_A: Show] (_A) => String
+! usep.kel:3:17: 型エラー: Boolean は Integral のインスタンスではありません
+exit=1
+-- proto tc
+id : (A) => A
+g : [_A: Show] (_A) => String @ {}
+! usep.kel:3:17: 型エラー: Boolean は Integral のインスタンスではありません
+exit=1
+-- HEAD run
+! usep.kel:3:17: 型エラー: Boolean は Integral のインスタンスではありません
+exit=1
+-- proto run
+! usep.kel:3:17: 型エラー: Boolean は Integral のインスタンスではありません
+exit=1

@@ -1,0 +1,5 @@
+let mk[B](x: B): Ref[B, Int32] = ???
+let f(): Unit = {
+  let k = fn(z) => { let s = mk(z); run h { Ref.get(s); () } }
+  ()
+}

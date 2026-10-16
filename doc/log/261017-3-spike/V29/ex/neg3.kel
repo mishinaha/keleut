@@ -1,0 +1,4 @@
+newtype H = MkH(Bx[{}])
+type Bx[A] = Box[A]
+newtype Box[A] = Box(A)
+let h: H = MkH(Box(1))

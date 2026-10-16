@@ -1,0 +1,6 @@
+effect Op = { op: (Int32, Int32) => Int32 }
+let k(): Int32 @ Op = perform op(1, 2) + perform op(3, 4)
+let r = k() handle {
+  case op(a, b) => resume(a * b)
+}
+echoln(show(r))

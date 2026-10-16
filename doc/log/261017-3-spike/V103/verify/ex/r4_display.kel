@@ -1,0 +1,11 @@
+let f = fn(x) => x + 1
+let g(x: Int32) = x * 2
+let h[A: Add](x: A, y: A) = x + y
+let n(x: Int32) = -x
+let c[A: Ord](x: A, y: A) = x < y
+let s = fn(x: Int32) => show(x) + "!"
+pub let p[A: Show](x: A): String = show(x)
+let q = (fn(x: Int32) => x + 1, 2)
+let idf2[T](x: T): T = x
+let w = idf2(fn(x: Int32) => x + 1)
+echoln(show(f(1) + g(2) + h(3, 4) + n(5)) + s(1) + p(c(1, 2)))

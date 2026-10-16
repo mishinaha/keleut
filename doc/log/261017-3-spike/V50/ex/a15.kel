@@ -1,0 +1,2 @@
+let f[Heap, h](x: Int32): Int32 @ Heap[h] = x
+let g[Heap, h](x: Int32): Int32 @ {Heap[h]} = x

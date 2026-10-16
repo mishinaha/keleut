@@ -1,0 +1,209 @@
+===  abort.kel
+-1
+[exit 0]
+=== --strict-exhaustive abort.kel
+-1
+[exit 0]
+=== --type-check abort.kel
+abort : (String) => A @ {Fail}
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  annotated.kel
+-1
+[exit 0]
+=== --strict-exhaustive annotated.kel
+-1
+[exit 0]
+=== --type-check annotated.kel
+fail : (String) => Never @ {Fail}
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  dexp.kel
+x
+[exit 0]
+=== --strict-exhaustive dexp.kel
+x
+[exit 0]
+=== --type-check dexp.kel
+_ : {}
+[exit 0]
+===  direct.kel
+-1
+[exit 0]
+=== --strict-exhaustive direct.kel
+-1
+[exit 0]
+=== --type-check direct.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  helper.kel
+-1
+[exit 0]
+=== --strict-exhaustive helper.kel
+-1
+[exit 0]
+=== --type-check helper.kel
+fail : (String) => A @ {Fail extends R1}
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  lamdefer.kel
+ok
+[exit 0]
+=== --strict-exhaustive lamdefer.kel
+ok
+[exit 0]
+=== --type-check lamdefer.kel
+h : (Never) => Int32
+_ : {}
+[exit 0]
+===  laterint.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive laterint.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check laterint.kel
+g : (Int32) => Int32
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  laterlet2.kel
+-1
+[exit 0]
+=== --strict-exhaustive laterlet2.kel
+-1
+[exit 0]
+=== --type-check laterlet2.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  laterlet.kel
+-1
+[exit 0]
+=== --strict-exhaustive laterlet.kel
+-1
+[exit 0]
+=== --type-check laterlet.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  numvar.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive numvar.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check numvar.kel
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  okarmann.kel
+⚠ 第 1 節は到達不能です(冗長)
+3
+[exit 0]
+=== --strict-exhaustive okarmann.kel
+⚠ 第 1 節は到達不能です(冗長)
+[exit 1]
+=== --type-check okarmann.kel
+mk : (Boolean) => #Ok(Never) | #Err(Int32) @ {Fail}
+go : (Boolean) => Int32 @ {Fail}
+⚠ 第 1 節は到達不能です(冗長)
+_ : {}
+[exit 0]
+===  okarm.kel
+⚠ 第 1 節は到達不能です(冗長)
+3
+-1
+[exit 0]
+=== --strict-exhaustive okarm.kel
+⚠ 第 1 節は到達不能です(冗長)
+[exit 1]
+=== --type-check okarm.kel
+mk : (Boolean) => #Ok(A) | #Err(Int32) | R1 @ {Fail extends R2}
+go : (Boolean) => Int32 @ {Fail}
+⚠ 第 1 節は到達不能です(冗長)
+_ : {}
+_ : {}
+[exit 0]
+===  optnever.kel
+⚠ 第 1 節は到達不能です(冗長)
+0
+[exit 0]
+=== --strict-exhaustive optnever.kel
+⚠ 第 1 節は到達不能です(冗長)
+[exit 1]
+=== --type-check optnever.kel
+f : (Option[Never]) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+_ : {}
+[exit 0]
+===  rigid.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive rigid.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check rigid.kel
+f : (A) => B
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  rowkind.kel
+1
+[exit 0]
+=== --strict-exhaustive rowkind.kel
+1
+[exit 0]
+=== --type-check rowkind.kel
+f : (A) => Int32
+_ : {}
+[exit 0]
+===  unannparam_call.kel
+! unannparam_call.kel:3:18: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --strict-exhaustive unannparam_call.kel
+! unannparam_call.kel:3:18: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --type-check unannparam_call.kel
+f : (Never) => A
+_ : {}
+! unannparam_call.kel:3:18: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+===  unannparam.kel
+ok
+[exit 0]
+=== --strict-exhaustive unannparam.kel
+ok
+[exit 0]
+=== --type-check unannparam.kel
+f : (Never) => A
+_ : {}
+[exit 0]
+===  v136.kel
+ok
+[exit 0]
+=== --strict-exhaustive v136.kel
+ok
+[exit 0]
+=== --type-check v136.kel
+_ : {}
+[exit 0]
+===  valbind.kel
+-1
+[exit 0]
+=== --strict-exhaustive valbind.kel
+-1
+[exit 0]
+=== --type-check valbind.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]

@@ -1,0 +1,2 @@
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b(n: Int32): Int32 @ {} = n

@@ -1,0 +1,5 @@
+type class Big[A] { val big: (A) => Boolean }
+type instance Big[Int64] {
+  let big(x: Int64) = x match { case 4294967295 => true  case _ => false }
+}
+echoln(show(big(4294967295i64)) + show(big(1i64)))

@@ -1,0 +1,4 @@
+type class D[A] { val d: (A) => Int32 }
+type instance D[Int32] { let d = fn(n: Int32) => { let y = n + 1i32; y } }
+pub let z: Int32 = d(1i32)
+with_stdout(fn() => println(show(z)))

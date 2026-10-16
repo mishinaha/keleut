@@ -1,0 +1,6 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let g1(n: Never): Int32 = n match { case m if true => 1 }
+let rec g2(MkA(n)) = 2
+and g3(x: Int32) = 3
+let g4(b: Boolean): Int32 = b match { case true if b => 1 }

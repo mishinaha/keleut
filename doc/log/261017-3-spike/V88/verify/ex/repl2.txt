@@ -1,0 +1,17 @@
+let then = "a
+let z = 3
+let w = if
+true then 1 else 2
+let r = {a = 1,
+  then = 2}
+let r2 = {a = 1,
+  b = 2}
+r2.b
+let f(x: Int32): Int32 = x + 1
+f(handle
+f(2)
+let m = 1 match {
+  case if => 2
+  case _ => 3
+}
+m

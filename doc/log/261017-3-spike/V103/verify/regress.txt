@@ -1,0 +1,213 @@
+===== r10_weakref.kel
+-- HEAD tc
+id : (A) => A
+n : Int32
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+n : Int32
+_ : {}
+exit=0
+-- HEAD run
+k
+12
+exit=0
+-- proto run
+k
+12
+exit=0
+===== r11_ctor_weak.kel
+-- HEAD tc
+r11_ctor_weak.kel:12:52: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto tc
+r11_ctor_weak.kel:12:52: パースエラー(付近のトークンを確認してください)
+exit=2
+-- HEAD run
+r11_ctor_weak.kel:12:52: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto run
+r11_ctor_weak.kel:12:52: パースエラー(付近のトークンを確認してください)
+exit=2
+===== r1_recfield.kel
+-- HEAD tc
+id : (A) => A
+r : [_A: Show] {f: (_A) => String}
+fs : List[(Int32) => String @ {Print}]
+go : () => {} @ {Print}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+r : [_A: Show] {f: (_A) => String}
+fs : List[(Int32) => String @ {Print}]
+go : () => {} @ {Print}
+_ : {}
+exit=0
+-- HEAD run
+3
+exit=0
+-- proto run
+3
+exit=0
+===== r2_tuple.kel
+-- HEAD tc
+id : (A) => A
+mk : () => (Array[A]) => Int32
+xs : Array[Int32]
+k : Option[(Array[Int32]) => Int32 @ {Console}]
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+mk : () => (Array[A]) => Int32
+xs : Array[Int32]
+k : Option[(Array[Int32]) => Int32 @ {Console}]
+_ : {}
+exit=0
+-- HEAD run
+4
+exit=0
+-- proto run
+4
+exit=0
+===== r3_rigid.kel
+-- HEAD tc
+twice : (() => Int32) => Int32
+addf : [A: Add] (() => A, A) => A
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+twice : (() => Int32) => Int32
+addf : [A: Add] (() => A, A) => A
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+t
+t
+10
+u
+3.5
+exit=0
+-- proto run
+t
+t
+10
+u
+3.5
+exit=0
+===== r4_display.kel
+-- HEAD tc
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+! r4_display.kel:7:9: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+-- proto tc
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+! r4_display.kel:7:9: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+-- HEAD run
+! r4_display.kel:7:9: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+-- proto run
+! r4_display.kel:7:9: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+===== r5_module.kel
+-- HEAD tc
+M.id : (A) => A @ {}
+! r5_module.kel:3:11: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+-- proto tc
+M.id : (A) => A @ {}
+! r5_module.kel:3:11: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+-- HEAD run
+! r5_module.kel:3:11: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+-- proto run
+! r5_module.kel:3:11: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+exit=1
+===== r6_handler.kel
+-- HEAD tc
+f : () => Int32 @ {Ask}
+! r6_handler.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+exit=1
+-- proto tc
+f : () => Int32 @ {Ask}
+! r6_handler.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+exit=1
+-- HEAD run
+! r6_handler.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+exit=1
+-- proto run
+! r6_handler.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+exit=1
+===== r7_hof.kel
+-- HEAD tc
+apply : ((A) => B, A) => B
+id : (A) => A
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+apply : ((A) => B, A) => B
+id : (A) => A
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+16
+17
+3
+exit=0
+-- proto run
+16
+17
+3
+exit=0
+===== r8_instance.kel
+-- HEAD tc
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+V(4,6)truetrue
+exit=0
+-- proto run
+V(4,6)truetrue
+exit=0
+===== r9_weak.kel
+-- HEAD tc
+id : (A) => A
+g : [_A: Show] (_A) => String
+p : () => {} @ {Print}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+g : [_A: Show] (_A) => String @ {}
+p : () => {} @ {Print}
+_ : {}
+exit=0
+-- HEAD run
+1
+exit=0
+-- proto run
+1
+exit=0

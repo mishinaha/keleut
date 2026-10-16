@@ -1,0 +1,8 @@
+type App[F[_], A] = F[A]
+newtype Box[A] = Box(A)
+newtype W = MkW(App[Box, {}])
+type P[A] = (A, Int32)
+newtype N = MkN(P[{}])
+let w = MkW(Box(()))
+let n = MkN(((), 3))
+with_stdout(fn() => n match { case MkN((u, k)) => println(show(k)) })

@@ -1,0 +1,5 @@
+newtype H = MkH(Cb[{Print}])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let h = MkH(Callback(fn() => println("hello")))
+let bad: Cb[{}] = Callback(fn() => println("x"))

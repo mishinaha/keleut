@@ -1,0 +1,195 @@
+File "test/instance_param_types.t", line 1, characters 0-0:
+diff --git a/_build/default/test/instance_param_types.t b/_build/default/test/instance_param_types.t.corrected
+index a67ad5c..28b111b 100644
+--- a/_build/default/test/instance_param_types.t
++++ b/_build/default/test/instance_param_types.t.corrected
+@@ -31,7 +31,15 @@
+   > echo(lv(1, #Hi))
+   > KEL
+   $ diktor inswild.kel
++  ⚠ このパターンには一致する値がありません
++  ⚠ 第 3 節は到達不能です(冗長)
++  3hi
+   $ diktor --strict-exhaustive --type-check inswild.kel
++  ⚠ このパターンには一致する値がありません
++  ⚠ 第 3 節は到達不能です(冗長)
++  _ : {}
++  _ : {}
++  [1]
+ 
+ 本体の数値リテラルは、署名の引数の型に決まる:
+ 
+@@ -41,6 +49,7 @@
+   > echo(show(pick(3i64, 20i64)))
+   > KEL
+   $ diktor inslit.kel
++  20
+ 
+ 閉じた構造的ヴァリアントの引数の漏れは、型エラーではなく網羅漏れの警告になる:
+ 
+@@ -50,7 +59,11 @@
+   > echo(lv(1, #Lo))
+   > KEL
+   $ diktor insvariant.kel
++  ⚠ match が非網羅的です。例えば #Hi(_) が漏れています
++  lo
+   $ diktor --strict-exhaustive insvariant.kel
++  ⚠ match が非網羅的です。例えば #Hi(_) が漏れています
++  [1]
+ 
+ 渡した型と本体が食い違うと、注釈を書いた関数と同じく、本体の食い違った位置に出る:
+ 
+@@ -59,6 +72,8 @@
+   > type instance Describe[Int32] { let describe(n) = __string_concat(n, "x") }
+   > KEL
+   $ diktor --type-check insbody.kel
++  ! insbody.kel:2:67: 型エラー: 型が一致しません: Int32 と String
++  [1]
+ 
+ 返り値の型は署名から決めないので、リテラルは既定の Int32 になり、署名と照らした
+ 時点で落ちる:
+@@ -69,6 +84,8 @@
+   > echo(show(size("a")))
+   > KEL
+   $ diktor insret.kel
++  ! insret.kel:2:32: 型エラー: インスタンスメソッド size がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
++  [1]
+ 
+ 注釈を書いた仮引数には署名の型を渡さない:
+ 
+@@ -77,6 +94,8 @@
+   > type instance Describe[String] { let describe(n: Int32) = "x" }
+   > KEL
+   $ diktor --type-check insannot.kel
++  ! insannot.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と String)
++  [1]
+ 
+ 前提を持つインスタンスでも、前提のクラスを本体で使う形は変わらない:
+ 
+@@ -89,4 +108,8 @@
+   > echo(show(Box("a") == Box("b")))
+   > KEL
+   $ diktor inspremise.kel
++  Box(3)truefalse
+   $ diktor --strict-exhaustive --type-check inspremise.kel
++  _ : {}
++  _ : {}
++  _ : {}
+File "test/instance_init.t", line 1, characters 0-0:
+diff --git a/_build/default/test/instance_init.t b/_build/default/test/instance_init.t.corrected
+index de50d3c..3a15331 100644
+--- a/_build/default/test/instance_init.t
++++ b/_build/default/test/instance_init.t.corrected
+@@ -18,6 +18,9 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor instinitcon.kel
++  init
++  foo
++  foo
+ 
+ エフェクトを起こさない値でない初期化式は受理する。返す無名関数の決まっていない行は
+ 空の行に決まる。組み込みのクラスでも、利用者のクラスの @ E のメソッドでも同じ:
+@@ -31,6 +34,7 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor instweakrow.kel
++  foo
+   $ cat > instweakrowuser.kel <<'KEL'
+   > type class Sz[A] { val sz[E]: (A) => Int32 @ E }
+   > newtype Foo = Foo
+@@ -41,6 +45,7 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instweakrowuser.kel
++  1
+ 
+ 初期化式の中で処理した操作は、初期化式の行に残らない:
+ 
+@@ -53,6 +58,7 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor instinithandled.kel
++  foo
+ 
+ 効果多相の関数を初期化式で呼ぶ形は、その関数の行変数が返す関数の行と共有されても
+ 受理する。初期化式の中の局所の束縛で呼んでも同じ:
+@@ -67,6 +73,7 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instinitpoly.kel
++  7
+   $ cat > instinitpolylocal.kel <<'KEL'
+   > type class Sz[A] { val sz: (A) => Int32 }
+   > newtype Foo = Foo
+@@ -78,6 +85,7 @@
+   > echoln(show(sz(Bar)))
+   > KEL
+   $ diktor instinitpolylocal.kel
++  3
+ 
+ トップレベルで起こせないエフェクトを初期化式で起こすと、エフェクトの名前とメソッドの
+ 名前を挙げて拒否する。位置はメソッドの束縛である:
+@@ -92,6 +100,8 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instinitask.kel
++  ! instinitask.kel:5:7: 型エラー: エフェクト Ask をインスタンスメソッド sz の初期化式では実行できません(初期化式が起こせるのはトップレベルの評価と同じエフェクトです)
++  [1]
+   $ cat > instinitheap.kel <<'KEL'
+   > type class Sz[A] { val sz: (A) => Int32 }
+   > newtype Foo = Foo
+@@ -101,6 +111,8 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instinitheap.kel
++  ! instinitheap.kel:4:7: 型エラー: エフェクト Heap をインスタンスメソッド sz の初期化式では実行できません(初期化式が起こせるのはトップレベルの評価と同じエフェクトです)
++  [1]
+ 
+ 前提を持つインスタンスの初期化式はメソッドを使うたびに評価するので、Console も
+ 起こせない:
+@@ -118,6 +130,8 @@
+   > echoln(show(k))
+   > KEL
+   $ diktor instinitperuse.kel
++  ! instinitperuse.kel:5:7: 型エラー: エフェクト Console をインスタンスメソッド sz の初期化式では実行できません(メソッドを使うたびに評価する初期化式は、エフェクトを起こせません)
++  [1]
+ 
+ ゼロ除算は行に現れないので、初期化式に書いても型検査を通る。前提を持たない
+ インスタンスでは、インスタンス宣言を実行する時点で実行時エラーになる(LangSpec §6.4):
+@@ -130,6 +144,9 @@
+   > echoln("b")
+   > KEL
+   $ diktor inidiv.kel
++  a
++  実行時エラー: ゼロ除算です
++  [3]
+ 
+ 前提を持つインスタンスでは初期化式をメソッドを使うたびに評価するので、実行時エラーは
+ メソッドを使う時点で起きる(LangSpec §6.4):
+@@ -145,6 +162,10 @@
+   > echoln(show(Box(1)))
+   > KEL
+   $ diktor inipremdiv.kel
++  a
++  b
++  実行時エラー: ゼロ除算です
++  [3]
+ 
+ エフェクトを起こさない初期化式は、構文上の値でなくても受理する。組み込みのクラスでも
+ 利用者のクラスと同じである:
+@@ -156,6 +177,7 @@
+   > echoln(show(N(0)))
+   > KEL
+   $ diktor inipure.kel
++  n3
+ 
+ 対話的な実行でも同じ規則で、トップレベルの行が Print を含むので、Print を起こす
+ 初期化式も受理する:
+@@ -170,3 +192,6 @@
+   > type instance Sz[Bar] { let sz = { let m = memo(fn(x) => 3i32); fn(x: Bar) => m(Foo) } }
+   > echoln(show(sz(Bar)))
+   > EOF2
++  init1
++  memo : ((Foo) => Int32) => (Foo) => Int32 = <fn>
++  3

@@ -1,0 +1,2 @@
+let f[Int8](x: Int8): Int8 = x
+echoln(show(f(1)))

@@ -1,0 +1,11 @@
+effect Fail = { throw: (Int32) => Never }
+effect Res = { use: () => Unit }
+let r = ({ perform use(); perform throw(0) }) handle {
+    case use() => resume()
+    case cancel => echoln("cancel res")
+  } handle {
+    case throw(n) if n > 0 => { echoln("pos"); 1 }
+    case throw(n) => { echoln("zero"); 10 / n }
+    case cancel => echoln("H cancel")
+  }
+echoln(show(r))

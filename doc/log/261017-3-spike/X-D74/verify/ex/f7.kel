@@ -1,0 +1,2 @@
+let g[h](r: Ref[h, Int32], s: Ref[Ref[h, Int32], Int32]): Unit = ()
+let t(x) = g(x, x)

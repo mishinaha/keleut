@@ -1,0 +1,3 @@
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle { case ask() => { echoln("c"); 1 / 0 } case cancel => echoln("cancel repl") }
+echoln("after")

@@ -1,0 +1,2 @@
+type class Log[T] { val l: (T) => Int32 }
+effect Log = { log: (String) => Unit }

@@ -1,0 +1,2 @@
+from "./lib2/bad" import Bad
+let x = 1

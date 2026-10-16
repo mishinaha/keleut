@@ -1,0 +1,111 @@
+1,2c1
+< ## V133: resume を書けない位置の診断の文言
+< 
+---
+> ### N.5 V133：resume を書けない位置の診断の文言
+3a3
+> #### (1) 判定、規模、依存、出典
+13c13
+< - V89(§13.5 の「ガード」の読み): 本項目の新しい文言は「操作節のガード」と書き、§13.5 1273 行の「ガード」を操作節自身のガードと読む側に合わせる。V89 の改訂がこの読みを採れば食い違わない。V89 が別の読みを採るときは、本項目の文言の「操作節のガード」を合わせて見直す。
+---
+> - V89(§13.5 の「ガード」の読み): 本項目の新しい文言は「操作節のガード」と書き、§13.5 1273 行の「ガード」を操作節自身のガードと読む側に合わせる。V89 の改訂がこの読みを採れば食い違わない。V89 が別の読みを採るときは、本項目の文言の「操作節のガード」を合わせて見直す。本計画は V89 の推奨案(操作節自身のガード)を採り、本項目を V89 より先に入れて、V89 の cram の innerguard を本項目の文面で書く(N.6)。
+15a16,17
+>   分野の合成では V101 の後に当てた。V101 は `{ env with ... }` を書かないので `no_resume` との衝突は起きず、§11.16 の hunk はずれだけで当たる(実測)。
+> - V58: return 節と cancel 節のガードの行を `at_node` の形に変える。本項目を V58 の後に当てると、return 節の hunk は fuzz 2 で正しい位置に当たり、cancel 節の hunk は外れる。外れた 1 行(`{ env with resume_ty = None; never_clause = None }` の `never_clause = None` を `no_resume = Some No_cancel_clause` にする)を当て直す(N.z)。
+20c22
+< 
+---
+> #### (2) 現状(根拠つき)
+33c35
+< HEAD での実測(`ex/` の 12 本のうち 10 本。全文は `results.head.txt`、いずれも `--type-check`、終了状態 1):
+---
+> HEAD での実測(`doc/log/261017-3-spike/V133/ex/` の 12 本のうち 10 本。全文は `doc/log/261017-3-spike/V133/results.head.txt`、いずれも `--type-check`、終了状態 1):
+37,46c39,48
+< | `ex/r_guard.kel` | 再開する操作の節のガード | resume は操作節の中でのみ使えます |
+< | `ex/n_guard.kel` | 再開しない操作の節のガード | resume は操作節の中でのみ使えます |
+< | `ex/r_ownret.kel` | 自分のハンドラの `return` 節 | resume は操作節の中でのみ使えます |
+< | `ex/r_ret.kel` | 再開する操作の節の中の入れ子の `handle` の `return` 節 | resume は操作節の中でのみ使えます |
+< | `ex/n_ret.kel` | 再開しない操作の節の中の入れ子の `handle` の `return` 節 | resume は操作節の中でのみ使えます |
+< | `ex/r_cancel.kel` | 再開する操作の節の中の入れ子の `handle` の `cancel` 節 | resume は操作節の中でのみ使えます |
+< | `ex/n_cancel.kel` | 再開しない操作の節の中の入れ子の `handle` の `cancel` 節 | resume は操作節の中でのみ使えます |
+< | `ex/n_innerlam.kel` | 再開しない操作の節の中の入れ子の再開する操作の節の無名関数 | resume は second-class です(…) |
+< | `ex/n_qual.kel` | `Fail.throw` と修飾した再開しない操作の節 | 再開しない操作 throw の節には resume を書けません(…) |
+< | `ex/top.kel` | 操作節の外 | resume は操作節の中でのみ使えます |
+---
+> | `doc/log/261017-3-spike/V133/ex/r_guard.kel` | 再開する操作の節のガード | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/n_guard.kel` | 再開しない操作の節のガード | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/r_ownret.kel` | 自分のハンドラの `return` 節 | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/r_ret.kel` | 再開する操作の節の中の入れ子の `handle` の `return` 節 | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/n_ret.kel` | 再開しない操作の節の中の入れ子の `handle` の `return` 節 | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/r_cancel.kel` | 再開する操作の節の中の入れ子の `handle` の `cancel` 節 | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/n_cancel.kel` | 再開しない操作の節の中の入れ子の `handle` の `cancel` 節 | resume は操作節の中でのみ使えます |
+> | `doc/log/261017-3-spike/V133/ex/n_innerlam.kel` | 再開しない操作の節の中の入れ子の再開する操作の節の無名関数 | resume は second-class です(…) |
+> | `doc/log/261017-3-spike/V133/ex/n_qual.kel` | `Fail.throw` と修飾した再開しない操作の節 | 再開しない操作 throw の節には resume を書けません(…) |
+> | `doc/log/261017-3-spike/V133/ex/top.kel` | 操作節の外 | resume は操作節の中でのみ使えます |
+51c53
+< 
+---
+> #### (3) 判断と確定
+89c91
+< 
+---
+> #### (4) 仕様側の改訂案
+95a98
+> #### (5) diktor 側の変更
+97,98c100
+< 
+< コード(`lib/elab.ml`、試作は `V133.patch`):
+---
+> コード(`lib/elab.ml`、試作は `doc/log/261017-3-spike/V133/V133.patch`):
+108c110
+< - 新しいファイル `test/resume_sites.t`(試作の `diktor/test/resume_sites.t`)。前書きは「操作節のガード、return 節、cancel 節に書いた resume は型検査で拒否し、診断は最も内側の位置を名指しする。操作節の外に書いた resume は、操作節の中でだけ使えることを述べる。再開しない操作の節の本体に書いた resume の診断は never_ops.t で見張る」。
+---
+> - 新しいファイル `test/resume_sites.t`(`doc/log/261017-3-spike/V133/V133.patch` の中)。前書きは「操作節のガード、return 節、cancel 節に書いた resume は型検査で拒否し、診断は最も内側の位置を名指しする。操作節の外に書いた resume は、操作節の中でだけ使えることを述べる。再開しない操作の節の本体に書いた resume の診断は never_ops.t で見張る」。
+114c116
+< - 期待値が変わる既存のブロック: `test/verify_fixes.t` の gresume(480 行)と gresume2(495 行)の 2 行だけ(`runtest.log`。最終稿の試作では promote 後の `dune runtest` が差分無しで通った。`runtest.final.log` は空)。gresume2 はガードの中の無名関数の `resume` もガードの文言になることを示す。
+---
+> - 期待値が変わる既存のブロック: `test/verify_fixes.t` の gresume(480 行)と gresume2(495 行)の 2 行だけ(`doc/log/261017-3-spike/V133/runtest.log`。最終稿の試作では promote 後の `dune runtest` が差分無しで通った。`doc/log/261017-3-spike/V133/runtest.final.log` は空)。gresume2 はガードの中の無名関数の `resume` もガードの文言になることを示す。
+133a136,137
+> 分野の合成(N.z)では、`test/verify_fixes.t` の gresume と gresume2、`test/resume_sites.t` は差分に入れた期待値のまま通った。
+> 本項目の後に入れる V89 の `test/resume_guard.t` の innerguard は、本項目の文面になる(実測。N.6)。
+134a139
+> #### (6) リスク
+142a148
+> #### (7) 検証の観点
+144,148c150,153
+< 
+< - `results.head.txt` と `results.spike.txt` を見比べ、変わるのが文言だけで、終了状態と位置(行と列)が同じであること。
+< - 試作の差分で、操作節の外(`ex/top.kel`、efferr3)の文言と、再開しない操作の節の本体、閉包、入れ子の `handle` の本体の文言(never_ops.t の 5 ブロック)が変わらないこと。
+< - 再開する操作の節の本体の中の `match` のガードに書いた `resume` が、HEAD と同じく受理されること(`no_resume` は操作節自身のガードにだけ置く。試作で `ex/m_guard.kel` を確かめた)。
+< - `cancel` 節の中の無名関数の `resume` が `cancel` 節の文言になること(試作で `ex/n_cancellam.kel` を確かめた)。
+---
+> - `doc/log/261017-3-spike/V133/results.head.txt` と `doc/log/261017-3-spike/V133/results.spike.txt` を見比べ、変わるのが文言だけで、終了状態と位置(行と列)が同じであること。
+> - 試作の差分で、操作節の外(`doc/log/261017-3-spike/V133/ex/top.kel`、efferr3)の文言と、再開しない操作の節の本体、閉包、入れ子の `handle` の本体の文言(never_ops.t の 5 ブロック)が変わらないこと。
+> - 再開する操作の節の本体の中の `match` のガードに書いた `resume` が、HEAD と同じく受理されること(`no_resume` は操作節自身のガードにだけ置く。試作で `doc/log/261017-3-spike/V133/ex/m_guard.kel` を確かめた)。
+> - `cancel` 節の中の無名関数の `resume` が `cancel` 節の文言になること(試作で `doc/log/261017-3-spike/V133/ex/n_cancellam.kel` を確かめた)。
+152a158
+> #### (8) 検証の反映
+154,155c160
+< 
+< 反証者の must_fix 1(§11.16 の記事の「`no_resume` が `None` なのは操作節の外だけ」は偽): 反映した。
+---
+> 反証者の 必須の指摘 1(§11.16 の記事の「`no_resume` が `None` なのは操作節の外だけ」は偽): 反映した。
+159c164
+< 反証者の must_fix 2(閉包と入れ子の `handle` の本体の 2 文の置き場所): 反映した。
+---
+> 反証者の 必須の指摘 2(閉包と入れ子の `handle` の本体の 2 文の置き場所): 反映した。
+163c168
+< `tools/litwrap.py` は記事を変えず(表の行の幅の報告は HEAD からあるもの)、一時の git の写し(`litgit2/`)での `tools/litcheck.py` は `lib/elab.ml` のコードの不一致(コードを変えたので当然)だけを出し、marker の違反は 0 件だった。
+---
+> `tools/litwrap.py` は記事を変えず(表の行の幅の報告は HEAD からあるもの)、一時的な git の写しでの `tools/litcheck.py` は `lib/elab.ml` のコードの不一致(コードを変えたので当然)だけを出し、marker の違反は 0 件だった。
+165c170
+< 反証者の must_fix 3(`resume_sites.t` の前書きが、ファイルに無い再開しない操作の節の本体を挙げる): 反映した。
+---
+> 反証者の 必須の指摘 3(`resume_sites.t` の前書きが、ファイルに無い再開しない操作の節の本体を挙げる): 反映した。
+179c184
+< `ex/` の 12 本の最終稿の診断は `results.final.txt` にある(終了状態と位置は `results.spike.txt` と同じで、ガードの 2 本の文言だけが変わった)。
+---
+> `doc/log/261017-3-spike/V133/ex/` の 12 本の最終稿の診断は `doc/log/261017-3-spike/V133/results.final.txt` にある(終了状態と位置は `doc/log/261017-3-spike/V133/results.spike.txt` と同じで、ガードの 2 本の文言だけが変わった)。
+187a193,194
+> 
+> 

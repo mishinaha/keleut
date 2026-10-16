@@ -1,0 +1,3 @@
+pub newtype Box[A] = Box(A)
+pub let mk(): Box[() => Int32 @ {}] @ {} = Box(fn() => 7)
+echoln(show(mk() match { case Box(f) => f() }))

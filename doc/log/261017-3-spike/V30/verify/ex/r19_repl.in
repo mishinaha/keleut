@@ -1,0 +1,8 @@
+effect Log = { log: (String) => Unit }; let bad: Int32 = "s"
+effect Log = { log: (String) => Unit }
+newtype N = N(() => Unit @ {Log})
+let _ = N(fn() => perform log("r")) match { case N(g) => g() handle { case log(s) => { echoln(s); resume(()) } } }
+effect Log = { log2: () => Unit }
+effect Z = { z: () => Int32 }; let q: Int32 = 1 / 0
+effect Z = { z: () => Int32 }
+let w: Int32 = (perform z()) handle { case z() => resume(5) }

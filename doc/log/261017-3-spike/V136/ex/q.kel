@@ -1,0 +1,4 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(_) = "never" }
+type instance Describe[Int32] { let describe((x)) = show(x) }
+echo(describe(3i32))

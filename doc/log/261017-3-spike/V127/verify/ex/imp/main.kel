@@ -1,0 +1,3 @@
+from "./lib" import { add3, thunk }
+let w[A, E](g: () => A @ E): A @ E = g()
+echoln(show(add3(1, 2, 3) + w(thunk)))

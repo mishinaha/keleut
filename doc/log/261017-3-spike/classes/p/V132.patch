@@ -1,0 +1,65 @@
+diff a/test/never_ops.t b/test/never_ops.t
+--- a/test/never_ops.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/never_ops.t	2026-10-17 04:11:37.079716506 +0900
+@@ -615,3 +615,61 @@
+   $ diktor toplevel.kel
+   ! toplevel.kel:2:9: 型エラー: エフェクト Fail をここでは実行できません(ラベル Fail がありません(行は閉じています))
+   [1]
++
++型クラスのメソッドの実装も、宣言の最外の行にあるエフェクトの再開しない操作で失敗できる
++(§12.2、§13.2)。失敗しないインスタンスは同じ宣言の下で純粋に書ける:
++
++  $ cat > clsfail.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > type class Parse[A] {
++  >   val parse: (String) => A @ Fail
++  > }
++  > type instance Parse[Int32] {
++  >   let parse(s) = if s == "1" then 1 else perform throw("bad: " + s)
++  > }
++  > type instance Parse[Boolean] {
++  >   let parse(s) = s == "t"
++  > }
++  > let r: Int32 = parse("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
++  > echoln(show(r))
++  > let b: Boolean = parse("t") handle { case throw(e) => false }
++  > echoln(show(b))
++  > KEL
++  $ diktor clsfail.kel
++  caught bad: 2
++  -1
++  true
++
++宣言の行を行変数で開いておけば、呼ぶ側のほかのエフェクトも通せる:
++
++  $ cat > clsfailrow.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > type class Parse[A] {
++  >   val parse[E]: (String) => A @ {Fail extends E}
++  > }
++  > type instance Parse[Int32] {
++  >   let parse[E](s: String): Int32 @ {Fail extends E} = if s == "1" then 1 else perform throw("bad: " + s)
++  > }
++  > let p[A: Parse, E](s: String): A @ {Fail extends E} = parse(s)
++  > let r: Int32 = p("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
++  > echoln(show(r))
++  > KEL
++  $ diktor clsfailrow.kel
++  caught bad: 2
++  -1
++
++宣言の最外の @ を省略したメソッドの実装は純粋でなければならず、再開しない操作も
++起こせない。実装の側に @ Fail と書いても同じである:
++
++  $ cat > clsfailpure.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > type class Parse[A] {
++  >   val parse: (String) => A
++  > }
++  > type instance Parse[Int32] {
++  >   let parse(s: String): Int32 @ Fail = if s == "1" then 1 else perform throw("bad: " + s)
++  > }
++  > KEL
++  $ diktor --type-check clsfailpure.kel
++  ! clsfailpure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の本体がエフェクトを起こしています。元の報告: ラベル Fail がありません(行は閉じています)
++  [1]

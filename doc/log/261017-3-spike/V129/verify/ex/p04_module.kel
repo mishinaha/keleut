@@ -1,0 +1,5 @@
+module M {
+  pub let f(x: Never): Int32 = x match {}
+  pub let g(): Int32 = ??? match {}
+}
+echoln("ok")

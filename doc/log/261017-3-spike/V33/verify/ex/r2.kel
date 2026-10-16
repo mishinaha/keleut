@@ -1,0 +1,8 @@
+type class Sizer[T] { val size: (T) => Int32 }
+module M {
+  pub newtype Box = Box(Int32)
+  type instance Sizer[Box] { let size(b: Box): Int32 @ {} = b match { case Box(x) if x > 0 => x case _ => 0 } }
+  pub let go(b: Box): Int32 = size(b)
+}
+echoln(show(M.go(M.Box(5))))
+echoln(show(M.go(M.Box(-5))))

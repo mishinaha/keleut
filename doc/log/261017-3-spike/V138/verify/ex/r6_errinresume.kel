@@ -1,0 +1,15 @@
+effect E = { throw: (String) => Never, ask: () => Int32 }
+effect Res = { use: () => Unit }
+effect Out = { note: () => Unit }
+let r = ({ perform note(); ({ perform use(); perform throw("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel res"); let a = perform ask(); echoln("never") }
+} handle {
+  case throw(e) => { echoln("H throw " + e); 1 / 0 }
+  case ask() => { let x = resume(5); echoln("ask got " + show(x)); x }
+  case cancel => echoln("H cancel")
+} }) handle {
+  case note() => resume()
+  case cancel => echoln("outer cancel")
+}
+echoln(show(r))

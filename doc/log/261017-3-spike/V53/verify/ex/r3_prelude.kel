@@ -1,0 +1,4 @@
+let r = println("hi") handle {
+  case print("x") => resume(())
+  case return(x) => x
+}

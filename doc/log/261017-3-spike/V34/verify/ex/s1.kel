@@ -1,0 +1,4 @@
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  pub let k: () => Int32 = g
+  k()
+}

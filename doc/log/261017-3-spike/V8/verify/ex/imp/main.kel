@@ -1,0 +1,2 @@
+from "./lib" import big
+echoln(show(big(9223372036854775807i64)) + show(big(1i64)))

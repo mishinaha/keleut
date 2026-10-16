@@ -1,0 +1,2 @@
+newtype Box[R] = MkBox(Int32)
+let f[R](r: {x: Int32 extends Box[R]}): Int32 = 0

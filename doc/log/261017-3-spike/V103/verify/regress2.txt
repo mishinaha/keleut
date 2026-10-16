@@ -1,0 +1,143 @@
+===== r4_display.kel
+-- HEAD tc
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+p : [A: Show] (A) => String @ {}
+q : ((Int32) => Int32, Int32)
+! r4_display.kel:9:9: 型エラー: 未束縛の変数: id_any
+exit=1
+-- proto tc
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+p : [A: Show] (A) => String @ {}
+q : ((Int32) => Int32, Int32)
+! r4_display.kel:9:9: 型エラー: 未束縛の変数: id_any
+exit=1
+-- HEAD run
+! r4_display.kel:9:9: 型エラー: 未束縛の変数: id_any
+exit=1
+-- proto run
+! r4_display.kel:9:9: 型エラー: 未束縛の変数: id_any
+exit=1
+===== r5_module.kel
+-- HEAD tc
+M.id : (A) => A @ {}
+M.g : (Ref[A, B]) => B @ {Heap[A]}
+M.plus : [A: Add] (A, A) => A @ {}
+n : Int32
+_ : {}
+exit=0
+-- proto tc
+M.id : (A) => A @ {}
+M.g : (Ref[A, B]) => B @ {Heap[A]}
+M.plus : [A: Add] (A, A) => A @ {}
+n : Int32
+_ : {}
+exit=0
+-- HEAD run
+k
+6
+exit=0
+-- proto run
+k
+6
+exit=0
+===== r6_handler.kel
+-- HEAD tc
+r6_handler.kel:14:9: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto tc
+r6_handler.kel:14:9: パースエラー(付近のトークンを確認してください)
+exit=2
+-- HEAD run
+r6_handler.kel:14:9: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto run
+r6_handler.kel:14:9: パースエラー(付近のトークンを確認してください)
+exit=2
+===== r11_ctor_weak.kel
+-- HEAD tc
+id : (A) => A
+xs : Array[Int32]
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+xs : Array[Int32]
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+4
+exit=0
+-- proto run
+4
+exit=0
+===== r12_alias.kel
+-- HEAD tc
+id : (A) => A
+xs : Array[Int32]
+l : (Array[Int32]) => Int32 @ {}
+sp : (Int32) => String @ {Print}
+p : () => {} @ {Print}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+xs : Array[Int32]
+l : (Array[Int32]) => Int32 @ {}
+sp : (Int32) => String @ {Print}
+p : () => {} @ {Print}
+_ : {}
+exit=0
+-- HEAD run
+4
+exit=0
+-- proto run
+4
+exit=0
+===== r13_ifmatch.kel
+-- HEAD tc
+r13_ifmatch.kel:5:42: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto tc
+r13_ifmatch.kel:5:42: パースエラー(付近のトークンを確認してください)
+exit=2
+-- HEAD run
+r13_ifmatch.kel:5:42: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto run
+r13_ifmatch.kel:5:42: パースエラー(付近のトークンを確認してください)
+exit=2
+===== r14_effvar.kel
+-- HEAD tc
+id : (A) => A
+use : ((Int32) => String, Int32) => String
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+use : ((Int32) => String, Int32) => String
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+1
+2
+3
+exit=0
+-- proto run
+1
+2
+3
+exit=0

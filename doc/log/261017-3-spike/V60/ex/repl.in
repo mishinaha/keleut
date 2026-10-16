@@ -1,0 +1,5 @@
+let k = 1
+let a = #Tag { k }
+let f(g: (Int32) => Int32): Int32 = g(1)
+f { x: Int32 => x }
+f { x => x }

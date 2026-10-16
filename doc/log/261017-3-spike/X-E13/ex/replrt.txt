@@ -1,0 +1,3 @@
+let rec sum(n: Int32): Int32 = if n == 0 then 0 else n + sum(n - 1)
+echoln(show(sum(100000)))
+echoln("after")

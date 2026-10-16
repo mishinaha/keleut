@@ -1,0 +1,11 @@
+type class Parity[A] { val ev: (A) => Boolean; val od: (A) => Boolean }
+type instance Parity[Int32] {
+  let rec ev(n: Int32): Boolean = if n == 0 then true else od(n - 1)
+  and od(n: Int32): Boolean = if n == 0 then false else ev(n - 1)
+}
+echoln(show(ev(10)) + show(od(7)))
+newtype T = T(Int32)
+type instance Show[T] {
+  let rec show(t: T): String = { let T(n) = t; if n <= 0 then "z" else "s" + show(T(n - 1)) }
+}
+echoln(show(T(3)))

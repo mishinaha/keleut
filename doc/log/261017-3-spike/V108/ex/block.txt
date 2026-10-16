@@ -1,0 +1,14 @@
+let p = (show, 1)
+(show, eq, 3)
+let k = {f = show, n = 1}
+let m = Some(show)
+let v = #Tag(show)
+let idf[A](x: A): A = x
+let t = idf(show); t(2i32)
+let h: (Int32) => String = show
+let rec ev[A: Eq](x: A): Boolean = eq(x, x)
+(ev, 2)
+extern "prim" let ex1[A: Show](x: A): String
+(ex1, 1)
+let q = (show, ???)
+q

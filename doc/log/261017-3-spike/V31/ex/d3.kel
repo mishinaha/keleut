@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+module M { type P: EffectRow = {Log}
+pub type Q = P }

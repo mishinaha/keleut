@@ -1,0 +1,3 @@
+type class Pp[A] { val pp[G[_]: Functor]: (A) => String }
+type instance Pp[Int32] { let pp(x) = show(x) }
+echoln(pp(7i32))

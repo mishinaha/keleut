@@ -1,0 +1,23 @@
+checking file lib/show.ml
+checking file lib/syntax.ml
+Hunk #1 succeeded at 704 (offset -1 lines).
+checking file lib/unify.ml
+Hunk #1 succeeded at 548 (offset 21 lines).
+Hunk #2 succeeded at 572 (offset 28 lines).
+Hunk #3 succeeded at 646 (offset 39 lines).
+Hunk #4 succeeded at 683 (offset 39 lines).
+checking file test/annot_rows.t
+checking file test/kinds.t
+checking file test/nonfeatures.t
+Hunk #2 succeeded at 94 with fuzz 1.
+checking file test/region.t
+checking file test/trailing_block.t
+Hunk #1 succeeded at 360 (offset 70 lines).
+checking file test/trailing_comma.t
+checking file test/typecheck_m6.t
+Hunk #1 succeeded at 342 (offset 17 lines).
+Hunk #2 succeeded at 362 (offset 17 lines).
+checking file test/typecheck.t
+Hunk #1 succeeded at 284 (offset 1 line).
+checking file test/verify_fixes.t
+checking file test/visibility.t

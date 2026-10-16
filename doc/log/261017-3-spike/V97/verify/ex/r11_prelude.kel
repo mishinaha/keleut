@@ -1,0 +1,6 @@
+let idf[A](x: A): A = x
+let t = idf(twice_show)
+let p(): Unit @ Console = echoln(t(1) + show(neg_all(3)))
+let q(): Unit @ Print = println(t(2))
+p()
+with_stdout(q)

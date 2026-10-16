@@ -1,0 +1,5 @@
+type Box[Float32] = {v: Float32}
+let b: Box[Int32] = {v = 3}
+echoln(show(b.v))
+let id[UInt64](x: UInt64): UInt64 = x
+echoln(show(id(5)))

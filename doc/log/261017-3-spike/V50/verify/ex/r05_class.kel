@@ -1,0 +1,5 @@
+type W: EffectRow = {Print}
+type class Say[A] { val say: (A) => Unit @ {W} }
+type instance Say[Int32] { let say(x) = println("int") }
+let go[W](x: Int32): Unit @ {W} = say(x)
+with_stdout(fn() => go(1))

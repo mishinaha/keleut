@@ -1,0 +1,6 @@
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let call[E](c: Callback[Q[E]]): Unit @ Q[E] = c match { case Callback(g) => g() }
+call(Callback(fn() => perform log("cb"))) handle { case log(s) => { echoln(s); resume(()) } }

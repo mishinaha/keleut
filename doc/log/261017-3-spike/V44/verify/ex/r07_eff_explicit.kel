@@ -1,0 +1,5 @@
+module M {
+  pub let p: (Int32) => Int32 @ {Console} = fn(x) => { echoln("p"); x }
+  pub let rec q: (Int32) => Int32 @ {Console} = fn(x) => if x <= 0 then p(x) else q(x - 1)
+}
+with_stdout(fn() => echoln(show(M.q(2))))

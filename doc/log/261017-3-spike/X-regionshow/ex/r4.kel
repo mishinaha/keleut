@@ -1,0 +1,1 @@
+let main(): Int32 = run h { let r = Ref.new(1); r }

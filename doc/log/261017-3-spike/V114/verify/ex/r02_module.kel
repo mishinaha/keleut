@@ -1,0 +1,7 @@
+module M {
+  pub newtype UInt8 = MkU(Int32)
+  pub let get(u: UInt8): Int32 = u match { case MkU(n) => n }
+}
+echoln(show(M.get(M.MkU(7))))
+let g(u: M.UInt8): Int32 = M.get(u)
+echoln(show(g(M.MkU(8))))

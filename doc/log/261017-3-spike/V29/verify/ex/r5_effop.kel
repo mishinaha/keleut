@@ -1,0 +1,5 @@
+type Cb[E] = () => Unit @ E
+effect Ev = { on: (Cb[{}]) => Unit }
+newtype T[E] = MkT(Cb[E])
+let go(): Unit @ {Ev, Print} = { perform on(fn() => ()); println("ok") }
+with_stdout(fn() => go() handle { case on(c) => { c(); resume(()) } })

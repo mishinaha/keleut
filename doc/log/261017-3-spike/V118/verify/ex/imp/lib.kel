@@ -1,0 +1,2 @@
+pub let k: Int32 = 7
+pub type T = Int32

@@ -1,0 +1,9 @@
+let f[A: Show](x: A): String = show(x)
+let g(p: (Int32, Int32)): Int32 = p match {
+  case (a, b) if a > b => a
+  case (_, b) => b
+}
+type Pair = (Int32, Int32)
+let k(p: Pair): Int32 = g(p)
+echoln(f(3))
+echoln(show(k((5, 2))))

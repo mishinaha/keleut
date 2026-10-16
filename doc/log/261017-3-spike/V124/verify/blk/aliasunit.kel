@@ -1,0 +1,4 @@
+type Unit = {}
+type C19 = A19[{}]
+type A19[E] = (Int32) => Unit @ E
+let f(g: C19): Unit = g(1)

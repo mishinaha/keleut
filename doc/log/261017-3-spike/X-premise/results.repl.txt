@@ -1,0 +1,8 @@
+--- <一時領域>/bin/diktor-head
+_ : List[Opaque] = Cons(MkOpaque(1), Nil)
+! <stdin>:3:1: 型エラー: Opaque は Eq のインスタンスではありません
+_ : Boolean = false
+--- <一時領域>/items/X-premise/diktor/_build/default/bin/main.exe
+_ : List[Opaque] = Cons(MkOpaque(1), Nil)
+! <stdin>:3:1: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+_ : Boolean = false

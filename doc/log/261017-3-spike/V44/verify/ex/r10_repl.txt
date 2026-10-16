@@ -1,0 +1,4 @@
+module M { pub let g: (Int32) => Int32 = fn(x) => x + 1 }
+M.g(2)
+module N { pub let h: (Int32) => {a: Int32} = fn(x) => {b = x} }
+module P { pub let e: (Int32) => Int32 = fn(x) => { echoln("a"); x } }

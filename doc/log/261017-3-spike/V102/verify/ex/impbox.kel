@@ -1,0 +1,3 @@
+from "./lib/boxes" import { P, Box }
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = Box(b)

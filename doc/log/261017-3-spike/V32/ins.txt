@@ -1,0 +1,27 @@
+
+行変数も型パラメータなので、同じ制限に入る。前の束縛が自分の行変数 E を含む行の
+文脈で後ろの束縛を呼ぶと、後ろの束縛の行変数 F の剛定数とぶつかって落ちる。
+逆の順に書けば通る。2 本とも行変数を取って互いを呼ぶ形は、どちらの順でも落ちる。
+片方の行を注釈しなければ、注釈した側の行変数が群の終わりまで共有され、通る:
+
+  $ cat > recrowfwd.kel <<'KEL'
+  > let rec a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+  > and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+  > KEL
+  $ diktor --type-check recrowfwd.kel
+  $ cat > recrowrev.kel <<'KEL'
+  > let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+  > and a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+  > KEL
+  $ diktor --type-check recrowrev.kel
+  $ cat > recrowmutual.kel <<'KEL'
+  > let rec b[F](n: Int32): Int32 @ {Console extends F} = n match { case 0 => 0 case m => a(m - 1) }
+  > and a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+  > KEL
+  $ diktor --type-check recrowmutual.kel
+  $ cat > recrowone.kel <<'KEL'
+  > let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }
+  > and b(n: Int32) = { echo("b"); a(n) }
+  > let use(): Int32 @ {Console, Print} = { println("p"); a(1) + b(2) }
+  > KEL
+  $ diktor --type-check recrowone.kel

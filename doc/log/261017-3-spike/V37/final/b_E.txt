@@ -1,0 +1,25 @@
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = {
+    let rec go(ys, k) = ys match {
+      case Nil => ("", Nil)
+      case Cons(head = h, tail = t) => if k == 1 then (Show.show(h), t) else go(ys, k / 2) match {
+        case (a, r) => r match {
+          case Nil => (a, Nil)
+          case _ => go(r, k - k / 2) match {
+            case (b, rest) => (a + ", " + b, rest)
+          }
+        }
+      }
+    }
+    let rec top(acc, ys, k) = ys match {
+      case Nil => acc
+      case _ => go(ys, k) match {
+        case (b, rest) => top(acc + ", " + b, rest, k + k)
+      }
+    }
+    xs match {
+      case Nil => "[]"
+      case Cons(head = h, tail = t) => "[" + top(Show.show(h), t, 1) + "]"
+    }
+  }
+}

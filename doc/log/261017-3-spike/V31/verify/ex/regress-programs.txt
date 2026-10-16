@@ -1,0 +1,48 @@
+== r1.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+let f[E](x: Int32): Int32 @ Q[E] = { perform log("hi"); x + 1 }
+let r = f(41) handle { case log(s) => { echoln(s); resume(()) } }
+echoln(show(r))
+== r3.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let call[E](c: Callback[Q[E]]): Unit @ Q[E] = c match { case Callback(g) => g() }
+call(Callback(fn() => perform log("cb"))) handle { case log(s) => { echoln(s); resume(()) } }
+== r5.kel
+effect Log = { log: (String) => Unit }
+module M {
+  pub type P[E]: EffectRow = {Log extends E}
+  pub type Q[E] = P[E]
+  pub type Fn[E] = (Int32) => Int32 @ E
+}
+let app[E](f: M.Fn[E], x: Int32): Int32 @ E = f(x)
+echoln(show(app(fn(x) => x * 2, 21)))
+== r12.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+let f[E](x: Int32): Int32 @ Q[E] = { perform log("in"); x }
+let outer[E](x: Int32): Int32 @ Q[E] = {
+  let y = f(x) handle { case log(s) => { perform log("re:" + s); resume(()) } }
+  if y > 0 then y else 0
+}
+echoln(show(outer(7) handle { case log(s) => { echoln(s); resume(()) } }))
+== h6.kel
+type Q[F[_]] = F
+type App[G[_]] = G[Int32]
+type class Fx[F[_]] {
+  val fx: (App[Q[F]]) => Int32
+}
+type instance Fx[Option[_]] {
+  let fx(x) = x match { case Some(n) => n case None => 0 }
+}
+echoln(show(fx(Some(3))))
+== h7.kel
+type Q[F[_]] = F
+type App[G[_]] = G[Int32]
+let get[F[_]](x: App[Q[F]], f: (F[Int32]) => Int32): Int32 = f(x)
+echoln(show(get(Some(5), fn(o) => o match { case Some(n) => n case None => 0 })))

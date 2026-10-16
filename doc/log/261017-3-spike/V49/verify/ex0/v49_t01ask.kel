@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x)
+let g: (Int32) => Int32 @ {Console} = idf(k)
+let r = (k(1) + perform ask()) handle { case ask() => resume(1)  case return(x) => x }
+echoln(show(r))

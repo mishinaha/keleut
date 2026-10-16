@@ -1,0 +1,2 @@
+effect Log = { log: (String) => Unit }
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log})) | MkC(List[E])

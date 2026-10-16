@@ -1,0 +1,5 @@
+let f((0, n): (Int32, Never)) = 1
+let g(("a", n): (String, Never)) = 2
+let h((true, n): (Boolean, Never)) = 3
+let k(p: (Int32, Never)): Int32 = p match { case (0, n) => 4 }
+echo("ok")

@@ -1,0 +1,17 @@
+effect Ask = { ask: (Int64) => Int64 }
+effect Tell = { tell: (Int64) => {} }
+let r = {
+  {
+    perform tell(perform ask(4294967295i64))
+    0i64
+  } handle {
+    case tell(4294967295) => resume({})
+    case tell(_) => resume({})
+    case return(v) => v
+  }
+} handle {
+  case ask(4294967295) => resume(9223372036854775807)
+  case ask(n) => resume(n)
+  case return(v) => v
+}
+echoln(show(r))

@@ -1,0 +1,11 @@
+# 1 回目: clsfailpure の期待値を空にして走らせた結果(差分はこのブロックだけ。ほかの既存ブロックと clsfail / clsfailrow は差分なし)
+File "test/never_ops.t", line 1, characters 0-0:
+@@ -671,3 +671,5 @@
+   > }
+   > KEL
+   $ diktor --type-check clsfailpure.kel
++  ! clsfailpure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の本体がエフェクトを起こしています。元の報告: ラベル Fail がありません(行は閉じています)
++  [1]
+# 2 回目: 期待値を書き足した後の dune runtest
+(出力なし)
+[exit 0]

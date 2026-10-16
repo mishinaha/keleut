@@ -1,0 +1,2 @@
+newtype Ref[h, A] = ???
+let f[h](r: Ref[h, Int32]): Int32 = 0

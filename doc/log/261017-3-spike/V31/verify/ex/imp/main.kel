@@ -1,0 +1,3 @@
+from "./lib" import { Id }
+let x: Id[Int32] = 4
+echoln(show(x))

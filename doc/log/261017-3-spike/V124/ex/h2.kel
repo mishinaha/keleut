@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+type W: EffectRow = {Log extends E2}
+newtype N = MkN(() => Unit @ {Nope})

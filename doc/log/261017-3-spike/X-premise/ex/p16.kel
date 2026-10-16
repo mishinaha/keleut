@@ -1,0 +1,4 @@
+newtype Opaque = MkOpaque(Int32)
+newtype Box[A] = MkBox(A)
+type instance[A: Eq] Eq[Box[_]] { let eq(p, q) = true }
+let ng = Cons(MkBox(Cons(MkOpaque(1i32), Nil)), Nil) == Nil

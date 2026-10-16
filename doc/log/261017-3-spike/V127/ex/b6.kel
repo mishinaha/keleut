@@ -1,0 +1,2 @@
+let apply[A, B](f: (A) => B, x: A): B = f(x)
+let n = apply(fn(a, b) => a, 1)

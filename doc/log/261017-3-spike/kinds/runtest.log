@@ -1,0 +1,70 @@
+合成後(全 9 項目と手直し、検証の反映の V31 の判定の改め)の dune build と dune runtest
+
+dune build: 成功(警告は HEAD と同じ parser.mly の Warning 60 だけ)。
+dune runtest: 差分なし(出力 0 行)。
+
+段階ごとの runtest(各段階で期待値を合わせた後):
+  V30 → V22+V124(手直し後) → V29 の cram → V56 → V57(改名後) → V27(手直し後) → V31(手直し後) → V117 → 記事の節番号
+  すべて差分 0。
+
+[A] HEAD の test/*.t を合成後の lib で走らせた差分(既存のブロックで期待値が変わるもの): 2 ファイル 3 ブロック
+  test/kinds.t
+    specunit2  exit 1(4:38 行カインドではない型パラメータです: E)→ 受理            V30(V124 / V22 の推奨案でも同じ)
+               (V30 の差分は let f(x: A16): A16 = x を足して f : (A16) => A16 を観測する)
+    speclab    exit 1(3:28 エフェクトラベルはこの位置(レコード型)では使えません)→ f : (A17[R1]) => A17[R1]   V30
+  test/invariants.t
+    aliaspub   differ: exit 1 / 0 → same: exit 1                                   V117
+  前書きだけを改める既存のブロック: kinds.t の fwdrow、specfield、specinner、specfwd、specunit、speclab(V30 と合成の手直し)。
+
+[B] 合成後の test/*.t を HEAD の lib で走らせて落ちるコマンド(新しいブロックのうち HEAD と結果が違うもの)
+  test/effect_order.t(新規、V30): effnt, effntforms, effop, effalias, effpos, effdup, effstd, effparams, effrepl の 9 コマンド
+      (effrepl の --repl は HEAD が 5 つ目の入力で「! <stdin>:5:65: 型エラー: 未知のエフェクト: Later2」を余分に出す。
+       HEAD でも同じなのは effunknown だけ。新しいコマンドで HEAD と違うものの合計は 51)
+  test/kinds.t
+    V30:  specunit2, speclab([A] の 2 つ)
+    V22:  specbare, specmod, specfix, specalias, specrun(spectypo は HEAD でも同じ)
+    V124: aliasunit, aliasunit3, ntalias, aliaslab, aliaslab2, aliaslab3(aliasunit2 と aliasunit4 は HEAD でも同じ)
+    V29(吸収): fwdalias, fwdalias2, fwdalias3, fwdalias4, fwdalias5
+    V27:  hktrow, hktrow2, hktrow3, hktrow4, hktrow5, hktrow6, hktrow7, hktrow8(hktrowok は HEAD でも同じ。
+          検証の反映で Id2 の 3 行を足した後も HEAD の出力と同じ。HEAD の処理系で同じプログラムを走らせて確かめた)
+    合成で追加(V27): hktrow9
+    V31:  aliasrow, aliasrow2, aliasrow3, aliasrowmain(aliasrow4 と aliasrow5 は HEAD でも同じ)
+  test/invariants.t
+    V124: aliasfwd
+    V117: aliaspub([A])、aliaspubhead の 1 つ目の組
+  test/pub.t(V117): pubalias, pubaliasnt, pubaliasimp/main
+  test/visibility.t
+    V56:  visrow16, visrow17, visrow18, visrow20(visrow19、visrow21 は HEAD でも同じ)
+    V57:  visrow22, visrow23, visrow24, visrow25(visrow26 は HEAD でも同じ)
+
+[C] 投機の繰り返しを外した変種(if now > prev を無効にしたもの)で落ちるブロック:
+    specfix, specalias, fwdalias3, fwdalias4(ほかは通る)。繰り返しのコミットにこの 4 本を入れる根拠。
+
+[D] 例の総当たり(run.sh。V124/ex 45、V124/verify/ex 45、V22/ex 12、V22/ex2 4、V22/verify/ex 14、
+    V29/ex 41、V29/verify/ex 39、V30/ex 26、V30/ex2 4、V30/verify/ex 30 の 260 本):
+    - 合成は、V22+V124(merged2)、V30、V29+拡張(ext2)の 3 つの試作のどれかが受理する例をすべて受理する。
+    - HEAD が受理する例で、合成が拒否するか出力を変えるものは無い。
+    - HEAD が拒否して合成が受理する例は 115 本。
+    - V22+V124 と出力が違うのは 28 本で、V30 の効果(後ろの effect のラベル)と V30 の診断の順序が 27 本、
+      V57 による文面の変化(r21_v57_param)が 1 本。
+      V29/verify/ex/v30b.kel だけは、どの単独の試作も拒否し、合成だけが受理する。
+    - V30 の試作に対しては、V30 の ex/ と verify/ex/ の受理が一致し、さらに specres の形(residual)を受理する。
+    - 項目ごとの例(V27 96 本、V31 45 本、V56 55 本、V57 31 本、V117 47 本)を各項目の試作と合成で比べた違い:
+        V27/ex/c3.kel   試作 1:17 の照合の誤り → 合成で受理に変わったので、エイリアスの検査を足して 1:1 の誤りにした
+        V56/ex/b1.kel、V56/verify/ex/b1.kel   試作「エフェクト行に Type エイリアス E は置けません」→
+                        「行変数 E は extends の位置にのみ書けます」(V57 が予告したとおり)
+        V30/verify/ex/r21_v57_param.kel  同じく V57 による文面の変化
+      ほかは各項目の試作と一致。
+
+[E] 検証の反映(V31 の D[V31-2] を展開後の型で判定する形に改めた後)
+    - 恒等のエイリアスの判定を、本体の字面(EIdent でパラメータ名)から、精緻化した本体を repr して
+      エイリアスのパラメータの剛変数そのものかどうかに替えた(lib/elab.ml の DType の枝と §11.40 の記事)。
+    - kinds.t の hktrowok に type Id2[A] = Id[A] と N2、f2 の 3 行と期待値 1 行を足し、前書きを改めた。
+    - dune build 成功、dune runtest 差分なし。litcheck は marker 0 件。
+    - verify/ex/id2.kel: 改める前は 3:15 で拒否、改めた後は f : (N[{Print}]) => Int32 で受理(HEAD と同じ)。
+      ex2/constrow.kel(type C[A, B] = A と type D[A] = C[A, Int32] を行の位置で使う)も同じく拒否から受理へ(HEAD は受理)。
+      ex2/idlab.kel(type Q = Id[{Log}])は改める前後と HEAD で同じ拒否(3:13)。
+    - [D] の 260 本と項目ごとの例 274 本(V27 96、V31 45、V56 55、V57 31、V117 47)は、改める前の合成と出力が完全に一致。
+    - kinds.patch は git diff の a/ b/ の見出しで作り直した。snap の写しに -p1 で当て、合成の写しと一致を確かめた。
+      git apply --numstat: lib/decls.ml +30/-16、lib/elab.ml +453/-180、test/effect_order.t +113、test/invariants.t +48/-3、
+      test/kinds.t +436/-25、test/pub.t +81、test/visibility.t +63。

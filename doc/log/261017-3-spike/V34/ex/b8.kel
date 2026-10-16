@@ -1,0 +1,4 @@
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let rec k: () => Int32 @ {} = fn() => g()
+  k()
+}

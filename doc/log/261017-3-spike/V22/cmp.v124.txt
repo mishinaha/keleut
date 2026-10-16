@@ -1,0 +1,234 @@
+=== <一時領域>/items/V22/ex/bare.kel
+! bare.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+=== <一時領域>/items/V22/ex/efflater.kel
+! efflater.kel:3:50: 型エラー: 未知のエフェクト: Log
+[exit 1]
+=== <一時領域>/items/V22/ex/modfwd.kel
+f : (M.A) => M.A
+[exit 0]
+=== <一時領域>/items/V22/ex/residual2.kel
+f : (A) => A
+[exit 0]
+=== <一時領域>/items/V22/ex/residual.kel
+! residual.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+=== <一時領域>/items/V22/ex/rowalias.kel
+f : (A) => A
+[exit 0]
+=== <一時領域>/items/V22/ex/run.kel
+ok
+[exit 0]
+=== <一時領域>/items/V22/ex/speclab.kel
+f : (A17[R1]) => A17[R1]
+[exit 0]
+=== <一時領域>/items/V22/ex/specunit2.kel
+
+[exit 0]
+=== <一時領域>/items/V22/ex/typealias.kel
+! typealias.kel:4:50: 型エラー: エフェクト行に Type エイリアス Log は置けません(: EffectRow を付けてください)
+[exit 1]
+=== <一時領域>/items/V22/ex/typo.kel
+! typo.kel:4:50: 型エラー: 未知のエフェクト: Lgo
+[exit 1]
+=== <一時領域>/items/V22/ex/v30.kel
+! v30.kel:2:33: 型エラー: 未知のエフェクト: Log
+[exit 1]
+=== <一時領域>/items/V22/verify/ex/r10_chain.kel
+! r10_chain.kel:3:42: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+=== <一時領域>/items/V22/verify/ex/r11_link.kel
+
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r12_diagmove2.kel
+! r12_diagmove2.kel:2:64: 型エラー: 型構成子 List の第1引数のカインドが一致しません: Type を期待しましたが R1 は Row です
+[exit 1]
+=== <一時領域>/items/V22/verify/ex/r13_nolabel.kel
+! r13_nolabel.kel:1:61: 型エラー: 型構成子 List の第1引数のカインドが一致しません: Type を期待しましたが R1 は Row です
+[exit 1]
+=== <一時領域>/items/V22/verify/ex/r1_diagmove.kel
+! r1_diagmove.kel:4:19: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== <一時領域>/items/V22/verify/ex/r2_alias_gap.kel
+f : (Z) => Z
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r3b_run_nested_rev.kel
+pos
+k
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r3_run_nested.kel
+pos
+k
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r4_effparam.kel
+! r4_effparam.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== <一時領域>/items/V22/verify/ex/r4_pubparam.kel
+f : (A[A]) => A[A]
+g : (P[A, R1]) => P[A, R1]
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r5_modshadow.kel
+f : (M.A) => M.A
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r6_guard_mod.kel
+big
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r7_import.kel
+imp
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r8_main.kel
+
+[exit 0]
+=== <一時領域>/items/V22/verify/ex/r9_repl.txt
+! <stdin>:1:22: 型エラー: 未知の型: Strin
+! <stdin>:2:74: 型エラー: 未知のエフェクト: Log
+a : A = MkA(MkB((<fn>, <fn>)))
+! <stdin>:6:66: 型エラー: 行カインドではない型パラメータです: E
+[exit 0]
+=== <一時領域>/items/V124/ex/a1.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a2.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a3.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a4.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a5.kel
+! a5.kel:1:21: 型エラー: 未知のエフェクト: R
+[exit 1]
+=== <一時領域>/items/V124/ex/a6.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a7.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a8.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/a9.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/b1.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/c1.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/c2.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/d1.kel
+f : ((Int32) => {} @ {}) => {}
+h : () => (Int32) => {} @ {}
+[exit 0]
+=== <一時領域>/items/V124/ex/d1r.kel
+f : ((Int32) => {} @ {}) => {}
+h : () => (Int32) => {} @ {}
+[exit 0]
+=== <一時領域>/items/V124/ex/d2.kel
+v : ({}, Int32)
+[exit 0]
+=== <一時領域>/items/V124/ex/d3.kel
+! d3.kel:3:5: 型エラー: 注釈された返り値型を満たしません(ラベル Print がありません(行は閉じています))
+[exit 1]
+=== <一時領域>/items/V124/ex/d4.kel
+f : ((Int32) => {}) => {}
+k : ((Int32) => {} @ {Print}) => {} @ {Print}
+[exit 0]
+=== <一時領域>/items/V124/ex/d4r.kel
+f : ((Int32) => {}) => {}
+k : ((Int32) => {} @ {Print}) => {} @ {Print}
+[exit 0]
+=== <一時領域>/items/V124/ex/d5.kel
+! d5.kel:2:14: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row
+[exit 1]
+=== <一時領域>/items/V124/ex/d5r.kel
+! d5r.kel:1:14: 型エラー: タプルの要素の型のカインドが Type ではありません: ς1 :: Row
+[exit 1]
+=== <一時領域>/items/V124/ex/d6.kel
+v : Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/e1.kel
+f : ((() => {} @ {}, () => {} @ {Log})) => Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/e2.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/e3.kel
+f : (N) => Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/e4.kel
+f : () => Int32 @ {Console}
+[exit 0]
+=== <一時領域>/items/V124/ex/e5.kel
+f : (B[{}]) => Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/e6.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/f1.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/f2.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/f3.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/f4.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/f5.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/g1.kel
+! g1.kel:1:30: 型エラー: 未知のエフェクト: Log
+[exit 1]
+=== <一時領域>/items/V124/ex/g2.kel
+! g2.kel:2:31: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== <一時領域>/items/V124/ex/g3.kel
+! g3.kel:2:33: 型エラー: 未知のエフェクト: Log
+[exit 1]
+=== <一時領域>/items/V124/ex/g4.kel
+! g4.kel:3:31: 型エラー: 型 Q はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== <一時領域>/items/V124/ex/h1.kel
+f : (M.N) => Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/h2.kel
+! h2.kel:3:30: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== <一時領域>/items/V124/ex/inv_b.kel
+u : (Int32) => {} @ {}
+_ : {}
+_ : {}
+[exit 0]
+=== <一時領域>/items/V124/ex/k1.kel
+! k1.kel:3:10: 型エラー: エフェクト行にフィールド x は書けません
+[exit 1]
+=== <一時領域>/items/V124/ex/k2.kel
+! k2.kel:3:10: 型エラー: エフェクト行にフィールド x は書けません
+[exit 1]
+=== <一時領域>/items/V124/ex/k3.kel
+v : Int32
+[exit 0]
+=== <一時領域>/items/V124/ex/v29a.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/v29b.kel
+
+[exit 0]
+=== <一時領域>/items/V124/ex/v29c.kel
+
+[exit 0]
+=== <一時領域>/items/V22/ex2/gap2.kel
+f : (M) => M
+[exit 0]
+=== <一時領域>/items/V22/ex2/gap.kel
+! gap.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]

@@ -1,0 +1,4 @@
+newtype N = N(Int32)
+type instance Tw[N] { let tw(n) = n }
+let rec rep[A: Tw](x: A, k: Int32): A = (k == 0) match { case true => x case false => rep(tw(x), k - 1) }
+let r = rep(N(4), 3)

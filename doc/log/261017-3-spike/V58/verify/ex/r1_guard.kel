@@ -1,0 +1,9 @@
+effect Ask = { ask: (Int32) => Int32 }
+let f(k: Int32): Int32 @ {Ask} = perform ask(k)
+let r =
+  f(5) handle {
+    case ask(n) if n > 3 => resume(n * 10)
+    case ask(n) => resume(n)
+    case return(v) => v + 1
+  }
+echoln(show(r))

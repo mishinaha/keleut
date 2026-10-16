@@ -1,0 +1,9 @@
+newtype Box[A] = Box(A)
+type instance [A: Show] Show[Box[_]] {
+  let show: (Box[A]) => String = fn(b) => { let Box(x) = b; "Box(" + show(x) + ")" }
+}
+echoln(show(Box(1)))
+echoln(show(Box(Box("a"))))
+type class Sz[A] { val sz: (A) => Int32 }
+type instance Sz[Int32] { let sz: (Int32) => Int32 = { let base = 2 + 3; fn(x) => x + base } }
+echoln(show(sz(1)))

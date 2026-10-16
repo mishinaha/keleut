@@ -1,0 +1,7 @@
+effect Ask = { ask: () => String }
+let f(g: () => String): String = g()
+let a = ("x" + perform Ask.ask()) handle {
+  case Ask.ask() => resume(f { "k" })
+  case return(v) => v
+}
+echoln(a)

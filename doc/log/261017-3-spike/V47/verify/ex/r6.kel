@@ -1,0 +1,4 @@
+from "./lib/m" import { M, W2 }
+let a(s: String): Unit @ M.W[{}] = M.say(s)
+let b(s: String): Unit @ W2[{}] = perform print(s + "\n")
+with_stdout(fn() => { a("imp1"); b("imp2") })

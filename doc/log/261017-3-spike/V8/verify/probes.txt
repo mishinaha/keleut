@@ -1,0 +1,275 @@
+=== r10b_class.kel
+type class Big[A] { val big: (A) => Boolean }
+type instance Big[Int64] {
+  let big(x: Int64) = x match { case 4294967295 => true  case _ => false }
+}
+echoln(show(big(4294967295i64)) + show(big(1i64)))
+--- head
+truefalse
+[exit 0]
+--- new
+truefalse
+[exit 0]
+=== r10_class.kel
+type class Big[A] { val big: (A) => Boolean }
+type instance Big[Int64] {
+  let big(x) = x match { case 4294967295 => true  case _ => false }
+}
+echoln(show(big(4294967295i64)) + show(big(1i64)))
+--- head
+! r10_class.kel:3:7: 型エラー: インスタンスメソッド big がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+[exit 1]
+--- new
+! r10_class.kel:3:7: 型エラー: インスタンスメソッド big がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+[exit 1]
+=== r11_record.kel
+let f(r: {a: Int64, b: Int32}): Int32 = r match {
+  case {a = 4294967295, b = 2147483647} => 1
+  case {a = -9223372036854775808, b = -2147483648} => 2
+  case _ => 3
+}
+echoln(show(f({a = 4294967295i64, b = 2147483647})) + show(f({a = -9223372036854775808i64, b = -2147483648})))
+--- head
+12
+[exit 0]
+--- new
+12
+[exit 0]
+=== r12_with.kel
+let each(xs: List[Int64], k: (Int64) => Int32): Int32 = xs match { case Cons(h, _) => k(h)  case Nil => 0 }
+let main(): Int32 = {
+  with n = each(Cons(4294967295i64, Nil))
+  n match { case 4294967295 => 7  case _ => 8 }
+}
+echoln(show(main()))
+--- head
+7
+[exit 0]
+--- new
+7
+[exit 0]
+=== r13_variant.kel
+let f(v: #A(Int64) | #B(Int32)): Int32 = v match {
+  case #A(4294967295) => 1
+  case #A(_) => 2
+  case #B(0xFFFFFFFF) => 3
+  case #B(_) => 4
+}
+echoln(show(f(#A(4294967295i64))) + show(f(#B(-1))))
+--- head
+13
+[exit 0]
+--- new
+13
+[exit 0]
+=== r14_tuplelet.kel
+let p: (Int64, Int32) = (4294967295i64, 1)
+let g(): Int32 = {
+  let (4294967295, y) = p
+  y
+}
+echoln(show(g()))
+--- head
+⚠ match が非網羅的です。例えば (0, _) が漏れています
+1
+[exit 0]
+--- new
+⚠ match が非網羅的です。例えば (0, _) が漏れています
+1
+[exit 0]
+=== r15_polyint.kel
+let id[A](y: A): A = y
+let h(n: Int64): Int32 = {
+  let k = id(fn(x) => x match { case 4294967295 => 1  case _ => 2 })
+  let m = k(n)
+  m + k(1)
+}
+echoln(show(h(4294967295i64)))
+--- head
+3
+[exit 0]
+--- new
+3
+[exit 0]
+=== r17_noprelude.kel
+extern "prim" let __int64_eq(x: Int64, y: Int64): Boolean
+let f(x: Int64): Boolean = x match { case 4294967295 => true  case _ => false }
+let g = f(4294967295i64)
+--- head
+! r17_noprelude.kel:1:1: 型エラー: プレリュードの extern __int64_eq は再宣言できません
+[exit 1]
+--- new
+! r17_noprelude.kel:1:1: 型エラー: プレリュードの extern __int64_eq は再宣言できません
+[exit 1]
+=== r19_multi.kel
+let a(x: Int64): Int32 = x match { case 4294967295 => 1  case _ => 2 }
+let b(x: Int32): Int32 = x match { case 2147483647 => 1  case _ => 2 }
+let c = a(4294967295i64) + b(2147483647)
+echoln(show(c))
+--- head
+2
+[exit 0]
+--- new
+2
+[exit 0]
+=== r1_alias.kel
+type I = Int64
+let f(x: I): Int32 = x match { case 4294967295 => 1  case _ => 2 }
+echoln(show(f(4294967295i64)) + show(f(0i64)))
+--- head
+12
+[exit 0]
+--- new
+12
+[exit 0]
+=== r2_module.kel
+module M {
+  pub let f(x: Int64): Int32 = x match { case 4294967295 => 1  case 0xFFFFFFFFFFFFFFFF => 3  case _ => 2 }
+}
+echoln(show(M.f(4294967295i64)) + show(M.f(-1i64)) + show(M.f(5i64)))
+--- head
+132
+[exit 0]
+--- new
+132
+[exit 0]
+=== r4_tparam.kel
+let app[A](x: A, k: (A) => Int32): Int32 = k(x)
+let r = app(4294967295i64, fn(y) => y match { case 4294967295 => 1  case _ => 2 })
+echoln(show(r))
+--- head
+1
+[exit 0]
+--- new
+1
+[exit 0]
+=== r5_guard.kel
+let f(x: Int64): Int32 = x match {
+  case 4294967295 if x > 0 => 1
+  case _ => 2
+}
+echoln(show(f(4294967295i64)))
+--- head
+1
+[exit 0]
+--- new
+1
+[exit 0]
+=== r6_handlers.kel
+effect Ask = { ask: (Int64) => Int64 }
+effect Tell = { tell: (Int64) => {} }
+let r = {
+  {
+    perform tell(perform ask(4294967295i64))
+    0i64
+  } handle {
+    case tell(4294967295) => resume({})
+    case tell(_) => resume({})
+    case return(v) => v
+  }
+} handle {
+  case ask(4294967295) => resume(9223372036854775807)
+  case ask(n) => resume(n)
+  case return(v) => v
+}
+echoln(show(r))
+--- head
+0
+[exit 0]
+--- new
+0
+[exit 0]
+=== r7_toplevel_nongen.kel
+let id[A](y: A): A = y
+let r = id(fn(x) => x match { case 4294967295 => 1  case _ => 2 })
+let b: Int32 = r(4294967295i64)
+echoln(show(b))
+--- head
+! r7_toplevel_nongen.kel:3:18: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+--- new
+! r7_toplevel_nongen.kel:2:36: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== r8_letrec.kel
+let rec f(x: Int64): Int32 = x match { case 4294967295 => 1  case 0 => 0  case _ => g(x - 1) }
+and g(x: Int64): Int32 = x match { case 4294967296 => 5  case _ => f(x) }
+echoln(show(f(4294967296i64)))
+--- head
+1
+[exit 0]
+--- new
+1
+[exit 0]
+=== r9_local_gen.kel
+let g(n: Int64): Int32 = {
+  let k = fn(x) => x match { case 4294967295 => 1  case _ => 2 }
+  k(n)
+}
+echoln(show(g(4294967295i64)))
+--- head
+! r9_local_gen.kel:3:5: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+--- new
+! r9_local_gen.kel:3:5: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+=== imp/main.kel
+from "./lib" import big
+echoln(show(big(9223372036854775807i64)) + show(big(1i64)))
+--- head
+truefalse
+[exit 0]
+--- new
+truefalse
+[exit 0]
+=== mask64.kel
+let f(x: Int64): Int32 = x match {
+  case 0xFFFFFFFF => 1
+  case -1 => 2
+  case _ => 3
+}
+echoln(show(f(-1i64)) + show(f(4294967295i64)))
+--- head
+21
+[exit 0]
+--- new
+21
+[exit 0]
+=== r16_repl.in
+let bad(x: Int32): Int32 = x match { case 4294967295 => 1  case _ => 2 } + "a"
+let ok(x: Int64): Int32 = x match { case 4294967295 => 1  case _ => 2 }
+ok(4294967295i64)
+:type fn(x) => x match { case 4294967295 => 1  case _ => 2 }
+:type fn(x: Int64) => x match { case 4294967295 => 1  case _ => 2 }
+let id[A](y: A): A = y
+let r = id(fn(x) => x match { case 1 => 1  case _ => 2 })
+r(4294967295i64)
+--- head
+<stdin>:1:74: パースエラー(付近のトークンを確認してください)
+ok : (Int64) => Int32 = <fn>
+_ : Int32 = 1
+(Int32) => Int32
+(Int64) => Int32
+id : (A) => A = <fn>
+r : (Int32) => Int32 = <fn>
+! <stdin>:8:3: 型エラー: 型が一致しません: Int64 と Int32
+--- new
+<stdin>:1:74: パースエラー(付近のトークンを確認してください)
+ok : (Int64) => Int32 = <fn>
+_ : Int32 = 1
+! <stdin>:4:31: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+(Int64) => Int32
+id : (A) => A = <fn>
+r : (Int32) => Int32 = <fn>
+! <stdin>:8:3: 型エラー: 型が一致しません: Int64 と Int32
+=== r18_repl.in
+let bad(x: Int32): String = { let k = x match { case 4294967295 => 1  case _ => 2 }; k + "a" }
+let ok(x: Int64): Int32 = x match { case 4294967296 => 1  case _ => 2 }
+ok(4294967296i64)
+--- head
+! <stdin>:1:86: 型エラー: String は Integral のインスタンスではありません
+ok : (Int64) => Int32 = <fn>
+_ : Int32 = 1
+--- new
+! <stdin>:1:86: 型エラー: String は Integral のインスタンスではありません
+ok : (Int64) => Int32 = <fn>
+_ : Int32 = 1

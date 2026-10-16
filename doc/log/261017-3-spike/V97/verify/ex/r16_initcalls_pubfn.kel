@@ -1,0 +1,8 @@
+type class Sh[A] { val sh: (A) => String }
+newtype Foo = Foo
+let mk(tag: String): ((Foo) => String) = fn(x) => tag
+let rowvar[E](f: () => Int32 @ E): Int32 @ E = f()
+type instance Sh[Foo] {
+  let sh: (Foo) => String = { let k = rowvar(fn() => 3); mk("foo" + show(k)) }
+}
+echoln(sh(Foo))

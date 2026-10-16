@@ -1,0 +1,7 @@
+let f(o: Option[Int32]): Int32 = o match {
+  case Some(4294967295) => 1
+  case Some(_) => 2
+  case None => 3
+}
+let (4294967295, y) = (1, 2)
+echoln(show(f(Some(0))))

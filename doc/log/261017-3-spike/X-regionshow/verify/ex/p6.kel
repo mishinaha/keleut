@@ -1,0 +1,1 @@
+let f[h: Show](r: Ref[h, Int32], x: h): String = show(x)

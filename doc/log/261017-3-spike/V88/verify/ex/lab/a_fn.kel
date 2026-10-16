@@ -1,0 +1,2 @@
+let g(x: Int32): Int32 = x
+let y = g(fn)

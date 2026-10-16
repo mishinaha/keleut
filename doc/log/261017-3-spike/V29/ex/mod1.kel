@@ -1,0 +1,5 @@
+newtype H = MkH(M.Cb[{Print}])
+module M {
+  pub type Cb[E] = Callback[E]
+  pub newtype Callback[E] = Callback(() => Unit @ E)
+}

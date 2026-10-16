@@ -1,0 +1,25 @@
+diff -ruN -x _build <一時領域>/items/V29/diktor/lib/elab.ml diktor/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 04:13:31.543983903 +0900
++++ b/lib/elab.ml	2026-10-17 04:14:48.279164331 +0900
+@@ -1190,7 +1190,9 @@
+       | None ->
+           (* @ Print = @ {Print} の略記 *)
+           let e = Decls.resolve_unit (intern n) in
+-          if Hashtbl.mem Decls.effects e then TRowExtend (e, t_unit, TRowEmpty) else type_error (unknown_effect n))
++          if Hashtbl.mem Decls.effects e || (!speculating && Hashtbl.find_opt Decls.type_namespace e = Some "effect") then
++            TRowExtend (e, t_unit, TRowEmpty)
++          else type_error (unknown_effect n))
+   | T.EApply ((_, T.EIdent (LongId [ n ])), args)
+     when (not (SMap.mem n env.types)) && Option.is_some (find_row_alias n) ->
+       (* EffectRow エイリアスの適用(@ W[E])。波括弧の中の要素と同じく find_row_alias で引き、
+@@ -1239,7 +1241,9 @@
+                        引数つきのときに env.types を見ないのは、型パラメータへの適用が
+                        行の要素になれないからである *)
+                     type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
+-                  else if Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) then
++                  else if Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n))
++                          || (!speculating && Hashtbl.find_opt Decls.type_namespace (Decls.resolve_unit (intern n)) = Some "effect")
++                  then
+                     TRowExtend
+                       ( Decls.resolve_unit (intern n),
+                         (match args with

@@ -1,0 +1,40 @@
+== V114
+Hunk #1 FAILED at 1046.
+1 out of 1 hunk FAILED
+Hunk #1 succeeded at 98 (offset 7 lines).
+Hunk #2 succeeded at 136 (offset 7 lines).
+Hunk #1 succeeded at 637 (offset -2 lines).
+Hunk #2 succeeded at 721 (offset -2 lines).
+== V8
+Hunk #6 succeeded at 5635 (offset 16 lines).
+Hunk #7 succeeded at 5662 (offset 16 lines).
+Hunk #1 succeeded at 81 (offset 7 lines).
+== V91
+== V108
+Hunk #1 succeeded at 851 (offset 122 lines).
+Hunk #2 succeeded at 928 (offset 122 lines).
+Hunk #3 succeeded at 956 (offset 122 lines).
+== V109
+Hunk #1 succeeded at 933 (offset 122 lines).
+== V126
+Hunk #1 succeeded at 458 (offset 23 lines).
+Hunk #2 succeeded at 488 with fuzz 2 (offset 23 lines).
+Hunk #3 succeeded at 632 (offset 24 lines).
+Hunk #4 succeeded at 720 (offset 24 lines).
+Hunk #1 succeeded at 93 with fuzz 1.
+== V127
+Hunk #1 succeeded at 191 (offset 4 lines).
+== V122
+Hunk #1 succeeded at 703 (offset -2 lines).
+== X-D74
+Hunk #1 succeeded at 703 (offset -2 lines).
+Hunk #1 succeeded at 360 (offset 70 lines).
+== V103
+== V117
+== V124
+== V133
+== V58
+== V97
+== X-premise
+== X-regionshow
+Hunk #2 succeeded at 94 with fuzz 1.

@@ -1,0 +1,164 @@
+== r01_import.kel
+| from "./lib/effs" import W
+| let f[W](u: Unit): Unit @ {W} = println("import")
+| with_stdout(fn() => f(()))
+-- run
+import
+[exit 0]
+-- --type-check
+f : ({}) => {} @ {Print}
+_ : {}
+[exit 0]
+== r02_pub.kel
+| type W: EffectRow = {Print}
+| pub let f[W](u: Unit): Unit @ {W} = println("pub")
+| with_stdout(fn() => f(()))
+-- run
+pub
+[exit 0]
+-- --type-check
+f : ({}) => {} @ {Print}
+_ : {}
+[exit 0]
+== r03_handle.kel
+| type W: EffectRow = {Print}
+| let f[W](u: Unit): Unit @ {Console, W} = { println("a"); println("b") }
+| let main(u: Unit): Unit @ {Console} = f(()) handle {
+|   case print(m) => resume(echo("[" + m + "]"))
+| }
+| main(())
+-- run
+[a
+][b
+][exit 0]
+-- --type-check
+f : ({}) => {} @ {Console, Print}
+main : ({}) => {} @ {Console}
+_ : {}
+[exit 0]
+== r04_guard.kel
+| type W: EffectRow = {Print}
+| let pick[W](n: Int32): Unit @ {W} = n match {
+|   case k if k > 0 => println("pos")
+|   case _ => println("nonpos")
+| }
+| with_stdout(fn() => { pick(3); pick(0) })
+-- run
+pos
+nonpos
+[exit 0]
+-- --type-check
+pick : (Int32) => {} @ {Print}
+_ : {}
+[exit 0]
+== r05_class.kel
+| type W: EffectRow = {Print}
+| type class Say[A] { val say: (A) => Unit @ {W} }
+| type instance Say[Int32] { let say(x) = println("int") }
+| let go[W](x: Int32): Unit @ {W} = say(x)
+| with_stdout(fn() => go(1))
+-- run
+int
+[exit 0]
+-- --type-check
+go : (Int32) => {} @ {Print}
+_ : {}
+[exit 0]
+== r06_lambda.kel
+| type W: EffectRow = {Print}
+| let twice[W](g: () => Unit @ {W}): Unit @ {W} = { g(); g() }
+| with_stdout(fn() => twice(fn() => println("tw")))
+-- run
+tw
+tw
+[exit 0]
+-- --type-check
+twice : (() => {} @ {Print}) => {} @ {Print}
+_ : {}
+[exit 0]
+== r07_module_pub.kel
+| module M {
+|   pub type W: EffectRow = {Print}
+|   pub let f[W](u: Unit): Unit @ {W} = println("mod")
+| }
+| with_stdout(fn() => M.f(()))
+-- run
+mod
+[exit 0]
+-- --type-check
+M.f : ({}) => {} @ {Print}
+_ : {}
+[exit 0]
+== r08_alias_param.kel
+| type W: EffectRow = {Print}
+| type K[W]: EffectRow = {Console, W}
+| let f(u: Unit): Unit @ K[Unit] = { println("p"); echoln("c") }
+| with_stdout(fn() => f(()))
+-- run
+p
+c
+[exit 0]
+-- --type-check
+f : ({}) => {} @ {Console, Print}
+_ : {}
+[exit 0]
+== r09_newtype.kel
+| type W: EffectRow = {Print}
+| newtype Box[W] = Box(() => Unit @ {W}, W)
+| let b = Box(fn() => println("box"), 1)
+| with_stdout(fn() => b match { case Box(g, _) => g() })
+-- run
+box
+[exit 0]
+-- --type-check
+b : Box[Int32]
+_ : {}
+[exit 0]
+== r10_with_args.kel
+| type W[E]: EffectRow = {Print extends E}
+| let f[W, E](u: Unit): Unit @ {W[E]} = println("args")
+| with_stdout(fn() => f(()))
+-- run
+args
+[exit 0]
+-- --type-check
+f : ({}) => {} @ {Print extends R1}
+_ : {}
+[exit 0]
+== r12_ext.kel
+| type W: EffectRow = {Print}
+| let f[W, E](g: () => Unit @ {W extends E}): Unit @ {W extends E} = g()
+| with_stdout(fn() => f(fn() => println("ext")))
+-- run
+ext
+[exit 0]
+-- --type-check
+f : (() => {} @ {Print extends R1}) => {} @ {Print extends R1}
+_ : {}
+[exit 0]
+== r13_local_fn.kel
+| type W: EffectRow = {Print}
+| let outer[W](x: W): W = {
+|   let inner(u: Unit): Unit @ {W} = println("local")
+|   x
+| }
+| with_stdout(fn() => { outer(1); println("done") })
+-- run
+done
+[exit 0]
+-- --type-check
+outer : (A) => A
+_ : {}
+[exit 0]
+== r14_instance_param.kel
+| type W: EffectRow = {Print}
+| newtype Bx[A] = Bx(A)
+| type class Run[F] { val go: (F, () => Unit @ {W}) => Unit @ {W} }
+| type instance [W] Run[Bx[_]] { let go(a, k) = k() }
+| with_stdout(fn() => go(Bx(0), fn() => println("inst")))
+-- run
+inst
+[exit 0]
+-- --type-check
+_ : {}
+[exit 0]

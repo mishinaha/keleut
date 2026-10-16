@@ -1,0 +1,320 @@
+=== annot.kel
+let f[A](g: (Int32) => A): A = g(1)
+let a = f { x: Int32 => x + 1 }
+--- HEAD
+annot.kel:2:11: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+annot.kel:2:13: 構文エラー: 末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)
+exit=2
+=== annot_out.kel
+let a = { x: Int32 => x }
+--- HEAD
+annot_out.kel:1:9: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+annot_out.kel:1:9: パースエラー(付近のトークンを確認してください)
+exit=2
+=== armdot.kel
+let r = {x = 5}
+let a = 1 match {
+  case 1 => r
+    .x
+  case _ => 0
+}
+echoln(show(a))
+--- HEAD
+5
+exit=0
+--- spike
+5
+exit=0
+=== armnl2.kel
+let f(g: (Int32) => Int32): Int32 = g(1)
+let a = 1 match {
+  case 1 => f
+    { x => x }
+  case _ => 0
+}
+echoln(show(a))
+--- HEAD
+armnl2.kel:3:14: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+armnl2.kel:3:14: パースエラー(付近のトークンを確認してください)
+exit=2
+=== armnl3.kel
+let f(g: () => Int32): Int32 = g()
+let a = 1 match { case 1 => f
+  { 2 }
+  case _ => 0 }
+echoln(show(a))
+--- HEAD
+armnl3.kel:2:30: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+armnl3.kel:2:30: パースエラー(付近のトークンを確認してください)
+exit=2
+=== armnl.kel
+let f(g: () => Int32): Int32 = g()
+let a = 1 match {
+  case 1 => f
+    { 2 }
+  case _ => 0
+}
+echoln(show(a))
+--- HEAD
+armnl.kel:3:14: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+armnl.kel:3:14: パースエラー(付近のトークンを確認してください)
+exit=2
+=== armparen.kel
+let g(x: Int32): Int32 = x
+let a = 1 match {
+  case 1 => g
+    (2)
+  case _ => 0
+}
+echoln(show(a))
+--- HEAD
+armparen.kel:3:14: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+armparen.kel:3:14: パースエラー(付近のトークンを確認してください)
+exit=2
+=== armsemi.kel
+let a = 1 match { case 1 => 2; case _ => 0 }
+echoln(show(a))
+--- HEAD
+armsemi.kel:1:30: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+armsemi.kel:1:30: パースエラー(付近のトークンを確認してください)
+exit=2
+=== ctorargs.kel
+newtype T = Foo(Int32, () => Int32)
+let k = 1
+let a = Foo(1) { k }
+--- HEAD
+ctorargs.kel:3:16: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+--- spike
+ctorargs.kel:3:16: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== ctor.kel
+newtype T = Foo(() => Int32)
+let k = 1
+let a = Foo { k }
+--- HEAD
+ctor.kel:3:13: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+ctor.kel:3:13: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== ctornl.kel
+newtype T = Foo
+let k = 1
+let a = (Foo
+  { k })
+--- HEAD
+ctornl.kel:4:3: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+ctornl.kel:4:3: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== ctor_ok.kel
+newtype T = Foo(() => Int32)
+let a = Foo(fn() => 1)
+echoln("ok")
+--- HEAD
+ok
+exit=0
+--- spike
+ok
+exit=0
+=== ctorrec.kel
+newtype T = Foo
+let a = Foo {}
+--- HEAD
+ctorrec.kel:2:13: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+ctorrec.kel:2:13: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== emptyblk.kel
+let f(g: () => Unit): Unit = g()
+f { }
+echoln("ok")
+--- HEAD
+emptyblk.kel:2:3: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
+exit=2
+--- spike
+emptyblk.kel:2:3: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
+exit=2
+=== empty.kel
+let f(g: (Int32) => Unit): Unit = g(1)
+f { x => }
+echoln("ok")
+--- HEAD
+ok
+exit=0
+--- spike
+ok
+exit=0
+=== mctor.kel
+module M { pub newtype T = Foo(() => Int32) }
+let k = 1
+let a = M.Foo { k }
+--- HEAD
+mctor.kel:3:15: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+mctor.kel:3:15: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== paren.kel
+let g(x: Int32): (() => Int32) => Int32 = fn(f) => f()
+let k = 1
+let a = (g(1)) { k }
+--- HEAD
+paren.kel:3:16: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+paren.kel:3:16: 構文エラー: 括弧で囲んだ式には末尾ブロックを付けられません(関数を括弧の中の引数として渡します)
+exit=2
+=== paren_ok.kel
+let g(x: Int32): (() => Int32) => Int32 = fn(f) => f()
+let a = (g(1))(fn() => 1)
+echoln(show(a))
+--- HEAD
+1
+exit=0
+--- spike
+1
+exit=0
+=== recok.kel
+let r = {x = 1}
+let s = {r with x = 2}
+let t: {x: Int32} = s
+echoln(show(t.x))
+--- HEAD
+2
+exit=0
+--- spike
+2
+exit=0
+=== recty.kel
+let f(g: () => Int32): Int32 = g()
+let a = f(1) { x: Int32 }
+--- HEAD
+recty.kel:2:14: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+recty.kel:2:16: 構文エラー: 末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)
+exit=2
+=== second2.kel
+let f(g: () => Int32): Int32 = g()
+let a = f { 1 } { 2 }
+--- HEAD
+second2.kel:2:17: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+exit=2
+--- spike
+second2.kel:2:17: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+exit=2
+=== second3.kel
+let f(g: () => Int32): Int32 = g()
+let a = f { 1 } { x: Int32 => x }
+--- HEAD
+second3.kel:2:17: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+second3.kel:2:17: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+exit=2
+=== second.kel
+let f(g: () => Int32): Int32 = g()
+let a = f { 1 } {}
+--- HEAD
+second.kel:2:17: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+second.kel:2:17: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+exit=2
+=== tagargs.kel
+let k = 1
+let a = #Tag(1) { k }
+--- HEAD
+tagargs.kel:2:17: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+--- spike
+tagargs.kel:2:17: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== tag.kel
+let k = 1
+let a = #Tag { k }
+--- HEAD
+tag.kel:2:14: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+tag.kel:2:14: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+exit=2
+=== tuple.kel
+let f[A](g: ((Int32, Int32)) => A): A = g((1, 2))
+let a = f { (a, b) => a + b }
+--- HEAD
+tuple.kel:2:20: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+tuple.kel:2:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
+exit=2
+=== tuple_out.kel
+let a = { (a, b) => a + b }
+--- HEAD
+tuple_out.kel:1:18: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+tuple_out.kel:1:11: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
+exit=2
+=== two.kel
+let f[A](g: (Int32, Int32) => A): A = g(1, 2)
+let a = f { x, y => x + y }
+--- HEAD
+two.kel:2:18: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+two.kel:2:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(2 個以上の引数を取る関数は fn(x, y) => 式 と書いて括弧の中に渡します)
+exit=2
+=== two_out.kel
+let a = { x, y => x }
+--- HEAD
+two_out.kel:1:16: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+two_out.kel:1:16: パースエラー(付近のトークンを確認してください)
+exit=2
+=== unit0.kel
+let f(g: () => Int32): Int32 = g()
+let a = f { () => 1 }
+--- HEAD
+unit0.kel:2:16: パースエラー(付近のトークンを確認してください)
+exit=2
+--- spike
+unit0.kel:2:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
+exit=2
+=== repl.in (--repl)
+let k = 1
+let a = #Tag { k }
+let f(g: (Int32) => Int32): Int32 = g(1)
+f { x: Int32 => x }
+f { x => x }
+--- diktor-head
+k : Int32 = 1
+<stdin>:2:14: パースエラー(付近のトークンを確認してください)
+f : ((Int32) => Int32 @ {}) => Int32 = <fn>
+<stdin>:4:3: パースエラー(付近のトークンを確認してください)
+_ : Int32 = 1
+--- main.exe
+k : Int32 = 1
+<stdin>:2:14: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+f : ((Int32) => Int32 @ {}) => Int32 = <fn>
+<stdin>:4:5: 構文エラー: 末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)
+_ : Int32 = 1

@@ -1,0 +1,13 @@
+--- a/lib/elab.ml
++++ b/lib/elab.ml
+@@ -2252,8 +2252,9 @@
+     let ty = subsume_closed level (elab_exp env level eff node) expected in
+     match (row_note, repr ty, repr expected) with
+     | Some note, TArrow (p1, r1, e1), TArrow (p2, r2, e2) when repr e2 = TRowEmpty -> (
+-        (* 引数と返り値を先に単一化し、最後の行の単一化の失敗だけを言い換える。
++        (* 引数の個数、引数、返り値を先に調べ、最後の行の単一化の失敗だけを言い換える。
+            Unify.unify の矢印の分岐と同じ順序なので、受理と拒否は変わらない *)
++        Unify.check_arity ty expected p1 p2;
+         Unify.unify p1 p2;
+         Unify.unify r1 r2;
+         try Unify.unify e1 e2 with Type_error msg -> type_error (msg ^ note))

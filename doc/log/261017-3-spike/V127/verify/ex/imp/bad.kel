@@ -1,0 +1,2 @@
+from "./lib" import { add3 }
+echoln(show(add3(1, 2)))

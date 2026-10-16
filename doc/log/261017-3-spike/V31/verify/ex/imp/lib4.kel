@@ -1,0 +1,2 @@
+pub type B = Option
+pub type Id[A] = A

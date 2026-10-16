@@ -1,0 +1,72 @@
+== a1 CHANGED
+HEAD: ! a1.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[1]
+NEW:  ! a1.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[1]
+== a2 SAME
+! a2.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+[1]
+== a3 CHANGED
+HEAD: ! a3.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[1]
+NEW:  ! a3.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[1]
+== a7 SAME
+! a7.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[1]
+== a8 SAME
+! a8.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[1]
+== a12 CHANGED
+HEAD: ! a12.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[1]
+NEW:  ! a12.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+[1]
+== a13 SAME
+! a13.kel:4:18: 型エラー: エフェクト位置の型のカインドが Row ではありません: Int32 :: Type
+[1]
+== a14 SAME
+! a14.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[1]
+== b1 CHANGED
+HEAD: ! b1.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+[1]
+NEW:  ! b1.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[1]
+== q1 CHANGED
+HEAD: ! q1.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[1]
+NEW:  ! q1.kel:4:18: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[1]
+== q2 SAME
+! q2.kel:4:18: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[1]
+== q3 SAME
+! q3.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[1]
+== q4 CHANGED
+HEAD: ! q4.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[1]
+NEW:  ! q4.kel:4:18: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
+[1]
+== q5 SAME
+! q5.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+[1]
+== c1 SAME
+! c1.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+[1]
+== c2 SAME
+f : (Int32) => Int32 @ {Print, Console}
+[0]
+== c6 SAME
+f : (Int32) => Int32
+g : (Int32) => Int32 @ {Print}
+[0]
+== imp2/a SAME: ! a.kel:2:26: 型エラー: 未知のエフェクト: P
+[1]
+== imp2/b SAME: ! b.kel:2:26: 型エラー: 未知のエフェクト: P
+[1]
+== imp2/c SAME: ! c.kel:2:8: 型エラー: 未知の型: P
+[1]
+== imp2/d SAME: ! d.kel:2:26: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+[1]

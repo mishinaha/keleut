@@ -1,0 +1,3 @@
+effect Log = { log: (N) => Unit }
+newtype N = N(() => Unit @ {Log})
+let f(n: N): Unit @ {Log} = log(n)

@@ -1,0 +1,5 @@
+module M {
+  pub let twice[A](f: (A) => A @ {}, x: A): A @ {} = f(f(x))
+}
+let main(): Unit @ {Console} = echoln(show(M.twice(fn(n) => n * 2, 3)))
+main()

@@ -1,0 +1,8 @@
+module M {
+  pub let f[E](g: () => Int32 @ E): Int32 @ E = {
+    let k = g
+    k()
+  }
+  pub let c: Int32 = 7
+}
+echoln(show(M.f(fn() => M.c)))

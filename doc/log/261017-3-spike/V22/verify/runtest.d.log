@@ -1,0 +1,15 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 5ba92e8..1b2ce7b 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -387,7 +387,8 @@ newtype のフィールドからエイリアスへ行を渡す形も、宣言順
+   > let f(n: N22, m: M22): Int32 = 0
+   > EOF
+   $ diktor --type-check --no-prelude ntalias.kel
+-  f : (N22, M22) => Int32
++  ! ntalias.kel:5:26: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
++  [1]
+ 
+ エイリアスの本体の中で、行のパラメータより右に同じ宣言群のエフェクトラベルがある
+ 形。投機はラベルの名前だけを知っていればよいので、effect の操作の登録(1b)を

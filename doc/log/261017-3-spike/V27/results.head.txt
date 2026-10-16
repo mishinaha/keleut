@@ -1,0 +1,150 @@
+== a1.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[F[E]]): Int32 = 0
+-- --type-check
+f : (Callback[F[A]]) => Int32
+[exit 0]
+== a2.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[F[E]]): Int32 = 0
+let main(): Unit = println(show(f(Callback(fn() => {}))))
+-- --type-check
+f : (Callback[F[A]]) => Int32
+main : () => {} @ {Print extends R1}
+[exit 0]
+== a3.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let run[F, E](c: Callback[F[E]]): Unit @ F[E] = c match { case Callback(g) => g() }
+-- --type-check
+a3.kel:2:5: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== a4.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F[_], E](c: Callback[F[E]]): Int32 = 0
+-- --type-check
+! a4.kel:2:19: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== a5.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype Holder[F, E] = Holder(Callback[F[E]])
+-- --type-check
+[exit 0]
+== a6.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[F, E] = Callback[F[E]]
+let f(c: Cb[List, Int32]): Int32 = 0
+-- --type-check
+! a6.kel:3:13: 型エラー: 型構成子 List には型引数が必要です
+[exit 1]
+== a7.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[F[E]]): Int32 = 0
+let g(c: Callback[{}]): Int32 = f(c)
+-- --type-check
+f : (Callback[F[A]]) => Int32
+! a7.kel:3:35: 型エラー: 型が一致しません: {} と _F[_A]
+[exit 1]
+== a8.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[F[E]], d: F[E]): Int32 = 0
+-- --type-check
+! a8.kel:2:35: 型エラー: 型注釈のカインドが Type ではありません: ς1[ς2] :: Row
+[exit 1]
+== b1.kel
+newtype Holder[F, E] = Holder(Callback[F[E]])
+newtype Callback[E] = Callback(() => Unit @ E)
+-- --type-check
+[exit 0]
+== b2.kel
+newtype Holder[F, E] = Holder(Callback[F[E]])
+newtype Callback[E] = Callback(() => Unit @ E)
+let f(h: Holder[List, Int32]): Int32 = 0
+-- --type-check
+! b2.kel:3:17: 型エラー: 型構成子 List には型引数が必要です
+[exit 1]
+== b3.kel
+newtype T[G] = MkT(G[Int32])
+let f[F[_, _]](x: T[F[String]]): Int32 = 0
+-- --type-check
+f : (T[F[String]]) => Int32
+[exit 0]
+== b4.kel
+newtype T[G] = MkT(G[Int32])
+let f[F](x: T[F[String]], y: F[String, Int32]): Int32 = 0
+-- --type-check
+f : (T[F[String]], F[String, Int32]) => Int32
+[exit 0]
+== b5.kel
+type Id[X] = X
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[E](c: Callback[Id[E]]): Int32 = 0
+-- --type-check
+! b5.kel:3:13: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1 は Type です
+[exit 1]
+== b6.kel
+type W[E]: EffectRow = {Print extends E}
+let f[F, E](x: Int32): Int32 @ W[F[E]] = x
+-- --type-check
+f : (Int32) => Int32 @ {Print extends F[A]}
+[exit 0]
+== b7.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[{Print extends F[E]}]): Int32 = 0
+-- --type-check
+! b7.kel:2:40: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2]
+[exit 1]
+== b8.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[F[E]]): Int32 = 0
+let g[F, E](c: Callback[F[E]]): Int32 = f(c)
+-- --type-check
+f : (Callback[F[A]]) => Int32
+g : (Callback[F[A]]) => Int32
+[exit 0]
+== b9.kel
+let f[F, A](x: F[A]): F[A] = x
+let g(xs: List[Int32]): List[Int32] = f(xs)
+-- --type-check
+f : (F[A]) => F[A]
+g : (List[Int32]) => List[Int32]
+[exit 0]
+== c1.kel
+type Id[A] = A
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype N[X] = MkN(Callback[Id[X]])
+let f(n: N[{Print}]): Int32 = 0
+-- --type-check
+f : (N[{Print}]) => Int32
+[exit 0]
+== c2.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[F, E] = Callback[F[E]]
+let f[G, X](c: Cb[G, X]): Int32 = 0
+-- --type-check
+f : (Callback[F[A]]) => Int32
+[exit 0]
+== d1.kel
+newtype Holder[F, E] = Holder(Callback[F[E]])
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[G, X](h: Holder[G, X]): Int32 = 0
+let g(c: Callback[{}]): Int32 = f(Holder(c))
+-- HEAD
+f : (Holder[F, A]) => Int32
+! d1.kel:4:35: 型エラー: 型が一致しません: {} と _F[_A]
+[exit 1]
+-- patched
+f : (Holder[F, A]) => Int32
+! d1.kel:4:35: 型エラー: 型が一致しません: {} と _F[_A]
+[exit 1]
+== d2.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype Holder[F, E] = Holder(Callback[F[E]])
+let f[G, X](h: Holder[G, X]): Int32 = 0
+let g(c: Callback[{}]): Int32 = f(Holder(c))
+-- HEAD
+f : (Holder[F, A]) => Int32
+! d2.kel:4:35: 型エラー: 型が一致しません: {} と _F[_A]
+[exit 1]
+-- patched
+! d2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]

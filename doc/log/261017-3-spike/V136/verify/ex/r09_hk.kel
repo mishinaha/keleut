@@ -1,0 +1,5 @@
+type class Fold[F[_]] { val foldl[A, B]: (F[A], B, (B, A) => B) => B }
+newtype Box[A] = Box(A)
+type instance Fold[Box[_]] { let foldl(b, z, f) = b match { case Box(x) => f(z, x) } }
+echo(show(foldl(Box(2i32), 10i32, fn(a, x) => a + x)))
+echo(foldl(Box("q"), "p", fn(a, x) => a + x))

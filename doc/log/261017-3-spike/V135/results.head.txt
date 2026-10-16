@@ -1,0 +1,155 @@
+# V135 の再現。HEAD = diktor 39d4091(bin/diktor-head)、PRE = dbcb088~1(規則 1 の直前、pre/ で build)、ALT = 代案 B の試作(V135-alt-default-never.patch)
+
+=== a_direct.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let f(): String @ Fail = describe(perform throw("x"))
+echoln(f() handle { case throw(m) => "caught " + m })
+--- HEAD:
+! a_direct.kel:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+caught x
+[exit 0]
+--- ALT:
+caught x
+[exit 0]
+
+=== b_helper.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let fail(m: String) = perform throw(m)
+let f(): String @ Fail = describe(fail("x"))
+echoln(f() handle { case throw(m) => "caught " + m })
+--- HEAD:
+! b_helper.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+caught x
+[exit 0]
+--- ALT:
+caught x
+[exit 0]
+
+=== c_annot.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let fail(m: String): Never @ Fail = perform throw(m)
+let f(): String @ Fail = describe(fail("x"))
+echoln(f() handle { case throw(m) => "caught " + m })
+--- HEAD:
+caught x
+[exit 0]
+--- PRE:
+caught x
+[exit 0]
+--- ALT:
+caught x
+[exit 0]
+
+=== d_let.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let f(): String @ Fail = { let v: Never = perform throw("x"); describe(v) }
+echoln(f() handle { case throw(m) => "caught " + m })
+--- HEAD:
+caught x
+[exit 0]
+--- PRE:
+caught x
+[exit 0]
+--- ALT:
+caught x
+[exit 0]
+
+=== e_noinst.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+let f(): String @ Fail = describe(perform throw("x"))
+--- HEAD:
+! e_noinst.kel:3:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+! e_noinst.kel:3:35: 型エラー: Never は Describe のインスタンスではありません
+[exit 1]
+--- ALT:
+! e_noinst.kel:3:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+
+=== f_show.kel
+effect Fail = { throw: (String) => Never }
+let f(): String @ Fail = show(perform throw("x"))
+--- HEAD:
+! f_show.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+! f_show.kel:2:31: 型エラー: Never は Show のインスタンスではありません
+[exit 1]
+--- ALT:
+! f_show.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+
+=== g_hole.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let f(): String = describe(???)
+--- HEAD:
+! g_hole.kel:3:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+! g_hole.kel:3:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- ALT:
+[exit 0]
+
+=== h_ascr.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let f(): String @ Fail = describe(perform throw("x") : Never)
+echoln(f() handle { case throw(m) => "caught " + m })
+--- HEAD:
+h_ascr.kel:4:54: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- PRE:
+h_ascr.kel:4:54: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- ALT:
+h_ascr.kel:4:54: パースエラー(付近のトークンを確認してください)
+[exit 2]
+
+=== i_surprise.kel
+type class Parse[A] { val parse: (String) => A }
+type instance Parse[Never] { let parse(s: String): Never = ??? }
+type instance Parse[Int32] { let parse(s: String): Int32 = 1 }
+let check(s: String): Boolean = { parse(s); true }
+echoln(show(check("1")))
+--- HEAD:
+! i_surprise.kel:4:5: 型エラー: 曖昧な制約: Parse を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+! i_surprise.kel:4:5: 型エラー: 曖昧な制約: Parse を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- ALT:
+実行時エラー: ??? に到達しました
+[exit 3]
+
+=== j_weak.kel
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let s = (describe(perform throw("x"))) handle { case throw(m) => "caught " + m }
+echoln(s)
+--- HEAD:
+! j_weak.kel:4:1: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- PRE:
+caught x
+[exit 0]
+--- ALT:
+caught x
+[exit 0]

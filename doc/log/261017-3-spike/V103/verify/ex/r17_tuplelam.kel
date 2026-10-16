@@ -1,0 +1,10 @@
+let idf2[T](x: T): T = x
+let t = idf2((fn(x: Int32) => -x, 0))
+let main(): Unit @ Console = {
+  let k: Option[(Int32) => Int32 @ Console] = t match { case (f, _) => Some(f) }
+  k match {
+    case Some(g) => echoln(show(g(1)))
+    case None => ()
+  }
+}
+main()

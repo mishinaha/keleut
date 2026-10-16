@@ -1,0 +1,2 @@
+from "./a" import AM.k
+echoln(show(k(8)))

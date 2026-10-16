@@ -1,0 +1,14 @@
+$ diktor(試作) paren.kel
+paren.kel:3:1: 構文エラー: 付近のトークンを確認してください
+[exit 2]
+$ diktor(試作) letnone.kel
+letnone.kel:1:5: 構文エラー: 付近のトークンを確認してください
+[exit 2]
+$ diktor(試作) runh.kel
+runh.kel:1:5: 構文エラー: 付近のトークンを確認してください
+[exit 2]
+$ diktor(試作) twoblk.kel
+twoblk.kel:1:9: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+[exit 2]
+<stdin>:1:5: 構文エラー: 付近のトークンを確認してください
+_ : Int32 = 2

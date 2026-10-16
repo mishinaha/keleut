@@ -1,0 +1,112 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:12:46.393428275 +0900
+@@ -3072,7 +3072,7 @@
+    単相に束縛し、網羅性検査のキューに積む。
+    この経路には一般化が無いので、キューに積んだ直後にそのまま drain する。 *)
+ 
+-and elab_binding env level eff ((_, b) as node : T.let_binding) : env =
++and elab_binding ?expected_params env level eff ((_, b) as node : T.let_binding) : env =
+   at_node node @@ fun () ->
+   (* pub の完全注釈検査。注釈が無ければ、@ の省略を純粋と読む約束も
+      立てられない。検査は冒頭で、本体を見る前に行う *)
+@@ -3091,7 +3091,7 @@
+     match b.T.lb_params with
+     | Some params ->
+         let seen = ref [] in
+-        let param_tys = List.map (fun _ -> new_var lvl) params in
++        let param_tys = method_param_tys lvl expected_params params in
+         let env2 = List.fold_left2 (fun env p t -> elab_pat env lvl seen t p) env_ty params param_tys in
+         let fn_eff =
+           match b.T.lb_eff with
+@@ -3122,8 +3122,18 @@
+               | T.EArrow (_, _, None), TArrow (a, r, _) when b.T.lb_pub -> TArrow (a, r, TRowEmpty)
+               | _ -> ty)
+         in
+-        (* 値束縛の初期化式は外側の eff で推論する *)
+-        let body_ty = elab_exp env_ty lvl eff b.T.lb_body in
++        (* 値束縛の初期化式は外側の eff で推論する。インスタンスのメソッドの初期化式が
++           注釈の無い仮引数だけを持つ無名関数なら、宣言の引数の型を検査モードで渡す *)
++        let body_ty =
++          match (expected_params, b.T.lb_ret, snd b.T.lb_body) with
++          | Some ets, None, T.Lambda { l_params; _ }
++            when List.length ets = List.length l_params
++                 && List.for_all (fun (p : T.pat) -> match snd p with T.PVar _ | T.PWildcard -> true | _ -> false) l_params ->
++              let t = TArrow (TRecord (closed_item_row ets), new_var lvl, new_row_var lvl) in
++              elab_check env_ty lvl eff b.T.lb_body t;
++              t
++          | _ -> elab_exp env_ty lvl eff b.T.lb_body
++        in
+         (try Unify.unify vty (subsume_closed lvl body_ty vty)
+          with Type_error msg when b.T.lb_ret <> None ->
+            (* pub の省略 @ の値束縛では、失敗の原因は本体が純粋でないこと。
+@@ -3176,6 +3186,15 @@
+       finish_binding_dicts node ~gen:false ~rigids hmark fn_ty;
+       env'
+ 
++(* インスタンスのメソッドの仮引数の型。宣言の引数の型が届いていて、個数が合えば、
++   注釈の無い変数とワイルドカードの仮引数にはその型を使う。それ以外は新しい型変数である *)
++and method_param_tys lvl expected params =
++  let fresh = List.map (fun _ -> new_var lvl) params in
++  match expected with
++  | Some ets when List.length ets = List.length params ->
++      List.map2 (fun (p : T.pat) (e, f) -> match snd p with T.PVar _ | T.PWildcard -> e | _ -> f) params (List.combine ets fresh)
++  | _ -> fresh
++
+ (* 束縛の終わりに、辞書パラメータを決めて束縛ノードに書き、本体で作った穴を解く(§11.28)。
+    generalize と release_rigids の後に呼ぶので、自分の剛定数は Generic になっており、
+    予約述語の付いた変数は既定化されている。一般化しない束縛の辞書パラメータは空である *)
+@@ -3301,7 +3320,7 @@
+    入り込んだかどうかで分ければ、この 2 つを同時に満たせる。
+    `test/annot_rows.t` の recandtp が前者を、recandpoly / recandeff が後者を確かめる。 *)
+ 
+-and elab_rec_bindings ?(top = false) env level eff bs : env =
++and elab_rec_bindings ?(top = false) ?(expected_params = fun _ -> None) env level eff bs : env =
+   (* 事前に割り当てた単相の変数で束縛 → 本体を推論 → unify → 一般化。多相再帰はできない *)
+   let lvl = level + 1 in
+   (* 型パラメータの剛定数は、署名を先に置くために、群のどの本体よりも前に作る(§11.29) *)
+@@ -3380,7 +3399,7 @@
+         match b.T.lb_params with
+         | Some params ->
+             let seen = ref [] in
+-            let param_tys = List.map (fun _ -> new_var lvl) params in
++            let param_tys = method_param_tys lvl (match snd b.T.lb_name with T.PVar x -> expected_params x | _ -> None) params in
+             let env2 = List.fold_left2 (fun env p t -> elab_pat env lvl seen t p) env_ty params param_tys in
+             (* 本体を検査する行は、先に pre に置いた行と同じものを使う(§11.29) *)
+             let fn_eff = match sig_eff with Some e -> e | None -> new_row_var lvl in
+@@ -4511,6 +4530,20 @@
+         Unify.map_generics_with memo (fun info -> TVar (ref (Generic info))) scheme
+     | None -> bug "instance: メソッドスキーマ未登録"
+   in
++  (* 宣言の引数の型を、仮引数の推論に渡す形にする。メソッドの型パラメータと行変数は
++     制約を持たない新しい変数にし、頭の剛定数はそのまま残す *)
++  let expected_params_of mname =
++    match repr (expected_of mname) with
++    | TArrow (p, _, _) -> (
++        let memo = Hashtbl.create 8 in
++        match repr (Unify.map_generics_with memo (fun i -> new_var ~kind:i.vkind 1) p) with
++        | TRecord row -> (
++            match row_fields row with
++            | fields, tail when repr tail = TRowEmpty && List.for_all (fun (l, _) -> l = l_item) fields -> Some (List.map snd fields)
++            | _ -> None)
++        | _ -> None)
++    | _ -> None
++  in
+   let subsume bnode mname inferred =
+     let lvl = 1 in
+     let expected = expected_of mname in
+@@ -4573,12 +4606,12 @@
+       match d with
+       | T.DLet ((_, b) as bnode) ->
+           let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+-          let env2 = elab_binding env 0 (new_row_var 0) bnode in
++          let env2 = elab_binding ?expected_params:(expected_params_of mname) env 0 (new_row_var 0) bnode in
+           (* 包摂のエラーは、そのメソッドの束縛を指す。宣言の先頭を指すと、複数のメソッドの
+              どれが悪いかを位置から読めない *)
+           at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values))
+       | T.DLetRec bs ->
+-          let env2 = elab_rec_bindings env 0 (new_row_var 0) bs in
++          let env2 = elab_rec_bindings ~expected_params:expected_params_of env 0 (new_row_var 0) bs in
+           List.iter
+             (fun (((_, b) as bnode) : T.let_binding) ->
+               let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in

@@ -1,0 +1,5 @@
+type Unit = {}
+type Thunk = () => Unit
+effect Async2 = { yield2: () => Unit }
+effect NurA = { spawna: (Thunk) => Unit }
+let bad(f: () => Unit @ Async2): Unit @ NurA = perform spawna(f)

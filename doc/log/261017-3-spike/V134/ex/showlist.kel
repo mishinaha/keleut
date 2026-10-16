@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let f(b: Boolean): String @ Fail = { let w = perform throw("a"); if b then show(Some(w)) else w match {} }
+echoln({ f(true) } handle { case throw(e) => e })

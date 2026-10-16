@@ -1,0 +1,2 @@
+type Q = {}
+let f(x: Q): Int32 = 0

@@ -1,0 +1,2 @@
+effect Get = { get: () => Int32 }
+let use(): Int32 = { perform get() } handle { case get() => resume("s") }

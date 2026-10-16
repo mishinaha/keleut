@@ -1,0 +1,4 @@
+let f(x) = x match {}
+echoln("before")
+let y: Int32 = f(3)
+echoln("after")

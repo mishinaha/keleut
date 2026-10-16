@@ -1,0 +1,5 @@
+newtype H = MkH(Cb[{}], Bx[{}])
+type Cb[E] = Callback[E]
+type Bx[A] = (A, Int32)
+newtype Callback[E] = Callback(() => Unit @ E)
+let h = MkH(Callback(fn() => ()), ((), 1))

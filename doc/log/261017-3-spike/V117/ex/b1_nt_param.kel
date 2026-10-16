@@ -1,0 +1,2 @@
+type F[A] = (A) => Int32
+pub newtype Box[A] = Box(F[A])

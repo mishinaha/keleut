@@ -1,0 +1,2 @@
+let f(x) = { let g = fn() => x match {}; let n: Never = x; 0 }
+echoln("ok")

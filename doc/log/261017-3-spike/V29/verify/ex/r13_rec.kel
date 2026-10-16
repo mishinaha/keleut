@@ -1,0 +1,6 @@
+type Arr[A] = (A) => A
+newtype Fix = MkFix(Arr[Fix])
+type Pr[E] = {x: Int32}
+newtype Z = MkZ(Pr[{}])
+let z = MkZ({x = 4})
+with_stdout(fn() => z match { case MkZ(r) => println(show(r.x)) })

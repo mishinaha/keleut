@@ -1,0 +1,25 @@
+# HEAD (diktor 39d4091) での実測。pre = 辞書渡し前の diktor 44c53e1 (32341fa^)。各値は 5 回の最小の実時間(秒)
+$ python3 -I bench3.py pre=diktor-base head=diktor-head <file...>
+file	pre	head
+b1_ops.kel	1.09	0.65
+b2_poly.kel	0.46	0.82
+b2a_mono.kel	0.46	0.39
+b2b_add.kel	0.46	0.67
+b2c_nolist.kel	0.76	0.76
+b2e_tail.kel	0.44	0.37
+b3_showlist.kel	0.33	0.36
+b4_eqrec.kel	0.41	0.26
+b5_noops.kel	0.57	0.50
+
+$ diktor-head cap.kel
+1!a!
+21
+3true33
+rc=0
+$ diktor-head b2_poly.kel
+0
+rc=0
+$ diktor-head b2b_add.kel
+0
+rc=0
+$ diktor-head capdict.kel => 1!true!1! rc=0

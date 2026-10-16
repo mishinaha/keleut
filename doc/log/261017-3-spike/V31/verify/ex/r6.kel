@@ -1,0 +1,4 @@
+type Q[E] = {extends E}
+type Rec[E] = {a: Int32 extends E}
+let g[E](r: Rec[E]): Int32 = r.a
+echoln(show(g({a = 5, b = 1})))

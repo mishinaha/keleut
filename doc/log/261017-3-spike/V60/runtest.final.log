@@ -1,0 +1,18 @@
+File "test/trailing_block.t", line 1, characters 0-0:
+diff --git a/_build/default/test/trailing_block.t b/_build/default/test/trailing_block.t.corrected
+index ebeb8ea..9c93898 100644
+--- a/_build/default/test/trailing_block.t
++++ b/_build/default/test/trailing_block.t.corrected
+@@ -154,8 +154,12 @@ g(#C) は型エラーになる:
+ 
+   $ echo 'let a = f { x = 1 => 2 }' > prec.kel
+   $ diktor --type-check prec.kel
++  prec.kel:1:11: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
++  [2]
+   $ echo 'let a = f { x, => 1 }' > prec2.kel
+   $ diktor --type-check prec2.kel
++  prec2.kel:1:11: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
++  [2]
+ 
+ { x => } のように文の列が空なら、本体の値は Unit である:
+ 

@@ -1,0 +1,14 @@
+effect Wrap = { wrap: (() => Unit @ {Console}) => () => Unit @ {Console} }
+let outer[E](): Unit @ {Console extends E} = {
+  let g = perform wrap(fn() => echoln("w"))
+  g()
+  let h = { perform wrap(fn() => echoln("inner")) } handle {
+    case wrap(f) => resume(fn() => { echoln("pre"); f() })
+    case return(x) => x
+  }
+  h()
+} handle {
+  case wrap(f) => resume(f)
+  case return(x) => x
+}
+outer()

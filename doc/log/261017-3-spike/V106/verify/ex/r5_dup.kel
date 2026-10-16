@@ -1,0 +1,3 @@
+type class Pp[A] { val pp[B: Show]: (A) => String
+  val pp: (A) => String }
+echoln("x")

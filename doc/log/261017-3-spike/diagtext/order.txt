@@ -1,0 +1,24 @@
+分野 diagtext の差分の適用順(snap/diktor = diktor 39d4091 に対して、作業領域の親で patch -p0)
+
+1. V34       items/V34/V34.patch            そのまま当たる
+2. V111      items/V111/V111.patch          unify.ml の 2 hunk が V34 と衝突(記事の末尾の段落と 576-577 行の隣接)。
+             手直し: unify.ml の部分を V34 の後の状態に当て直した(V111-unify-rebased.diff)。
+               - §8.7 の記事: V34 の 4 文の後に、空行を挟んで V111 の last_rigid_clash の段落を置く
+               - 剛定数の分岐: V111 の 3 行(last_rigid_clash := Some (t1, t2) を足す)をそのまま
+             elab.ml と test/rec_tparam_note.t はそのまま当たる(V111-nounify.patch)
+3. V102      items/V102/V102.patch          elab.ml hunk1 が fuzz 1(V111 の has_sub の切り出しの直後)。内容の手直しは無し
+4. V33       items/V33/V33.patch            オフセットのみ
+5. X-premise items/X-premise/X-premise.patch オフセットのみ
+6. V24       items/V24/V24.patch            オフセットのみ
+
+その後 dune build(警告は lib/parser.mly:88 の unused module のみ。本分野は触らない)、dune runtest(下の 13 ブロック 14 コマンドの差分)、
+dune promote、dune runtest(差分 0)。
+
+合成差分:
+  diagtext.patch           promote 後(既存の期待値の更新を含む)
+  diagtext.nopromote.patch promote 前(各項目の差分を合成しただけ)
+
+他分野の差分を合成後に --dry-run(参考):
+  V122、X-regionshow、V58、V110、V136、X-D74、X-D7 は当たる(オフセットのみ)。
+  V127、X-perform は elab.ml の hunk1(row_failure の直後への挿入)が fuzz 2(V111 の has_sub の切り出しのため)、
+  V127 は unify.ml にも fuzz 1〜2 の hunk がある。どれも挿入で、内容の手直しは要らない見込み(dry-run のみ、build はしていない)。

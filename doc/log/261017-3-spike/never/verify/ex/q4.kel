@@ -1,0 +1,9 @@
+effect Fail = { throw: (String) => Never }
+let outer(n: Int32): Int32 @ Fail = {
+  let inner(m: Int32): Int32 @ Fail = {
+    let k = 1
+    if m == 0 then perform throw("x") match {} else m + k
+  }
+  inner(n)
+}
+echoln(show(outer(0) handle { case throw(e) => 0 - 1 }))

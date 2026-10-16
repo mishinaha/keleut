@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32, tell: (Int32) => {} }
+let g(): Int32 = ({ perform tell(1); perform Ask.ask() }) handle {
+  case Ask.ask() => resume(5)
+  case tell(n) => resume({})
+  case return(x) => x + 1
+}
+echoln(show(g()))

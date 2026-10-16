@@ -1,0 +1,3 @@
+newtype Foo = Foo
+let f: (Foo) => String = { echoln("init"); fn(x) => "foo" }
+echoln(f(Foo))

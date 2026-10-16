@@ -1,0 +1,11 @@
+let id[T](x: T): T = x
+let main(): Unit @ Console = {
+  let f = if true then id(Show.show) else fn(x: Int32) => { echoln("e"); "e" }
+  echoln(f(1))
+  let g = 1 match {
+    case 1 => id(Neg.neg)
+    case _ => fn(x: Int32) => { echoln("n"); x }
+  }
+  echoln(show(g(5)))
+}
+main()

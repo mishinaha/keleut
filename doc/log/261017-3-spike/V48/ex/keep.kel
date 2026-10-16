@@ -1,0 +1,8 @@
+newtype Empt
+newtype Opt2[A] = Sm(A) | Nn
+let k1(Sm(x): Opt2[Empt]) = 1
+let k2(o: Opt2[Never]): Int32 = o match { case Sm(x) => 1  case Nn => 2 }
+let k3(o: #Ok(Int32) | #Err(Never)): Int32 = o match { case #Ok(n) => n  case #Err(e) => 0 }
+let k4(b: Boolean): Int32 = b match { case true => 1 }
+let k5((true, x): (Boolean, Int32)) = x
+let k6(#A): Int32 = 1

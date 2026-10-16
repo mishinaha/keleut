@@ -1,0 +1,6 @@
+module M {
+  pub type class Describe[A] { val describe: (A) => String }
+  type instance Describe[Never] { let describe(n) = n match { case _ => "x" } }
+  type instance Describe[Int64] { let describe(n) = if n > 10 then "big" else "small" }
+}
+echo(M.describe(20i64))

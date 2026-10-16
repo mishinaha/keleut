@@ -1,0 +1,28 @@
+File "test/smoke.t", line 1, characters 0-0:
+diff --git a/_build/default/test/smoke.t b/_build/default/test/smoke.t.corrected
+index 48ecde6..f7b7952 100644
+--- a/_build/default/test/smoke.t
++++ b/_build/default/test/smoke.t.corrected
+@@ -24,7 +24,7 @@
+ 
+   $ printf 'effect E = { op: () => Int32 }\nlet r = (1) handle { case op() => resume(1) case cancel(e) => () }\n' > cr.kel
+   $ diktor cr.kel; echo "exit: $?"
+-  ! cr.kel:1:9: 未実装: cancel(reason)(v0 は case cancel のみ)
++  ! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
+   exit: 4
+ 
+ 言語に無い数値の接尾辞は型エラーで exit 1(LangSpec §4.2、§15.5):
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck.t b/_build/default/test/typecheck.t.corrected
+index 28ca388..da73319 100644
+--- a/_build/default/test/typecheck.t
++++ b/_build/default/test/typecheck.t.corrected
+@@ -214,7 +214,7 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > EOF2
+   $ diktor --type-check --no-prelude mix.kel
+   ok : Int32
+-  ! mix.kel:2:11: 未実装: cancel(reason)(v0 は case cancel のみ)
++  ! mix.kel:3:11: 未実装: cancel(reason)(v0 は case cancel のみ)
+   [4]
+ 
+ 標準環境の名前は再宣言できない(LangSpec §16.1。newtype、型エイリアス、effect、

@@ -1,0 +1,5 @@
+let h = fn(x) => x match {
+  case 4294967295 => 1i32
+  case _ => 2i32
+}
+echoln(show(h(5)))

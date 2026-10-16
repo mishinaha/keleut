@@ -1,0 +1,1 @@
+pub let pairs(): List[List[Int32]] = Cons(Cons(1, Nil), Cons(Nil, Cons(Cons(2, Cons(3, Nil)), Nil)))

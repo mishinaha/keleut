@@ -1,0 +1,89 @@
+File "test/repl.t", line 1, characters 0-0:
+diff --git a/_build/default/test/repl.t b/_build/default/test/repl.t.corrected
+index 924d961..d957cee 100644
+--- a/_build/default/test/repl.t
++++ b/_build/default/test/repl.t.corrected
+@@ -299,20 +299,20 @@ Show のインスタンスを持つ newtype の値は Show.show で表示し、
+   > let q = (show, ???)
+   > q
+   > EOF2
+-  p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+-  _ : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = (<fn>, <fn>, 3)
+-  k : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
+-  m : [A: Show] Option[(A) => String] = Some(<fn>)
+-  v : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
++  p : [A: Show] ((A) => String, Int32) = <fn>
++  _ : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = <fn>
++  k : [A: Show] {f: (A) => String, n: Int32} = <fn>
++  m : [A: Show] Option[(A) => String] = <fn>
++  v : [A: Show] #Tag((A) => String) | R1 = <fn>
+   idf : (A) => A = <fn>
+-  t : (Int32) => String @ {Console, Blocking, Print} = <fn>
++  t : (Int32) => String @ {Console, Blocking, Print} = <prim Show.show>
+   _ : String = "2"
+-  h : (Int32) => String = <fn>
++  h : (Int32) => String = <prim Show.show>
+   ev : [A: Eq] (A) => Boolean = <fn>
+-  _ : [A: Eq] ((A) => Boolean, Int32) = (<fn>, 2)
+-  _ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+-  q : [A: Show] ((A) => String, B) = <unevaluated>
+-  _ : [A: Show] ((A) => String, B) = <unevaluated>
++  _ : [A: Eq] ((A) => Boolean, Int32) = <fn>
++  _ : [A: Show] ((A) => String, Int32) = <fn>
++  q : [A: Show] ((A) => String, B) = <fn>
++  _ : [A: Show] ((A) => String, B) = <fn>
+ 
+ 型の頭が newtype で Show を満たす値は、評価した値を利用者の show に渡す。
+ show が引数を照合しても、評価した値に照合する。
+@@ -328,10 +328,10 @@ show が引数を照合しても、評価した値に照合する。
+   > let y = U(show)
+   > let z = U((show, ???))
+   > EOF2
+-  x : [A: Show] W[(A) => String] = W!
+-  _ : [A: Show] W[(A) => String] = W!
++  実行時エラー: match のどの節にも一致しません: <fn>
++  ! <stdin>:4:1: 型エラー: 未束縛の変数: x
+   y : [A: Show] U[(A) => String] = U!
+-  z : [A: Show] U[((A) => String, B)] = <unevaluated>
++  z : [A: Show] U[((A) => String, B)] = U!
+ 
+ 型エラーと曖昧性エラーで失敗した入力の中で宣言したインスタンスは、後の入力から見えない:
+ 
+File "test/tail_calls.t", line 1, characters 0-0:
+diff --git a/_build/default/test/tail_calls.t b/_build/default/test/tail_calls.t.corrected
+index b4d6f7b..093c31b 100644
+--- a/_build/default/test/tail_calls.t
++++ b/_build/default/test/tail_calls.t.corrected
+@@ -219,7 +219,8 @@ cancel 節から起こした再開しない操作による破棄が打ち切ら
+   $ OCAMLRUNPARAM=l=100k diktor retrycancel.kel 2> err.txt
+   0
+   $ sort err.txt | uniq -c | sed 's/^ *//'
+-  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  66229 cancel 節で例外が抑制されました: Stack overflow
++  33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+   $ cat > retrycancelvia.kel <<'KEL'
+   > effect Fail = { throw: (String) => Never }
+   > effect Ask = { ask: () => Int32 }
+@@ -243,7 +244,8 @@ cancel 節から起こした再開しない操作による破棄が打ち切ら
+   $ OCAMLRUNPARAM=l=100k diktor retrycancelvia.kel 2> err.txt
+   0
+   $ sort err.txt | uniq -c | sed 's/^ *//'
+-  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  66229 cancel 節で例外が抑制されました: Stack overflow
++  33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+   $ cat > retrycancelsame.kel <<'KEL'
+   > effect Fail = { throw: (String) => Never }
+   > effect Res = { use: () => Unit }
+@@ -283,9 +285,10 @@ cancel 節から起こした再開しない操作による破棄が打ち切ら
+   > echoln(show(loop(100000)))
+   > KEL
+   $ OCAMLRUNPARAM=l=100k diktor retcancelret.kel 2> err.txt
+-  0
++  [3]
+   $ sort err.txt | uniq -c | sed 's/^ *//'
+-  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  33761 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  1 実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+ 
+ 再開しない操作の節の値が、同じハンドラの末尾でない resume の戻り値として届く形(§5.7 の
+ 但し書き)。保留していた節の評価が続くので、節の本体は末尾位置にならず、この実装では

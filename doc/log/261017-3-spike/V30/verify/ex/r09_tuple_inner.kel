@@ -1,0 +1,4 @@
+effect Log = { log: (String) => Unit }
+type W[E] = () => Unit @ E
+newtype A = MkA((W[{Print}], () => Unit @ {Log}))
+let f(x: A): A = x

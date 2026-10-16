@@ -1,0 +1,20 @@
+effect Ask = { ask: () => Int32 }
+effect Tell = { tell: (Int32) => Unit }
+let f(): Int32 = run h {
+  let r = Ref.new(0)
+  let x = (fn() => {
+    let y = (fn() => { Ref.set(r, perform ask()); perform tell(Ref.get(r)); Ref.get(r) + 1 })() handle {
+      case tell(n) => { Ref.set(r, n + 1); resume({}) }
+      case return(v) => v * 2
+    }
+    y
+  })() handle {
+    case ask() => resume(20)
+    case return(v) => v
+  }
+  x match {
+    case n if n > 10 => n + Ref.get(r)
+    case n => n
+  }
+}
+echoln(show(f()))

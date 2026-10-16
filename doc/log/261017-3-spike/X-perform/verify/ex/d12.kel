@@ -1,0 +1,3 @@
+newtype Box = Box(Int32)
+type class Pu[T] { val pu: (T) => Unit }
+type instance Pu[Box] { let pu(b) = echo("i") }

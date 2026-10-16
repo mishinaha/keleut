@@ -1,0 +1,15 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let r = (((({ perform use(); perform throw("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel a"); perform throw("from a") }
+}) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel b"); perform throw("from b") }
+}) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel c"); perform throw("from c") }
+}) handle {
+  case throw(e) => { echoln("H " + e); 1 }
+}
+echoln(show(r))

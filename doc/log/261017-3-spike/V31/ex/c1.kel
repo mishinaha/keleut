@@ -1,0 +1,3 @@
+type Q = Q2
+type Q2 = Int32
+let f(x: Q): Int32 = x

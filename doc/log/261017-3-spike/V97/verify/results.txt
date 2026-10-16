@@ -1,0 +1,205 @@
+## myprelude.kel
+[HEAD]
+! myprelude.kel:122:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+x1
+[NEW]
+! myprelude.kel:122:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+x1
+## q.kel
+[HEAD]
+x0
+[NEW]
+x0
+## r11_prelude.kel
+[HEAD]
+! r11_prelude.kel:2:13: 型エラー: 未束縛の変数: twice_show
+x1
+[NEW]
+! r11_prelude.kel:2:13: 型エラー: 未束縛の変数: twice_show
+x1
+## r12_noprelude.kel
+[HEAD]
+x0
+[NEW]
+x0
+## r13_runinit.kel
+[HEAD]
+! r13_runinit.kel:8:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+6
+N3
+x0
+## r14_letrec.kel
+[HEAD]
+truetrue
+sssz
+x0
+[NEW]
+truetrue
+sssz
+x0
+## r15_weakinit_builtin.kel
+[HEAD]
+! r15_weakinit_builtin.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+! r15_weakinit_builtin.kel:6:41: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+x1
+## r16_initcalls_pubfn.kel
+[HEAD]
+foo3
+x0
+[NEW]
+foo3
+x0
+## r17_initop.kel
+[HEAD]
+! r17_initop.kel:2:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+n3
+x0
+## r18_initpure.kel
+[HEAD]
+! r18_initpure.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+n
+x0
+## r19_premdiv.kel
+[HEAD]
+! r19_premdiv.kel:5:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+a
+b
+実行時エラー: ゼロ除算です
+x3
+## r1b_reorder.kel
+[HEAD]
+1
+foo
+x0
+[NEW]
+1
+foo
+x0
+## r1_weakinit.kel
+[HEAD]
+1
+foo
+x0
+[NEW]
+! r1_weakinit.kel:7:39: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+x1
+## r20_premdiv_user.kel
+[HEAD]
+a
+b
+実行時エラー: ゼロ除算です
+x3
+[NEW]
+a
+b
+実行時エラー: ゼロ除算です
+x3
+## r2_useradd.kel
+[HEAD]
+V(3)
+V(7)
+V(10)
+x0
+[NEW]
+V(3)
+V(7)
+V(10)
+x0
+## r3_module.kel
+[HEAD]
+3
+8
+x0
+[NEW]
+3
+8
+x0
+## r4_heapop.kel
+[HEAD]
+v=2
+27
+x0
+[NEW]
+v=2
+27
+x0
+## r5_alias.kel
+[HEAD]
+2
+3
+9
+x0
+[NEW]
+2
+3
+9
+x0
+## r6_handler.kel
+[HEAD]
+10 1
+x0
+[NEW]
+10 1
+x0
+## r7_premise.kel
+[HEAD]
+Box(1)
+Box(Box(a))
+6
+x0
+[NEW]
+Box(1)
+Box(Box(a))
+6
+x0
+## r8_eqord.kel
+[HEAD]
+! r8_eqord.kel:5:38: 型エラー: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+truetrue
+false
+4
+x0
+## r9_import.kel
+[HEAD]
+! r9_import.kel:6:33: 型エラー: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+41
+2
+x0
+## t.kel
+[HEAD]
+m
+x0
+[NEW]
+m
+x0
+## r10_repl.in [H]
+idf : (A) => A = <fn>
+g : (Int32) => Int32 = <fn>
+_ : Int32 = 2
+3
+w : (Int32) => Int32 = <fn>
+1
+foo
+## r10_repl.in [N]
+idf : (A) => A = <fn>
+g : (Int32) => Int32 @ {} = <fn>
+_ : Int32 = 2
+3
+w : (Int32) => Int32 = <fn>
+1
+! <stdin>:9:61: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+! <stdin>:10:11: 型エラー: Foo は Sh のインスタンスではありません

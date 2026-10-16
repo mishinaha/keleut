@@ -1,0 +1,4 @@
+effect Log = { log: (String) => Unit }
+type W[E]: EffectRow = {Log extends E}
+type Wrap[E] = W[E]
+let h[E](x: Int32): Int32 @ {Wrap[E]} = x

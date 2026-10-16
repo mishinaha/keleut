@@ -1,0 +1,43 @@
+合成後の dune build: 成功(既存の lib/parser.mly 88 行の警告のみ)
+合成後の dune runtest: 差分 0(premise.t の pr7 を取り込んだ後。取り込む前の差分は pr7 の 1 ブロックだけ。runtest.raw.log)
+
+HEAD(39d4091)の処理系に合成後の cram を置いた runtest(runtest.headwithnew.log)で落ちるブロック、すなわち合成で期待値が変わるか新しく足すブロック:
+
+[期待値が変わる既存のブロック]
+- test/classes.t ml9e、ml9e2(V97/V103: 一般化しない束縛の表示に @ {} が付く)
+- test/premise.t pr7(V136: 診断の文面と位置が 3:11 から 5:40 に)
+[プログラムや前書きだけが変わり、HEAD でも通る既存のブロック]
+- test/spec_gaps.t ordervr(V97/V103: 本体を fn(x) => x に、前書き)
+- test/verify_fixes.t vrgen(V97/V103: 同上、出力 15 から 13)
+- test/annot_rows.t instmonorow(V97/V103: 前書きだけ)
+[新しいブロックで HEAD では落ちるもの]
+- test/builtin_rows.t(V97/V103、新設 9 ブロック): bshowweak、bshowann、barrlen、brefget、bopweak、bopdisp、stdinst が HEAD で落ちる。stdprim、stdop は HEAD でも通る
+- test/instance_init.t(V110 と V97 の時点の例、新設 10 ブロック): instinitcon、instweakrow(+instweakrowuser)、instinithandled、instinitask(+instinitheap)、instinitperuse、inidiv、inipremdiv、inipure が HEAD で落ちる。instinitpoly(+local)と REPL は HEAD でも通る
+- test/instance_param_types.t(V136、新設 8 ブロック): insnever、inswild、inslit、insvariant、insbody が HEAD で落ちる。insret、insannot、inspremise は HEAD でも通る
+- test/dictionary_passing.t(V106、3 ブロック): mtpabsent(+mtpabsent2)が HEAD で落ちる。mtpfree、mtpbogus/mtpfrac は HEAD でも通る
+- test/import.t(V126、3 ブロック): pi1、pi2(+pi3、pi4)が HEAD で落ちる。pi/ の import のブロックは HEAD でも通る
+[新しいブロックで HEAD でも通るもの]
+- test/never_ops.t(V132、3 ブロック): clsfail、clsfailrow、clsfailpure
+- test/std_names.t(X-D7、1 ブロック)
+[新しく落ちるブロック]
+- 無い
+
+中間状態の runtest:
+- HEAD + 手順 1 + V110 + instance_init.t: 差分 0(runtest.stage-V110.log)
+- その上に V97/V103 のコードと builtin_rows.t、classes.t、annot_rows.t: 差分 0(runtest.stage-V97.log)
+
+各項目の試作と合成の処理系の比較(cmp.V97V103.txt、cmp.rest.txt。各項目の ex/、ex2/、verify/ex/、fin/ の .kel を実行と --type-check で):
+- V97: 110 回中 10 回が異なる。instinit_builtin、instinit_user(Ask の診断が V110 の文面と 4:7 / 5:7 の位置に)、instinit_user2、r15_weakinit_builtin、r1_weakinit(V97 の試作は拒否、合成は受理して実行)。どれも初期化式の規則を V110 の案にしたため
+- V103: 98 回中 8 回。i5_valeff、i6_valeff_user(Print の拒否の文面が V110 のものに)、i7_valeff_console、i8_user_console(V103 の試作は拒否、合成は受理して init と n を出す)。同じ理由
+- V110: 112 回中 4 回。b3、c3 の元の報告が「行 ς1 は注釈で固定された行変数なので…」から「ラベル Console がありません(行は閉じています)」に(V97 による)
+- V136: 94 回中 0 回
+- V106: 80 回中 2 回。ex/alias1.kel(もともと拒否)の診断が V136 により「インスタンスメソッド pp がクラス宣言の型を満たしません((ς1, ς1) は Show のインスタンスではありません)」(6:7)から「(_A, _A) は Show のインスタンスではありません」(6:33)に
+- V126: 56 回中 0 回
+- V132: 38 回中 6 回。ex/show.kel、ex/eq.kel、verify/ex/addinst.kel の元の報告が「ラベル Fail がありません(行は閉じています)」に(V97 による。V132 の (1) の推測が実測で成り立つ)
+- X-D7: 46 回中 0 回
+- V110 の results.final.txt の 57 件の再実行: 55 件一致、b3 と c3 の 2 件が上と同じ理由で異なる
+
+最終稿の段階の手直し(2026-10-17):
+- classes.patch のファイルの見出しを a/、b/ の形(時刻なし)に作り直した。本体の行は前の差分と同一(見出しを除いた比較で差 0)。
+- HEAD 39d4091 の写しに patch -p1 で 15 ファイルとも当たり(--dry-run の後)、当てた木は合成の木と一致した。
+- dune build: lib/parser.mly 88 行の Warning 60 だけで成功。dune runtest: 終了状態 0、出力 0 バイト(fin/runtest.final.log)。

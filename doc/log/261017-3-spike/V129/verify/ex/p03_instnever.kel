@@ -1,0 +1,4 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n) = n match {} }
+type instance Describe[Int32] { let describe(n) = "i" }
+echoln(describe(1i32))

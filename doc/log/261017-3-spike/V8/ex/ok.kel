@@ -1,0 +1,17 @@
+let f(x: Int32): Int32 = x match {
+  case 2147483647 => 1
+  case -2147483648 => 2
+  case 0xFFFFFFFF => 3
+  case 0b1 => 4
+  case _ => 5
+}
+let g(x: Int64): Int32 = x match {
+  case 4294967295 => 1
+  case 9223372036854775807 => 2
+  case _ => 3
+}
+let h(x: Float64): Int32 = x match {
+  case 1e999 => 1
+  case _ => 2
+}
+echoln(show(f(0 - 1)) + show(g(4294967295i64)) + show(h(1e999)))

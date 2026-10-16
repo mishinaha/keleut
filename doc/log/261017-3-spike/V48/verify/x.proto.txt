@@ -1,0 +1,61 @@
+$ diktor --strict-exhaustive x1_alias.kel
+⚠ match が非網羅的です。例えば Nn が漏れています
+⚠ このパターンには一致する値がありません
+[exit 1]
+$ diktor --strict-exhaustive x2_module.kel
+⚠ match が非網羅的です。例えば MkB(_) が漏れています
+⚠ このパターンには一致する値がありません
+⚠ match が非網羅的です。例えば MkB(_) が漏れています
+⚠ このパターンには一致する値がありません
+[exit 1]
+$ diktor --strict-exhaustive x3_tparam.kel
+⚠ match が非網羅的です。例えば B(0) が漏れています
+⚠ match が非網羅的です。例えば None が漏れています
+[exit 1]
+$ diktor --strict-exhaustive x4_guard.kel
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ このパターンには一致する値がありません
+[exit 1]
+$ diktor --strict-exhaustive x5_handler.kel
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ このパターンには一致する値がありません
+[exit 1]
+$ diktor --strict-exhaustive x6_variant.kel
+⚠ match が非網羅的です。例えば #B(_) が漏れています
+⚠ このパターンには一致する値がありません
+⚠ match が非網羅的です。例えば #B(_) が漏れています
+⚠ このパターンには一致する値がありません
+[exit 1]
+$ diktor --strict-exhaustive x7_pub.kel
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ このパターンには一致する値がありません
+[exit 1]
+$ diktor --strict-exhaustive x8_lit.kel
+ok[exit 0]
+$ diktor --strict-exhaustive x11_opclause.kel
+7[exit 0]
+$ diktor --strict-exhaustive x12_instance.kel
+⚠ match が非網羅的です。例えば 1 が漏れています
+[exit 1]
+$ (cd imp; diktor main.kel)
+⚠ match が非網羅的です。例えば Nn が漏れています
+⚠ このパターンには一致する値がありません
+ok[exit 0]
+$ diktor --prelude x9_prelude.kel --type-check x9_main.kel
+f : (Option[Empt]) => Int32
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ このパターンには一致する値がありません
+g : (Option[Never]) => Int32
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ このパターンには一致する値がありません
+h : (Boolean) => Int32
+⚠ match が非網羅的です。例えば false が漏れています
+[exit 0]
+$ diktor --repl < x10_repl.in
+f : (Absurd) => Int32 = <fn>
+g : ((Int32, Never)) => Int32 = <fn>
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ このパターンには一致する値がありません
+h : (Option[Never]) => Int32 = <fn>
+[exit 0]

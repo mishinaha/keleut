@@ -1,0 +1,911 @@
+diff a/lib/aux.ml b/lib/aux.ml
+--- a/lib/aux.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/aux.ml	2026-10-17 04:45:49.707671077 +0900
+@@ -44,10 +44,12 @@
+ 
+    `NotImplemented` を `Type_error` と分けるのは、
+    書けるが実装されていないものと、書いてはならないものを、利用者が区別できるようにするためである。
+-   `1u8`、`Int8`、`module` の入れ子、`cancel(reason)` は、Diktor が実装していない機能である。
++   `module` の入れ子と `cancel(reason)` は、Diktor が実装していない機能である。
+    第11章はこれらに対して `noimpl` を呼び、第16章は終了コード 4 で終える。
+    `1 + true` は書いてはならないものなので、第8章の `add_class` が `type_error` を呼び、
+    第16章は終了コード 1 で終える。
++   言語に無い数値の接尾辞(`1u8`)も書いてはならないものであり、
++   第11章の `number_ty` が `type_error` を呼ぶ。
+    利用者は終了コードを見れば、Diktor の未実装に当たったのか、
+    プログラムを書き直す必要があるのかが分かる。
+ 
+@@ -93,7 +95,10 @@
+    Type_error_at も必ず捕まえる。
+    (c) Unify の関数(unify、rewrite_row)だけを包む節は、言い換えるにせよ握り潰すにせよ、
+    Type_error_at を捕まえなくてよい。
+-   Unify は位置を知らないので、そこから Type_error_at は出ない *)
++   unify と rewrite_row は位置を知らないので、そこから Type_error_at は出ない。
++   Unify のうち Type_error_at を出すのは、
++   数値リテラルの既定化(generalize と default_numerics)だけで、
++   どちらも (c) の節には包まれない *)
+ exception Type_error_at of Location.span * string
+ 
+ (* 位置つきの未実装。at_node は NotImplemented にも同じ規則で span を貼る *)
+diff a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:45:49.707770045 +0900
+@@ -1046,10 +1046,10 @@
+    | コード | 意味 | 出所 |
+    |---|---|---|
+    | 0 | 正常終了 | `run_with` が最後まで走った |
+-   | 1 | 型エラー、import エラー | 第11章の診断、`Aux.Type_error`、`--strict-exhaustive`、§16.3b の `Import_error` |
++   | 1 | 型エラー、import エラー | 第11章の診断(言語に無い数値の接尾辞を含む)、`Aux.Type_error`、`--strict-exhaustive`、§16.3b の `Import_error` |
+    | 2 | 構文エラー、字句エラー | `Parse_error`、`Lex_error`、不正な UTF-8 |
+    | 3 | 実行時エラー | `Runtime_error`、未処理のエフェクト、再帰過多、メモリ不足、内部異常 |
+-   | 4 | 未実装(Diktor が実装していない機能) | `Aux.NotImplemented`(1u8、Int8、module の入れ子など) |
++   | 4 | 未実装(Diktor が実装していない機能) | `Aux.NotImplemented`(module の入れ子、cancel(reason) など) |
+    | 64 | 使い方の誤り | 引数解析の失敗、入力ファイルや import 先を開けない |
+    | 74 | 出力に書き出せない | 標準出力への flush の失敗 |
+ 
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:46:11.363855270 +0900
+@@ -181,15 +181,41 @@
+    リテラルの述語のための仕組みを別に持たなくても、既定化とクラスの解決は正しく整合する。
+ 
+    接尾辞が付いていれば具体型にする。
+-   Diktor が実行できる数値型は 3 つだけなので、それ以外の幅の接尾辞と型名は、
+-   構文としては受理したうえで未実装のエラーにする。
++   意味を持つ接尾辞は `i32`、`i64`、`f64` の 3 つだけである。
++   ほかの接尾辞は字句としては 1 個の数値に切れるが、言語に無い型を指すので、ここで型エラーにする。
+    黙って別の幅に丸めることはしない。
++   字句や構文の段階で落とさないのは、型検査の診断の流れ(§11.43)に乗せ、
++   それまでに確定した型の行を残すためである。
++   浮動小数の本体に整数の接尾辞を付けた字面も、同じ流れで型エラーにする。
+ 
+    残った `Integral` / `Fractional` は、
+    宣言の終わりに `default_numerics` が Int32 / Float64 に落とす(第8章)。
+-   既定化が表示より先に走るので、通常の型表示にこれらの述語は現れない。 *)
++   `number_ty` はリテラルの位置を第8章の `literal_origins` に控える。
++   既定の型が他の制約を満たさないとき、既定化はその位置で報告する(第8章 §8.9)。
++   既定化が表示より先に走るので、通常の型表示にこれらの述語は現れない。
++
++   ### パターンの数値リテラルは、宣言の終わりに型で読む
++
++   `number_ty` は字面の中身を読まないので、桁あふれした数値リテラルも型検査を通る。
++   式の位置では、第14章がリテラルを評価する時点で、範囲外の字面を実行時エラーにする。
++   パターンの位置のリテラルは評価されない。
++   第14章の照合は、値の型で字面を読めなければ、その節を不一致として次へ進む。
++   そのため、Int32 の照合対象に書いた `case 4294967295` は、どの値にも一致しない節として黙って残る。
++   第10章(exhaust.ml)の網羅性検査は列の型を知らないので、この節を報告できない。
++
++   そこで、パターンの数値リテラルを `pattern_numbers` に積み、
++   宣言の終わりの既定化の後に `check_pattern_numbers` で読む。
++   既定化の後なら、どのリテラルのノードの型も Int32、Int64、Float64 のどれかに決まっている。
++   その型で字面を読めなければ、リテラルの位置を指す型エラーにする。
++   読み方は第14章の照合と同じく、OCaml の `Int32.of_string` などに任せる。
++   浮動小数の読みは桁あふれしても無限大になって失敗しないので、調べるのは整数の 2 型だけである。
++
++   検査をパターンの推論のその場で行わないのは、そこではまだ型が決まっていないことがあるからである。
++   注釈の無い引数を照合する `fn(x) => x match { case 4294967295 => … }` では、
++   リテラルの型は `Integral` 述語つきの変数のままで、宣言の終わりに Int32 に落ちる。
++   網羅性検査の時点(束縛の一般化の直前)でも、同じ理由で型が決まっているとは限らない。 *)
+ 
+-let number_ty level (n : number) : ty =
++let number_ty ~loc level (n : number) : ty =
+   match n.n_suffix with
+   (* 浮動小数の本体に整数接尾辞が付いたリテラル(1.i32 / 1e3i64)は拒否する。受理すると、
+      実行時の Int32.of_string が本体を読めず、型検査を通ったリテラルが実行時に必ず落ちる *)
+@@ -198,14 +224,44 @@
+   | Some (NsInt 32) -> t_int32
+   | Some (NsInt 64) -> t_int64
+   | Some (NsFloat 64) -> t_float64
+-  | Some _ -> noimpl ("数値接尾辞 " ^ Lexer.show_number n ^ "(v0 は i32/i64/f64 のみ)")
++  | Some _ ->
++      type_error
++        ("数値リテラル " ^ Lexer.show_number n ^ " の接尾辞 " ^ n.n_suffix_text ^ " はありません(接尾辞は i32、i64、f64 だけです)")
+   | None ->
+       let v = new_var level in
+-      Unify.add_class v (if n.n_is_float then cls_fractional else cls_integral);
++      let c = if n.n_is_float then cls_fractional else cls_integral in
++      Unify.add_class v c;
++      Unify.note_literal ~loc v c;
+       v
+ 
+-(* 名前だけを受理し、Diktor では実行できない数値型 *)
+-let unsupported_numeric = [ "Int8"; "Int16"; "UInt8"; "UInt16"; "UInt32"; "UInt64"; "Float32" ]
++(* パターンの数値リテラルのノードと字面。elab_pat が先頭に積み、check_pattern_numbers が読む *)
++let pattern_numbers : (T.pat * number) list ref = ref []
++
++(* 既定化の後に、パターンの整数リテラルを型で読む。読めなければ、
++   推論した順で最初のものを型エラーにする *)
++let check_pattern_numbers () =
++  let pats = List.rev !pattern_numbers in
++  pattern_numbers := [];
++  List.iter
++    (fun (node, (n : number)) ->
++      let fits =
++        match repr (Tree.get_ty node) with
++        | TCon (c, []) when c = intern "Int32" -> Some ("Int32", Option.is_some (Int32.of_string_opt n.n_text))
++        | TCon (c, []) when c = intern "Int64" -> Some ("Int64", Option.is_some (Int64.of_string_opt n.n_text))
++        | _ -> None
++      in
++      match fits with
++      | Some (tyname, false) ->
++          raise
++            (Type_error_at
++               ( Tree.loc_of node,
++                 "数値リテラルのパターン " ^ Lexer.show_number n ^ " は " ^ tyname
++                 ^ " の範囲を超えるので、どの値にも一致しません" ))
++      | _ -> ())
++    pats
++
++(* 言語に無い数値型の名前。宣言の無い名前として引いたときに、未知の型の診断に数値型の案内を添える *)
++let absent_numeric = [ "Int8"; "Int16"; "UInt8"; "UInt16"; "UInt32"; "UInt64"; "Float32" ]
+ 
+ (* 未束縛の変数の診断。module スコープで解決済みなのに環境に届かないとき
+    (前方の module 名)は素の文言にし、スコープ外に候補があるときだけ修飾名を案内する *)
+@@ -457,9 +513,10 @@
+    診断の位置が 2 番目の使用点になるのは、`F[E]` の時点では `E` のカインドがまだ決まっておらず、
+    照合が通るからである(`test/kinds.t` の hkt)。
+ 
+-   `unsupported_numeric` にある名前は、ここで未実装の数値型として拒否する。
+-   `Int8` のような名前は、未知の型として報告するより、
+-   Diktor が実装していない数値型として報告するほうが、利用者が原因を理解しやすい。
++   `Int8` のような言語に無い数値型の名前(`absent_numeric`)は、宣言の無い名前として引く。
++   利用者が同じ名前の型を宣言していればその型になり、宣言が無ければ未知の型である。
++   後者の診断には、数値型の一覧を添える。
++   利用者が別の言語の幅のつもりで書いたとき、原因に届くようにするためである。
+ 
+    値の型の位置で読んだ型は、カインドが `Type` であることも照合する。
+ 
+@@ -517,29 +574,30 @@
+       match SMap.find_opt n env.types with
+       | Some t -> t
+       | None ->
+-          if List.mem n unsupported_numeric then noimpl ("数値型 " ^ n ^ "(v0 は Int32/Int64/Float64 のみ)")
+-          else
+-            let oid = Decls.resolve_con (intern n) in
+-            Decls.check_con_visible oid;
+-            (match Hashtbl.find_opt Decls.aliases oid with
+-            | Some info -> expand_alias env level ~expanding info []
+-            | None ->
+-                if Hashtbl.mem Decls.con_kinds oid then (
+-                  match Decls.con_kind oid 0 with
+-                  | KStar -> TCon (oid, [])
+-                  | _ -> type_error ("型構成子 " ^ n ^ " には型引数が必要です"))
+-                else
+-                  (* スコープ外の module の内部型なら候補を添える。
+-                     案内するのは pub の型だけで、非 pub の型は従っても直らない *)
+-                  match
+-                    List.filter
+-                      (fun q -> match Hashtbl.find_opt Decls.con_visibility q with Some v -> v.Decls.vis_pub | None -> true)
+-                      (Decls.con_synonym_candidates oid)
+-                  with
+-                  | _ :: _ as cands ->
+-                      type_error
+-                        ("未知の型: " ^ n ^ "(" ^ String.concat " か " (List.map display_of cands) ^ " と修飾してください)")
+-                  | _ -> type_error ("未知の型: " ^ n)))
++          let oid = Decls.resolve_con (intern n) in
++          Decls.check_con_visible oid;
++          (match Hashtbl.find_opt Decls.aliases oid with
++          | Some info -> expand_alias env level ~expanding info []
++          | None ->
++              if Hashtbl.mem Decls.con_kinds oid then (
++                match Decls.con_kind oid 0 with
++                | KStar -> TCon (oid, [])
++                | _ -> type_error ("型構成子 " ^ n ^ " には型引数が必要です"))
++              else
++                (* スコープ外の module の内部型なら候補を添える。
++                   案内するのは pub の型だけで、非 pub の型は従っても直らない *)
++                match
++                  List.filter
++                    (fun q -> match Hashtbl.find_opt Decls.con_visibility q with Some v -> v.Decls.vis_pub | None -> true)
++                    (Decls.con_synonym_candidates oid)
++                with
++                | _ :: _ as cands ->
++                    type_error
++                      ("未知の型: " ^ n ^ "(" ^ String.concat " か " (List.map display_of cands) ^ " と修飾してください)")
++                | _ ->
++                    if List.mem n absent_numeric then
++                      type_error ("未知の型: " ^ n ^ "(数値型は Int32、Int64、Float64 だけです)")
++                    else type_error ("未知の型: " ^ n)))
+   | T.EIdent li -> (
+       (* 平坦化済みの module の修飾型参照(Parser.Parser など)。
+          修飾名でもエイリアスを引く(M.A の形) *)
+@@ -1333,7 +1391,8 @@
+       Unify.unify expected t_string;
+       env
+   | T.PNumber n ->
+-      Unify.unify expected (number_ty level n);
++      Unify.unify expected (number_ty ~loc:(Tree.loc_of node) level n);
++      pattern_numbers := (node, n) :: !pattern_numbers;
+       env
+   | T.PRecord (fields, rest) -> (
+       let ftys = List.map (fun (l, _) -> (l, new_var level)) fields in
+@@ -1546,7 +1605,7 @@
+   match e with
+   | T.Bool _ -> t_boolean
+   | T.Text _ -> t_string
+-  | T.Number n -> number_ty level n
++  | T.Number n -> number_ty ~loc:(Tree.loc_of node) level n
+ (* ## 11.11 変数とラムダ
+ 
+    ### 証拠の穴
+@@ -5091,6 +5150,7 @@
+       (* 既定化も宣言の包みの中で走らせる。DInstance の本体で作られた数値リテラルの述語は、
+          ここで初めて落ちることがある。包みの外で走らせると、位置なしの型エラーになる *)
+       Unify.default_numerics ();
++      check_pattern_numbers ();
+       (* 宣言の終わりに、台帳に残っている穴をすべて解き直す。前の宣言で型の決まらなかった
+          穴も、この宣言で型が決まれば解ける *)
+       solve_holes_at ~since:0 ~params:[];
+@@ -5144,6 +5204,7 @@
+   warnings_count := 0;
+   Unify.reset ();
+   Exhaust.reset ();
++  pattern_numbers := [];
+   group_stack := [];
+   opened_rows := [];
+   pub_pure_cells := []
+@@ -5569,6 +5630,7 @@
+   Hashtbl.reset top_types;
+   Unify.reset ();
+   Exhaust.reset ();
++  pattern_numbers := [];
+   group_stack := [];
+   opened_rows := []
+ 
+@@ -5595,6 +5657,7 @@
+         Unify.lower_levels ~since:mark 0 t;
+         Unify.check_ambiguity ~all:true ~level:0 [ t ];
+         Unify.default_numerics ());
++      check_pattern_numbers ();
+       t)
+ 
+ (* 実体の型を引く(対話的な実行の結果の表示に使う。直前の check_input の束縛に限る) *)
+diff a/lib/exhaust.ml b/lib/exhaust.ml
+--- a/lib/exhaust.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/exhaust.ml	2026-10-17 04:46:11.350583548 +0900
+@@ -152,22 +152,27 @@
+ 
+    読めない成分を例外にせず印にするのは、ここが評価ではなく検査だからである。
+    網羅性検査は値を作る必要がないので、読めない成分は印のまま鍵に使えば足りる。
+-   桁あふれした数値リテラルは型検査を通る。
++   網羅性検査の時点では、桁あふれした数値リテラルのパターンはまだ落とされていない。
+    第11章(elab.ml)の `number_ty` は接尾辞と浮動小数かどうかだけを見て、`n_text` の中身は読まない。
+-   範囲外のリテラルを落とすのは第14章(interp.ml)である。
+-   評価の時点で「数値リテラルが範囲外です」を出し、終了コード 3 で終わる。
+-   網羅性検査で例外を投げると、利用者には網羅性検査の内部エラーが届き、本当の原因が見えなくなる。
++   パターンのリテラルを型で読んで落とすのは、宣言の終わりの既定化の後に走る、
++   第11章 §11.2 の `check_pattern_numbers` である。
++   検査は束縛の一般化の直前に走るので、それより先に来る。
++   ここで例外を投げると、利用者には網羅性検査の内部エラーが届き、
++   その後に来る第11章の型エラーが見えなくなる。
+ 
+    残る不完全性は、どれも見逃す側の誤りである。
+    積の鍵は、列の型で読んだ鍵より細かい。
+    そのため、実行時には同じ値になる組を別の鍵にし、本当の冗長を見逃す。
+    たとえば Int32 の列では、`case 0xFFFFFFFF` と `case -1` はどちらも `-1l` と一致する。
+    しかし、積の鍵ではこの 2 つは別の鍵になる。
+-   また、列の型で読めない字面の節(Int32 の列の `case 4294967295`)はどの値にも一致しないが、
+-   この節を報告する診断はない。
+-   式の位置では同じ字面が実行時エラーになるので、パターンと式で扱いが対称でない。
+-   両方を直すには、スクルティニの型を `convert` に渡す必要がある(入れ子のパターンの型も要る)。
+-   これは設計を大きく変えるので、Diktor は積の鍵にとどめる。
++   この見逃しを直すには、列の型で読んだ鍵が要る。
++   しかし検査の時点では、列の型がまだ `Integral` 述語つきの変数のことがあり、
++   その変数は後で Int32 にも Int64 にも決まりうる。
++   そのため、Diktor は積の鍵にとどめる。
++   一方、列の型で読めない字面(Int32 の列の `case 4294967295`)は、
++   第11章 §11.2 が宣言の終わりに型エラーにする。
++   そのため、受理されるプログラムでは、整数の列のリテラルはどれも列の型で読める。
++   積の鍵はこの性質に頼らずに正しいので、検査の順序が変わっても誤った警告を出さない。
+ 
+    ### `PCtor` は解決結果を読んで宣言順に並べ替える
+ 
+diff a/lib/lexer.ml b/lib/lexer.ml
+--- a/lib/lexer.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/lexer.ml	2026-10-17 04:46:11.350684098 +0900
+@@ -74,6 +74,7 @@
+    一般化の時点で既定の型に落ちるまで決まらない(仕様 §2)。
+    字句解析の時点で `Int32.of_string` を呼ぶと、その決定を先取りすることになる。
+    実際の変換は、第14章(interp.ml)が精緻化で解決した型を見て行い、範囲外の値は実行時エラーにする。
++   パターンに書いた字面だけは、第11章 §11.2 が宣言の終わりに型で読み、範囲外なら型エラーにする。
+ 
+    接尾辞の切り出しには注意点が 1 つある。
+    16 進では `f` が数字なので、`0xff` の `f` を接尾辞の始まりと読んではならない。
+@@ -91,7 +92,7 @@
+    `Failure` が字句層から漏れる。
+    この例外は、第16章の終了コードの規約では最後の受け皿に落ち、内部エラー(終了コード 3)になる。
+    `parse_number` は解釈できない幅を -1 に落とし、
+-   第11章の `number_ty` がそれを未実装エラー(終了コード 4)として報告する。
++   第11章の `number_ty` がそれを、言語に無い接尾辞として型エラー(終了コード 1)にする。
+    ただし、本体が小数のリテラルに整数の接尾辞が付いているときは、幅を見る前に型エラーになる。
+    こうして、字句解析の途中で本章が投げる例外を `Lex_error` だけに保つ。
+    番兵に -1 を使うのは、幅の字句が `Plus digit` なので負の幅をソースに書けず、
+@@ -129,7 +130,7 @@
+       let body = String.sub text 0 i in
+       let raw = String.sub text i (len - i) in
+       (* 解釈できない幅は -1 に落とし、第11章の number_ty へ回す。number_ty は、本体が小数で
+-         接尾辞が整数なら型エラーにし、そうでなければ未実装エラーにする。字句は Plus digit
++         接尾辞が整数なら型エラーにし、そうでなければ言語に無い接尾辞の型エラーにする。字句は Plus digit
+          なので負の幅はソースに書けず、-1 はどの実装の幅とも衝突しない番兵になる。
+          先頭に 0 を置いた幅(i032)も -1 にする。意味を持つ接尾辞は綴りが i32、i64、f64 の
+          3 つだけで(仕様 §4.2)、同じ値に読める別の綴りを受理しない *)
+diff a/lib/syntax.ml b/lib/syntax.ml
+--- a/lib/syntax.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/syntax.ml	2026-10-17 04:45:49.708664893 +0900
+@@ -639,8 +639,9 @@
+ 
+    組み込みのスカラー型は `Boolean` / `Int32` / `Int64` / `Float64` / `String` / `Never` の 6 つだけである。
+    `Never` はコンストラクタが 0 個の名目型で、`n match {}` が網羅と判定される根拠になる(第10章)。
+-   ほかの数値の幅(`Int8`、符号なし、`Float32`)は、名前と接尾辞を受理したうえで、
+-   第11章が未実装エラー(終了コード 4)で拒否する。
++   ほかの数値の幅(`Int8`、符号なし、`Float32`)は言語に無い。
++   その接尾辞は字句としては受理し、第11章が型エラー(終了コード 1)で拒否する。
++   その名前は組み込みの名前ではなく、利用者が型として宣言できる。
+ 
+    `t_unit` には名目型を使わない。
+    Unit は空レコードである(sample.kel:59, :167)。
+@@ -722,7 +723,7 @@
+ 
+    `n_suffix` は `1i64` / `1u8` / `1f32` の接尾辞である。
+    Diktor の実行時の数値型は `Int32` / `Int64` / `Float64` の 3 種だけで、
+-   ほかの幅は字句としては受理し、第11章が未実装エラー(終了コード 4)で拒否する。
++   ほかの幅は字句としては受理し、第11章が型エラー(終了コード 1)で拒否する。
+    `n_suffix_text` は接尾辞の原文(無ければ空文字列)で、診断とダンプはこちらを使う。
+    解釈済みの `n_suffix` から表記を組み立て直すと、
+    桁あふれの幅や先頭のゼロ(`1i032`)の字面が失われる(第2章 §2.1)。
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:45:34.081273803 +0900
+@@ -31,7 +31,8 @@
+    | `kind_of` / `var_info_of` / `map_generics_with` | 第11章の型の補助関数 |
+    | `is_predicate` / `show_ref` | 第9章(show.ml)。制約の印字と、循環参照を避けるための穴 |
+ 
+-   `bind` も外から見えるが、呼ぶのは本章の `unify` / `generalize` / `default_numerics` だけである。
++   `bind` も外から見えるが、呼ぶのは本章の `unify` と、
++   `generalize` / `default_numerics` が使う `default_to` だけである。
+    外向けの関数ではないので、§8.5 で内部の手続きとして扱う。
+    第10章が `unify` を呼ぶのは構造的ヴァリアントの行を閉じる 1 か所だけで、
+    それ以外は型を読むだけである。
+@@ -289,6 +290,22 @@
+ (* いまの番号。これより後に台帳へ載る項目は、これより大きい番号を持つ *)
+ let class_mark () = !class_seq
+ 
++(* 数値リテラルが述語を付けた変数と、述語と、リテラルの位置。
++   既定化の失敗を報告する位置を探すのに使う(§8.9 の default_to)。
++   default_numerics が宣言の終わりに空に戻す *)
++let literal_origins : (tvar ref * oid * Location.span) list ref = ref []
++
++let note_literal ~loc t c = match t with TVar r -> literal_origins := (r, c, loc) :: !literal_origins | _ -> ()
++
++(* 証拠の穴の台帳(§8.11)。既定化の失敗を報告する位置を探すのにも使うので、ここで定義する *)
++let holes : (int * Tree.hole) list ref = ref []
++
++(* 前の宣言の終わりに控えた oid。
++   これより大きい h_id の穴は、いまの宣言で作ったものである。
++   一般化しない束縛の穴は宣言をまたいで台帳に残るので、
++   既定化の失敗の位置を探すときはこの床で前の宣言の穴を除く *)
++let decl_hole_floor = ref 0
++
+ (* 制約つきの新変数はここで作り、作った時点で台帳に載せる。
+    instantiate、subst_params、第11章のコンストラクタの具体化(dd_params の展開)もここを通る。
+    未定変数が制約を持つ入口は、この関数と、既存の未定変数に制約を足す add_class
+@@ -668,7 +685,52 @@
+    `unbound_var` は `Generic` を未定変数と見なさないので、`unify` は `bind` へ進まず、
+    §8.7 の剛な行変数の分岐に落ちる。
+    その結果、構造的ヴァリアントの行を閉じる `match` が、原因と関係のない型エラーで落ちる。
+-   `Generic` を単一化に渡さないという、§8.3 と同じ前提を守るための順序である。 *)
++   `Generic` を単一化に渡さないという、§8.3 と同じ前提を守るための順序である。
++
++   ### 既定化の失敗を報告する位置
++
++   既定化は、述語つきの変数に付いた他の制約を、既定の型で初めて確かめる。
++   `1.5 % 2.0` の `Rem` は、`Float64` に落とした時点で満たせないと分かる。
++   この時点では式の検査が終わっているので、外側の `at_node` に任せると、
++   位置は束縛の名前か宣言の先頭になる。
++   そこで既定化は、失敗した制約の発生位置を自分で探し、`Type_error_at` で報告する。
++   発生位置の手がかりは 2 つある。
++   1 つは証拠の穴(§8.11)で、穴は制約を持ち込んだ参照や演算子の位置を持つ。
++   もう 1 つは `literal_origins` で、予約述語を付けたリテラルの位置を控える。
++   予約述語には穴が無いので、`1 + 1.5` の `Fractional` の位置はこちらから引く。
++   本章で位置つきの例外を出すのはこの経路だけである。 *)
++
++(* 述語つきの変数 v を既定の型 t へ束縛する。
++   束縛の前に、v の制約を 1 つずつ t に付けてみて、失敗した制約 c の発生位置で報告する。
++   発生位置は、いまの宣言で作った c の証拠の穴のうち最も古いものの位置
++   (制約を持ち込んだ参照や演算子)で、
++   穴の無い予約述語では、その述語を付けた最も古いリテラルの位置である。
++   前の宣言の一般化しない束縛から伝わった制約のように、
++   いまの宣言に c の発生位置が見つからなければ、
++   既定の型を選んだ述語 pred を付けた最も古いリテラルの位置で報告する。
++   それも見つからなければ、位置なしの Type_error のまま投げ、外側の at_node に任せる。
++   Int32 と Float64 は型引数を持たないので、
++   ここで付けた制約を bind がもう一度付けても結果は変わらない *)
++let default_to ~pred v t =
++  let same u = match repr u with TVar r -> r == v | _ -> false in
++  let origin c =
++    let from_holes =
++      List.filter_map (fun (_, (h : Tree.hole)) -> if h.h_id > !decl_hole_floor && h.h_sol = None && h.h_cls = c && same h.h_ty then Some h.h_loc else None) !holes
++    in
++    let from_literals c = List.filter_map (fun (r, c', loc) -> if c' = c && same (TVar r) then Some loc else None) !literal_origins in
++    match (List.rev from_holes, List.rev (from_literals c), List.rev (from_literals pred)) with
++    | loc :: _, _, _ | [], loc :: _, _ | [], [], loc :: _ -> Some loc
++    | [], [], [] -> None
++  in
++  (match !v with
++  | Unbound i ->
++      List.iter
++        (fun c ->
++          try add_class t c
++          with Type_error msg -> ( match origin c with Some loc -> raise (Type_error_at (loc, msg)) | None -> raise (Type_error msg)))
++        i.vcls
++  | _ -> ());
++  bind v t
+ 
+ (* level より深い Unbound を Generic にする。Rigid は一般化しない。
+    予約述語つきの変数は既定の型へ bind する(Integral → Int32、Fractional → Float64) *)
+@@ -677,8 +739,8 @@
+   | TVar v -> (
+       match !v with
+       | Unbound i when i.vlevel > level ->
+-          if List.mem cls_integral i.vcls then bind v t_int32
+-          else if List.mem cls_fractional i.vcls then bind v t_float64
++          if List.mem cls_integral i.vcls then default_to ~pred:cls_integral v t_int32
++          else if List.mem cls_fractional i.vcls then default_to ~pred:cls_fractional v t_float64
+           else set_tv v (Generic i)
+       | _ -> ())
+   | TCon (_, args) -> List.iter (generalize level) args
+@@ -733,17 +795,20 @@
+   go t
+ 
+ (* 宣言の終わりに、台帳に残った述語つきの弱い変数を既定の型に落とす。
+-   述語のない変数はどちらの分岐にも当たらず素通りする *)
++   述語のない変数はどちらの分岐にも当たらず素通りする。
++   台帳を古い順にたどるので、既定化の失敗が 2 つ以上あるときは、先に作った変数の失敗を報告する *)
+ let default_numerics () =
+   List.iter
+     (fun (_, v) ->
+       match !v with
+       | Unbound { vcls; _ } ->
+-          if List.mem cls_integral vcls then bind v t_int32
+-          else if List.mem cls_fractional vcls then bind v t_float64
++          if List.mem cls_integral vcls then default_to ~pred:cls_integral v t_int32
++          else if List.mem cls_fractional vcls then default_to ~pred:cls_fractional v t_float64
+       | _ -> ())
+-    !class_vars;
+-  class_vars := []
++    (List.rev !class_vars);
++  class_vars := [];
++  literal_origins := [];
++  decl_hole_floor := new_oid ()
+ 
+ (* 型に現れる変数の vid の集合 *)
+ let rec collect_vars t (acc : (oid, unit) Hashtbl.t) =
+@@ -954,8 +1019,6 @@
+ 
+ module TT = Tree
+ 
+-let holes : (int * TT.hole) list ref = ref []
+-
+ let hole_seq = ref 0
+ 
+ let hole_mark () = !hole_seq
+@@ -1062,4 +1125,6 @@
+ 
+ let reset () =
+   class_vars := [];
++  literal_origins := [];
++  decl_hole_floor := new_oid ();
+   holes := []
+diff a/test/dictionary_passing.t b/test/dictionary_passing.t
+--- a/test/dictionary_passing.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/dictionary_passing.t	2026-10-17 04:46:58.375760815 +0900
+@@ -417,5 +417,5 @@
+   > echoln(show(modulo(1.5, 1.0)))
+   > KEL
+   $ diktor negremf.kel
+-  ! negremf.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
++  ! negremf.kel:2:13: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
+diff a/test/literal_default.t b/test/literal_default.t
+--- a/test/literal_default.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/literal_default.t	2026-10-17 04:45:34.081403349 +0900
+@@ -0,0 +1,130 @@
++接尾辞の無い数値リテラルの型は、宣言の終わりか束縛の一般化で Int32 か Float64 に決まる
++(LangSpec §4.2)。決まった型がほかの制約を満たさないときの型エラーは、
++その制約を持ち込んだ演算子や参照の位置に出る。
++1.5 % 2.0 の Rem は % の式の位置(リテラルの 1.5 と同じ列)に出る:
++
++  $ cat > remlit.kel <<'KEL'
++  > let a = 0
++  > let b = 1.5 % 2.0
++  > KEL
++  $ diktor remlit.kel
++  ! remlit.kel:2:9: 型エラー: Float64 は Rem のインスタンスではありません
++  [1]
++
++演算子が引数の側から離れていても、演算子の位置に出る。
++ラムダの中の % と、引数の 1.5 では、% の式の位置(2:19)になる:
++
++  $ cat > lamlit.kel <<'KEL'
++  > let a = 0
++  > let h = (fn(x) => x % x)(1.5)
++  > KEL
++  $ diktor lamlit.kel
++  ! lamlit.kel:2:19: 型エラー: Float64 は Rem のインスタンスではありません
++  [1]
++
++整数と小数のリテラルが同じ型になる形では、Int32 に決まり、小数のリテラルの位置に出る:
++
++  $ cat > mixlit.kel <<'KEL'
++  > let a = 0
++  > let z = 1 + 1.5
++  > KEL
++  $ diktor mixlit.kel
++  ! mixlit.kel:2:13: 型エラー: Int32 は Fractional のインスタンスではありません
++  [1]
++
++利用者のクラスでも同じで、メソッドの参照の位置に出る:
++
++  $ cat > clslit.kel <<'KEL'
++  > type class C[A] { val f: (A) => A }
++  > type instance C[Int32] { let f(x) = x }
++  > let z = f(1.5)
++  > KEL
++  $ diktor clslit.kel
++  ! clslit.kel:3:9: 型エラー: Float64 は C のインスタンスではありません
++  [1]
++
++インスタンスの前提から伝わった制約は、外側の制約を持ち込んだ参照の位置に出る:
++
++  $ cat > premlit.kel <<'KEL'
++  > type class C[A] { val c: (A) => Int32 }
++  > type instance C[Int32] { let c(x) = x }
++  > newtype Box[A] = Box(A)
++  > type instance[A: C] C[Box[_]] { let c(b) = 0 }
++  > let z = c(Box(1.5))
++  > KEL
++  $ diktor premlit.kel
++  ! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません
++  [1]
++
++一般化しない束縛を経由して前の宣言から伝わった制約は、前の宣言の位置ではなく、
++既定の型を決めたいまの宣言のリテラルの位置に出る。
++2 行目の g は受理され、7 行目の 1.5(7:15)を指す:
++
++  $ cat > weaklit.kel <<'KEL'
++  > type class C[A] { val c: (A) => Int32 }
++  > type instance C[Int32] { let c(x) = x }
++  > newtype Box[A] = Box(A)
++  > type instance[A: C] C[Box[_]] { let c(b) = 0 }
++  > let ident[T](x: T): T = x
++  > let g = ident(fn(y) => c(y))
++  > let k = g(Box(1.5))
++  > KEL
++  $ diktor --type-check weaklit.kel
++  ident : (A) => A
++  g : [_A: C] (_A) => Int32 @ {}
++  ! weaklit.kel:7:15: 型エラー: Float64 は C のインスタンスではありません
++  [1]
++
++同じ宣言に既定化の失敗が 2 つあるときは、先に書いた方を報告する:
++
++  $ cat > orderlit.kel <<'KEL'
++  > let g(n: Int32): Int32 = {
++  >   let u = 1 + 1.5
++  >   let w = 2.5 % 3.0
++  >   n
++  > }
++  > KEL
++  $ diktor --type-check orderlit.kel
++  ! orderlit.kel:2:15: 型エラー: Int32 は Fractional のインスタンスではありません
++  [1]
++
++一般化する関数の本体と、関数の本体の中の一般化しない束縛でも、演算子の位置に出る:
++
++  $ cat > genlit.kel <<'KEL'
++  > let f() = 1.5 % 2.0
++  > let g(n: Int32): Int32 = {
++  >   let u = 1.5 % 2.0
++  >   n
++  > }
++  > KEL
++  $ diktor --type-check genlit.kel
++  ! genlit.kel:1:11: 型エラー: Float64 は Rem のインスタンスではありません
++  [1]
++  $ sed -i 1d genlit.kel
++  $ diktor --type-check genlit.kel
++  ! genlit.kel:2:11: 型エラー: Float64 は Rem のインスタンスではありません
++  [1]
++
++インスタンスのメソッドの本体の中でも同じ:
++
++  $ cat > instlit.kel <<'KEL'
++  > type class D[A] { val d: (A) => Float64 }
++  > type instance D[Int32] {
++  >   let d(x) = {
++  >     let k = 1.5 % 2.0
++  >     k
++  >   }
++  > }
++  > KEL
++  $ diktor --type-check instlit.kel
++  ! instlit.kel:4:13: 型エラー: Float64 は Rem のインスタンスではありません
++  [1]
++
++対話的な実行でも同じ位置に出る:
++
++  $ diktor --repl <<'KEL'
++  > let b = 1.5 % 2.0
++  > echoln(show(1 + 1.5))
++  > KEL
++  ! <stdin>:1:9: 型エラー: Float64 は Rem のインスタンスではありません
++  ! <stdin>:2:17: 型エラー: Int32 は Fractional のインスタンスではありません
+diff a/test/neg_rem.t b/test/neg_rem.t
+--- a/test/neg_rem.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/neg_rem.t	2026-10-17 04:46:58.375760815 +0900
+@@ -81,7 +81,7 @@
+ 
+   $ echo 'echoln(show(1.5 % 2.0))' > remf.kel
+   $ diktor remf.kel
+-  ! remf.kel:1:1: 型エラー: Float64 は Rem のインスタンスではありません
++  ! remf.kel:1:13: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
+   $ echo 'echoln(-"abc")' > negs.kel
+   $ diktor negs.kel
+diff a/test/numeric.t b/test/numeric.t
+--- a/test/numeric.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/numeric.t	2026-10-17 04:46:11.350768529 +0900
+@@ -249,18 +249,20 @@
+   e : (String) => Int32
+   ⚠ match が非網羅的です。例えば "a" が漏れています
+ 
+-未対応の接尾辞は書いたとおりの字面で報告する(A5。かつて桁あふれは
++i32、i64、f64 以外の接尾辞は言語に無いので、型エラー(終了コード 1)で拒否する
++(LangSpec §4.2、§15.5)。
++診断は書いたとおりの字面を出す(A5。かつて桁あふれは
+ 1i9999 という書ける幅に化け、区別が付かなかった):
+ 
+   $ printf 'echoln(show(1u8))\n' > u8.kel
+   $ diktor u8.kel
+-  ! u8.kel:1:13: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! u8.kel:1:13: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+   $ printf 'echoln(show(1i9999))\n' > w9999.kel
+   $ diktor w9999.kel
+-  ! w9999.kel:1:13: 未実装: 数値接尾辞 1i9999(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! w9999.kel:1:13: 型エラー: 数値リテラル 1i9999 の接尾辞 i9999 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+ 先頭ゼロの接尾辞も原文のまま(1i032 が 1i32 に化けない):
+ 
+@@ -273,12 +275,57 @@
+ ほかの接尾辞と同じく受理しない(LangSpec §4.2、付録 A.2):
+ 
+   $ diktor lead0.kel
+-  ! lead0.kel:1:9: 未実装: 数値接尾辞 1i032(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! lead0.kel:1:9: 型エラー: 数値リテラル 1i032 の接尾辞 i032 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+   $ printf 'echoln(show(7f064))\n' > lead0f.kel
+   $ diktor lead0f.kel
+-  ! lead0f.kel:1:13: 未実装: 数値接尾辞 7f064(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! lead0f.kel:1:13: 型エラー: 数値リテラル 7f064 の接尾辞 f064 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
++
++基数つきの字面、浮動小数の接尾辞、パターンの位置、対話的な実行でも同じ型エラーになる:
++
++  $ printf 'let x = 0xffu8\n' > hexu8.kel
++  $ diktor hexu8.kel
++  ! hexu8.kel:1:9: 型エラー: 数値リテラル 0xffu8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
++  $ printf 'let x = 1.5f32\n' > f32.kel
++  $ diktor f32.kel
++  ! f32.kel:1:9: 型エラー: 数値リテラル 1.5f32 の接尾辞 f32 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
++  $ cat > patsfx.kel <<'EOF'
++  > let f(n: Int32): Int32 = n match {
++  >   case 1i8 => 0
++  >   case _ => 1
++  > }
++  > EOF
++  $ diktor patsfx.kel
++  ! patsfx.kel:2:8: 型エラー: 数値リテラル 1i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
++  $ printf '1u8\n1 + 1\n' | diktor --repl
++  ! <stdin>:1:1: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  _ : Int32 = 2
++
++浮動小数の本体に整数の接尾辞を付けた字面は、幅を見る前に本体の誤りとして報告する:
++
++  $ printf 'let x = 1.5i8\n' > floati8.kel
++  $ diktor floati8.kel
++  ! floati8.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
++  [1]
++
++言語に無い数値型の名前は、宣言が無ければ未知の型で、数値型の一覧を添える。
++宣言の無い名前なので、利用者が同じ名前の型を宣言すれば使える:
++
++  $ printf 'let f(x: Int8): Int8 = x\n' > int8.kel
++  $ diktor int8.kel
++  ! int8.kel:1:10: 型エラー: 未知の型: Int8(数値型は Int32、Int64、Float64 だけです)
++  [1]
++  $ cat > int8user.kel <<'EOF'
++  > newtype Int8 = Int8(Int32)
++  > let f(x: Int8): Int8 = x
++  > echoln("ok")
++  > EOF
++  $ diktor int8user.kel
++  ok
+ 
+ 小数部を省いた浮動小数リテラル(A4 / D25。1. / 2.e3 / 1.f64):
+ 
+@@ -295,9 +342,8 @@
+   2000.0
+   1.0
+ 
+-鍵は 3 通りの読みの積(260829-5 M12 検証修正)。Int32 列で読めない
+-10 進と折り返す 16 進が同じ鍵に潰れず、到達可能な節に偽の冗長警告を
+-出さない:
++Int32 の列で読めない 10 進 4294967295 は、同じビット列に折り返す
++16 進 0xFFFFFFFF と並べても、宣言の終わりに型エラーになる(LangSpec §4.2):
+ 
+   $ cat > mask.kel <<'KEL'
+   > let f(x: Int32): Int32 = x match {
+@@ -307,10 +353,82 @@
+   > }
+   > echoln(show(f(0 - 1)))
+   > KEL
+-  $ diktor mask.kel
+-  2
+-  $ diktor --type-check --strict-exhaustive mask.kel > /dev/null; echo "exit: $?"
+-  exit: 0
++  $ diktor --type-check mask.kel
++  f : (Int32) => Int32
++  ! mask.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++
++Int64 の列では 0xFFFFFFFF と -1 は別の値なので、網羅性検査は両方の節を
++残し、-1 の節を冗長と報告しない(Int32 の読みでは同じ -1 になる):
++
++  $ cat > mask64.kel <<'KEL'
++  > let f(x: Int64): Int32 = x match {
++  >   case 0xFFFFFFFF => 1
++  >   case -1 => 2
++  >   case _ => 3
++  > }
++  > echoln(show(f(-1i64)) + show(f(4294967295i64)))
++  > KEL
++  $ diktor mask64.kel
++  21
++  $ diktor --type-check --strict-exhaustive mask64.kel
++  f : (Int64) => Int32
++  _ : {}
++
++パターンの整数リテラルは、宣言の終わりに照合する値の型で読み、読めなければ
++リテラルを指す型エラーにする(LangSpec §4.2)。10 進は符号付きの範囲、
++16 進はビット幅で決まる。入れ子のパターン、操作節の引数、型が既定化で
++Int32 に決まる注釈なしの引数でも同じ:
++
++  $ cat > litpat.kel <<'KEL'
++  > let a(x: Int32): Int32 = x match { case 0x1FFFFFFFF => 1  case _ => 2 }
++  > KEL
++  $ diktor litpat.kel
++  ! litpat.kel:1:41: 型エラー: 数値リテラルのパターン 0x1FFFFFFFF は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ printf 'let b(x: Int64): Int32 = x match { case 9223372036854775808 => 1  case _ => 2 }\n' > lit64.kel
++  $ diktor lit64.kel
++  ! lit64.kel:1:41: 型エラー: 数値リテラルのパターン 9223372036854775808 は Int64 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ printf 'let c(o: Option[Int32]): Int32 = o match { case Some(4294967295) => 1  case _ => 2 }\n' > litnest.kel
++  $ diktor litnest.kel
++  ! litnest.kel:1:54: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ printf 'let d = fn(x) => x match { case 4294967295 => 1i32  case _ => 2i32 }\n' > litdef.kel
++  $ diktor litdef.kel
++  ! litdef.kel:1:33: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ cat > litop.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r = { perform ask(7) } handle {
++  >   case ask(4294967295) => resume(1)
++  >   case ask(_) => resume(2)
++  >   case return(v) => v
++  > }
++  > KEL
++  $ diktor litop.kel
++  ! litop.kel:3:12: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++
++型の境界の字面と、型で読める字面は通る。局所の束縛で、網羅性検査の後に
++照合の型が Int64 に決まる形も、Int64 で読んで受理する:
++
++  $ cat > litok.kel <<'KEL'
++  > let f(x: Int32): Int32 = x match {
++  >   case 2147483647 => 1
++  >   case -2147483648 => 2
++  >   case 0xFFFFFFFF => 3
++  >   case _ => 4
++  > }
++  > let id[A](y: A): A = y
++  > let g(n: Int64): Int32 = {
++  >   let k = id(fn(x) => x match { case 4294967295 => 1  case _ => 2 })
++  >   k(n)
++  > }
++  > echoln(show(f(0 - 1)) + show(g(4294967295i64)))
++  > KEL
++  $ diktor litok.kel
++  31
+ 
+ 浮動小数の本体に整数接尾辞は書けない(D25 の副作用の封鎖。受理すると
+ 型検査を通ったリテラルが実行時に必ず落ちた):
+diff a/test/smoke.t b/test/smoke.t
+--- a/test/smoke.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/smoke.t	2026-10-17 04:45:49.708808315 +0900
+@@ -20,9 +20,16 @@
+   $ diktor t.kel; echo "exit: $?"
+   exit: 0
+ 
+-未実装は exit 4(仕様にあって v0 が実装していないもの。§16.8):
++未実装は exit 4(書けるが処理系が実装していない機能。§16.8):
++
++  $ printf 'effect E = { op: () => Int32 }\nlet r = (1) handle { case op() => resume(1) case cancel(e) => () }\n' > cr.kel
++  $ diktor cr.kel; echo "exit: $?"
++  ! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
++  exit: 4
++
++言語に無い数値の接尾辞は型エラーで exit 1(LangSpec §4.2、§15.5):
+ 
+   $ echo 'let x = 1u8' > u8.kel
+   $ diktor u8.kel; echo "exit: $?"
+-  ! u8.kel:1:9: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  exit: 4
++  ! u8.kel:1:9: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  exit: 1
+diff a/test/typecheck.t b/test/typecheck.t
+--- a/test/typecheck.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/typecheck.t	2026-10-17 04:45:49.708860474 +0900
+@@ -185,8 +185,8 @@
+   > let bad = 1u8
+   > EOF
+   $ diktor --type-check --no-prelude numbad2.kel
+-  ! numbad2.kel:1:11: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! numbad2.kel:1:11: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+ 型エイリアスの検査(非再帰・部分適用禁止):
+ 
+@@ -208,12 +208,13 @@
+ 未実装は診断の流れに乗る(G6。それまでの型の行が消えない):
+ 
+   $ cat > mix.kel <<'EOF2'
++  > effect E = { op: () => Int32 }
+   > let ok = 1 + 2
+-  > let bad = 1u8
++  > let bad = (1) handle { case op() => resume(1) case cancel(e) => () }
+   > EOF2
+   $ diktor --type-check --no-prelude mix.kel
+   ok : Int32
+-  ! mix.kel:2:11: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
++  ! mix.kel:3:11: 未実装: cancel(reason)(v0 は case cancel のみ)
+   [4]
+ 
+ 標準環境の名前は再宣言できない(LangSpec §16.1。newtype、型エイリアス、effect、
+diff a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:45:49.708921389 +0900
+@@ -347,8 +347,8 @@
+ 
+   $ printf 'echoln(show(1i999999999999999999999))\n' > hugesuf.kel
+   $ diktor hugesuf.kel
+-  ! hugesuf.kel:1:13: 未実装: 数値接尾辞 1i999999999999999999999(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! hugesuf.kel:1:13: 型エラー: 数値リテラル 1i999999999999999999999 の接尾辞 i999999999999999999999 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+   $ printf 'module A { module B { let x = 1 } }\n' > nestmod.kel
+   $ diktor nestmod.kel

@@ -1,0 +1,5 @@
+module M {
+  pub newtype T = A | B(Int32)
+  pub let f(t: T): Int32 = t match { case A => 0 case B(n) => n }
+}
+echoln(show(M.f(M.B(7))))

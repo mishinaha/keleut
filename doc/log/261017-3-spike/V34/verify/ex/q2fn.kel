@@ -1,0 +1,7 @@
+let ap2(a: Int32, g: () => Int32 @ {}): Int32 = g()
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1[E](a: Int32, g: () => Int32 @ E): Int32 @ E = ap2(a, g)
+}

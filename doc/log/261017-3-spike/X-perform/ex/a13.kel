@@ -1,0 +1,4 @@
+type Unit = {}
+effect Async2 = { yield2: () => Unit }
+effect NurP = { spawnp: ((Int32) => Unit) => Unit }
+let bad(f: (String) => Unit @ Async2): Unit @ NurP = perform spawnp(f)

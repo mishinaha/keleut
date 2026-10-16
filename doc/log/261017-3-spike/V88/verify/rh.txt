@@ -1,0 +1,152 @@
+## arg.kel
+  | let g(x: Int32) = x
+  | let y = g(handle)
+arg.kel:2:11: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## casepat.kel
+  | let x = 1 match { case rec => 1 }
+casepat.kel:1:24: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## c_eq.kel
+  | let = 1
+c_eq.kel:1:5: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## c_then.kel
+  | let then = 1
+c_then.kel:1:5: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## effop.kel
+  | effect E = { run: () => Int32 }
+effop.kel:1:14: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## empty.kel
+  [exit 0]
+## eof_after.kel
+  | let then
+eof_after.kel:1:5: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## expr.kel
+  | let x = 1
+  | let y = x + match
+expr.kel:2:13: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## extern.kel
+  | extern "c" let pub(x: Int32): Int32
+extern.kel:1:16: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## field.kel
+  | let r = {a = 1}
+  | let z = r.module
+field.kel:2:11: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_and.kel
+  | let f(x: Int32): Int32 = x
+  | let y = f(1) and 2
+fp_and.kel:2:14: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_case_if.kel
+  | let x = 1 match { case if => 1 }
+fp_case_if.kel:1:24: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_import.kel
+  | let x = 1
+  | import b
+fp_import.kel:2:1: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_late_import.kel
+  | let x = 1
+  | from "./a" import b
+fp_late_import.kel:2:1: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_missing_rhs.kel
+  | let x =
+  | let y = 2
+fp_missing_rhs.kel:2:1: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_noelse.kel
+  | let x = if true then 1
+  | let y = 2
+fp_noelse.kel:1:23: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_operand.kel
+  | let g = 1 + if true then 1 else 2
+fp_operand.kel:1:13: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## fp_operand_paren.kel
+  | let g = 1 + if (true) then 1 else 2
+fp_operand_paren.kel:1:13: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## kwlabel.kel
+  | let r = {then = 1}
+kwlabel.kel:1:10: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## kwlabel_ok.kel
+  | let r = {thenx = 1}
+  [exit 0]
+## kwthen.kel
+  | let then = 1
+  | println(then)
+kwthen.kel:1:5: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## label2.kel
+  | let r = {a = 1}
+  | let z = r with { if = 2 }
+label2.kel:2:11: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## label3.kel
+  | let x = {match = 1}
+label3.kel:1:10: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## labelarg.kel
+  | let f(x: Int32) = x
+  | let y = f(import = 1)
+labelarg.kel:2:11: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## label.kel
+  | let r = {type = 1}
+label.kel:1:15: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## label_pat.kel
+  | let p = {a = 1, b = 2}
+  | let {a, then} = p
+label_pat.kel:2:9: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## label_type.kel
+  | let f(x: {then: Int32}): Int32 = 1
+label_type.kel:1:11: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## label_update.kel
+  | let r = {a = 1}
+  | let s = {r with then = 2}
+label_update.kel:2:17: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## lambda.kel
+  | let f(g: (Int32) => Int32) = g(1)
+  | let y = f { else => else }
+lambda.kel:2:13: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## letfrom.kel
+  | let from = 1
+letfrom.kel:1:5: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## letrec.kel
+  | let rec val(x: Int32): Int32 = x
+letrec.kel:1:9: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## param.kel
+  | let f(else: Int32) = else
+param.kel:1:7: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## truebind.kel
+  | let x = true
+  | let true = 1
+truebind.kel:2:5: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## tuplepat.kel
+  | let (a, case) = (1, 2)
+tuplepat.kel:1:9: パースエラー(付近のトークンを確認してください)
+  [exit 2]
+## typaram.kel
+  | let f[with] (x: Int32) = x
+typaram.kel:1:7: パースエラー(付近のトークンを確認してください)
+  [exit 2]

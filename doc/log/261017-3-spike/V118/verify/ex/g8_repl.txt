@@ -1,0 +1,10 @@
+let a = 1
+let f(x: Int32) = {
+  let y = x +
+    1
+  y
+}
+f(a)
+:type f
+let r = {a = 1}
+{r with a = 3}.a

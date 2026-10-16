@@ -1,0 +1,14 @@
+## m2
+big
+small
+exit=0
+## m3
+m3.kel:3:11: パースエラー(付近のトークンを確認してください)
+exit=2
+## m4
+3
+true
+exit=0
+## prel2
+! prel2.kel:494:46: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1

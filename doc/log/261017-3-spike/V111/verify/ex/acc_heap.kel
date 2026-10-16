@@ -1,0 +1,3 @@
+let rec f[h](r: Ref[h, Int32], n: Int32): Int32 @ {Heap[h]} = if n <= 0i32 then Ref.get(r) else { Ref.set(r, Ref.get(r) + n); g(r, n - 1i32) }
+and g(r, n) = f(r, n)
+echoln(show(run h { let r = Ref.new(0i32); f(r, 4i32) }))

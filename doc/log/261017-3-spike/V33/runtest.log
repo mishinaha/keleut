@@ -1,0 +1,26 @@
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 01ad006..06d5760 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -252,6 +252,8 @@ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証)。値
+   > type instance Sizer[Box] { let size(b: Box): Int32 @ Print = b match { case Box(x) => x } }
+   > KEL
+   $ diktor --type-check clsannotrow.kel
++  ! clsannotrow.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の注釈が空でない行を書いています。元の報告: ラベル Print がありません(行は閉じています)
++  [1]
+ 
+ 値束縛の注釈の頭に型エイリアスを書いた形も、エイリアスの中の @ を注釈の側として述べる:
+ 
+@@ -262,6 +264,8 @@ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証)。値
+   > type instance Sizer[Box] { let size: Fn = fn(b) => 1 }
+   > KEL
+   $ diktor --type-check clsannotalias.kel
++  ! clsannotalias.kel:4:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の注釈が空でない行を書いています。元の報告: ラベル Print がありません(行は閉じています)
++  [1]
+ 
+ 名指しは最外の行の単一化で失敗したときのものなので、同じ宣言でも実装しだいで
+ 文言が変わる。高階の引数を呼ばない実装は最外の行まで届き、呼ぶ実装は引数の
+
+# promote 後の再実行(写しの classes.t に期待値を書き込んだあと)
+[runtest: 差分なし]

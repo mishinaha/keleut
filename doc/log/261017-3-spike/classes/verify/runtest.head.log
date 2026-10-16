@@ -1,0 +1,358 @@
+File "test/builtin_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/builtin_rows.t b/_build/default/test/builtin_rows.t.corrected
+index fe9e75f..4d3513e 100644
+--- a/_build/default/test/builtin_rows.t
++++ b/_build/default/test/builtin_rows.t.corrected
+@@ -18,8 +18,8 @@
+   > with_stdout(q)
+   > KEL
+   $ diktor bshowweak.kel
+-  1
+-  2
++  ! bshowweak.kel:4:33: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ 注釈で型を決めた形も同じである:
+ 
+@@ -33,11 +33,10 @@
+   > KEL
+   $ diktor --type-check bshowann.kel
+   idf : (A) => A
+-  f : (Int32) => String @ {}
++  f : (Int32) => String
+   p : () => {} @ {Console}
+-  q : () => {} @ {Print}
+-  _ : {}
+-  _ : {}
++  ! bshowann.kel:4:33: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ Array.length は @ を省いた署名で、閉じた {} と読む(LangSpec §14.3):
+ 
+@@ -51,8 +50,8 @@ Array.length は @ を省いた署名で、閉じた {} と読む(LangSpec §14.
+   > with_stdout(q)
+   > KEL
+   $ diktor barrlen.kel
+-  3
+-  3
++  ! barrlen.kel:5:38: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ Ref.get の行は閉じた {Heap[h]} で、run の本体の中の行の違う 2 つの関数から呼べる:
+ 
+@@ -71,9 +70,8 @@ Ref.get の行は閉じた {Heap[h]} で、run の本体の中の行の違う 2
+   > main()
+   > KEL
+   $ diktor brefget.kel
+-  k
+-  m
+-  2
++  ! brefget.kel:7:57: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
+ 
+ 演算子 + と前置の - は、メソッドの呼び出しと同じく閉じたスキーマの尾部を開く。
+ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なので、束縛の終わりに閉じた {}
+@@ -96,7 +94,8 @@ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なの
+   > main()
+   > KEL
+   $ diktor bopweak.kel
+-  11
++  ! bopweak.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
++  [1]
+ 
+ 演算子を本体に持つ無名関数を選ぶ条件式の束縛も、閉じた {} の行と表示する:
+ 
+@@ -104,7 +103,7 @@ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なの
+   > let g = if true then fn(x: Int32) => x + 1 else fn(x: Int32) => x - 1
+   > KEL
+   $ diktor --type-check bopdisp.kel
+-  g : (Int32) => Int32 @ {}
++  g : (Int32) => Int32
+ 
+ プリミティブ(extern "prim")で省略した @ は、使うたびに新しい行変数になる。
+ 一般化しない束縛では最初の使用で行が決まり、2 つ目の文脈で落ちる:
+@@ -148,5 +147,5 @@ x + 1 だけを本体に持つ無名関数の行はその開いた尾部なの
+   > echoln(show(N(1)))
+   > KEL
+   $ diktor stdinst.kel
+-  ! stdinst.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
++  ! stdinst.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+   [1]
+File "test/instance_param_types.t", line 1, characters 0-0:
+diff --git a/_build/default/test/instance_param_types.t b/_build/default/test/instance_param_types.t.corrected
+index 28b111b..bce7a6a 100644
+--- a/_build/default/test/instance_param_types.t
++++ b/_build/default/test/instance_param_types.t.corrected
+@@ -17,6 +17,10 @@
+   > type instance D3[Never] { let rec d3(n) = n match {} }
+   > KEL
+   $ diktor --strict-exhaustive --type-check insnever.kel
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。例えば _ が漏れています
++  [1]
+ 
+ 同じ理由で、署名の引数が Never か閉じた構造的ヴァリアントのとき、case _ の節には
+ 一致する値が無いという警告や冗長の警告が出る:
+@@ -31,15 +35,10 @@
+   > echo(lv(1, #Hi))
+   > KEL
+   $ diktor inswild.kel
+-  ⚠ このパターンには一致する値がありません
+-  ⚠ 第 3 節は到達不能です(冗長)
+   3hi
+   $ diktor --strict-exhaustive --type-check inswild.kel
+-  ⚠ このパターンには一致する値がありません
+-  ⚠ 第 3 節は到達不能です(冗長)
+   _ : {}
+   _ : {}
+-  [1]
+ 
+ 本体の数値リテラルは、署名の引数の型に決まる:
+ 
+@@ -49,7 +48,8 @@
+   > echo(show(pick(3i64, 20i64)))
+   > KEL
+   $ diktor inslit.kel
+-  20
++  ! inslit.kel:2:33: 型エラー: インスタンスメソッド pick がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
++  [1]
+ 
+ 閉じた構造的ヴァリアントの引数の漏れは、型エラーではなく網羅漏れの警告になる:
+ 
+@@ -59,10 +59,10 @@
+   > echo(lv(1, #Lo))
+   > KEL
+   $ diktor insvariant.kel
+-  ⚠ match が非網羅的です。例えば #Hi(_) が漏れています
+-  lo
++  ! insvariant.kel:2:31: 型エラー: インスタンスメソッド lv がクラス宣言の型を満たしません(ラベル Hi がありません(行は閉じています))
++  [1]
+   $ diktor --strict-exhaustive insvariant.kel
+-  ⚠ match が非網羅的です。例えば #Hi(_) が漏れています
++  ! insvariant.kel:2:31: 型エラー: インスタンスメソッド lv がクラス宣言の型を満たしません(ラベル Hi がありません(行は閉じています))
+   [1]
+ 
+ 渡した型と本体が食い違うと、注釈を書いた関数と同じく、本体の食い違った位置に出る:
+@@ -72,7 +72,7 @@
+   > type instance Describe[Int32] { let describe(n) = __string_concat(n, "x") }
+   > KEL
+   $ diktor --type-check insbody.kel
+-  ! insbody.kel:2:67: 型エラー: 型が一致しません: Int32 と String
++  ! insbody.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: String と Int32)
+   [1]
+ 
+ 返り値の型は署名から決めないので、リテラルは既定の Int32 になり、署名と照らした
+File "test/instance_init.t", line 1, characters 0-0:
+diff --git a/_build/default/test/instance_init.t b/_build/default/test/instance_init.t.corrected
+index 3a15331..86d3ffd 100644
+--- a/_build/default/test/instance_init.t
++++ b/_build/default/test/instance_init.t.corrected
+@@ -18,9 +18,8 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor instinitcon.kel
+-  init
+-  foo
+-  foo
++  ! instinitcon.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ エフェクトを起こさない値でない初期化式は受理する。返す無名関数の決まっていない行は
+ 空の行に決まる。組み込みのクラスでも、利用者のクラスの @ E のメソッドでも同じ:
+@@ -34,7 +33,8 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor instweakrow.kel
+-  foo
++  ! instweakrow.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+   $ cat > instweakrowuser.kel <<'KEL'
+   > type class Sz[A] { val sz[E]: (A) => Int32 @ E }
+   > newtype Foo = Foo
+@@ -45,7 +45,8 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instweakrowuser.kel
+-  1
++  ! instweakrowuser.kel:5:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド sz の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ 初期化式の中で処理した操作は、初期化式の行に残らない:
+ 
+@@ -58,7 +59,8 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor instinithandled.kel
+-  foo
++  ! instinithandled.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ 効果多相の関数を初期化式で呼ぶ形は、その関数の行変数が返す関数の行と共有されても
+ 受理する。初期化式の中の局所の束縛で呼んでも同じ:
+@@ -100,8 +102,8 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instinitask.kel
+-  ! instinitask.kel:5:7: 型エラー: エフェクト Ask をインスタンスメソッド sz の初期化式では実行できません(初期化式が起こせるのはトップレベルの評価と同じエフェクトです)
+-  [1]
++  未処理のエフェクト操作: Ask.ask
++  [3]
+   $ cat > instinitheap.kel <<'KEL'
+   > type class Sz[A] { val sz: (A) => Int32 }
+   > newtype Foo = Foo
+@@ -111,8 +113,7 @@
+   > echoln(show(sz(Foo)))
+   > KEL
+   $ diktor instinitheap.kel
+-  ! instinitheap.kel:4:7: 型エラー: エフェクト Heap をインスタンスメソッド sz の初期化式では実行できません(初期化式が起こせるのはトップレベルの評価と同じエフェクトです)
+-  [1]
++  1
+ 
+ 前提を持つインスタンスの初期化式はメソッドを使うたびに評価するので、Console も
+ 起こせない:
+@@ -130,8 +131,9 @@
+   > echoln(show(k))
+   > KEL
+   $ diktor instinitperuse.kel
+-  ! instinitperuse.kel:5:7: 型エラー: エフェクト Console をインスタンスメソッド sz の初期化式では実行できません(メソッドを使うたびに評価する初期化式は、エフェクトを起こせません)
+-  [1]
++  start
++  init
++  5
+ 
+ ゼロ除算は行に現れないので、初期化式に書いても型検査を通る。前提を持たない
+ インスタンスでは、インスタンス宣言を実行する時点で実行時エラーになる(LangSpec §6.4):
+@@ -144,9 +146,8 @@
+   > echoln("b")
+   > KEL
+   $ diktor inidiv.kel
+-  a
+-  実行時エラー: ゼロ除算です
+-  [3]
++  ! inidiv.kel:4:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ 前提を持つインスタンスでは初期化式をメソッドを使うたびに評価するので、実行時エラーは
+ メソッドを使う時点で起きる(LangSpec §6.4):
+@@ -162,10 +163,8 @@
+   > echoln(show(Box(1)))
+   > KEL
+   $ diktor inipremdiv.kel
+-  a
+-  b
+-  実行時エラー: ゼロ除算です
+-  [3]
++  ! inipremdiv.kel:5:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ エフェクトを起こさない初期化式は、構文上の値でなくても受理する。組み込みのクラスでも
+ 利用者のクラスと同じである:
+@@ -177,7 +176,8 @@
+   > echoln(show(N(0)))
+   > KEL
+   $ diktor inipure.kel
+-  n3
++  ! inipure.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ 対話的な実行でも同じ規則で、トップレベルの行が Print を含むので、Print を起こす
+ 初期化式も受理する:
+File "test/premise.t", line 1, characters 0-0:
+diff --git a/_build/default/test/premise.t b/_build/default/test/premise.t.corrected
+index 675c2bc..ec01057 100644
+--- a/_build/default/test/premise.t
++++ b/_build/default/test/premise.t.corrected
+@@ -134,7 +134,7 @@
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude pr7.kel
+-  ! pr7.kel:5:40: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
++  ! pr7.kel:3:11: 型エラー: インスタンスメソッド eq がクラス宣言の型を満たしません(型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください)
+   [1]
+ 
+ 未知のクラス・予約述語は束縛子の位置でも拒む:
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 9922562..a8875bd 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -49,7 +49,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String @ {}
++  weak : [_A: Show] (_A) => String
+   _ : String
+ 
+ ファイルの終わりまでに型が決まらなければ、曖昧性エラーになる。辞書はファイルごとに
+@@ -61,7 +61,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e2.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String @ {}
++  weak : [_A: Show] (_A) => String
+   ! ml9e2.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+   [1]
+ 
+File "test/dictionary_passing.t", line 1, characters 0-0:
+diff --git a/_build/default/test/dictionary_passing.t b/_build/default/test/dictionary_passing.t.corrected
+index 839928b..7d29bdb 100644
+--- a/_build/default/test/dictionary_passing.t
++++ b/_build/default/test/dictionary_passing.t.corrected
+@@ -302,14 +302,11 @@ module の中の非修飾名も、再帰群の参照として記録する。制
+   > echoln(pp(3i32))
+   > KEL
+   $ diktor mtpabsent.kel
+-  ! mtpabsent.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+-  [1]
++  i3
+   $ cat > mtpabsent2.kel <<'KEL'
+   > type class Pp[F[_]] { val pp[A, B: Show + Eq]: (F[A]) => String }
+   > KEL
+   $ diktor mtpabsent2.kel
+-  ! mtpabsent2.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+-  [1]
+ 
+ 制約のクラス名の検査は、型に現れるかの検査より先に走る。未知のクラスと予約述語は、
+ 束縛の型パラメータと同じく、曖昧性エラーではなくそれぞれの診断で落ちる:
+File "test/import.t", line 1, characters 0-0:
+diff --git a/_build/default/test/import.t b/_build/default/test/import.t.corrected
+index db88d15..d893c15 100644
+--- a/_build/default/test/import.t
++++ b/_build/default/test/import.t.corrected
+@@ -109,8 +109,7 @@ type の位置で、最初の pub のメソッドの名前を文面に出す。
+   > echoln(describe(1i32))
+   > KEL
+   $ diktor pi1.kel
+-  pi1.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(メソッドはクラスを import して使います): describe
+-  [2]
++  int
+ 
+ module の中のインスタンスの let rec でも、複数のメソッドの 2 つ目に付けても同じである。pub type
+ instance の本体に pub を付けた形は、インスタンスの pub より先に本体の pub を報告する:
+@@ -124,8 +123,6 @@ instance の本体に pub を付けた形は、インスタンスの pub より
+   > }
+   > KEL
+   $ diktor pi2.kel
+-  pi2.kel:3:3: 構文エラー: type instance の本体の let には pub を付けられません(メソッドはクラスを import して使います): show
+-  [2]
+   $ cat > pi3.kel <<'KEL'
+   > type class Pair[A] {
+   >   val first: (A) => Int32
+@@ -137,14 +134,12 @@ instance の本体に pub を付けた形は、インスタンスの pub より
+   > }
+   > KEL
+   $ diktor pi3.kel
+-  pi3.kel:5:1: 構文エラー: type instance の本体の let には pub を付けられません(メソッドはクラスを import して使います): second
+-  [2]
+   $ cat > pi4.kel <<'KEL'
+   > type class D[A] { val d: (A) => Int32 }
+   > pub type instance D[Boolean] { pub let d(b: Boolean): Int32 = 0i32 }
+   > KEL
+   $ diktor pi4.kel
+-  pi4.kel:2:5: 構文エラー: type instance の本体の let には pub を付けられません(メソッドはクラスを import して使います): d
++  pi4.kel:3:1: 構文エラー: type instance に pub は付けられません
+   [2]
+ 
+ pub を外せば、インスタンスを宣言したファイルを import したファイルから、クラスのメソッドの

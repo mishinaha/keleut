@@ -1,0 +1,75 @@
+File "test/decl_pos.t", line 1, characters 0-0:
+diff --git a/_build/default/test/decl_pos.t b/_build/default/test/decl_pos.t.corrected
+index 813d5d4..8c9c7e7 100644
+--- a/_build/default/test/decl_pos.t
++++ b/_build/default/test/decl_pos.t.corrected
+@@ -14,7 +14,7 @@ pub newtype の完全注釈の診断は、@ の無い矢印を含むフィール
+   > }
+   > KEL
+   $ diktor --type-check ntpos.kel
+-  ! ntpos.kel:4:11: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! ntpos.kel:2:3: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+ 
+ コンストラクタが複数あるときも、悪いコンストラクタのフィールドの型を指す。
+@@ -25,7 +25,7 @@ pub newtype の完全注釈の診断は、@ の無い矢印を含むフィール
+   >   | B(Int32, List[(Int32) => Int32])
+   > KEL
+   $ diktor --type-check ntpos2.kel
+-  ! ntpos2.kel:2:14: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! ntpos2.kel:1:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+ 
+ effect の操作の型が矢印でないときは、その操作の型を指す:
+@@ -37,7 +37,7 @@ effect の操作の型が矢印でないときは、その操作の型を指す:
+   > }
+   > KEL
+   $ diktor --type-check effpos.kel
+-  ! effpos.kel:3:10: 型エラー: 操作 level の型は矢印型でなければなりません
++  ! effpos.kel:1:1: 型エラー: 操作 level の型は矢印型でなければなりません
+   [1]
+ 
+ 予約された操作名と、英小文字で始まらない操作名は、名前の右にある型の位置を指す:
+@@ -49,7 +49,7 @@ effect の操作の型が矢印でないときは、その操作の型を指す:
+   > }
+   > KEL
+   $ diktor --type-check effpos2.kel
+-  ! effpos2.kel:3:11: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
++  ! effpos2.kel:1:1: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
+   [1]
+ 
+   $ cat > effpos3.kel <<'KEL'
+@@ -59,7 +59,7 @@ effect の操作の型が矢印でないときは、その操作の型を指す:
+   > }
+   > KEL
+   $ diktor --type-check effpos3.kel
+-  ! effpos3.kel:3:7: 型エラー: 操作名 _x は英小文字で始めてください(handle の節が操作名として読めません)
++  ! effpos3.kel:1:1: 型エラー: 操作名 _x は英小文字で始めてください(handle の節が操作名として読めません)
+   [1]
+ 
+ 同じ effect の中での操作名の重複は、2 度目の宣言の型を指す:
+@@ -72,7 +72,7 @@ effect の操作の型が矢印でないときは、その操作の型を指す:
+   > }
+   > KEL
+   $ diktor --type-check effpos4.kel
+-  ! effpos4.kel:4:8: 型エラー: 操作 log が二重に宣言されています
++  ! effpos4.kel:1:1: 型エラー: 操作 log が二重に宣言されています
+   [1]
+ 
+ 型パラメータの診断は、操作ではなく宣言全体の誤りなので、宣言の先頭を指す:
+@@ -96,7 +96,7 @@ type class のメソッドの診断も、操作と同じく、そのメソッド
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude clspos.kel
+-  ! clspos.kel:3:10: 型エラー: メソッド h の型は矢印型でなければなりません
++  ! clspos.kel:1:1: 型エラー: メソッド h の型は矢印型でなければなりません
+   [1]
+   $ cat > clspos2.kel <<'KEL'
+   > type class C[A] {
+@@ -106,5 +106,5 @@ type class のメソッドの診断も、操作と同じく、そのメソッド
+   > }
+   > KEL
+   $ diktor --type-check --no-prelude clspos2.kel
+-  ! clspos2.kel:4:10: 型エラー: メソッド f が二重に宣言されています
++  ! clspos2.kel:1:1: 型エラー: メソッド f が二重に宣言されています
+   [1]

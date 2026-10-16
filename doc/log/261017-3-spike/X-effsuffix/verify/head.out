@@ -1,0 +1,51 @@
+== ex/e1_alias.kel
+a : (Int32) => Int32 @ {}
+b : (Int32) => Int32 @ {}
+c : (() => Int32) => Int32
+d : (Int32) => Int32 @ {}
+exit=0
+== ex/e2_module.kel
+M.f : (Int32) => Int32 @ {}
+M.g : (Int32) => Int32
+M.h : (() => Int32) => Int32
+u : (Int32) => Int32
+v : () => Int32
+exit=0
+== ex/e3_class.kel
+s : [A: Sz] (A) => Int32
+t : (Int32) => Int32
+exit=0
+== ex/e4_handler.kel
+runa : (() => A @ {Ask extends R1}) => A
+both : () => Int32
+id : (A) => A
+weak : () => Int32
+lam : () => Int32
+main : () => {} @ {Print extends R1}
+exit=0
+== ex/e5_types.kel
+ap : ((A) => B, A) => B
+ap0 : ((A) => B @ {}, A) => B @ {}
+curry : (Int32) => (Int32) => Int32 @ {}
+curry2 : (Int32) => (Int32) => Int32
+! ex/e5_types.kel:5:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+exit=1
+== ex/e8_guard.kel
+pick : ((Int32) => Boolean @ {}, Int32) => Int32
+pick2 : ((Int32) => Boolean, Int32) => Int32
+exit=0
+== repl
+f : (Int32) => Int32 @ {} = <fn>
+g : (Int32) => Int32 = <fn>
+h : (Int32) => Int32 @ {} = <fn>
+id : (A) => A = <fn>
+w : () => Int32 = <fn>
+_ : Int32 = 1
+_ : () => Int32 @ {Console, Blocking, Print extends _R1} = <fn>
+== prelude
+a : (Int32) => Int32
+b : (Int32) => Int32 @ {}
+c : (Int32) => Int32
+== import
+r : (Int32) => Int32
+r2 : (Int32) => Int32 @ {}

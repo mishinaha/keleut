@@ -1,0 +1,14 @@
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index 4bb07a1..9c279c6 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -235,7 +235,7 @@ qual4 から case write(s) を落とすと、File の write の網羅漏れと f
+   > EOF
+   $ diktor --type-check --no-prelude qual5.kel
+   prog : () => String @ {File}
+-  ! qual5.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
++  ! qual5.kel:7:8: 型エラー: 操作 flush はエフェクト File に属しません
+   [1]
+ 
+ qual5 から flush の節を落とすと、残る誤りは網羅漏れだけになり、それが

@@ -1,0 +1,6 @@
+type Fn[A, E] = (A) => A @ E
+type class Twice[T] { val twice: (T) => T }
+type instance Twice[Int32] { let twice(x: Int32): Int32 = x * 2 }
+newtype Hold = MkHold(Fn[Int32, {}])
+let h = MkHold(fn(x) => twice(x))
+with_stdout(fn() => h match { case MkHold(f) => println(show(f(21))) })

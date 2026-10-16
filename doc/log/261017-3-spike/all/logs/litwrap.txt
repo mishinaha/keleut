@@ -1,0 +1,27 @@
+## new lib/driver.ml
+lib/driver.ml:1190: 表・見出し・コード(幅 146): | 1 | 型エラー、import エラー | 第11章の診断(言語に無い数値の接尾辞を含む)、`Aux.Type_er
+## head lib/driver.ml
+## new lib/elab.ml
+lib/elab.ml:36: 表・見出し・コード(幅 156): | 1a | エイリアスの表、newtype の頭(名前とカインド)、effect の名前 | 型の本体を書く前に、すべ
+lib/elab.ml:38: 表・見出し・コード(幅 162): | 1b | newtype のコンストラクタ、effect の操作、class のメソッド | 型の本体を書くのでカイ
+lib/elab.ml:60: 表・見出し・コード(幅 130): | `resolve_perform` | 操作名から(エフェクト, 操作, スキーマ)を引く。修飾なしの名前は、行に現
+lib/elab.ml:824: 表・見出し・コード(幅 253): | 束縛の最外(`let` / `pub let` / `extern` / クラスメソッド) | 書いたとおり。本体の
+lib/elab.ml:825: 表・見出し・コード(幅 170): | 入れ子(引数の型、返り値の中、newtype のフィールド、レコード型のフィールド、タプル型の要素、effect の
+lib/elab.ml:4967: 表・見出し・コード(幅 129): | 推論された型 | `instantiate_ev` | どんな型にでもなれるので、柔らかい変数にする。制約ごとの穴が
+## head lib/elab.ml
+lib/elab.ml:36: 表・見出し・コード(幅 123): | 1a | エイリアスの表、newtype の頭(名前とカインド) | 型の本体を書く前に、すべての型構成子のカインド
+lib/elab.ml:38: 表・見出し・コード(幅 192): | 1b | newtype のコンストラクタ、effect の操作、class のメソッド | 型の本体を書くのでカイ
+lib/elab.ml:60: 表・見出し・コード(幅 130): | `resolve_perform` | 操作名から(エフェクト, 操作, スキーマ)を引く。修飾なしの名前は、行に現
+lib/elab.ml:616: 表・見出し・コード(幅 253): | 束縛の最外(`let` / `pub let` / `extern` / クラスメソッド) | 書いたとおり。本体の
+lib/elab.ml:617: 表・見出し・コード(幅 170): | 入れ子(引数の型、返り値の中、newtype のフィールド、レコード型のフィールド、タプル型の要素、effect の
+lib/elab.ml:4389: 表・見出し・コード(幅 129): | 推論された型 | `instantiate_ev` | どんな型にでもなれるので、柔らかい変数にする。制約ごとの穴が
+## new lib/tree.ml
+lib/tree.ml:160: 表・見出し・コード(幅 135): | `EvInst (c, n, ps)` | (クラス `c`, 型構成子 `n`)のインスタンス。`ps` は前提の
+lib/tree.ml:176: 表・見出し・コード(幅 223): | `DMethod (own, mk, adapter)` | インスタンスのメソッドの束縛 | `own` は実装を
+## head lib/tree.ml
+lib/tree.ml:160: 表・見出し・コード(幅 135): | `EvInst (c, n, ps)` | (クラス `c`, 型構成子 `n`)のインスタンス。`ps` は前提の
+lib/tree.ml:176: 表・見出し・コード(幅 223): | `DMethod (own, mk, adapter)` | インスタンスのメソッドの束縛 | `own` は実装を
+## new lib/unify.ml
+lib/unify.ml:26: 表・見出し・コード(幅 164): | `instantiate_ev` / `constraints_of` / `dkeys_of` | 第11章のスキ
+## head lib/unify.ml
+lib/unify.ml:26: 表・見出し・コード(幅 164): | `instantiate_ev` / `constraints_of` / `dkeys_of` | 第11章のスキ

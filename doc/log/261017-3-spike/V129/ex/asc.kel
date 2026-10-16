@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let g(): Int32 @ Fail = (perform throw("x"): Never) match {}
+echoln("ok")

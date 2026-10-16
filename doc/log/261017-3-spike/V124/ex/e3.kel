@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+newtype N = MkN(Cb[{Log}])
+type Cb[E] = Callback[E]
+newtype Callback[E] = MkCb(() => Unit @ E)
+let f(n: N): Int32 = 0

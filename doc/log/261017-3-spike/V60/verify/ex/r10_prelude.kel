@@ -1,0 +1,5 @@
+extern echoln: (String) => Unit
+newtype B = Bx
+let f(g: () => B): B = g()
+let b = f { Bx }
+echoln("p")

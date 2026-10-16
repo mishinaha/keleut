@@ -1,0 +1,13 @@
+type Cell[h] = Ref[h, Int32]
+let swap[h](a: Cell[h], b: Cell[h]): Unit @ Heap[h] = {
+  let t = Ref.get(a)
+  Ref.set(a, Ref.get(b))
+  Ref.set(b, t)
+}
+let main(): Int32 = run h {
+  let a = Ref.new(1)
+  let b = Ref.new(2)
+  swap(a, b)
+  Ref.get(a) * 10 + Ref.get(b)
+}
+echoln(show(main()))

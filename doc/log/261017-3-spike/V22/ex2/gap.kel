@@ -1,0 +1,7 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype M = MkM(N[{}])
+newtype N[E] = MkN((() => Unit @ E, Al1[{Log}]))
+type Al1[F] = Al2[F]
+type Al2[G] = () => Unit @ G
+let f(x: M): M = x

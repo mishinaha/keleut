@@ -1,0 +1,3 @@
+let rec f(n: Int32): Int32 = n match { case m if m > 0i32 => g(m - 1i32) case _ => 0i32 }
+and g[B](n: Int32): Int32 = f(n)
+echoln(show(f(3i32)))

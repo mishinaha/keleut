@@ -1,0 +1,1 @@
+let x: Wrap = MkWrap(MkPair((fn() => {}, fn() => perform log("b"))))

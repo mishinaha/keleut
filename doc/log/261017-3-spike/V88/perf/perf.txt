@@ -1,0 +1,3 @@
+--dump-ast big.kel (30000 行): 変更前 676.7 ms / 試作 824.3 ms (7 回の最小。どちらも同じ dune の既定の profile でビルド)
+--type-check big.kel: 変更前 820.2 ms / 試作 1016.6 ms (7 回の最小。どちらも同じ dune の既定の profile でビルド)
+tiny.kel の実行(プレリュード込み): 変更前 2.9 ms / 試作 3.1 ms (7 回の最小。どちらも同じ dune の既定の profile でビルド)

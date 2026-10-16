@@ -1,0 +1,7 @@
+module M {
+  pub type class Show[A] { val show: (A) => Boolean }
+  newtype P = P(Int32)
+  type instance Show[P] { let show(p) = true }
+  pub let f(): Boolean = show(P(1))
+}
+let main() = println(M.f())

@@ -1,0 +1,3 @@
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let v = fn(r) => W(r)
+let x[h](r: Ref[h, Int32]) = v(r)

@@ -1,0 +1,6 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+type W: EffectRow = {Log}
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ W))
+let f(x: A): A = x

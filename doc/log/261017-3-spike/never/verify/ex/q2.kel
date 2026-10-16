@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+module M {
+  pub let g(n: Int32): Int32 @ Fail = if n == 0 then perform throw("x") match {} else n
+}
+echoln(show(M.g(0) handle { case throw(e) => 0 - 1 }))

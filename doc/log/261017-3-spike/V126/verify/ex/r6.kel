@@ -1,0 +1,9 @@
+type class D[A] { val d: (A) => Int32 }
+let app(n: Int32, f: (Int32) => Int32): Int32 = f(n)
+type instance D[Int32] {
+  let d(n: Int32): Int32 = {
+    with x = app(n)
+    x * 2i32
+  }
+}
+with_stdout(fn() => println(show(d(4i32))))

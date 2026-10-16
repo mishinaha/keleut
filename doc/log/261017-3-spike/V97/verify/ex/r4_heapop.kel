@@ -1,0 +1,14 @@
+let main(): Unit @ Console = {
+  let n = run h {
+    let r = Ref.new(1i32)
+    let bump(): Unit @ {Heap[h]} = Ref.set(r, Ref.get(r) + 1)
+    let shout(): Unit @ {Heap[h], Console} = { echoln("v=" + show(Ref.get(r))); bump() }
+    bump()
+    shout()
+    let arr = MutableArray.new(3, 0)
+    MutableArray.set(arr, 0, Ref.get(r) * 10)
+    MutableArray.get(arr, 0) - MutableArray.length(arr)
+  }
+  echoln(show(n))
+}
+main()

@@ -1,0 +1,6 @@
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let f(): String @ Fail = describe(perform throw("x"))
+let g(): String @ Fail = { let v: Never = perform throw("y"); describe(v) }
+echoln(g() handle { case throw(m) => "caught " + m })

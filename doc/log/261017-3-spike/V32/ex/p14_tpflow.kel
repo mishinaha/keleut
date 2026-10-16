@@ -1,0 +1,2 @@
+let rec f[A](x: A): Unit @ Print = { println("f"); g(x) }
+and g[A](x: A): Unit @ {} = ()

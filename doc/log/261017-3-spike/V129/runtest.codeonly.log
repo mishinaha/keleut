@@ -1,0 +1,14 @@
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/_build/default/test/never_ops.t b/_build/default/test/never_ops.t.corrected
+index e586598..1c6da97 100644
+--- a/_build/default/test/never_ops.t
++++ b/_build/default/test/never_ops.t.corrected
+@@ -89,7 +89,7 @@ perform の式が要求される型になる。match の腕にそのまま置け
+   > echoln(show(r2))
+   > EOF
+   $ diktor absurd.kel
+-  ⚠ match が非網羅的です。例えば _ が漏れています
++  ⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+   3
+   -1
+   $ cat > absurdplain.kel <<'EOF'

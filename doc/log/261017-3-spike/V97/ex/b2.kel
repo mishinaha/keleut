@@ -1,0 +1,6 @@
+let id[A](x: A): A = x
+let f: (Int32) => String = id(show)
+let p(): Unit @ Console = echoln(f(1i32))
+let q(): Unit @ Print = println(f(2i32))
+p()
+with_stdout(q)

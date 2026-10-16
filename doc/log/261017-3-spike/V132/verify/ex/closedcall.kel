@@ -1,0 +1,12 @@
+effect Fail = { throw: (String) => Never }
+type class Parse[A] {
+  val parse: (String) => A @ Fail
+}
+type instance Parse[Int32] {
+  let parse(s) = if s == "1" then 1 else perform throw("bad: " + s)
+}
+let g(): Int32 @ {Fail, Console} = { echoln("in g"); parse("1") }
+echoln(show(g() handle { case throw(e) => 0 }))
+let p[A: Parse](s: String): A @ Fail = parse(s)
+let q: Int32 = p("x") handle { case throw(e) => 5 }
+echoln(show(q))

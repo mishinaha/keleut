@@ -1,0 +1,24 @@
+== lib/driver.ml
+[lib/driver.ml] code: 不一致(先頭から 477 トークン目) / marker: 0 件
+  旧: Location.show_pos let dump_tokens_file file = let tokens = try with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file))
+  新: Location.show_pos let dump_tokens_file file = let tokens = with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file)) in
+== lib/lexer.ml
+[lib/lexer.ml] code: 不一致(先頭から 9 トークン目) / marker: 0 件
+  旧: Syntax exception Lex_error of string * Lexing.position let parse_number text = let len = String.length text
+  新: Syntax exception Lex_error of string * Lexing.position let unterminated_text_msg = "文字列リテラルが閉じていません" let unterminated_comment_msg = "ブロックコメントが閉じていません" let
+== lib/parser.mly
+[lib/parser.mly] code: 不一致(先頭から 31 トークン目) / marker: 0 件
+  旧: = sp; Location.finish = ep }, x) let is_upper s = s <> "" && s.[0]
+  新: = sp; Location.finish = ep }, x) let start_of (d, _) = (Data.loc d).Location.start let syntax_error_at
+== lib/syntax.ml
+[lib/syntax.ml] code: 不一致(先頭から 9 トークン目) / marker: 0 件
+  旧: Aux type long_id = LongId of string list exception Syntax_error of string type import_name = {
+  新: Aux type long_id = LongId of string list type import_name = { in_path : string list;
+== lib/tree.ml
+[lib/tree.ml] code: 不一致(先頭から 199 トークン目) / marker: 0 件
+  旧: None; resolved = None; dict = DNone } end module Tree = Syntax.Make (ElabData) let data
+  新: None; resolved = None; dict = DNone } let loc d = d.loc end module Tree
+== lib/elab.ml
+[lib/elab.ml] code: 不一致(先頭から 14617 トークン目) / marker: 0 件
+  旧: e_exit : int; e_msg : string } let type_check ?(prelude = []) decls = current_out :=
+  新: e_exit : int; e_msg : string } let limit_error = function | Out_of_memory -> { e_loc

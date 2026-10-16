@@ -1,0 +1,3 @@
+effect File = { write: (String) => Unit }
+let app[A](x: A): Unit = ()
+let use(): Unit @ Console = app(fn() => perform write("x"))

@@ -1,0 +1,7 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+type K = Cb[{Print}]
+newtype H = MkH(K)
+let mk(): H = MkH(Callback(fn() => perform print("x")))

@@ -1,0 +1,2 @@
+pub let shout(s: String): Unit @ {Print} = println(s + "!")
+pub let eqs[A: Eq](a: List[A], b: List[A]): Boolean = a == b

@@ -1,0 +1,1 @@
+let f[F, E](x: Int32): Int32 @ {F[E]} = x

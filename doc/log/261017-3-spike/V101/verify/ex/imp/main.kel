@@ -1,0 +1,7 @@
+from "./regs" import { Reg, mk, }
+let main(): Unit @ Console = {
+  perform reg(fn() => echoln("i"))
+  perform Reg.reg(mk())
+  echoln("done")
+} handle { case reg(f) => { f(); resume() } }
+main()

@@ -1,0 +1,36 @@
+=== explicit.kel
+newtype Box = Box(() => Int32 @ {})
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = Box(b)
+--- diktor-head --type-check explicit.kel
+b : () => Int32 @ {Console}
+! explicit.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+--- main.exe --type-check explicit.kel
+b : () => Int32 @ {Console}
+! explicit.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== recfield.kel
+newtype R = R({go: () => Int32})
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = R({go = b})
+--- diktor-head --type-check recfield.kel
+b : () => Int32 @ {Console}
+! recfield.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ R のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+--- main.exe --type-check recfield.kel
+b : () => Int32 @ {Console}
+! recfield.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ R のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== tuplefield.kel
+newtype T = T((Int32, () => Int32))
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = T((1, b))
+--- diktor-head --type-check tuplefield.kel
+b : () => Int32 @ {Console}
+! tuplefield.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ T のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+--- main.exe --type-check tuplefield.kel
+b : () => Int32 @ {Console}
+! tuplefield.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ T のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]

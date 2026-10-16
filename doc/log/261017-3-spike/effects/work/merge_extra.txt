@@ -1,0 +1,54 @@
+@@@intro
+X-perform はこの項目に吸収する(X-perform の P[X-perform-3] の推奨案)。
+X-perform は、V101 が `perform` と `resume` の引数を `elab_check` に通すことを前提に、その `fallback` で行の不一致に §9 の案内を添える。
+台帳では V101 と X-perform の両方をこの項目で閉じる。
+判断事項と裁定の番号は、それぞれの最終稿のまま残す。
+各小見出しの中は、V101 の部分、X-perform の部分の順に書き、分野の合成で分かったことを最後に足す。
+コミットは V101 の 3 つの後に X-perform の 3 つを置く。
+@@@pre1
+分野の合成では、V127 の後に V101 を、その後に X-perform を当てた(N.z)。
+V127 の `check_call_arity` は、perform と呼び出しの引数の `elab_check` より前に置く。
+@@@post3
+**分野の合成で見つけた食い違い。**
+
+X-perform の `fallback` は、文言があり期待型の行が閉じた空の行のとき、矢印を引数、返り値、行に分けて単一化する。
+V127 は引数の個数の検査(`Unify.check_arity`)を `Unify.unify` の矢印の分岐に置くので、分けた単一化はこの検査を通らない。
+そのため、操作の引数の型が `(Int32) => Int32` の `perform reg(fn(x, y) => x)`(`doc/log/261017-3-spike/V101/ex/e5.kel`)は、V127 を入れた後も「ラベル _item がありません(行は閉じています)」のままだった(実測)。
+関数呼び出しの同じ形と、操作の型の矢印の行が空でない形は、V127 の個数の文面になる(実測、`doc/log/261017-3-spike/effects/ex/callpure2.kel`、`doc/log/261017-3-spike/effects/ex/e5row.kel`)。
+
+D[V101-3]: `elab_check` の `fallback` で矢印を分けて単一化するときも、引数の単一化の前に `Unify.check_arity` で引数の個数を比べる。
+`Unify.unify` の矢印の分岐と同じ順序なので、受理と拒否は変わらない(ソースから導いた性質。合成の `dune runtest` の結果が手直しの前後で同じことを実測した)。
+手直しの後、`e5.kel` は 2:37 に「引数の個数が一致しません: (_A, _B) => _A と (Int32) => Int32 @ {}(引数は 2 個と 1 個です)」を出す。
+0 引数の形(`doc/log/261017-3-spike/effects/ex/e5zero.kel`)は「引数の個数が一致しません: () => _A と (Int32) => Int32 @ {}(引数は 0 個と 1 個です)」を出す(実測)。
+
+V[V101-1](台帳の候補): 型注釈が関数型である値束縛の初期化式に書いた無名関数では、修飾しない操作名が注釈の行で解決されない(`y8calltuple` の 5 行目)。
+§13.2 1136 行はこの位置を関数型を要求する位置に数えるので、§13.3 の読み替えが働かないのが意図どおりかを確かめる。
+@@@post5
+**分野の合成での手直し。**
+
+V127 の後に当てると、`V101.patch` の perform の引数の hunk は外れる。
+V127 が直前に `check_call_arity` の行を足したためである。
+`Unify.unify (elab_exp env level eff arg) args_row;` を `elab_check env level eff arg args_row;` に置き換えて当て直した(`check_call_arity` の行はその前に残る)。
+`X-perform-over-V101.patch` は、`op_row_note` の hunk が fuzz 2 で `check_call_arity` の定義の後に当たる(`row_failure` の記事と定義は離れない)。
+perform の `elab_check` に `~row_note` を渡す hunk は同じ理由で外れるので、同じ行に当て直した。
+
+D[V101-3] の手直し(`doc/log/261017-3-spike/effects/arity-fallback.patch`。コード 1 行と行コメント 1 行)は、X-perform のコミット 1 に含める。
+X-perform のコミット 3 には、`test/arity.t` の末尾に perfarity のブロックを足す(プログラムは e5 と e5zero の 2 本、コマンドは 2 個)。
+前書きは「perform の引数に書いた無名関数の引数の個数の誤りも、操作の型の矢印と比べて個数の文面で報告する」の趣旨にする。
+期待値は (3) の D[V101-3] の実測のとおりである。
+
+合成後の `dune runtest`(N.z)では、opsig2 が 4:63 と `op_row_note` の文言に、nested2 と efferr が §11.12 と同じ案内に変わり、新しく落ちるブロックは無い(実測)。
+V101 のコミット 2 で opsig2 の位置を、X-perform のコミット 2 で 3 ブロックの文言を改める。
+V101 と X-perform の新しいブロック(合わせて 12 個)は、項目の試作に cram のファイルが無いので、合成には含めていない。
+合成の版で V101 と X-perform の例を走らせ直し、それぞれの試作の版と比べた。
+違いは D[V101-3] の `e5.kel` と、X-perform の `a6.kel`(V127 の個数の文面)と、V101 の `w1pureperf`、`w2pubeff`、`w5callpure`(`doc/log/261017-3-spike/V101/verify/ex/`)だけである(実測)。
+後の 3 本は、X-perform の後に §11.12 と同じ案内が付く(P[X-perform-2])。
+したがって、上の 2 つの表の期待値は合成の版でもそのまま使える。
+@@@post6
+- 同じ行の近くを V127 と V133 が触る。本計画の順(V127、V101、X-perform、V133)で当てると、N.z のとおり 2 行を当て直す。順序を変えると、外れる hunk も変わる。
+- D[V101-3] を落とすと、操作の型の矢印の行が空の位置でだけ、引数の個数の誤りが古い文面に戻る。perfarity のブロックで見張る。
+@@@post7
+- 合成の版で `e5.kel` と `e5zero.kel` が個数の文面になり、`dune runtest` の結果が D[V101-3] の手直しの前後で同じであること。
+@@@post8
+分野の合成で見つけた食い違い(X-perform の `fallback` が V127 の個数の検査を通らない)は、D[V101-3] として (3) と (5) に反映した。
+V101 の部分の (6) の「V127 の `_item` の文面の言い換えを入れるなら、この項目の後は `e5` も同じ言い換えの対象になる」は、D[V101-3] の手直しを入れて初めて成り立つ。

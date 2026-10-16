@@ -1,0 +1,603 @@
+diff -ruN -x _build a/lib/show.ml b/lib/show.ml
+--- a/lib/show.ml	2026-10-17 04:59:49.594234126 +0900
++++ b/lib/show.ml	2026-10-17 04:59:49.599027233 +0900
+@@ -15,7 +15,8 @@
+    印字の方針は次のとおりである。
+ 
+    1. `Generic` は `A, B, C…`、`Unbound` は `_A, _B…`、`Rigid` は `ς1, ς2…` と書く
+-   2. カインドごとに名前のプールを変える(`Type` は `A..E`、`F[_]` は `F..H`)
++   2. カインドごとに名前のプールを変える(`Type` は `A..E`、`F[_]` は `F..H`)。
++      リージョンの位置に現れる変数は `h, h1…` と書く
+    3. エフェクト行が空または裸の行変数のときは表示しない
+    4. エフェクトラベルの引数がユニットなら、裸のラベル名を書く
+    5. 制約つき変数があれば、その制約を前置する
+@@ -66,6 +67,31 @@
+ 
+    `pick` はプールを使い切ると添字を足す(`A, B, …, E, A1, B1, …`)。
+ 
++   ### リージョンの名前
++
++   リージョン変数のカインドは値の型と同じ `Type` である(第6章 §6.11)。
++   カインドだけで名前を選ぶと、
++   `let use[h, A](r: Ref[h, A]): A @ Heap[h] = Ref.get(r)` の型は `(Ref[A, B]) => B @ {Heap[A]}` と表示され、
++   どれがリージョンでどれが値の型かを、利用者は `Ref` の引数の順から思い出さなければならない。
++   そこで、`Ref` と `MutableArray` の第 1 引数か、`Heap` ラベルの引数に現れる変数は、
++   `Type` のプールではなく `h` のプールから名前を採る。
++   1 個目は `h`、2 個目以降は `h1, h2…` で、`(Ref[h, A]) => A @ {Heap[h]}` のように、
++   仕様の署名一覧と同じ綴りになる。
++   弱い変数には、ほかの変数と同じく下線を前置する(`_h`)。
++   剛定数は §9.2 のとおり `ς` で書き、このプールを使わない。
++
++   リージョンかどうかは、印字の前に型を走査して、その位置に現れたかどうかで決める。
++   型の表現にはリージョンを区別する印が無いからである。
++   同じ変数が値の型の位置にも現れるとき(`(h, Ref[h, Int32]) => Int32`)も、リージョンの名前を使う。
++   1 か所でもリージョンの位置に現れた変数は、型検査の上ではリージョンとして使われている。
++   名前を決めるのは、§9.1 の採番表と同じく、`show_all` に渡したすべての型を通した出現である。
++   `Ref` などの名前は綴りから `intern` で引くので、
++   module の中で同名の型を宣言しても、その型の引数はリージョンとして扱わない。
++   利用者の newtype の型引数も、リージョンを包んでいるかどうかを問わず、
++   リージョンの位置として扱わない。
++   `newtype Box[k] = Box(Ref[k, Int32])` の `k` は、
++   同じ印字に `Ref[k, …]` か `Heap[k]` が現れれば `h` と書き、現れなければ `A` と書く。
++
+    ### 弱い変数の下線
+ 
+    `Unbound` の変数には `_` を前置する。
+@@ -104,10 +130,15 @@
+     let prev = Option.value ~default:[] (Hashtbl.find_opt seen d) in
+     if not (List.mem n prev) then Hashtbl.replace seen d (n :: prev)
+   in
++  let regions : (oid, unit) Hashtbl.t = Hashtbl.create 8 in
++  let region t =
++    match repr t with TVar { contents = Unbound i | Generic i } -> Hashtbl.replace regions i.vid () | _ -> ()
++  in
+   let rec collect t =
+     match repr t with
+     | TCon (n, args) ->
+         note n;
++        (match args with r :: _ when n = ty_ref || n = ty_mutable_array -> region r | _ -> ());
+         List.iter collect args
+     | TApp (f, a) ->
+         collect f;
+@@ -119,6 +150,7 @@
+     | TRecord row | TVariant row -> collect row
+     | TRowExtend (l, f, rest) ->
+         note l;
++        if l = eff_heap then region f;
+         collect f;
+         collect rest
+     | TRowEmpty | TVar _ -> ()
+@@ -134,6 +166,7 @@
+   let star_pool = "ABCDE" in
+   let arrow_pool = "FGH" in
+   let star_count = ref 0 in
++  let region_count = ref 0 in
+   let arrow_count = ref 0 in
+   let row_count = ref 0 in
+   let rigid_count = ref 0 in
+@@ -162,6 +195,10 @@
+                 let n = !arrow_count in
+                 incr arrow_count;
+                 pick arrow_pool n
++            | _ when Hashtbl.mem regions i.vid ->
++                let n = !region_count in
++                incr region_count;
++                pick "h" n
+             | _ ->
+                 let n = !star_count in
+                 incr star_count;
+@@ -201,7 +238,9 @@
+    同じ情報を、書き写せない形式でもう一度見せることはしない。
+ 
+    なお、`name_of_var` は、カインドが未確定(`KVar`)の変数を、
+-   `kind_repr` による場合分けの最後の `_` の分岐で `Type` と同じに扱う。
++   `kind_repr` による場合分けの `KRow` でも `KArrow` でもない分岐で、`Type` と同じに扱う。
++   ただし、リージョンの位置に現れた変数は、
++   カインドが `Type` でも未確定でも `h` のプールから名前を採る。
+    カインドが未確定のまま印字される変数は、
+    後で `KStar` へ既定化される(第1章の `default_kind`。時期は §1.6)。
+    そこで、先回りして `Type` のプールから名前を採る。 *)
+diff -ruN -x _build a/lib/syntax.ml b/lib/syntax.ml
+--- a/lib/syntax.ml	2026-10-17 04:59:49.594257520 +0900
++++ b/lib/syntax.ml	2026-10-17 04:59:49.599051129 +0900
+@@ -705,6 +705,13 @@
+      操作と一緒に直接登録する(理由は §1.10) *)
+   let eff_heap = intern "Heap"
+ 
++  (* 第 1 引数がリージョンである組み込みの型構成子。
++     第8章は、この位置の不一致を述べる文言を選ぶのに使い、
++     第9章は、この位置の型変数の表示名を選ぶのに使う *)
++  let ty_ref = intern "Ref"
++
++  let ty_mutable_array = intern "MutableArray"
++
+   let eff_blocking = intern "Blocking"
+ end
+ 
+diff -ruN -x _build a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 04:59:49.594311743 +0900
++++ b/lib/unify.ml	2026-10-17 04:59:49.599087287 +0900
+@@ -527,7 +527,7 @@
+    その後で引数を検査すると、`Ref` の型引数の位置で、
+    外側と内側の `run` が作った 2 つの剛定数が一致しない。
+    これは仕様どおりの拒否である。
+-   衝突がエフェクト行の `Heap` ラベルの引数で起きたときは、
++   衝突がエフェクト行の `Heap` ラベルの引数か、`Ref` と `MutableArray` の第 1 引数で起きたときは、
+    この分岐のメッセージに §8.8 の言い換えが付く。
+ 
+    空の行と剛な行変数が衝突したときは、その手前の分岐で、
+@@ -544,6 +544,12 @@
+     | _, Some v -> bind v t1
+     | None, None -> (
+         match (t1, t2) with
++        | TCon (n1, r1 :: as1), TCon (n2, r2 :: as2)
++          when n1 = n2 && (n1 = ty_ref || n1 = ty_mutable_array) && List.length as1 = List.length as2 ->
++            unify_region (name_of n1 ^ " の第 1 引数")
++              (fun msg -> "ほかのリージョンの " ^ name_of n1 ^ " を使おうとしています(" ^ msg ^ ")")
++              r1 r2;
++            List.iter2 unify as1 as2
+         | TCon (n1, as1), TCon (n2, as2) when n1 = n2 && List.length as1 = List.length as2 ->
+             List.iter2 unify as1 as2
+         | TApp (f1, a1), TApp (f2, a2) ->
+@@ -601,9 +607,29 @@
+    この検査が無いと、推論器が停止しなくなる。
+ 
+    フィールドの単一化が `Heap` ラベルで失敗したときは、エラーメッセージを差し替える。
+-   `Heap[h]` の `h` は `run` が与えた剛定数なので、ここでの不一致はほぼ確実に、
+-   別の `run` のスコープのヒープを使おうとしたことを意味する。
+-   そのため、「スコープ付きの型が一致しません」より原因に近い言葉で伝える。
++   言い換えは `unify_region` が受け持ち、失敗した 2 つの型の形で 2 通りに分かれる。
++
++   - どちらも剛定数のとき。
++     剛定数は、`run` が与えたリージョン変数か、注釈の型パラメータである。
++     不一致は、ほかのリージョンのヒープを使おうとしたことを意味するので、そう述べる。
++     どちらの剛定数かは区別しないので、別の `run` のスコープとは言わない。
++     注釈の型パラメータが表すリージョンも、`run` の本体から見ればほかのリージョンだからである。
++   - 片方が未束縛の型変数のとき。
++     相手の形は問わない。
++     失敗の原因は、束縛のときの §8.3 の occurs check と脱出検査か、§8.4 の制約の伝播である。
++     リージョンの取り違えではないので、元の文言のまま報告する。
++   - どちらも未束縛でなく、どちらかが型変数でないとき。
++     リージョンを表す型は、`run` のリージョン変数と型パラメータだけである。
++     `@ Heap[Int32]` の `Int32` のような型は、どのリージョンとも一致しない。
++     そこで、その型がリージョンではないことを述べる。
++     リージョン変数のカインドは `Type` なので、注釈の検査はこの形を拒否しない。
++     剛定数の名前 `ς1` を見せても、利用者は書いた `Int32` が原因だと読み取れない。
++
++   `Ref` と `MutableArray` の第 1 引数も同じ位置づけなので、§8.7 の `unify` は、
++   この 2 つの型構成子の第 1 引数を `unify_region` で単一化する。
++   どちらも剛定数のときは、ほかのリージョンの `Ref` か `MutableArray` を使おうとしたと述べる。
++   入れ子の `run` で外側の参照を読む形は、`Heap` ラベルではなくこの位置で落ちるので(§8.7)、
++   この言い換えが無いと、利用者には剛定数の名前の不一致だけが見える。
+ 
+    `rewrite_row` はラベルの名前だけで一致を判定し、
+    ラベル引数(`Heap[h]` の `h`)は見つけた後で単一化する。
+@@ -618,10 +644,33 @@
+   (match tail_before with
+   | Some tv -> ( match !tv with Link _ -> type_error "再帰的な行型が発生しました" | _ -> ())
+   | None -> ());
+-  (try unify field field2
+-   with Type_error msg when label = eff_heap -> type_error ("別の run スコープのヒープを使おうとしています(" ^ msg ^ ")"));
++  if label = eff_heap then
++    unify_region "Heap の引数" (fun msg -> "ほかのリージョンのヒープを使おうとしています(" ^ msg ^ ")") field field2
++  else unify field field2;
+   unify rest rest2
+ 
++(* リージョンの位置の 2 つの型を単一化する。
++   失敗したとき、片方が未束縛の型変数なら、失敗の原因は束縛のときの検査なので、
++   元の文言のまま報告する。
++   どちらも剛定数なら、元の文言を both で包んで報告する。
++   それ以外で、どちらかが型変数でなければ、その型はリージョンではないと述べる *)
++and unify_region what both r1 r2 =
++  let shape =
++    match (repr r1, repr r2) with
++    | TVar { contents = Rigid _ }, TVar { contents = Rigid _ } -> `Rigids
++    | TVar { contents = Unbound _ }, _ | _, TVar { contents = Unbound _ } -> `Vars
++    | TVar _, TVar _ -> `Vars
++    | TVar _, t | t, _ -> `Non_region t
++  in
++  try unify r1 r2
++  with Type_error msg -> (
++    match shape with
++    | `Non_region t ->
++        type_error
++          (what ^ " " ^ show t ^ " はリージョンではありません。" ^ what ^ "には run のリージョン変数か型パラメータを書きます")
++    | `Rigids -> type_error (both msg)
++    | `Vars -> type_error msg)
++
+ (* ## 8.9 一般化
+ 
+    `generalize level t` は `t` を走査し、
+diff -ruN -x _build a/test/annot_rows.t b/test/annot_rows.t
+--- a/test/annot_rows.t	2026-10-17 04:59:49.594387016 +0900
++++ b/test/annot_rows.t	2026-10-17 04:59:49.599672908 +0900
+@@ -1009,7 +1009,7 @@
+   > and g[k](n: Int32): Int32 @ {} = n
+   > KEL
+   $ diktor --type-check recfwdheap.kel
+-  f : (Ref[A, Int32], Int32) => Int32 @ {Heap[A], Print}
++  f : (Ref[h, Int32], Int32) => Int32 @ {Heap[h], Print}
+   g : (Int32) => Int32 @ {}
+   $ cat > recfwdval.kel <<'KEL'
+   > let rec a: (Int32) => Int32 @ {Console, Print} = fn(n) => b(n)
+diff -ruN -x _build a/test/kinds.t b/test/kinds.t
+--- a/test/kinds.t	2026-10-17 04:59:49.594609598 +0900
++++ b/test/kinds.t	2026-10-17 04:59:49.599701282 +0900
+@@ -842,11 +842,11 @@
+   > KEL
+   $ diktor --type-check refkind.kel
+   f : (Ref[Int32, Int32]) => Int32
+-  g : (Ref[A, Int32]) => Int32
++  g : (Ref[h, Int32]) => Int32
+   h : (MutableArray[String, Int32]) => Int32
+ 
+-@ Heap[Int32] と注釈した関数も型検査に通るが、run の本体からは別のスコープの
+-ヒープとして、トップレベルからは Heap のラベルが無いとして呼べない:
++@ Heap[Int32] と注釈した関数も型検査に通るが、run の本体からは Heap の引数が
++リージョンではないとして、トップレベルからは Heap のラベルが無いとして呼べない:
+ 
+   $ cat > refkind3.kel <<'KEL'
+   > let f(): Int32 @ Heap[Int32] = 0
+@@ -854,7 +854,7 @@
+   > KEL
+   $ diktor --type-check refkind3.kel
+   f : () => Int32 @ {Heap[Int32]}
+-  ! refkind3.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
++  ! refkind3.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+   [1]
+   $ cat > refkind4.kel <<'KEL'
+   > let f(): Int32 @ Heap[Int32] = 0
+@@ -872,5 +872,48 @@
+   > let v: Int32 = run h { let r: Ref[Int32, Int32] = Ref.new(0); 0 }
+   > KEL
+   $ diktor --type-check refkind5.kel
+-  ! refkind5.kel:1:28: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
++  ! refkind5.kel:1:28: 型エラー: 注釈された型を満たしません(Ref の第 1 引数 Int32 はリージョンではありません。Ref の第 1 引数には run のリージョン変数か型パラメータを書きます)
++  [1]
++
++MutableArray の第 1 引数も同じ文言で報告する:
++
++  $ cat > refkind6.kel <<'KEL'
++  > let v: Int32 = run h { let a: MutableArray[String, Int32] = MutableArray.new(3, 0); 0 }
++  > KEL
++  $ diktor --type-check refkind6.kel
++  ! refkind6.kel:1:28: 型エラー: 注釈された型を満たしません(MutableArray の第 1 引数 String はリージョンではありません。MutableArray の第 1 引数には run のリージョン変数か型パラメータを書きます)
++  [1]
++
++run を経由しない Heap どうしの不一致も、リージョンでない側を述べる。
++@ Heap[String] の関数から @ Heap[Int32] の関数を呼ぶ:
++
++  $ cat > refkind7.kel <<'KEL'
++  > let f(): Int32 @ Heap[Int32] = 0
++  > let g(): Int32 @ Heap[String] = f()
++  > KEL
++  $ diktor --type-check refkind7.kel
++  f : () => Int32 @ {Heap[Int32]}
++  ! refkind7.kel:2:33: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
++  [1]
++
++関数の型の注釈の中の Heap[h] と一致させる場合も同じである:
++
++  $ cat > refkind8.kel <<'KEL'
++  > let f(): Int32 @ Heap[Int32] = 0
++  > let g(): Int32 = run h { let k: () => Int32 @ Heap[h] = f; k() }
++  > KEL
++  $ diktor --type-check refkind8.kel
++  f : () => Int32 @ {Heap[Int32]}
++  ! refkind8.kel:2:30: 型エラー: 注釈された型を満たしません(Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます)
++  [1]
++
++どちらの Heap の引数もリージョンを表す型変数のときは、ほかのリージョンの
++ヒープを使おうとしたものとして報告する。型パラメータ A のヒープの関数を
++run h の本体で呼ぶ:
++
++  $ cat > refkind9.kel <<'KEL'
++  > let f[A](g: () => Int32 @ Heap[A]): Int32 = run h { g() }
++  > KEL
++  $ diktor --type-check refkind9.kel
++  ! refkind9.kel:1:53: 型エラー: ほかのリージョンのヒープを使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+diff -ruN -x _build a/test/nonfeatures.t b/test/nonfeatures.t
+--- a/test/nonfeatures.t	2026-10-17 04:59:49.594666827 +0900
++++ b/test/nonfeatures.t	2026-10-17 04:59:49.599726159 +0900
+@@ -81,10 +81,10 @@
+ 
+ 型パラメータの束縛子はこの規則の例外で、大小を問わない(裁定 D110。仕様 §0、
+ sample.kel:50-51)。大小は型の表示に現れないので、小文字で束縛しても大文字で
+-束縛しても同じ型が出る。リージョン変数を型パラメータの位置に小文字で書けるのも
+-この例外による。run が導入するリージョン変数のほうは小文字に限り、大文字始まりも
+-_ も構文エラーになる(sample.kel:52。小文字の run h が通ることは test/region.t /
+-test/parallel.t が固定している):
++束縛しても同じ型が出る(リージョンの位置の変数は綴りによらず h と出る。case7c)。
++リージョン変数を型パラメータの位置に小文字で書けるのもこの例外による。run が導入する
++リージョン変数のほうは小文字に限り、大文字始まりも _ も構文エラーになる(sample.kel:52。
++小文字の run h が通ることは test/region.t / test/parallel.t が固定している):
+ 
+   $ printf 'let f[a](x: a): a = x\n' > case7.kel
+   $ diktor --type-check case7.kel
+@@ -94,7 +94,7 @@
+   f : (A) => A
+   $ printf 'let use[h, A](r: Ref[h, A]): A @ Heap[h] = Ref.get(r)\n' > case7c.kel
+   $ diktor --type-check case7c.kel
+-  use : (Ref[A, B]) => B @ {Heap[A]}
++  use : (Ref[h, A]) => A @ {Heap[h]}
+   $ printf 'let g(): Int32 = run H { 1 }\n' > case8.kel
+   $ diktor --type-check case8.kel
+   case8.kel:1:22: パースエラー(付近のトークンを確認してください)
+diff -ruN -x _build a/test/region.t b/test/region.t
+--- a/test/region.t	2026-10-17 04:59:49.594726240 +0900
++++ b/test/region.t	2026-10-17 04:59:49.599740376 +0900
+@@ -24,7 +24,7 @@
+   > let bump[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+   > KEL
+   $ diktor --type-check bump.kel
+-  ! bump.kel:1:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! bump.kel:1:74: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ 書くと宣言したなら通る。行に Heap[h] が出る:
+@@ -34,7 +34,7 @@
+   >   MutableArray.set(a, 0, 42)
+   > KEL
+   $ diktor --type-check honest.kel
+-  bump : (MutableArray[A, Int32]) => {} @ {Heap[A] extends R1}
++  bump : (MutableArray[h, Int32]) => {} @ {Heap[h] extends R1}
+ 
+ MutableArray.length も Heap[h] を要求する(長さは変わらないが、可変配列に
+ 触れること自体が行に載る — 仕様 §10 の署名一覧と、その理由を書いた
+@@ -161,11 +161,39 @@
+ 
+ MutableArray[h, A] は型注釈として書ける。仕様 §10 の署名一覧が断る「ここだけの
+ 表記」(sample.kel:679)はパラメータの並びの話であって、型式を禁じてはいない
+-(sample.kel:697。D137)。印字は型パラメータを付け直すので、h は A として出る:
++(sample.kel:697。D137)。印字では h と出る(名付け方は次の regionshow):
+ 
+   $ printf 'let use[h, A](a: MutableArray[h, A], i: Int32): A @ Heap[h] = MutableArray.get(a, i)\n' > maannot.kel
+   $ diktor --type-check maannot.kel
+-  use : (MutableArray[A, B], Int32) => B @ {Heap[A]}
++  use : (MutableArray[h, A], Int32) => A @ {Heap[h]}
++
++印字は型パラメータを付け直す。Ref と MutableArray の第 1 引数か Heap の引数に
++現れる変数は h、h1、h2 と名付け、ほかの型の変数とは別に数える。束縛子の綴りは
++表示に残らない。同じ変数が値の型の位置にも現れるときも h と書く。一般化されない
++変数には下線が付く。run の剛定数は ς のまま出る。利用者の newtype の型引数は
++リージョンの位置に数えないので、Box[k] の k は同じ印字に Ref か Heap が現れる
++unbox では h、現れない size では A と出る:
++
++  $ cat > regionshow.kel <<'KEL'
++  > let two[r, s, A](x: Ref[r, A], y: MutableArray[s, Int32]): A @ {Heap[r], Heap[s]} = Ref.get(x)
++  > let both[A](x: A, r: Ref[A, Int32]): Int32 = 0
++  > let id[A](x: A): A = x
++  > let w = id(Ref.new)
++  > newtype Box[k] = Box(Ref[k, Int32])
++  > let unbox[k](b: Box[k]): Ref[k, Int32] = b match { case Box(r) => r }
++  > let size[k](b: Box[k]): Int32 = 0
++  > KEL
++  $ diktor --type-check regionshow.kel
++  two : (Ref[h, A], MutableArray[h1, Int32]) => A @ {Heap[h], Heap[h1]}
++  both : (h, Ref[h, Int32]) => Int32
++  id : (A) => A
++  w : (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1}
++  unbox : (Box[h]) => Ref[h, Int32]
++  size : (Box[A]) => Int32
++  $ printf 'let main(): Int32 = run h { let r = Ref.new(1); r }\n' > regionshow2.kel
++  $ diktor --type-check regionshow2.kel
++  ! regionshow2.kel:1:21: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+ 
+ 添字が範囲外なら実行時エラー(不変・可変とも)。負の長さも実行時に弾く:
+ 
+@@ -192,7 +220,7 @@
+   > KEL
+   $ diktor --type-check pardet.kel
+   pmap : (Array[A], (A) => B @ {}) => Array[B]
+-  ! pardet.kel:3:47: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! pardet.kel:3:47: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ 不変配列は @ {} のコールバックから読める:
+@@ -215,7 +243,7 @@
+   > pub let wipe[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 7) }
+   > KEL
+   $ diktor --type-check pubpure.kel
+-  ! pubpure.kel:1:78: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! pubpure.kel:1:78: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ 最外の矢印に @ {} と書いた関数 g は、名前で参照するときに行の尾部を開くので、run の
+@@ -256,3 +284,83 @@
+   $ diktor --type-check nonew.kel
+   ! nonew.kel:1:34: 型エラー: 未束縛の変数: Array.new
+   [1]
++
++Ref と MutableArray の第 1 引数で 2 つのリージョンが一致しないときは、ほかの
++リージョンの Ref や MutableArray を使おうとしたものとして報告する。run を
++含まない、2 つの型パラメータのリージョンの取り違えも同じ文言になる:
++
++  $ cat > regswap.kel <<'KEL'
++  > let swap[h, k](a: Ref[h, Int32], b: Ref[k, Int32]): Unit @ Heap[h] = Ref.set(a, Ref.get(b))
++  > KEL
++  $ diktor --type-check regswap.kel
++  ! regswap.kel:1:89: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
++  [1]
++
++内側の run の本体で、内側の参照を外側のリージョンの Ref と注釈する:
++
++  $ cat > regannot.kel <<'KEL'
++  > let g(): Int32 = run h {
++  >   let r = Ref.new(0)
++  >   run k {
++  >     let s = Ref.new(1)
++  >     let t: Ref[h, Int32] = s
++  >     0
++  >   }
++  > }
++  > KEL
++  $ diktor --type-check regannot.kel
++  ! regannot.kel:5:9: 型エラー: 注釈された型を満たしません(ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2))
++  [1]
++
++片方のリージョンがまだ決まっていない型変数で、run のリージョン変数を
++束縛するとスコープの外へ漏れるときは、脱出の文言のまま報告する。Ref でも
++Heap でも同じである:
++
++  $ cat > regesc.kel <<'KEL'
++  > let mk[B](x: B): Ref[B, Int32] = ???
++  > let f(): Unit = {
++  >   let k = fn(z) => { let s = mk(z); run h { Ref.get(s); () } }
++  >   ()
++  > }
++  > KEL
++  $ diktor --type-check regesc.kel
++  mk : (h) => Ref[h, Int32]
++  ! regesc.kel:3:53: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
++  $ cat > regheapesc.kel <<'KEL'
++  > let mk[B](x: B): () => Int32 @ Heap[B] = ???
++  > let f(): Unit = {
++  >   let k = fn(z) => { let s = mk(z); run h { s(); () } }
++  >   ()
++  > }
++  > KEL
++  $ diktor --type-check regheapesc.kel
++  mk : (h) => () => Int32 @ {Heap[h]}
++  ! regheapesc.kel:3:45: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
++
++片方のリージョンがまだ決まっていない型変数なら、相手が型変数でなくても、
++束縛のときの検査の文言のまま報告する。リージョンの位置での occurs check と、
++相手が Ref の型のときの脱出である:
++
++  $ cat > regoccurs.kel <<'KEL'
++  > let g[h](r: Ref[h, Int32], s: Ref[Ref[h, Int32], Int32]): Unit = ()
++  > let t(x) = g(x, x)
++  > KEL
++  $ diktor --type-check regoccurs.kel
++  g : (Ref[h, Int32], Ref[Ref[h, Int32], Int32]) => {}
++  ! regoccurs.kel:2:17: 型エラー: occurs check に失敗しました(無限型が発生します)
++  [1]
++  $ cat > regescref.kel <<'KEL'
++  > let mk[B](x: B): Ref[B, Int32] = ???
++  > let eq[A](x: A, y: A): Unit = ()
++  > let f(): Unit = {
++  >   let k = fn(z) => { let s = mk(z); run h { let t = Ref.new(0); eq(s, mk(t)); () } }
++  >   ()
++  > }
++  > KEL
++  $ diktor --type-check regescref.kel
++  mk : (h) => Ref[h, Int32]
++  eq : (A, A) => {}
++  ! regescref.kel:4:71: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+diff -ruN -x _build a/test/trailing_block.t b/test/trailing_block.t
+--- a/test/trailing_block.t	2026-10-17 04:59:49.594949684 +0900
++++ b/test/trailing_block.t	2026-10-17 04:59:49.599758481 +0900
+@@ -290,7 +290,7 @@
+   > EOF
+   $ diktor --type-check run2.kel
+   call0 : (() => A) => A
+-  ! run2.kel:4:27: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! run2.kel:4:27: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ with の右辺に末尾ブロック付きの呼び出しを書くと、継続は末尾ブロックの
+diff -ruN -x _build a/test/trailing_comma.t b/test/trailing_comma.t
+--- a/test/trailing_comma.t	2026-10-17 04:59:49.594964101 +0900
++++ b/test/trailing_comma.t	2026-10-17 04:59:49.599772908 +0900
+@@ -27,7 +27,7 @@
+   > KEL
+   $ diktor --type-check tc2.kel
+   n : Int32
+-  g : (Ref[A, Int32]) => Int32 @ {Heap[A]}
++  g : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+ 
+ 末尾カンマが付くのは最後の**要素**の後だけ。...rest と extends T は
+ 要素ではなく終端子なので、その後には付けられない(検証で確定した境界):
+diff -ruN -x _build a/test/typecheck_m6.t b/test/typecheck_m6.t
+--- a/test/typecheck_m6.t	2026-10-17 04:59:49.595043812 +0900
++++ b/test/typecheck_m6.t	2026-10-17 04:59:49.599786464 +0900
+@@ -325,7 +325,7 @@
+   $ diktor --type-check --no-prelude st.kel
+   ok1 : Int32
+   ok2 : Int32
+-  poly : (A) => Ref[B, Int32] @ {Heap[B] extends R1}
++  poly : (A) => Ref[h, Int32] @ {Heap[h] extends R1}
+ 
+   $ cat > stbad1.kel <<'EOF'
+   > let bad = run h { Ref.new(0) }
+@@ -345,7 +345,7 @@
+   > let bad = run h { let r = Ref.new(0); run h2 { Ref.get(r) } }
+   > EOF
+   $ diktor --type-check --no-prelude stbad3.kel
+-  ! stbad3.kel:1:56: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! stbad3.kel:1:56: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ MiniLang §16-8 の runST 2例(値制限):
+diff -ruN -x _build a/test/typecheck.t b/test/typecheck.t
+--- a/test/typecheck.t	2026-10-17 04:59:49.594990010 +0900
++++ b/test/typecheck.t	2026-10-17 04:59:49.599803867 +0900
+@@ -283,7 +283,7 @@
+ 
+   $ printf 'let g[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)\n' > effshort.kel
+   $ diktor --type-check effshort.kel
+-  g : (Ref[A, Int32]) => Int32 @ {Heap[A]}
++  g : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+ 
+ 組み込みクラスのメソッドスキーマ(arrow1 / arrow2 の 1 枚から出る):
+ 
+diff -ruN -x _build a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 04:59:49.595090731 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:59:49.599819426 +0900
+@@ -389,7 +389,7 @@
+   > }
+   > EOF
+   $ diktor --type-check nestrun.kel
+-  ! nestrun.kel:3:48: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! nestrun.kel:3:48: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ ブロックの Seq は文のノードを借りない(260829-3 課題 7)。借りていた頃は
+diff -ruN -x _build a/test/visibility.t b/test/visibility.t
+--- a/test/visibility.t	2026-10-17 04:59:49.595110709 +0900
++++ b/test/visibility.t	2026-10-17 04:59:49.599839685 +0900
+@@ -249,7 +249,7 @@
+   M.k : (Int32) => Int32 @ {Print extends R1}
+   M.o : (Int32) => Int32 @ {Console}
+   m : (Int32) => Int32 @ {Console}
+-  n : (Int32) => Int32 @ {Heap[A]}
++  n : (Int32) => Int32 @ {Heap[h]}
+ 
+ module の中でエフェクト名を EffectRow エイリアスで覆うと、エイリアスの本体に書いた
+ 同じ名前もエイリアス自身を指すので、使う箇所が無くても、宣言を再帰として拒否する。
+@@ -282,8 +282,8 @@
+   $ diktor --type-check visrow10.kel
+   M.f : (Int32) => Int32 @ {Console}
+   M.g : (Int32) => Int32 @ {Print, Console}
+-  M.h : (Int32) => Int32 @ {Heap[A]}
+-  M.k : (Int32) => Int32 @ {Heap[A]}
++  M.h : (Int32) => Int32 @ {Heap[h]}
++  M.k : (Int32) => Int32 @ {Heap[h]}
+   $ cat > visrow10b.kel <<'KEL'
+   > module N {
+   >   pub newtype Heap[A] = MkH(A)
+@@ -297,8 +297,8 @@
+   $ diktor --type-check visrow10b.kel
+   N.f : (Int32) => Int32 @ {Console}
+   N.g : (Int32) => Int32 @ {Console, Print}
+-  N.h : (Int32) => Int32 @ {Heap[A]}
+-  N.k : (Int32) => Int32 @ {Heap[A]}
++  N.h : (Int32) => Int32 @ {Heap[h]}
++  N.k : (Int32) => Int32 @ {Heap[h]}
+ 
+ 同じく、module の newtype や Type エイリアスは、同名のトップレベルの EffectRow
+ エイリアスも覆わない。module の中のエフェクト位置のその名前は、引数の有無に
+@@ -495,7 +495,7 @@
+   Array.sum : (Array[Int32]) => Int32 @ {}
+   $ printf 'module Ref { pub let swap[A](a: Ref[A, Int32]): Int32 = 0 }\n' > visbi4.kel
+   $ diktor --type-check visbi4.kel
+-  Ref.swap : (Ref[A, Int32]) => Int32 @ {}
++  Ref.swap : (Ref[h, Int32]) => Int32 @ {}
+ 
+ --prelude で差し替えたプレリュードも、ユーザのプログラムと同じに拒否される。
+ 平坦化は in_prelude のフラグが立つ前に走るので、プレリュードだからという免除が

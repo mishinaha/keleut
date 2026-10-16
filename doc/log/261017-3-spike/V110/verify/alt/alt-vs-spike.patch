@@ -1,0 +1,19 @@
+--- a/lib/elab.ml	2026-10-17 04:13:54.595226684 +0900
++++ b/lib/elab.ml	2026-10-17 04:17:03.798864242 +0900
+@@ -4591,10 +4591,12 @@
+       match d with
+       | T.DLet ((_, b) as bnode) ->
+           let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+-          let env2 = elab_binding env 0 eff0 bnode in
+-          (* 包摂のエラーは、そのメソッドの束縛を指す。宣言の先頭を指すと、複数のメソッドの
+-             どれが悪いかを位置から読めない *)
+-          at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values))
++          let rho = new_row_var 0 in
++          let env2 = elab_binding env 0 rho bnode in
++          at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values));
++          at_node bnode (fun () ->
++            let r = match repr (snd (row_fields rho)) with TRowEmpty -> row_append rho (new_row_var 0) | _ -> rho in
++            try Unify.unify r eff0 with Type_error msg -> type_error ("インスタンスメソッド " ^ mname ^ " の初期化式が、トップレベルで起こせないエフェクトを起こしています(" ^ msg ^ ")"))
+       | T.DLetRec bs ->
+           let env2 = elab_rec_bindings env 0 eff0 bs in
+           List.iter

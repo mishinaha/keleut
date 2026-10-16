@@ -1,0 +1,7 @@
+type class Run[A] { val go[E]: (A, () => Unit @ E) => Unit @ E }
+newtype Foo = Foo
+type instance Run[Foo] {
+  let go: (Foo, () => Unit @ {}) => Unit = { echoln("init"); fn(x, k) => () }
+}
+go(Foo, fn() => echoln("k"))
+echoln("done")

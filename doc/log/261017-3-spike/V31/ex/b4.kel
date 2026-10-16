@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]

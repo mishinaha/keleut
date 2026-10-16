@@ -1,0 +1,16 @@
+(class Pretty (A) (val pretty : (=> (A) String)))
+(newtype N (N Int32))
+(instance Pretty (N)
+ (dlet
+  (binding pretty (params n) =
+   (match n (case (pctor N x) => (apply show (extend _item x {})))))))
+(dlet
+ (binding-pub p : String = (apply pretty (extend _item (construct N 3) {}))))
+(exp (apply echoln (extend _item p {})))
+(dlet (binding xs = (extend _item 1 (extend _item 2 (extend _item 3 {})))))
+(exp
+ (apply echoln
+  (extend _item
+   (apply show
+    (extend _item (select _item (restrict _item (restrict _item xs))) {}))
+   {})))

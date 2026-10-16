@@ -1,0 +1,6 @@
+let app[A, R, E](f: (A) => R @ E, x: A): R @ E = f(x)
+let p = app(fn(t) => t._0, (1, 2))
+let q = app(fn(t) => t._0 + t._1, (3, 4))
+let z(): Int32 = 5
+let k[A, E](g: () => A @ E): A @ E = g()
+echoln(show(p + q + k(z)))

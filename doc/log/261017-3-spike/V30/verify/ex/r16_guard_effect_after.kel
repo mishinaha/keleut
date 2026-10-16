@@ -1,0 +1,5 @@
+let pick(n: Int32): Int32 @ {Ask} = n match { case k if k > perform ask() => 1 case _ => 0 }
+effect Ask = { ask: () => Int32 }
+newtype Q = Q((Int32) => Int32 @ {Ask})
+let r: Int32 = Q(pick) match { case Q(p) => p(5) handle { case ask() => resume(3) } }
+echoln(show(r))

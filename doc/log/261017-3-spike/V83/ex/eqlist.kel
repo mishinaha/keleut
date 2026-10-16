@@ -1,0 +1,2 @@
+echoln(show(Cons(1, Nil) == Cons(1, Nil)))
+echoln(show(Some(1) == None))

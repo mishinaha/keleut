@@ -1,0 +1,2 @@
+from "./leaf" import k
+pub let m: Int32 = k

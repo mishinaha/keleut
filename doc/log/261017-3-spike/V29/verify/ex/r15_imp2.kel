@@ -1,0 +1,3 @@
+from "./lib/cbs" import { Cb, Callback }
+let f(c: Cb[{}]): Int32 = 1
+with_stdout(fn() => println(show(f(Callback(fn() => ())))))

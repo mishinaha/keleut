@@ -1,0 +1,3 @@
+let f(n: Never) = n match { case _ => "never" }
+let g(l: #Lo | #Hi) = l match { case #Lo => "lo" case #Hi => "hi" case _ => "other" }
+echo(g(#Hi))

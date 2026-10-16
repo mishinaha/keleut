@@ -1,0 +1,2 @@
+pub type D2[E] = B2[E]
+pub type B2[E] = (E, Int32)

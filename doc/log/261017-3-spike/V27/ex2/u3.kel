@@ -1,0 +1,1 @@
+type W[G]: EffectRow = G[Int32]

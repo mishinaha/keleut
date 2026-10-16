@@ -1,0 +1,2 @@
+let f(x: Int32): Int32 = x
+let b = (1, 2) match { case (a, _) if f() > 0 => a case _ => 0 }

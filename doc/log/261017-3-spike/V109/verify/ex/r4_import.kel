@@ -1,0 +1,4 @@
+from "./lib/dl" import { cnt, mk }
+let c1 = mk(2)
+let c2 = mk("a")
+echoln(show(c1(Cons(2, Cons(3, Cons(2, Nil))))) + show(c2(Cons("a", Nil))) + show(cnt(Cons(true, Nil), false)))

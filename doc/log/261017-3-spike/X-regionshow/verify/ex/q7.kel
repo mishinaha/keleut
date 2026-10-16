@@ -1,0 +1,2 @@
+let f[k](r: Ref[k, Int32]): Int32 @ Heap[k] = Ref.get(r)
+let g[k](r: MutableArray[k, Int32]): Int32 @ Heap[k] = f(r)

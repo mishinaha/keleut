@@ -1,0 +1,15 @@
+effect Ask = { ask: () => Int32 }
+module M {
+  type WA[E]: EffectRow = {Ask extends E}
+  type W: EffectRow = {Ask}
+  let f[E](u: Unit): Int32 @ {WA[E]} = perform ask() + 1
+  let g(u: Unit): Int32 @ W = perform ask() * 2
+  pub let h(u: Unit): Int32 = (f(()) + (g(()) handle {
+      case ask() => resume(100)
+      case return(x) => x
+    })) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+}
+with_stdout(fn() => println(show(M.h(()))))

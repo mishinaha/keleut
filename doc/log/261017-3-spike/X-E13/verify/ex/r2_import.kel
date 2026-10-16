@@ -1,0 +1,5 @@
+from "./lib/util" import { twice, Box }
+let b = Box(twice(fn(n) => n + 1, 40))
+b match {
+  case Box(v) => echoln(show(v))
+}

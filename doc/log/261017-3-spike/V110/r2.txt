@@ -1,0 +1,44 @@
+== c2.kel
+type class Pr[A] { val pr: (A) => Unit @ Print }
+newtype Foo = Foo
+type instance Pr[Foo] {
+  let pr = { echoln("init"); fn(x: Foo) => () }
+}
+pr(Foo) handle { case print(s) => resume(()) }
+echoln("done")
+-- HEAD
+init
+done
+exit 0
+-- 試作
+init
+done
+exit 0
+== c5.kel
+type class Pr[A] { val pr: (A) => Unit @ Console }
+newtype Foo = Foo
+type instance Pr[Foo] {
+  let pr = { echoln("init"); fn(x: Foo) => echoln("call") }
+}
+pr(Foo)
+-- HEAD
+init
+call
+exit 0
+-- 試作
+init
+call
+exit 0
+== c6.kel
+effect Ask = { ask: () => Int32 }
+newtype Foo = Foo
+type instance Show[Foo] {
+  let show = { let n = perform ask(); fn(x: Foo) => "foo" } handle { case ask() => resume(1i32) }
+}
+echoln(show(Foo))
+-- HEAD
+! c6.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+exit 1
+-- 試作
+foo
+exit 0

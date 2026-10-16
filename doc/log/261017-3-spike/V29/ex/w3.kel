@@ -1,0 +1,4 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+type Wr[E]: EffectRow = {Print extends E}
+type F = () => Unit @ Wr[{}]

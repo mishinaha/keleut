@@ -1,0 +1,2 @@
+effect St[S] = { get: () => S }
+newtype H = MkH((() => Unit @ {}, () => Unit @ {St[Int32]}))

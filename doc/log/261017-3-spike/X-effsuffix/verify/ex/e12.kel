@@ -1,0 +1,1 @@
+let bad4[E](f: () => Int32 @ {Console extends E}): Int32 = f

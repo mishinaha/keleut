@@ -1,0 +1,4 @@
+from "./lib2" import { Id, Fn }
+let ap[E](f: Fn[E]): Int32 @ E = f(1)
+let x: Id[Int32] = ap(fn(n) => n + 1)
+echoln(show(x))

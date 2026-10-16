@@ -1,0 +1,1 @@
+let f[G](x: Int32): Int32 @ {Print extends G[Int32]} = x

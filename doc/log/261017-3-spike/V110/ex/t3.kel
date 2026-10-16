@@ -1,0 +1,3 @@
+effect Ask = { ask: () => Int32 }
+let n = perform ask()
+echoln(show(n))

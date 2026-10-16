@@ -1,0 +1,5 @@
+type Unit = {}
+effect Out = { out: (String) => Unit }
+module M {
+  pub let f(): Unit @ {} = perform out("x")
+}

@@ -1,0 +1,23 @@
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 8f67206..8fd3e8e 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -301,9 +301,17 @@ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証)。値
+   > echoln(show(Cons(upto(3, Nil), Cons(upto(0, Nil), Cons(upto(2, Nil), Nil)))))
+   > KEL
+   $ diktor pshowsplit.kel
++  []
+   [1]
+   [1, 2]
+   [1, 2, 3]
++  [1, 2, 3, 4]
++  [1, 2, 3, 4, 5]
++  [1, 2, 3, 4, 5, 6]
++  [1, 2, 3, 4, 5, 6, 7]
++  [1, 2, 3, 4, 5, 6, 7, 8]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9]
++  [[1, 2, 3], [], [1, 2]]
+ 
+ 頭に書いた前提 [A: Show] は効いている。要素が Show のインスタンスでなければ落ちる:
+ 

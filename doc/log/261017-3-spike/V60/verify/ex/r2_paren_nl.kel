@@ -1,0 +1,9 @@
+let g(x: Int32): Int32 = x
+let c = (g(1))
+{ echoln("block") }
+let d = #Tag
+{ echoln("block2") }
+newtype U = Bar
+let e = Bar
+{ echoln("block3") }
+echoln(show(c))

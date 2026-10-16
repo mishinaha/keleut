@@ -1,0 +1,3 @@
+type T = () => Unit @ {Log}
+effect Log = { log: (String) => Unit }
+let f(x: T): Unit @ {Log} = x()

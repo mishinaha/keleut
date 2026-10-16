@@ -1,0 +1,7 @@
+type E: EffectRow = {Console}
+module M {
+  type E = Int32
+  pub let f(x: Int32): Int32 @ {Print} = { println("m"); x }
+}
+let g[E](x: Int32): Int32 @ {Print, Console} = { echoln("top"); M.f(x) }
+echoln(show(g(3) handle { case print(s) => { echoln("P:" + s); resume() } case return(x) => x }))

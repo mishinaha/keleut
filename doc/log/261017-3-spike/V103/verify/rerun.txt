@@ -1,0 +1,220 @@
+== a1.kel
+-- head tc
+id : (A) => A
+g : (Array[_A]) => Int32
+xs : Array[Int32]
+p : () => {} @ {Print}
+! a1.kel:5:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto tc
+id : (A) => A
+g : (Array[_A]) => Int32 @ {}
+xs : Array[Int32]
+p : () => {} @ {Print}
+c : () => {} @ {Console}
+_ : {}
+exit=0
+-- head run
+! a1.kel:5:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto run
+2
+exit=0
+== a2.kel
+-- head tc
+id : (A) => A
+alen : (Array[A]) => Int32 @ {}
+g : (Array[_A]) => Int32 @ {}
+xs : Array[Int32]
+p : () => {} @ {Print}
+c : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+alen : (Array[A]) => Int32 @ {}
+g : (Array[_A]) => Int32 @ {}
+xs : Array[Int32]
+p : () => {} @ {Print}
+c : () => {} @ {Console}
+_ : {}
+exit=0
+-- head run
+2
+exit=0
+-- proto run
+2
+exit=0
+== b1.kel
+-- head tc
+id : (A) => A
+g : [_A: Show] (_A) => String
+p : () => {} @ {Print}
+! b1.kel:4:34: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto tc
+id : (A) => A
+g : [_A: Show] (_A) => String @ {}
+p : () => {} @ {Print}
+c : () => {} @ {Console}
+_ : {}
+exit=0
+-- head run
+! b1.kel:4:34: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto run
+2
+exit=0
+== b2.kel
+-- head tc
+id : (A) => A
+g : [_A: Render] (_A) => String @ {}
+p : () => {} @ {Print}
+c : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+id : (A) => A
+g : [_A: Render] (_A) => String @ {}
+p : () => {} @ {Print}
+c : () => {} @ {Console}
+_ : {}
+exit=0
+-- head run
+2
+exit=0
+-- proto run
+2
+exit=0
+== c1.kel
+-- head tc
+id : (A) => A
+g : (String) => Int32
+p : () => {} @ {Print}
+! c1.kel:4:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto tc
+id : (A) => A
+g : (String) => Int32
+p : () => {} @ {Print}
+! c1.kel:4:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- head run
+! c1.kel:4:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto run
+! c1.kel:4:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+== d1.kel
+-- head tc
+id : (A) => A
+! d1.kel:6:41: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto tc
+id : (A) => A
+n : Int32
+_ : {}
+exit=0
+-- head run
+! d1.kel:6:41: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto run
+5
+exit=0
+== e1.kel
+-- head tc
+f : () => Int32 @ {Console}
+s : () => String @ {Print}
+_ : {}
+_ : {}
+xs : Array[Int32]
+t : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+f : () => Int32 @ {Console}
+s : () => String @ {Print}
+_ : {}
+_ : {}
+xs : Array[Int32]
+t : () => {} @ {Console}
+_ : {}
+exit=0
+-- head run
+b
+true1
+a
+11
+5
+11
+11
+exit=0
+-- proto run
+b
+true1
+a
+11
+5
+11
+11
+exit=0
+== e2.kel
+-- head tc
+! e2.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+exit=1
+-- proto tc
+! e2.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+-- head run
+! e2.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+exit=1
+-- proto run
+! e2.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+== e3.kel
+-- head tc
+a : (Array[A]) => Int32
+r : (Ref[A, B]) => B @ {Heap[A] extends R1}
+sh : [A: Show] (A) => String
+ad : [A: Add] (A, A) => A
+exit=0
+-- proto tc
+a : (Array[A]) => Int32
+r : (Ref[A, B]) => B @ {Heap[A] extends R1}
+sh : [A: Show] (A) => String
+ad : [A: Add] (A, A) => A
+exit=0
+-- head run
+exit=0
+-- proto run
+exit=0
+== e4.kel
+-- head tc
+! e4.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド render の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto tc
+! e4.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド render の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+-- head run
+! e4.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド render の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto run
+! e4.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド render の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+== ov.kel
+-- head tc
+inc : (Int32) => Int32 @ {}
+idf : (A) => A
+! ov.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+exit=1
+-- proto tc
+inc : (Int32) => Int32 @ {}
+idf : (A) => A
+! ov.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+exit=1
+-- head run
+! ov.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+exit=1
+-- proto run
+! ov.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+exit=1

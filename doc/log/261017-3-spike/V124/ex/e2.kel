@@ -1,0 +1,5 @@
+module M {
+  pub type C = A[{}]
+  pub type A[E] = (Int32) => Unit @ E
+}
+let f(c: M.C): Int32 = 0

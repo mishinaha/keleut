@@ -1,0 +1,4 @@
+type S = V[{}]
+type V[E] = [A | B(Int32) extends E]
+let v: S = B(2)
+v match { case B(n) => echoln(show(n)) case A => echoln("a") }

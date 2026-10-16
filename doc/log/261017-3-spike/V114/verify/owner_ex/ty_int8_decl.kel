@@ -1,0 +1,2 @@
+newtype Int8 = MkInt8(Int32)
+echoln("ok")

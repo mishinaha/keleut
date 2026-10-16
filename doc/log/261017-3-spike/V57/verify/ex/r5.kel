@@ -1,0 +1,10 @@
+module M {
+  type E = Int32
+  pub newtype N[E](() => Unit @ {Console extends E})
+  pub let go[E](n: N[E]): Unit @ {Console extends E} = n match { case N(k) => k() }
+}
+effect Ask = { ask: () => Int32 }
+M.go(M.N(fn() => echoln(show(perform ask())))) handle {
+  case ask() => resume(((perform ask()) handle { case ask() => resume(9) case return(x) => x }) + 1)
+  case return(x) => x
+}

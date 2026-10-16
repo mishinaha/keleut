@@ -1,0 +1,31 @@
+File "lib/parser.mly", line 88, characters 0-26:
+Warning 60 [unused-module]: unused module Diktor.
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index 99e408a..0d7e570 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -369,19 +369,19 @@ pub でなければ可視性の検査で落ちる:
+ 
+   $ printf 'module M {\n  type E = Int32\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow16.kel
+   $ diktor --type-check visrow16.kel
+-  ! visrow16.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow16.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+   [1]
+   $ printf 'type E = Int32\nlet f[E](x: Int32): Int32 @ {Print, E} = x\n' > visrow16b.kel
+   $ diktor --type-check visrow16b.kel
+-  ! visrow16b.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow16b.kel:2:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+   [1]
+   $ printf 'module E { pub type E = Int32 }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow16c.kel
+   $ diktor --type-check visrow16c.kel
+-  ! visrow16c.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow16c.kel:2:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+   [1]
+   $ printf 'module E { type E = Int32 }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow16d.kel
+   $ diktor --type-check visrow16d.kel
+-  ! visrow16d.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow16d.kel:2:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+   [1]
+ 
+ 同名の EffectRow エイリアスは、行の要素では型パラメータより先に当たる:

@@ -1,0 +1,12 @@
+effect Ask = { ask: () => Int32 }
+effect Log = { note: (String) => Unit }
+let prog(): Int32 @ {Ask, Log} = {
+  perform note("x")
+  if perform ask() == 1 then 10else 20
+}
+let r = (prog() handle {
+  case ask() => resume(1)
+}) handle {
+  case note(s) => resume(())
+}
+echoln(show(r))

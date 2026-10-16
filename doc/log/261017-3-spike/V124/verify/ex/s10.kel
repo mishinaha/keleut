@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+type C = A[{}]
+type A[E] = (Int32) => Int32 @ {Fail extends E}
+let safe(g: C, n: Int32): Int32 = g(n) handle { case throw(e) => { echoln("caught " + e); 0 } }
+echoln(show(safe(fn(x) => if x > 0 then x else perform throw("neg"), -1)))

@@ -1,0 +1,7 @@
+type class Pp[A] {
+  val m[E: Show]: (A) => Int32 @ E
+}
+type instance Pp[Int32] {
+  let m(x) = x
+}
+echoln(show(m(1i32)))

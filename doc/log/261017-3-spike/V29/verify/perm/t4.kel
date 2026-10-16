@@ -1,0 +1,7 @@
+type A2[E] = N2[E]
+type A1[E] = N1[E]
+newtype N2[E] = MkN2(A3[E])
+newtype N3[E] = MkN3(() => Unit @ E)
+newtype N0 = MkN0(A1[{}])
+type A3[E] = N3[E]
+newtype N1[E] = MkN1(A2[E])

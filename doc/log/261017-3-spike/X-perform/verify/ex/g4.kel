@@ -1,0 +1,16 @@
+effect Mk = { mk: () => (Int32) => Int32 }
+effect Mk2 = { mk2: () => {f: () => Int32} }
+let a(): Int32 = (perform mk())(3) handle {
+  case mk() => resume(fn(x) => x * 2)
+  case return(x) => x
+}
+let mkf(): (Int32) => Int32 = fn(x) => x + 100
+let b(): Int32 = (perform mk())(3) handle {
+  case mk() => resume(mkf())
+  case return(x) => x
+}
+let c(): Int32 = (perform mk2()).f() handle {
+  case mk2() => resume({f = fn() => 9})
+  case return(x) => x
+}
+echoln(show(a())); echoln(show(b())); echoln(show(c()))

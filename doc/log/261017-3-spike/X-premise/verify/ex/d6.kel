@@ -1,0 +1,5 @@
+newtype Opaque = MkOpaque(Int32)
+let ng(o: Opaque): String = {
+  let k = fn(x) => show(Cons(x, Nil))
+  k(o)
+}

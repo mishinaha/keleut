@@ -1,0 +1,5 @@
+newtype Bar = Bar
+type instance Show[Bar] {
+  let show = { let xs = List.map([1i32, 2i32], fn(x) => x + 1i32); fn(b: Bar) => "bar" }
+}
+echoln(show(Bar))

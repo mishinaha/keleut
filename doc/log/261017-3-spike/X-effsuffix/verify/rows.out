@@ -1,0 +1,7 @@
+closed_empty : (Int32) => Int32 @ {}
+bare_var : (() => Int32) => Int32
+open_tail : (() => {} @ {Out extends R1}) => {} @ {Out extends R1}
+closed_label : () => {} @ {Out}
+nested_closed : (() => Int32 @ {}) => Int32 @ {}
+inferred : (Int32) => Int32
+pub_omitted : (Int32) => Int32 @ {}

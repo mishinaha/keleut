@@ -1,0 +1,2 @@
+let b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+let a(n: Int32): Int32 @ Console = b(n)

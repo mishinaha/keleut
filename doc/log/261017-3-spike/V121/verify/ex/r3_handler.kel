@@ -1,0 +1,7 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let abort[A](m: String): A @ Fail = perform throw(m)
+let v: Int32 = ({ let x = perform ask(); if x > 0 then x else abort("neg") } handle { case ask() => resume(5) }) handle { case throw(e) => 0 - 1 }
+echoln(show(v))
+let w: Int32 = { let n: Option[Int32] = None; n match { case Some(k) if k > 0 => k case _ => abort("ñ") } } handle { case throw(e) => { echoln("caught " + e); 7 } }
+echoln(show(w))

@@ -1,0 +1,4 @@
+effect Heap[A] {
+  fn put(x: A): {}
+}
+let f[A](x: A): {} @ Heap[A] = perform Heap.put(x)

@@ -1,0 +1,13 @@
+i1_weakimpl diktor-head rc=1: ! i1_weakimpl.kel:4:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありま�
+i1_weakimpl main.exe rc=0: n
+i2_weakimplval diktor-head rc=1: ! i2_weakimplval.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがあり�
+i2_weakimplval main.exe rc=0: n
+i5_valeff diktor-head rc=1: ! i5_valeff.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありませ
+i5_valeff main.exe rc=1: ! i5_valeff.kel:3:38: 型エラー: ラベル Print がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か�
+i6_valeff_user diktor-head rc=3: 未処理のエフェクト操作: Print.print
+i6_valeff_user main.exe rc=1: ! i6_valeff_user.kel:4:32: 型エラー: ラベル Print がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {}
+i7_valeff_console diktor-head rc=1: ! i7_valeff_console.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがあ�
+i7_valeff_console main.exe rc=1: ! i7_valeff_console.kel:3:38: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の
+i8_user_console diktor-head rc=0: init
+n
+i8_user_console main.exe rc=1: ! i8_user_console.kel:4:32: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @

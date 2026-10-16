@@ -1,0 +1,4 @@
+newtype N = N(Int32)
+let idf[A](x: A): A = x
+type instance Show[N] { let show = { echoln("init"); idf(fn(x: N) => "n") } }
+echoln(show(N(1)))

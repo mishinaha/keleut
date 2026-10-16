@@ -1,0 +1,2 @@
+let f[F, A](x: F[A]): F[A] = x
+let g(xs: List[Int32]): List[Int32] = f(xs)

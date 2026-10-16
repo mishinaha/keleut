@@ -1,0 +1,3 @@
+from "./r1_import_lib" import M
+let g(s: String): Unit @ {M.WE[{}]} = M.c(s)
+with_stdout(fn() => { M.a("a"); M.c("c"); M.d("d"); g("g") })

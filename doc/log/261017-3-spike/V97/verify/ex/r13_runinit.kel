@@ -1,0 +1,10 @@
+type class Sz[A] { val sz: (A) => Int32 }
+type instance Sz[Int32] {
+  let sz: (Int32) => Int32 = { let n = run h { let r = Ref.new(1i32); Ref.set(r, Ref.get(r) + 4); Ref.get(r) }; fn(x) => x + n }
+}
+echoln(show(sz(1)))
+newtype N = N(Int32)
+type instance Show[N] {
+  let show: (N) => String = { let k = run h { let a = MutableArray.new(2, 3); MutableArray.get(a, 1) }; fn(v) => "N" + Show.show(k) }
+}
+echoln(show(N(0)))

@@ -1,0 +1,2 @@
+from "./badlib" import { f }
+echoln(show(f(1i32)))

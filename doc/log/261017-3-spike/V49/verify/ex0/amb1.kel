@@ -1,0 +1,6 @@
+let read_[A: Show](s: String): A = ???
+let f(): Int32 = {
+  let x: Int32 = { let v = read_("1"); 1 }
+  let k = fn() => 1
+  x + k()
+}

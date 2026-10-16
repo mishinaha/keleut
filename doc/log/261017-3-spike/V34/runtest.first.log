@@ -1,0 +1,62 @@
+File "test/rigid_empty_row.t", line 1, characters 0-0:
+diff --git a/_build/default/test/rigid_empty_row.t b/_build/default/test/rigid_empty_row.t.corrected
+index d25f8a5..b5a2826 100644
+--- a/_build/default/test/rigid_empty_row.t
++++ b/_build/default/test/rigid_empty_row.t.corrected
+@@ -12,10 +12,13 @@
+   > let h[E](g: () => Int32 @ E): () => Int32 @ {} = g
+   > KEL
+   $ diktor --type-check fnrigid.kel
++  ! fnrigid.kel:1:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
+   $ cat > fnrigidok.kel <<'KEL'
+   > let h[E](g: () => Int32 @ E): () => Int32 @ E = g
+   > KEL
+   $ diktor --type-check fnrigidok.kel
++  h : (() => Int32) => () => Int32
+ 
+ 局所の値束縛は型パラメータを取れない。注釈の空の行が外側の型パラメータの
+ 行変数とぶつかっても、行変数を新しく導入するよう促す助言は出さない:
+@@ -27,6 +30,8 @@
+   > }
+   > KEL
+   $ diktor --type-check valrigid.kel
++  ! valrigid.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
+ 
+ 空の行が初期化式の側(呼ぶ関数の仮引数)にあるときも、同じ文言になる。
+ 注釈には行変数が既に書かれており、直すのは初期化式の関数の側である:
+@@ -39,6 +44,9 @@
+   > }
+   > KEL
+   $ diktor --type-check valinitrigid.kel
++  ap : (() => Int32 @ {}) => Int32
++  ! valinitrigid.kel:3:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
+ 
+ インスタンスの実装は、値束縛、let rec の値束縛、関数束縛のどれでも原因だけを
+ 報告する。宣言の行変数 E は実装の側から名指しできない:
+@@ -52,6 +60,8 @@
+   > }
+   > KEL
+   $ diktor --type-check clsrigid.kel
++  ! clsrigid.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
+   $ cat > clsrecrigid.kel <<'KEL'
+   > type class Run[A] {
+   >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+@@ -61,6 +71,8 @@
+   > }
+   > KEL
+   $ diktor --type-check clsrecrigid.kel
++  ! clsrecrigid.kel:5:11: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
+   $ cat > clsfnrigid.kel <<'KEL'
+   > type class Run[A] {
+   >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+@@ -70,3 +82,5 @@
+   > }
+   > KEL
+   $ diktor --type-check clsfnrigid.kel
++  ! clsfnrigid.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]

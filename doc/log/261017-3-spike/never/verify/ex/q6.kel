@@ -1,0 +1,7 @@
+effect Fail = { throw: (String) => Never }
+let rec f(n: Int32): Int32 @ Fail = {
+  let h = fn(b: Boolean) => if b then perform throw("z") match {} else n
+  let w = 2
+  h(n == 0) + w
+}
+echoln(show(f(0) handle { case throw(e) => 0 - 1 }))

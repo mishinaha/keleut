@@ -1,0 +1,14 @@
+effect E = { throw: (String) => Never, ask: () => Int32 }
+effect Res = { use: () => Unit }
+module M {
+  pub let attempt[A: Show](x: A, n: Int32): String @ Console = ({ perform use(); if n > 0 then perform throw(show(x)) else show(x) }) handle {
+    case use() => resume()
+    case cancel => { let a = perform ask(); echoln("M cancel " + show(a)) }
+  } handle {
+    case throw(e) => "caught " + e
+    case ask() => { let y = resume(n); y + "!" }
+  }
+}
+echoln(M.attempt(42, 1))
+echoln(M.attempt("s", 0))
+echoln(M.attempt(true, 2))

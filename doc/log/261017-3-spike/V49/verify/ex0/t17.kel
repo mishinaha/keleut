@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let f(z) = {
+  let g: (Int32) => Int32 @ {Console} = idf(fn(x) => z(x))
+  g(1)
+}
+let main(): Unit @ {Console} = echoln(show(f(fn(x) => perform ask() + x)))
+main()

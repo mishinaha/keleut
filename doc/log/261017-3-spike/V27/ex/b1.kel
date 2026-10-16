@@ -1,0 +1,2 @@
+newtype Holder[F, E] = Holder(Callback[F[E]])
+newtype Callback[E] = Callback(() => Unit @ E)

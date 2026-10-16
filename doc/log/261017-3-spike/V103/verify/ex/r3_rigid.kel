@@ -1,0 +1,7 @@
+let twice[E](g: () => Int32 @ E): Int32 @ E = g() + g() * 2 - -1
+let addf[A: Add, E](g: () => A @ E, x: A): A @ E = g() + x
+let main(): Unit @ Console = {
+  echoln(show(twice(fn() => { echoln("t"); 3 })))
+  echoln(show(addf(fn() => { echoln("u"); 1.5 }, 2.0)))
+}
+main()

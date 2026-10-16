@@ -1,0 +1,2 @@
+newtype C[R] = MkC(A[{extends R}])
+newtype A[E] = MkA(() => Unit @ E)

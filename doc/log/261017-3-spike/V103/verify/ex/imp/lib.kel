@@ -1,0 +1,3 @@
+pub let idl[T](x: T): T = x
+pub let len[A](xs: Array[A]): Int32 = Array.length(xs) + 0
+pub let bump[h](r: Ref[h, Int32]): Unit @ Heap[h] = Ref.set(r, Ref.get(r) + 1)

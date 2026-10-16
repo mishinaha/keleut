@@ -1,0 +1,152 @@
+== pub1.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let describe(n) = "int"
+}
+println(describe(1i32))
+-- run
+! pub1.kel:5:11: 型エラー: pub な宣言には完全な型注釈が必要です(引数に型注釈がありません)
+exit=1
+-- type-check
+! pub1.kel:5:11: 型エラー: pub な宣言には完全な型注釈が必要です(引数に型注釈がありません)
+exit=1
+== pub2.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let rec describe(n) = "int"
+}
+println(describe(1i32))
+-- run
+! pub2.kel:5:15: 型エラー: pub な宣言には完全な型注釈が必要です(引数に型注釈がありません)
+exit=1
+-- type-check
+! pub2.kel:5:15: 型エラー: pub な宣言には完全な型注釈が必要です(引数に型注釈がありません)
+exit=1
+== mod1.kel
+module M {
+  type class Describe[A] {
+    val describe: (A) => String
+  }
+  type instance Describe[Int32] {
+    pub let describe(n) = "int"
+  }
+}
+println(M.describe(1i32))
+-- run
+! mod1.kel:2:3: 未実装: module 内の type class 宣言(M10): module M
+exit=4
+-- type-check
+! mod1.kel:2:3: 未実装: module 内の type class 宣言(M10): module M
+exit=4
+== blk.kel
+let f() = {
+  pub let x = 1
+  x
+}
+println(f())
+-- run
+blk.kel:4:2: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+exit=2
+-- type-check
+blk.kel:4:2: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+exit=2
+== pub3.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))
+-- run
+int
+exit=0
+== nopub3.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  let describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))
+-- run
+int
+exit=0
+== pubrec.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let rec describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))
+-- run
+int
+exit=0
+== pubeff.kel
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  pub let say(n: Int32): Unit = println("int")
+}
+with_stdout(fn() => say(1i32))
+-- run
+! pubeff.kel:5:33: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Print がありません(行は閉じています))
+exit=1
+== nopubeff.kel
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  let say(n: Int32): Unit = println("int")
+}
+with_stdout(fn() => say(1i32))
+-- run
+int
+exit=0
+== pubeff2.kel
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  pub let say(n: Int32): Unit @ Print = println("int")
+}
+with_stdout(fn() => say(1i32))
+-- run
+int
+exit=0
+== (cd imp; --import-path .) main.kel
+from "lib" import { Describe, Box, describe }
+with_stdout(fn() => println(describe(Box(1i32))))
+-- run
+! main.kel:1:36: import エラー: lib に describe という公開の宣言はありません
+exit=1
+== (cd imp; --import-path .) main2.kel
+from "lib" import { Box }
+with_stdout(fn() => println(describe(Box(1i32))))
+-- run
+! main2.kel:2:29: 型エラー: 未束縛の変数: describe
+exit=1
+== (cd imp; --import-path .) mainnp.kel
+from "libnp" import { Describe, Box, describe }
+with_stdout(fn() => println(describe(Box(1i32))))
+-- run
+! mainnp.kel:1:38: import エラー: libnp に describe という公開の宣言はありません
+exit=1
+== (cd imp; --import-path .) main3.kel
+from "lib" import { Describe, Box }
+with_stdout(fn() => println(describe(Box(1i32))))
+-- run
+box
+exit=0
+== (cd imp; --import-path .) main3np.kel
+from "libnp" import { Describe, Box }
+with_stdout(fn() => println(describe(Box(1i32))))
+-- run
+box
+exit=0

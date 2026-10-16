@@ -1,0 +1,4 @@
+module E {
+  pub type E[A] = A
+}
+let f[E](x: Int32): Int32 @ {E[Int32]} = x

@@ -1,0 +1,1 @@
+type class MyShow[A] { val show: (A) => Boolean }

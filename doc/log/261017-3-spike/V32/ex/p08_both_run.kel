@@ -1,0 +1,4 @@
+let rec f(n: Int32): Int32 @ Console = n match { case 0 => { echoln("f0"); 0 } case m => g(m - 1) }
+and g(n: Int32): Int32 @ Console = n match { case 0 => { echoln("g0"); 0 } case m => f(m - 1) }
+let use(): Int32 @ {Console, Print} = { println("p"); f(3) + g(2) }
+with_stdout(fn() => use())

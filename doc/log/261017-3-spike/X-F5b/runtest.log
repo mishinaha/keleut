@@ -1,0 +1,74 @@
+# (1) 試作のコードだけを入れ、cram を足す前の dune runtest: 差分なし(出力 0 行)
+# (2) tokens.t に 3 ブロックを足した後、promote 前の dune runtest の出力
+File "test/tokens.t", line 1, characters 0-0:
+diff --git a/_build/default/test/tokens.t b/_build/default/test/tokens.t.corrected
+index 7bcac49..f79b1ed 100644
+--- a/_build/default/test/tokens.t
++++ b/_build/default/test/tokens.t.corrected
+@@ -612,13 +612,23 @@ Uchar.of_int 0xD800 は Invalid_argument を投げるので、is_valid で先に
+ 
+   $ printf 'let a = 0b102\n' > glued1.kel
+   $ diktor --type-check glued1.kel
++  glued1.kel:1:9: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ printf 'let a = 0x\n' > glued2.kel
+   $ diktor --type-check glued2.kel
++  glued2.kel:1:9: パースエラー: 数値リテラル 0 の直後に x が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ printf 'let a = 1u\n' > glued3.kel
+   $ diktor --type-check glued3.kel
++  glued3.kel:1:9: パースエラー: 数値リテラル 1 の直後に u が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ printf 'let a = 1.2.3\n' > glued4.kel
+   $ diktor --type-check glued4.kel
++  glued4.kel:1:9: パースエラー: 数値リテラル 1.2 の直後に . が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ diktor --type-check projnum.kel
++  projnum.kel:1:9: パースエラー: 数値リテラル 1. の直後に _0 が続いています(数値リテラルの綴りを確認してください)
++  [2]
+ 
+ 詰まる位置が式の途中でもパターンでも、負の数値リテラルでも同じ。REPL は同じ文面を出して続く:
+ 
+@@ -627,6 +637,8 @@ Uchar.of_int 0xD800 は Invalid_argument を投げるので、is_valid で先に
+   > let a = g(1, 2x)
+   > KEL
+   $ diktor --type-check gluedpos.kel
++  gluedpos.kel:2:14: パースエラー: 数値リテラル 2 の直後に x が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ cat > gluedpat.kel <<'KEL'
+   > let f(x: Int32): Int32 = x match {
+   >   case 0b102 => 1
+@@ -634,19 +646,31 @@ Uchar.of_int 0xD800 は Invalid_argument を投げるので、is_valid で先に
+   > }
+   > KEL
+   $ diktor --type-check gluedpat.kel
++  gluedpat.kel:2:8: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ printf 'let a = -0b102\n' > gluedneg.kel
+   $ diktor --type-check gluedneg.kel
++  gluedneg.kel:1:10: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
+   $ printf 'let a = 0b102\n1 + 1\n' | diktor --repl
++  <stdin>:1:9: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  _ : Int32 = 2
+ 
+ 数値と続きのトークンの間に空白がある形と、続きが英数字でも . でもない形は、
+ 従来の文面のまま。数値に予約語が隙間なく続いても文法に合えば受理する:
+ 
+   $ printf 'let a = 1 x\n' > gluedsp.kel
+   $ diktor --type-check gluedsp.kel
++  gluedsp.kel:1:11: パースエラー(付近のトークンを確認してください)
++  [2]
+   $ printf 'let a = 1"s"\n' > gluedtext.kel
+   $ diktor --type-check gluedtext.kel
++  gluedtext.kel:1:10: パースエラー(付近のトークンを確認してください)
++  [2]
+   $ printf 'let c = true\nlet a = if c then 1else 2\n' > gluedelse.kel
+   $ diktor --type-check gluedelse.kel
++  c : Boolean
++  a : Int32
+ 
+ `{` の読み分けの 3 文脈(仕様 §0、sample.kel:26-28)。実装は文脈で先読みを
+ 止めるのではなく、3 種を束ねた %inline lbrace で受ける(D12 / FIX-2b)。
+# (3) dune promote 後の dune runtest: 下に出力が無ければ差分なし
+# rc=0

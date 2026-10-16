@@ -1,0 +1,4 @@
+let bad = fn(y) => {
+  let f[A](x: A): A = y
+  f
+}

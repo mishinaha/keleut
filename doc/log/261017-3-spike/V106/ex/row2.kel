@@ -1,0 +1,2 @@
+let m[E: Show](x: Int32): Int32 @ E = x
+echoln(show(m(1)))

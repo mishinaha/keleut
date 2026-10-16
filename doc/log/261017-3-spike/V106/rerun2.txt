@@ -1,0 +1,322 @@
+== alias1.kel 
+-- head
+! alias1.kel:6:7: 型エラー: インスタンスメソッド pp がクラス宣言の型を満たしません((ς1, ς1) は Show のインスタンスではありません)
+[1]
+-- spike
+! alias1.kel:6:7: 型エラー: インスタンスメソッド pp がクラス宣言の型を満たしません((ς1, ς1) は Show のインスタンスではありません)
+[1]
+== alias2.kel 
+-- head
+3true
+[0]
+-- spike
+3true
+[0]
+== cls1.kel 
+-- head
+i3
+[0]
+-- spike
+! cls1.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== cls2.kel 
+-- head
+! cls2.kel:5:7: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+-- spike
+! cls2.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== cls3.kel 
+-- head
+i3
+[0]
+-- spike
+i3
+[0]
+== cls4.kel 
+-- head
+3true
+[0]
+-- spike
+3true
+[0]
+== cls5.kel 
+-- head
+i3
+i4
+[0]
+-- spike
+! cls5.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== cls6.kel 
+-- head
+i3
+[0]
+-- spike
+! cls6.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== cls7.kel 
+-- head
+[0]
+-- spike
+! cls7.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== cls8.kel 
+-- head
+[0]
+-- spike
+! cls8.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== ext1.kel 
+-- head
+! ext1.kel:1:1: 型エラー: 曖昧な制約: 型パラメータ A の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+-- spike
+! ext1.kel:1:1: 型エラー: 曖昧な制約: 型パラメータ A の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+== hk1.kel 
+-- head
+5
+[0]
+-- spike
+5
+[0]
+== let1.kel 
+-- head
+! let1.kel:1:5: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+-- spike
+! let1.kel:1:5: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+== let2.kel 
+-- head
+i3
+[0]
+-- spike
+i3
+[0]
+== row1.kel 
+-- head
+[0]
+-- spike
+[0]
+== row2.kel 
+-- head
+! row2.kel:2:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[1]
+-- spike
+! row2.kel:2:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[1]
+== row3.kel 
+-- head
+! row3.kel:7:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[1]
+-- spike
+! row3.kel:7:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[1]
+== pre_user.kel 
+-- head
+[0]
+-- spike
+! pre_user.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Eq をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== r10_bogus.kel 
+-- head
+! r10_bogus.kel:1:1: 型エラー: 未知のクラス: Bogus
+[1]
+-- spike
+! r10_bogus.kel:1:1: 型エラー: 未知のクラス: Bogus
+[1]
+== r10_letbogus.kel 
+-- head
+! r10_letbogus.kel:1:5: 型エラー: 未知のクラス: Bogus
+[1]
+-- spike
+! r10_letbogus.kel:1:5: 型エラー: 未知のクラス: Bogus
+[1]
+== r11_frac2.kel 
+-- head
+! r11_frac2.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+-- spike
+! r11_frac2.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+== r11_frac.kel 
+-- head
+! r11_frac.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+-- spike
+! r11_frac.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+== r11_letfrac2.kel 
+-- head
+! r11_letfrac2.kel:1:5: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+-- spike
+! r11_letfrac2.kel:1:5: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+== r12_main.kel 
+-- head
+! r12_main.kel:1:8: 型エラー: 未束縛の変数: pp
+[1]
+-- spike
+! r12_main.kel:1:8: 型エラー: 未束縛の変数: pp
+[1]
+== r13_later.kel 
+-- head
+L
+[0]
+-- spike
+! r13_later.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Later をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== r14_mod.kel 
+-- head
+! r14_mod.kel:2:3: 未実装: module 内の type class 宣言(M10): module M
+[4]
+-- spike
+! r14_mod.kel:2:3: 未実装: module 内の type class 宣言(M10): module M
+[4]
+== r15_nested.kel 
+-- head
+3
+[0]
+-- spike
+3
+[0]
+== r16_ret.kel 
+-- head
+none
+[0]
+-- spike
+none
+[0]
+== r17_hkuse.kel 
+-- head
+! r17_hkuse.kel:1:1: 型エラー: 未知のクラス: Pure
+[1]
+-- spike
+! r17_hkuse.kel:1:1: 型エラー: 未知のクラス: Pure
+[1]
+== r1_letphantom.kel 
+-- head
+! r1_letphantom.kel:2:5: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+-- spike
+! r1_letphantom.kel:2:5: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[1]
+== r1_phantom.kel 
+-- head
+34
+[0]
+-- spike
+! r1_phantom.kel:2:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== r2_heap.kel 
+-- head
+ok
+[0]
+-- spike
+ok
+[0]
+== r2_letheap.kel 
+-- head
+ok
+[0]
+-- spike
+ok
+[0]
+== r3_module.kel 
+-- head
+r3_module.kel:4:1: 構文エラー: type instance に pub は付けられません
+[2]
+-- spike
+r3_module.kel:4:1: 構文エラー: type instance に pub は付けられません
+[2]
+== r4_import.kel 
+-- head
+imp
+[0]
+-- spike
+! lib/cls.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== r5_dup.kel 
+-- head
+! r5_dup.kel:1:1: 型エラー: メソッド pp が二重に宣言されています
+[1]
+-- spike
+! r5_dup.kel:1:1: 型エラー: メソッド pp が二重に宣言されています
+[1]
+== r6_guard.kel 
+-- head
+pos
+[0]
+-- spike
+! r6_guard.kel:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Ord をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== r7_alias_cls.kel 
+-- head
+! r7_alias_cls.kel:3:1: 型エラー: 未知の型構成子: Bool
+[1]
+-- spike
+! r7_alias_cls.kel:2:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+[1]
+== r8_hk_param.kel 
+-- head
+! r8_hk_param.kel:1:1: 型エラー: 未知のクラス: Functor
+[1]
+-- spike
+! r8_hk_param.kel:1:1: 型エラー: 未知のクラス: Functor
+[1]
+== r9_rowuse.kel 
+-- head
+r9_rowuse.kel:2:39: パースエラー(付近のトークンを確認してください)
+[2]
+-- spike
+r9_rowuse.kel:2:39: パースエラー(付近のトークンを確認してください)
+[2]
+== r10_bogus.kel --type-check --no-prelude
+-- head
+! r10_bogus.kel:1:1: 型エラー: 未知のクラス: Bogus
+[1]
+-- spike
+! r10_bogus.kel:1:1: 型エラー: 未知のクラス: Bogus
+[1]
+== r11_frac.kel --type-check --no-prelude
+-- head
+! r11_frac.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+-- spike
+! r11_frac.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+== r11_frac2.kel --type-check --no-prelude
+-- head
+! r11_frac2.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+-- spike
+! r11_frac2.kel:1:1: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+== r10_letbogus.kel --type-check --no-prelude
+-- head
+! r10_letbogus.kel:1:5: 型エラー: 未知のクラス: Bogus
+[1]
+-- spike
+! r10_letbogus.kel:1:5: 型エラー: 未知のクラス: Bogus
+[1]
+== r11_letfrac2.kel --type-check --no-prelude
+-- head
+! r11_letfrac2.kel:1:5: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+-- spike
+! r11_letfrac2.kel:1:5: 型エラー: Fractional は予約されたリテラル述語です(制約には書けません、D8)
+[1]
+== repl
+--
+_ : String = "r3"
+_ : Int32 = 2
+[0]
+--
+! <stdin>:1:1: 型エラー: 曖昧な制約: メソッド pp の型パラメータ B の制約 Show をメソッドの型から決められません(メソッドの型に現れない型パラメータに制約が付いています)
+! <stdin>:2:1: 型エラー: 未知のクラス: Pp
+! <stdin>:3:1: 型エラー: 未束縛の変数: pp
+_ : Int32 = 2
+[0]

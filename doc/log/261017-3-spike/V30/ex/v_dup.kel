@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+newtype N = N(() => Unit @ {Log})
+effect Log = { log2: (String) => Unit }

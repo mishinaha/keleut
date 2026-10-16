@@ -1,0 +1,2 @@
+type Q[E] = {extends E}
+let f[E](x: Int32): Int32 @ Q[E] = x

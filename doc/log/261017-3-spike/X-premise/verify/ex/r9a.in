@@ -1,0 +1,6 @@
+newtype Opaque = MkOpaque(Int32)
+let id2(x) = x
+let r = id2(Nil)
+Cons(r, Nil) == Cons(Cons(Cons(MkOpaque(1i32), Nil), Nil), Nil)
+r == Cons(MkOpaque(1i32), Nil)
+r == Cons(3i32, Nil)

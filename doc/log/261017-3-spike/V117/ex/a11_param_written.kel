@@ -1,0 +1,2 @@
+type G[A] = (A) => Int32 @ {}
+pub let h(f: G[(Int32) => Int32]): Int32 = f(fn(x) => x)

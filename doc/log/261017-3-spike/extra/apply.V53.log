@@ -1,0 +1,4 @@
+patching file lib/elab.ml
+Hunk #1 succeeded at 3063 (offset 68 lines).
+patching file test/eval.t
+patching file test/verify_fixes.t

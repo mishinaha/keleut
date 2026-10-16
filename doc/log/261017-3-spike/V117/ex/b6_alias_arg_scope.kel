@@ -1,0 +1,5 @@
+type G = (Int32) => Int32
+module M {
+  pub type Wrap[A] = (A) => Int32 @ {}
+}
+pub let h(f: M.Wrap[G]): Int32 = 0

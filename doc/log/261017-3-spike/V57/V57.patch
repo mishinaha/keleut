@@ -1,0 +1,109 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:22:52.823994386 +0900
+@@ -1070,6 +1070,14 @@
+    ラベルの引数の欄がそのままエフェクトのパラメータで、
+    パラメータを持たないエフェクトはそこに `Unit` を置く。
+    行変数の中置の合成(`{E1, Print}` の `E1`)は受け付けない。
++   波括弧の中に引数なしで書いた型パラメータは、同名の EffectRow エイリアスが無ければ、
++   行にならないエイリアスや可視性を調べる前に、この合成として拒否する。
++   同名の Type エイリアスや Type エイリアスのコンパニオンがあっても、診断は変わらない
++   (`test/visibility.t` の visrow16 から visrow16d)。
++   同名の EffectRow エイリアスがあれば、波括弧の中ではエイリアスが先に当たる(visrow16e)。
++   そのエイリアスが pub でないコンパニオンなら、可視性の誤りになる。
++   `@ W` の形は 1 の判定で型パラメータを先に引くので、
++   型パラメータと EffectRow エイリアスが同名のとき、`@ W` と `@ {W}` は別のものを指す。
+    行の合成を末尾の `extends` だけに限ると、
+    `row_append` の左辺が常に閉じているという不変条件を保てる。
+    例外は、開いた行に展開されるエイリアスの splice である。
+@@ -1215,25 +1223,32 @@
+                  WithPrint[E](エイリアスの適用)を取り違えない。修飾名(M.W)も同じ
+                  経路で引く。effect は module に宣言できないので、修飾名が指しうるのは
+                  エイリアスだけで、ほかは unknown_effect の診断になる *)
+-              match find_alias n with
+-              | Some info when info.Decls.al_kind = Some "EffectRow" ->
+-                  splice_row n (expand_alias env level ~expanding info args) acc (* 行を splice する *)
+-              | Some _ -> type_error ("エフェクト行に Type エイリアス " ^ n ^ " は置けません(: EffectRow を付けてください)")
+-              | None ->
+-                  if args = [] && SMap.mem n env.types then
+-                    (* `{E1, Print}` のような行変数の合成は受け付けない(末尾の extends だけ)。
+-                       引数つきのときに env.types を見ないのは、型パラメータへの適用が
+-                       行の要素になれないからである *)
+-                    type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
+-                  else if Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) then
+-                    TRowExtend
+-                      ( Decls.resolve_unit (intern n),
+-                        (match args with
+-                        | [] -> t_unit
+-                        | [ a ] -> elab_type env level ~expanding a
+-                        | _ -> type_error "エフェクトラベルの引数は1個までです"),
+-                        acc )
+-                  else type_error (unknown_effect n))
++              (* `{E1, Print}` のような行変数の合成は受け付けない(末尾の extends だけ)。
++                 引数つきのときに env.types を見ないのは、型パラメータへの適用が
++                 行の要素になれないからである。
++                 型パラメータは、同名の EffectRow エイリアスの次に調べる。
++                 EffectRow エイリアスは型パラメータより先に当たるが、
++                 行にならないエイリアスは型パラメータを覆わない。
++                 find_alias より先に調べるので、型パラメータと同名の Type エイリアスや
++                 pub でない Type エイリアスのコンパニオンがあっても、
++                 診断は行変数の位置の誤りのままである *)
++              if args = [] && SMap.mem n env.types && Option.is_none (find_row_alias n) then
++                type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
++              else
++                match find_alias n with
++                | Some info when info.Decls.al_kind = Some "EffectRow" ->
++                    splice_row n (expand_alias env level ~expanding info args) acc (* 行を splice する *)
++                | Some _ -> type_error ("エフェクト行に Type エイリアス " ^ n ^ " は置けません(: EffectRow を付けてください)")
++                | None ->
++                    if Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) then
++                      TRowExtend
++                        ( Decls.resolve_unit (intern n),
++                          (match args with
++                          | [] -> t_unit
++                          | [ a ] -> elab_type env level ~expanding a
++                          | _ -> type_error "エフェクトラベルの引数は1個までです"),
++                          acc )
++                    else type_error (unknown_effect n))
+           | T.BField (l, _) -> type_error ("エフェクト行にフィールド " ^ l ^ " は書けません"))
+         elems tail
+   | _ ->
+diff a/test/visibility.t b/test/visibility.t
+--- a/test/visibility.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/visibility.t	2026-10-17 04:22:52.824282022 +0900
+@@ -363,6 +363,35 @@
+   ! visrow15.kel:2:26: 型エラー: 型 W.W は module W の外からは参照できません(pub を付けてください)
+   [1]
+ 
++行の要素に引数なしで書いた型パラメータは、行変数の合成として拒否する。
++同名の Type エイリアスが同じ module やトップレベルにあっても、同名の module の
++Type エイリアスのコンパニオンが pub でも pub でなくても、診断は変わらない:
++
++  $ printf 'module M {\n  type E = Int32\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow16.kel
++  $ diktor --type-check visrow16.kel
++  ! visrow16.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++  $ printf 'type E = Int32\nlet f[E](x: Int32): Int32 @ {Print, E} = x\n' > visrow16b.kel
++  $ diktor --type-check visrow16b.kel
++  ! visrow16b.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++  $ printf 'module E { pub type E = Int32 }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow16c.kel
++  $ diktor --type-check visrow16c.kel
++  ! visrow16c.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++  $ printf 'module E { type E = Int32 }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow16d.kel
++  $ diktor --type-check visrow16d.kel
++  ! visrow16d.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++
++同名の EffectRow エイリアスは、行の要素では型パラメータより先に当たる。
++`@ E` と書くと型パラメータが当たるので、`@ E` と `@ {E}` は別のものを指す。
++`@ Print` を `@ {Print}` の略記とする doc/sample.kel の規則とは食い違う、現状の振る舞いである:
++
++  $ printf 'module M {\n  type E: EffectRow = {Print}\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow16e.kel
++  $ diktor --type-check visrow16e.kel
++  M.f : (Int32) => Int32 @ {Print}
++
+ 同名クラスによる可視性の迂回は宣言時に拒否(M16 検証。修飾名 M.f が
+ クラス M のメソッド f と値環境で区別できないため):
+ 

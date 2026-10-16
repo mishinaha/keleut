@@ -1,0 +1,2 @@
+let f(x) = { let a = x match {}; x + 1 }
+echoln("ok")

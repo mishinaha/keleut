@@ -1,0 +1,159 @@
+===== a_noresume_error.kel
+effect Res = { use: () => Unit }
+effect Ask = { ask: () => Int32 }
+let r = ({ perform use(); perform ask() + 1 }) handle {
+  case use() => resume()
+  case cancel => echoln("cancel res")
+} handle {
+  case ask() => { echoln("ask clause"); 1 / 0 }
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head a_noresume_error.kel
+ask clause
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+===== b_resumed_error.kel
+effect Res = { use: () => Unit }
+effect Ask = { ask: () => Int32 }
+let r = ({ perform use(); perform ask() + 1 }) handle {
+  case use() => resume()
+  case return(x) => { echoln("close res"); x }
+  case cancel => echoln("cancel res")
+} handle {
+  case ask() => { let v = resume(1); echoln("resumed " + show(v)); v / 0 }
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head b_resumed_error.kel
+close res
+resumed 2
+実行時エラー: ゼロ除算です
+[exit 3]
+===== c_resume_arg_error.kel
+effect Res = { use: () => Unit }
+effect Ask = { ask: () => Int32 }
+let r = ({ perform use(); perform ask() + 1 }) handle {
+  case use() => resume()
+  case cancel => echoln("cancel res")
+} handle {
+  case ask() => resume(1 / 0)
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head c_resume_arg_error.kel
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+===== d_outer_never.kel
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => { echoln("ask clause throws"); perform throw("from clause") }
+  case cancel => echoln("cancel ask")
+} handle {
+  case throw(e) => { echoln("caught " + e); 0 }
+}
+echoln(show(r))
+----- $ diktor-head d_outer_never.kel
+ask clause throws
+cancel ask
+caught from clause
+0
+[exit 0]
+===== e_outer_resumable_discard.kel
+effect Ask = { ask: () => Int32 }
+effect Stop = { stop: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => { echoln("ask clause"); perform stop() }
+  case cancel => echoln("cancel ask")
+} handle {
+  case stop() => { echoln("stop: no resume"); 7 }
+}
+echoln(show(r))
+----- $ diktor-head e_outer_resumable_discard.kel
+ask clause
+stop: no resume
+cancel ask
+7
+[exit 0]
+===== f_guard_error.kel
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() if 1 / 0 == 0 => resume(1)
+  case ask() => resume(2)
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head f_guard_error.kel
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+===== g_never_body_error.kel
+effect Fail = { throw: (String) => Never }
+let r = (perform throw("x") + 1) handle {
+  case throw(e) => 1 / 0
+  case cancel => echoln("cancel fail")
+}
+echoln(show(r))
+----- $ diktor-head g_never_body_error.kel
+実行時エラー: ゼロ除算です
+[exit 3]
+===== h_value_noresume.kel
+effect Res = { use: () => Unit }
+effect Ask = { ask: () => Int32 }
+let r = ({ perform use(); perform ask() + 1 }) handle {
+  case use() => resume()
+  case cancel => echoln("cancel res")
+} handle {
+  case ask() => { echoln("ask clause"); 5 }
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head h_value_noresume.kel
+ask clause
+cancel res
+5
+[exit 0]
+===== i_panic_noresume.kel
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => ???
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head i_panic_noresume.kel
+cancel ask
+実行時エラー: ??? に到達しました
+[exit 3]
+===== j_resumed_outer_never.kel
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => { let v = resume(1); echoln("resumed " + show(v)); perform throw("after resume") }
+  case cancel => echoln("cancel ask")
+} handle {
+  case throw(e) => { echoln("caught " + e); 0 }
+}
+echoln(show(r))
+----- $ diktor-head j_resumed_outer_never.kel
+resumed 2
+caught after resume
+0
+[exit 0]
+===== k_nested_second.kel
+effect Ask = { ask: (Int32) => Int32 }
+let r = (perform ask(1) + perform ask(2)) handle {
+  case ask(n) => { echoln("ask " + show(n)); n match { case 1 => resume(10) + 0 case _ => 1 / 0 } }
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))
+----- $ diktor-head k_nested_second.kel
+ask 1
+ask 2
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]

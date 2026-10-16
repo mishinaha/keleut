@@ -1,0 +1,5 @@
+let g(n: Int32): Int32 = run h {
+  let r = Ref.new(n)
+  n match { case x if Ref.get(r) > 0 => x case _ => 0 }
+}
+echoln(show(g(3)))

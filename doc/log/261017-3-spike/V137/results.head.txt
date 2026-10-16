@@ -1,0 +1,129 @@
+# HEAD (diktor-head, 39d4091)
+### grow_outer_small.kel
+effect Fail = { throw: (String) => Never }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else
+  ({ perform use(); perform stop(); 1 }) handle {
+    case use() => resume()
+    case cancel => { echoln("cancel " + show(n)); perform throw("from cancel") }
+  } handle {
+    case stop() => { echoln("stop " + show(n)); loop(n - 1) }
+  }
+let r = loop(3) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+  case return(x) => { echoln("return " + show(x)); x }
+}
+echoln(show(r))
+--- $ OCAMLRUNPARAM=l=100k diktor grow_outer_small.kel 2> err.txt; echo exit; sort err.txt | uniq -c
+cancel 3
+stop 3
+cancel 2
+stop 2
+cancel 1
+stop 1
+return 0
+0
+exit 0
+3 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+
+### retrycancel.kel
+effect Fail = { throw: (String) => Never }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else
+  ({ perform use(); perform stop(); 1 }) handle {
+    case use() => resume()
+    case cancel => perform throw("from cancel")
+  } handle {
+    case stop() => loop(n - 1)
+  }
+let r = loop(100000) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+}
+echoln(show(r))
+--- $ OCAMLRUNPARAM=l=100k diktor retrycancel.kel 2> err.txt; echo exit; sort err.txt | uniq -c
+0
+exit 0
+33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+66229 cancel 節で例外が抑制されました: Stack overflow
+
+### retrycancelvia.kel
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else
+  ({ perform use(); perform stop(); 1 }) handle {
+    case use() => resume()
+    case cancel => { let a = perform ask(); () }
+  } handle {
+    case stop() => loop(n - 1)
+  }
+let r = (loop(100000) handle {
+  case ask() => perform throw("from ask")
+}) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+}
+echoln(show(r))
+--- $ OCAMLRUNPARAM=l=100k diktor retrycancelvia.kel 2> err.txt; echo exit; sort err.txt | uniq -c
+0
+exit 0
+33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+66229 cancel 節で例外が抑制されました: Stack overflow
+
+### retrycancelsame.kel
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else
+  ({ perform use(); perform throw("first") }) handle {
+    case use() => resume()
+    case cancel => perform throw("from cancel")
+  } handle {
+    case throw(e) => loop(n - 1)
+  }
+echoln(show(loop(100000)))
+--- $ OCAMLRUNPARAM=l=100k diktor retrycancelsame.kel 2> err.txt; echo exit; sort err.txt | uniq -c
+0
+exit 0
+100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+
+### grow_tick.kel
+effect Fail = { throw: (String) => Never, tick: () => Unit }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else {
+    perform tick()
+    ({ perform use(); perform stop(); 1 }) handle {
+      case use() => resume()
+      case cancel => perform throw("from cancel")
+    } handle {
+      case stop() => loop(n - 1)
+    }
+  }
+let r = loop(100000) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+  case tick() => resume()
+}
+echoln(show(r))
+--- $ OCAMLRUNPARAM=l=100k diktor grow_tick.kel 2> err.txt; echo exit; sort err.txt | uniq -c
+0
+exit 0
+33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+66229 cancel 節で例外が抑制されました: Stack overflow
+
+# 非末尾 resume の入れ子の最大の深さ(l=100k、二分探索。nontail の形は ex/nontail_N.kel のとおり)
+HEAD: 5403 段で通り 5404 段で落ちる / 試作: 7946 段で通り 7947 段で落ちる
+n=5403 head: 5403 new: 5403
+n=5404 head: 実行時エラー: スタックオーバーフロー(再帰が深すぎます) new: 5404
+n=7946 head: 実行時エラー: スタックオーバーフロー(再帰が深すぎます) new: 7946
+n=7947 head: 実行時エラー: スタックオーバーフロー(再帰が深すぎます) new: 実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+retry: head 1.42s new 1.39s ratio 0.98 (best of 7, no OCAMLRUNPARAM)
+nontail5000: head 0.72s new 0.73s ratio 1.01 (best of 7, no OCAMLRUNPARAM)
+grow_outer: head 0.30s new 0.23s ratio 0.75 (best of 7, no OCAMLRUNPARAM)
+same: head 0.23s new 0.23s ratio 1.02 (best of 7, no OCAMLRUNPARAM)

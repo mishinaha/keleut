@@ -1,0 +1,2 @@
+type R[G] = {x: Int32 extends G[Int32]}
+let f[G](r: R[G]): Int32 = r.x

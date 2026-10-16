@@ -1,0 +1,14 @@
+File "test/inst_init_pure.t", line 1, characters 0-0:
+diff --git a/_build/default/test/inst_init_pure.t b/_build/default/test/inst_init_pure.t.corrected
+index ef3b8e1..e2d563d 100644
+--- a/_build/default/test/inst_init_pure.t
++++ b/_build/default/test/inst_init_pure.t.corrected
+@@ -58,6 +58,5 @@
+   > echoln("b")
+   > KEL
+   $ diktor inidiv.kel
+-  a
+-  実行時エラー: ゼロ除算です
+-  [3]
++  ! inidiv.kel:4:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]

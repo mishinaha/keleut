@@ -1,0 +1,3 @@
+let f(Some(x): Option[Empt]) = 1
+let g(o: Option[Never]): Int32 = o match { case Some(x) => 1 }
+let h(b: Boolean): Int32 = b match { case true => 1 }

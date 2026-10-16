@@ -1,0 +1,3 @@
+type K[A] = Int32
+pub newtype Box = Box(K[(Int32) => Int32])
+echoln("ok")

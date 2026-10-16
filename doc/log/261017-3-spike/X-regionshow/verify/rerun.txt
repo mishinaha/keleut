@@ -1,0 +1,155 @@
+=== r10.kel
+module M {
+  pub newtype Ref[A, B] = MkR(A, B)
+  pub let f[A](r: Ref[A, Int32]): Int32 = 0
+}
+let g[A](r: M.Ref[A, Int32]): Int32 = 0
+--- head
+M.f : (M.Ref[A, Int32]) => Int32 @ {}
+g : (M.Ref[A, Int32]) => Int32
+[0]
+--- new
+M.f : (M.Ref[A, Int32]) => Int32 @ {}
+g : (M.Ref[A, Int32]) => Int32
+[0]
+=== r11.kel
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let f[h](w: Wrap[Ref, h]): Int32 = 0
+let u[h](r: Ref[h, Int32]) = W(r)
+--- head
+! r11.kel:2:18: 型エラー: 型構成子 Ref には型引数が必要です
+[1]
+--- new
+! r11.kel:2:18: 型エラー: 型構成子 Ref には型引数が必要です
+[1]
+=== r12.kel
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let u[h](r: Ref[h, Int32]): Wrap[Ref, h] = W(r)
+let v = fn(r) => W(r)
+let x[h](r: Ref[h, Int32]) = v(r)
+--- head
+! r12.kel:2:34: 型エラー: 型構成子 Ref には型引数が必要です
+[1]
+--- new
+! r12.kel:2:34: 型エラー: 型構成子 Ref には型引数が必要です
+[1]
+=== r13.kel
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let v = fn(r) => W(r)
+let x[h](r: Ref[h, Int32]) = v(r)
+--- head
+v : (F[A, Int32]) => Wrap[F, A]
+x : (Ref[A, Int32]) => Wrap[Ref, A]
+[0]
+--- new
+v : (F[A, Int32]) => Wrap[F, A]
+x : (Ref[h, Int32]) => Wrap[Ref, h]
+[0]
+=== r1.kel
+let get[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let first[h, A](a: MutableArray[h, A]): A @ Heap[h] = MutableArray.get(a, 0)
+let both[h, A, B](r: Ref[h, B], a: MutableArray[h, A]): B @ Heap[h] = Ref.get(r)
+let poly = fn(u) => Ref.new(0)
+let two[h, k](r: Ref[h, Int32], s: Ref[k, Int32]): Int32 @ {Heap[h], Heap[k]} = 0
+let pair[h](r: Ref[h, Int32]): (Ref[h, Int32], Int32) = (r, 0)
+--- head
+get : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+first : (MutableArray[A, B]) => B @ {Heap[A]}
+both : (Ref[A, B], MutableArray[A, C]) => B @ {Heap[A]}
+poly : (A) => Ref[B, Int32] @ {Heap[B] extends R1}
+two : (Ref[A, Int32], Ref[B, Int32]) => Int32 @ {Heap[A], Heap[B]}
+pair : (Ref[A, Int32]) => (Ref[A, Int32], Int32)
+[0]
+--- new
+get : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+first : (MutableArray[h, A]) => A @ {Heap[h]}
+both : (Ref[h, A], MutableArray[h, B]) => A @ {Heap[h]}
+poly : (A) => Ref[h, Int32] @ {Heap[h] extends R1}
+two : (Ref[h, Int32], Ref[h1, Int32]) => Int32 @ {Heap[h], Heap[h1]}
+pair : (Ref[h, Int32]) => (Ref[h, Int32], Int32)
+[0]
+=== r2.kel
+let f[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let g[h](r: Ref[h, String]): Int32 @ Heap[h] = f(r)
+--- head
+f : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+! r2.kel:2:50: 型エラー: 型が一致しません: String と Int32
+[1]
+--- new
+f : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+! r2.kel:2:50: 型エラー: 型が一致しません: String と Int32
+[1]
+=== r3.kel
+let f[A](x: A, r: Ref[A, Int32]): Int32 = 0
+let g[h](x: h): Int32 = 0
+--- head
+f : (A, Ref[A, Int32]) => Int32
+g : (A) => Int32
+[0]
+--- new
+f : (h, Ref[h, Int32]) => Int32
+g : (A) => Int32
+[0]
+=== r4.kel
+let main(): Int32 = run h { let r = Ref.new(1); r }
+--- head
+! r4.kel:1:21: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[1]
+--- new
+! r4.kel:1:21: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[1]
+=== r5.kel
+let r = Ref.new
+--- head
+r : (A) => Ref[B, A] @ {Heap[B] extends R1}
+[0]
+--- new
+r : (A) => Ref[h, A] @ {Heap[h] extends R1}
+[0]
+=== r6.kel
+let f(r: Ref[Int32, Int32]): Int32 = 0
+let g(): Int32 @ Heap[Int32] = 0
+--- head
+f : (Ref[Int32, Int32]) => Int32
+g : () => Int32 @ {Heap[Int32]}
+[0]
+--- new
+f : (Ref[Int32, Int32]) => Int32
+g : () => Int32 @ {Heap[Int32]}
+[0]
+=== r7.kel
+let first[h, A](a: MutableArray[h, A]): A @ Heap[h] = MutableArray.get(a, 0)
+let g[h](r: Ref[h, Int32]): Int32 @ Heap[h] = first(r)
+--- head
+first : (MutableArray[A, B]) => B @ {Heap[A]}
+! r7.kel:2:53: 型エラー: 型が一致しません: Ref[ς1, Int32] と MutableArray[ς1, _A]
+[1]
+--- new
+first : (MutableArray[h, A]) => A @ {Heap[h]}
+! r7.kel:2:53: 型エラー: 型が一致しません: Ref[ς1, Int32] と MutableArray[ς1, _A]
+[1]
+=== r8.kel
+let id[A](x: A): A = x
+let w = id(Ref.new)
+let k: Int32 = w
+--- head
+id : (A) => A
+w : (_A) => Ref[_B, _A] @ {Heap[_B] extends _R1}
+! r8.kel:3:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と (_A) => Ref[_B, _A] @ {Heap[_B] extends _R1})
+[1]
+--- new
+id : (A) => A
+w : (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1}
+! r8.kel:3:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1})
+[1]
+=== r9.kel
+let h1[h, E](r: Ref[h, Int32]): Int32 @ {Heap[h] extends E} = Ref.get(r)
+let k[h](r: Ref[h, Int32]): Int32 = h1(r)
+--- head
+h1 : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+k : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+[0]
+--- new
+h1 : (Ref[h, Int32]) => Int32 @ {Heap[h] extends R1}
+k : (Ref[h, Int32]) => Int32 @ {Heap[h] extends R1}
+[0]

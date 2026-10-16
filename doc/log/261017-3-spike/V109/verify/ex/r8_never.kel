@@ -1,0 +1,7 @@
+effect Fail = { fail: (String) => Never }
+let safe[A: Show](x: A, k: Int32): String =
+  ({ if k > 0 then show(x) else perform fail(show(x)) }) handle {
+    case fail(m) => "fail:" + m + show(x)
+    case return(s) => "ok:" + s
+  }
+echoln(safe(Cons(1, Nil), 1) + " " + safe(true, 0))

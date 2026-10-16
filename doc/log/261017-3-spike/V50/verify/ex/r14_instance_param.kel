@@ -1,0 +1,5 @@
+type W: EffectRow = {Print}
+newtype Bx[A] = Bx(A)
+type class Run[F] { val go: (F, () => Unit @ {W}) => Unit @ {W} }
+type instance [W] Run[Bx[_]] { let go(a, k) = k() }
+with_stdout(fn() => go(Bx(0), fn() => println("inst")))

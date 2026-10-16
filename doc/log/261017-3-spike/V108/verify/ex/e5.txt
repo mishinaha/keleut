@@ -1,0 +1,10 @@
+let (a, b) = (show, 1)
+let p = (show, 1); let p2 = p
+p2
+let q: [A: Show] (A) => String = ???
+let s: [A: Show] (A) => String = show
+s(3)
+let r = (println, 1)
+r
+println
+Show.show

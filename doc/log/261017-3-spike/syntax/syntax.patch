@@ -1,0 +1,2318 @@
+diff -ruN -x _build a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:50:58.581803343 +0900
+@@ -157,7 +157,7 @@
+   in
+   go default_options args
+ 
+-(* ## 16.3 前段の実体化と、パースエラーの整形
++(* ## 16.3 前段の実体化と、字句エラーと構文エラーの整形
+ 
+    字句解析器(第2章)とパーサ(第3章)は、AST のノードに貼るデータをパラメータに取るファンクタである。
+    本章は第5章の `Tree.ElabData` を渡して、両者を実体化する。
+@@ -167,8 +167,9 @@
+ module Parser' = Parser.Make (Tree.ElabData)
+ 
+ (* `Parse_error` は、位置まで整形し終えた 1 行を運ぶための、本章専用の例外である。
+-   menhir が投げる `Parser'.Error` は情報を持たず、どこで詰まったかは、
++   §16.3a の駆動が投げる `Parser'.Error` は情報を持たず、どこで詰まったかは、
+    字句解析器が覚えている最後のトークンの位置からしか取れない。
++   詰まる直前の状態を調べるのは、§16.3a の駆動の中だけである。
+    パーサと字句解析器の両方を扱うのは本章だけなので、
+    両者の情報を結びつけて整形できるのも本章だけである。
+ 
+@@ -238,40 +239,161 @@
+   (* from_filename はファイルを一括で読む。open と読み出しの両方の段で起きる
+      Sys_error を入力エラーにするため、この段を with_input で包む。印字は包まない。
+      印字の失敗を入力エラーと取り違えないためである *)
+-  let tokens =
+-    try with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file))
+-    with Sedlexing.MalFormed ->
+-      (* parse_with(§16.3)と同じく、ファイル名を付けて報告する *)
+-      raise (Parse_error (file ^ ": 字句エラー: 不正な UTF-8 バイト列です"))
+-  in
++  let tokens = with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file)) in
+   List.iter (fun e -> Printf.printf "%4d  %s\n" e.Lexer'.sp.Lexing.pos_lnum (Lexer'.show_token e.Lexer'.tok)) tokens
+ 
++(* ## 16.3a 増分 API による駆動と、予約語の誤用
++
++   パーサは menhir の表の形(`--table`)で生成し、増分 API で 1 トークンずつ駆動する。
++   こうすると、文法に合わないトークンに出会ったとき、その直前の状態が手元に残る。
++   `parse_program` はその状態を使い、誤りの種類を 1 つだけ見分ける。
++   予約語を識別子の位置に書いた誤りである。
++   見分けたときは、予約語の綴りと位置を付けた `Syntax_error_at` を投げる。
++   それ以外の誤りでは `Parser'.Error` を投げる。
++
++   見分ける条件は、詰まったトークンが予約語(第2章 §2.13)で、
++   それを同じ綴りの識別子に置き換えると、次のトークンまで読み進められることである。
++   `let then = 1` は、`then` を識別子にすると `=` まで進めるので、この誤りとして報告する。
++   文面は、予約語をその位置に書けないことを先に言い、識別子に使えないことを括弧の中に添える。
++   前置で書いた `handle { ... } with { ... }` や `match(x) { ... }`、
++   順序を逆にした `import { b } from ...` も、
++   識別子に置き換えると呼び出しや末尾ブロックとして読み進められるので、
++   この条件に通る。
++   これらは識別子のつもりで書いた形ではないので、識別子に使えないとだけ言うと原因から外れる。
++   次のトークンまで見るのは、予約語を予約語として書いたが位置が違う入力を除くためである。
++   `1 + if c then 1 else 2` の `if` や、宣言の後ろに書いた `from` がそれにあたる。
++   これらは識別子に置き換えても次のトークン(`c` や文字列)で詰まるので、汎用の文面になる。
++
++   次のトークンまで見ても除けない形がある。
++   `1 + if (c) then 1 else 2` の `if` は、識別子に置き換えると `(` まで進める。
++   そこで、詰まった位置に `(` を置けば、その直後に同じ予約語を置けるときも、汎用の文面にする。
++   これは、`if` や `fn` のように式を始める予約語を、
++   括弧で囲まずに演算子のオペランドに書いた形である。
++   `true` と `false` はこの判定から外す。
++   `let true = 1` の `true` は、`(` の後ろならパターンとして置けるが、
++   識別子の位置に書いた誤りだからである。
++
++   条件はもう 1 つある。
++   `{then = 1}` の `{` は、第2章 §2.9 の表で `then` を識別子と見ないので、ブロックに分類される。
++   ブロックの中では識別子の次に `=` を置けないので、上の条件に通らない。
++   そこで、詰まった予約語の直前が `{blk` で、次のトークンが `=` か `,` のときも、
++   この誤りとして報告する。
++   §2.9 の表でレコードに分類する形を、予約語についても同じに見たものである。
++
++   次のトークンを読むと、字句解析器が控える直前のトークンとその位置が進む。
++   汎用の文面はその位置を使い、対話的な実行は直前のトークンが `EOF` かどうかで続きの行を待つか決める(§16.6b)。
++   そこで、読む前の値を控えておき、読んだ直後に戻す。
++   次のトークンの字句エラーと、置き換えた後の意味アクションが投げる構文エラーは、
++   条件に通らなかったものとして扱う。
++   置き換えた後の還元は意味アクションを実行して木のノードを作るが、その木は捨てる。 *)
++module I = Parser'.MenhirInterpreter
++
++(* 識別子に置き換えた状態から、次の入力を求めるところまで進める *)
++let rec advance cp =
++  match cp with
++  | I.Shifting _ | I.AboutToReduce _ -> advance (I.resume cp)
++  | _ -> cp
++
++let misused_reserved_word lexer ~after_brace before (tok, sp, ep) =
++  match Lexer'.reserved_word tok with
++  | None -> None
++  | Some w ->
++      let prev = lexer.Lexer'.prev and last_sp = lexer.Lexer'.last_sp and last_ep = lexer.Lexer'.last_ep in
++      let before_ep = lexer.Lexer'.before_ep and before_cont = lexer.Lexer'.before_cont in
++      let recent = lexer.Lexer'.recent in
++      let next = match Lexer'.read lexer with next, nsp, _ -> Some (next, nsp) | exception Lexer.Lex_error _ -> None in
++      lexer.Lexer'.prev <- prev;
++      lexer.Lexer'.last_sp <- last_sp;
++      lexer.Lexer'.last_ep <- last_ep;
++      lexer.Lexer'.before_ep <- before_ep;
++      lexer.Lexer'.before_cont <- before_cont;
++      lexer.Lexer'.recent <- recent;
++      let continues (next, nsp) =
++        match advance (I.offer before (Lexer'.Parser.LOWER_IDENTIFIER w, sp, ep)) with
++        | I.InputNeeded _ as cp -> I.acceptable cp next nsp
++        | _ -> false
++        | exception Syntax.Syntax_error_at _ -> false
++      in
++      let record_label = function Lexer'.Parser.EQ, _ | Lexer'.Parser.COMMA, _ -> after_brace | _ -> false in
++      let operand () =
++        match advance (I.offer before (Lexer'.Parser.LPAREN, sp, sp)) with
++        | I.InputNeeded _ as cp -> I.acceptable cp tok sp
++        | _ -> false
++        | exception Syntax.Syntax_error_at _ -> false
++      in
++      let literal = match tok with Lexer'.Parser.BOOL _ -> true | _ -> false in
++      match next with
++      | Some n when (continues n || record_label n) && (literal || not (operand ())) -> Some (w, sp)
++      | _ -> None
++
++let parse_program lexer =
++  let rec run last prev_tok cp =
++    match cp with
++    | I.InputNeeded _ ->
++        let triple = Lexer'.read lexer in
++        run (Some (cp, triple)) (Option.map (fun (_, (t, _, _)) -> t) last) (I.offer cp triple)
++    | I.Shifting _ | I.AboutToReduce _ -> run last prev_tok (I.resume cp)
++    | I.Accepted v -> v
++    | I.HandlingError _ | I.Rejected -> (
++        let after_brace = prev_tok = Some Lexer'.Parser.LBRACE_BLOCK in
++        match Option.bind last (fun (before, triple) -> misused_reserved_word lexer ~after_brace before triple) with
++        | Some (w, sp) ->
++            raise (Syntax.Syntax_error_at (sp, Printf.sprintf "予約語 %s はここには書けません(予約語は識別子に使えません)" w))
++        | None -> raise Parser'.Error)
++  in
++  (* 開始位置は空の lexbuf の位置(1 行目の 0 桁)である。
++     開始直後に空の規則を還元したときだけ、ノードの位置になる *)
++  run None None (Parser'.Incremental.program (Lexing.from_string "").Lexing.lex_curr_p)
++
+ (* `parse_with` は、パースの入口を 1 つにまとめる関数である。
+    上流から来る失敗のうち、この関数が受けるのは次の 4 種類である。
+ 
+-   - `Parser'.Error`：menhir が次に進む節を選べなかった(文法に合わない)
++   - `Parser'.Error`：§16.3a の駆動で、menhir が次に進む節を選べず、
++     予約語の誤用でもなかった(文法に合わない)
+    - `Syntax.Syntax_error`：文法は通ったが、脱糖(第3章)が形を拒否した
+-   - `Syntax.Syntax_error_at`：同じく脱糖が形を拒否し、誤りの位置を指定した
+-   - `Sedlexing.MalFormed`：入力が不正な UTF-8 バイト列である
++   - `Syntax.Syntax_error_at`：同じく脱糖が形を拒否し、誤りの位置を指定した。
++     §16.3a の `parse_program` が、予約語を識別子の位置に書いた誤りを報告するときもこれを投げる
++   - `Stack_overflow` と `Out_of_memory`：構文解析が処理系の限度を超えた
+ 
+    利用者から見ると、どれも入力を読めなかったという誤りなので、1 行にそろえて `Parse_error` にする。
+    前の 3 つには位置を付ける。
+    `Syntax_error_at` には指定された位置を、ほかの 2 つには最後に読んだトークンの位置を使う。
+-   `MalFormed` では位置が失われているので、ファイル名だけを付ける。
++   ただし `Parser'.Error` の直前で数値が隙間なく別のトークンに割れていたときは(第2章 §2.14)、
++   `parse_error_message` が数値の開始位置を指し、数値とその直後に続く綴りを名指す。
++
++   構文解析が限度を超えるのは、文法の動作の中の末尾でない再帰による。
++   たとえば、ブロックの文の列を畳む `block_of_items` と、引数の列から行を組む `record_of_args` は、
++   列の長さに比例してスタックを使う。
++   限度を超えた時点の最後のトークンは、長い列の終わりの近くにあるだけで、誤りの位置ではない。
++   そこで、限度にはファイル名だけを付ける。
++   限度を受けるのは、それを型検査の段や評価の段の限度と区別し、
++   読み込みの段の失敗として終了コード 2 で報告するためである。
+    字句解析器の `Lexer.Lex_error` はここでは受けず、§16.8 の受け皿がそのまま受ける。
++   不正な UTF-8 バイト列も、第2章が位置つきの `Lex_error` に変えてから投げるので、同じ受け皿に届く。
+    種類ごとに区別して報告したくなったときは、この関数で分ければよい。
+    分岐点を 1 か所に集めてあるのはそのためである。 *)
++let read_limit_message file = function
++  | Out_of_memory -> file ^ ": 処理系の限度: 構文解析でメモリが不足しました"
++  | _ -> file ^ ": 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)"
++
++let parse_error_message lx =
++  match Lexer'.glued_number lx with
++  | Some (n, sp, next) ->
++      Printf.sprintf "%s: 構文エラー: 数値リテラル %s の直後に %s が続いています(数値リテラルの綴りを確認してください)"
++        (show_pos sp) (Lexer.show_number n) next
++  | None -> (
++      match Lexer'.error_positions lx with
++      | pos, None -> Printf.sprintf "%s: 構文エラー: 付近のトークンを確認してください" (show_pos pos)
++      | pos, Some next ->
++          Printf.sprintf "%s: 構文エラー: この位置の後ろ、%d:%d のトークンが文法に合いません" (show_pos pos)
++            next.Lexing.pos_lnum
++            (next.Lexing.pos_cnum - next.Lexing.pos_bol + 1))
++
+ let parse_unit_with lexer =
+-  try Lexer'.parse Parser'.program lexer with
+-  | Sedlexing.MalFormed ->
+-      (* 位置は失われているが、ファイル名は分かる。複数のファイルを渡したときに
+-         どれが壊れているかが分かるよう、ファイル名を付ける *)
+-      raise (Parse_error (Printf.sprintf "%s: 字句エラー: 不正な UTF-8 バイト列です" lexer.Lexer'.last_sp.Lexing.pos_fname))
+-  | Parser'.Error ->
+-      raise (Parse_error (Printf.sprintf "%s: パースエラー(付近のトークンを確認してください)" (show_pos lexer.Lexer'.last_sp)))
+-  | Syntax.Syntax_error msg ->
+-      raise (Parse_error (Printf.sprintf "%s: 構文エラー: %s" (show_pos lexer.Lexer'.last_sp) msg))
++  try parse_program lexer with
++  | Parser'.Error -> raise (Parse_error (parse_error_message lexer))
+   | Syntax.Syntax_error_at (pos, msg) -> raise (Parse_error (Printf.sprintf "%s: 構文エラー: %s" (show_pos pos) msg))
++  | (Stack_overflow | Out_of_memory) as ex -> raise (Parse_error (read_limit_message lexer.Lexer'.last_sp.Lexing.pos_fname ex))
+ 
+ (* import はコマンド行で渡したファイルにだけ書ける。プレリュードと文字列の API は、
+    相対パスの基準になるファイルを持たないので、import があれば構文エラーにする *)
+@@ -760,18 +882,18 @@
+   Sedlexing.set_position lexbuf { Lexing.pos_fname = "<stdin>"; pos_lnum = line; pos_bol = -col; pos_cnum = 0 };
+   Sedlexing.set_filename lexbuf "<stdin>";
+   let lx = Lexer'.from_sedlex lexbuf in
+-  match Lexer'.parse Parser'.program lx with
++  match parse_program lx with
+   | [], ds -> Complete ds
+   | im :: _, _ ->
+       Failed (Printf.sprintf "%s: 構文エラー: import は対話的な実行では書けません" (show_pos im.Syntax.im_loc.Location.start))
+   | exception Parser'.Error ->
+       if lx.Lexer'.prev = Some Lexer'.Parser.EOF then Incomplete
+-      else Failed (Printf.sprintf "%s: パースエラー(付近のトークンを確認してください)" (show_pos lx.Lexer'.last_sp))
+-  | exception Lexer.Lex_error (("unterminated string literal" | "unterminated block comment"), _) -> Incomplete
++      else Failed (parse_error_message lx)
++  | exception Lexer.Lex_error (msg, _) when msg = Lexer.unterminated_text_msg || msg = Lexer.unterminated_comment_msg ->
++      Incomplete
+   | exception Lexer.Lex_error (msg, pos) -> Failed (Printf.sprintf "%s: 字句エラー: %s" (show_pos pos) msg)
+-  | exception Syntax.Syntax_error msg -> Failed (Printf.sprintf "%s: 構文エラー: %s" (show_pos lx.Lexer'.last_sp) msg)
+   | exception Syntax.Syntax_error_at (pos, msg) -> Failed (Printf.sprintf "%s: 構文エラー: %s" (show_pos pos) msg)
+-  | exception Sedlexing.MalFormed -> Failed "<stdin>: 字句エラー: 不正な UTF-8 バイト列です"
++  | exception ((Stack_overflow | Out_of_memory) as ex) -> Failed (read_limit_message "<stdin>" ex)
+ 
+ (* 実行時エラーの文言。§16.8 の受け皿と同じ文言にそろえる *)
+ let runtime_message = function
+@@ -1047,12 +1169,16 @@
+    |---|---|---|
+    | 0 | 正常終了 | `run_with` が最後まで走った |
+    | 1 | 型エラー、import エラー | 第11章の診断、`Aux.Type_error`、`--strict-exhaustive`、§16.3b の `Import_error` |
+-   | 2 | 構文エラー、字句エラー | `Parse_error`、`Lex_error`、不正な UTF-8 |
++   | 2 | 構文エラー、字句エラー | `Parse_error`、`Lex_error`(不正な UTF-8 を含む) |
+    | 3 | 実行時エラー | `Runtime_error`、未処理のエフェクト、再帰過多、メモリ不足、内部異常 |
+    | 4 | 未実装(Diktor が実装していない機能) | `Aux.NotImplemented`(1u8、Int8、module の入れ子など) |
+    | 64 | 使い方の誤り | 引数解析の失敗、入力ファイルや import 先を開けない |
+    | 74 | 出力に書き出せない | 標準出力への flush の失敗 |
+ 
++   再帰過多とメモリ不足は、処理系の限度を超えたことを表し、起きた段の誤りに数える。
++   読み込みの段では 2、型検査の段では 1、評価の段では 3 である。
++   表の 3 の行の再帰過多とメモリ不足は、評価の段のものである。
++
+    64 は BSD の sysexits の EX_USAGE、74 は EX_IOERR である。
+    独自の番号を選ぶより、既にある慣習に従うほうがシェルスクリプトから扱いやすい。
+    74 をプログラムの誤り(3)と分けているのは、
+@@ -1075,8 +1201,10 @@
+    | 存在しないファイル | ファイルを開けません | 64 |
+    | 不正な UTF-8 バイト列 | 字句エラー | 2 |
+    | module の入れ子、module 内の effect | 未実装 | 4 |
+-   | 深すぎる再帰 | 実行時エラー | 3 |
+-   | 巨大な割り当て | 実行時エラー | 3 |
++   | 評価の段の深すぎる再帰 | 実行時エラー | 3 |
++   | 評価の段の巨大な割り当て | 実行時エラー | 3 |
++   | 構文解析の段の長すぎる列 | 処理系の限度 | 2 |
++   | 型検査の段の深すぎる入れ子 | 処理系の限度 | 1 |
+    | 標準出力に書けない(/dev/full) | 出力エラー | 74 |
+ 
+    表の 3 行目の未実装は、第11章の `flatten_modules` が投げる。
+@@ -1089,8 +1217,18 @@
+    ### 守るべき不変条件
+ 
+    - 受け皿は、`run_with` を丸ごと囲む 1 枚だけである。
+-     そのため、型検査中の再帰過多も評価中の再帰過多も、同じ終了コード 3 になる。
+-     フェーズごとに終了コードを分けるには、受け皿を分割する必要がある。
++     受け皿の `Stack_overflow` と `Out_of_memory` の節は、段ごとの受け手が受けなかったものを受け、
++     終了コード 3 にする。
++     評価の段の再帰過多とメモリ不足がそれにあたる。
++     読み込みの段と型検査の段のものは、それぞれの段の受け手が診断に変える。
++     読み込みの段では §16.3 の `parse_unit_with` と §16.6b の `try_parse` が受け、
++     字句と構文の誤りと同じ終了コード 2 にする。
++     型検査の段では第11章の `type_check`、`type_check_units`、`catch_input_errors` が
++     `limit_error` で診断に変え、型検査での拒否と同じ終了コード 1 にする。
++     対話的な実行でも、入力の構文解析と型検査の限度は入力の拒否として報告され、セッションは続く。
++     段ごとの受け手の外で溢れたものも受け皿に届き、終了コード 3 になる。
++     対話的な実行の開始時のプレリュードの型検査(`Elab.start_session`)と、
++     `--dump-ast` の印字がそれにあたる。
+    - 規約を最終的に保証するのは、最後の catch-all である。
+      OCaml は例外パターンの網羅性を検査しないので、
+      新しい例外に節を足し忘れてもコンパイルエラーにならない。
+@@ -1160,9 +1298,6 @@
+       | Sys_error msg ->
+           (* 入力側の誤りは Input_error に閉じ込めてあるので、ここへ来るのは出力側の誤りである *)
+           die_output msg
+-      | Sedlexing.MalFormed ->
+-          Printf.eprintf "字句エラー: 不正な UTF-8 バイト列です\n";
+-          safe_exit 2
+       | Aux.Type_error_at (loc, msg) ->
+           (* type_check の外で投げられた型エラー(位置つき)。
+              CLI では、平坦化の型エラーを type_check_files が先に受ける *)
+diff -ruN -x _build a/lib/dune b/lib/dune
+--- a/lib/dune	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/dune	2026-10-17 04:47:22.489296535 +0900
+@@ -7,7 +7,7 @@
+   (pps sedlex.ppx)))
+ 
+ (menhir
+- (flags --explain --strict)
++ (flags --explain --strict --table)
+  (modules parser))
+ 
+ ; プレリュードを文字列として埋め込む(--prelude PATH で差し替えられる)
+diff -ruN -x _build a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:46:13.691350838 +0900
+@@ -645,7 +645,7 @@
+    表の 2 行目のうち、レコード型のフィールドとタプル型の要素は、
+    仕様 §9 の入れ子の矢印の一覧にも挙がっている(sample.kel:498-500)。
+    レコード型のフィールドにも裸の矢印を書ける。
+-   `{run: () => Unit}` がパースエラーになるのは矢印のせいではなく、
++   `{run: () => Unit}` が構文エラーになるのは矢印のせいではなく、
+    `run` が予約語(§2.4)で、ラベルの位置に置けないからである。
+    フィールド名を変えれば書け、省略した `@` はほかの入れ子と同じく `@ {}` になる
+    (`test/annot_rows.t` の nestrec、`test/nonfeatures.t` の kwlabel)。
+@@ -5491,9 +5491,13 @@
+    `process_decls` の各パスと後始末のループ、`flatten_modules` の宣言の単位である。
+    宣言の単位の包みが最後の受け手なので、どのエラーにも、少なくともその宣言の先頭の位置が付く。
+ 
+-   例外を型付きの返り値に変えるのは、下の `type_check` の 1 か所だけである。
+-   受けるのは 2 系統だけで、`Type_error` / `Type_error_at` は終了コード 1、
++   例外を型付きの返り値に変えるのは、下の `type_check` と、
++   §11.44 の `catch_input_errors`、§11.45 の `type_check_units` の 3 か所である。
++   どれも同じ 3 系統を受け(`type_check_units` はさらに `Import_error` を受ける)、
++   `Type_error` / `Type_error_at` は終了コード 1、
+    `NotImplemented` / `NotImplemented_at` は終了コード 4 になる。
++   残りの 1 系統は、処理系の限度を超えたことを表す `Stack_overflow` / `Out_of_memory` で、
++   型検査での拒否と同じ終了コード 1 になる(下の `limit_error`)。
+    `Syntax_error` と `Syntax_error_at` の節は置かない。
+    この 2 つを投げるのは parser.mly だけで、
+    第16章の `parse_with` がそれをすべて `Parse_error` に包み直してから型検査に入るからである。
+@@ -5526,6 +5530,16 @@
+    (包みの外で投げられた例外では None) *)
+ type error = { e_loc : Location.span option; e_word : string; e_exit : int; e_msg : string }
+ 
++(* 型検査が処理系の限度を超えたときの診断。
++   深すぎる入れ子の推論はスタックを使い尽くし、Stack_overflow になる。
++   これは評価の誤りではなく型検査の段で起きるので、
++   実行時エラーではなく型検査での拒否と同じ終了コード 1 にする。
++   位置は付けない。
++   例外が上がった時点で、どの節点の推論が深すぎたかを示す情報は残っていないからである *)
++let limit_error = function
++  | Out_of_memory -> { e_loc = None; e_word = "処理系の限度"; e_exit = 1; e_msg = "型検査でメモリが不足しました" }
++  | _ -> { e_loc = None; e_word = "処理系の限度"; e_exit = 1; e_msg = "型検査で再帰が深すぎます(スタックオーバーフロー)" }
++
+ let type_check ?(prelude = []) decls =
+   current_out := [];
+   try (type_check_decls ~prelude decls, None) with
+@@ -5533,9 +5547,10 @@
+   | Type_error msg -> (List.rev !current_out, Some { e_loc = None; e_word = "型エラー"; e_exit = 1; e_msg = msg })
+   (* Syntax_error と Syntax_error_at の節は置かない。投げるのは parser.mly だけで、第16章の parse_with が
+      すべて Parse_error に包み直してから型検査に入る。届く例外は、Type_error と、未実装の
+-     NotImplemented の 2 系統だけ *)
++     NotImplemented と、処理系の限度の 3 系統だけ *)
+   | NotImplemented_at (loc, feat) -> (List.rev !current_out, Some { e_loc = Some loc; e_word = "未実装"; e_exit = 4; e_msg = feat })
+   | NotImplemented feat -> (List.rev !current_out, Some { e_loc = None; e_word = "未実装"; e_exit = 4; e_msg = feat })
++  | (Stack_overflow | Out_of_memory) as ex -> (List.rev !current_out, Some (limit_error ex))
+ 
+ (* ## 11.44 対話的な実行の入口
+ 
+@@ -5561,6 +5576,7 @@
+   | Type_error msg -> Error { e_loc = None; e_word = "型エラー"; e_exit = 1; e_msg = msg }
+   | NotImplemented_at (loc, feat) -> Error { e_loc = Some loc; e_word = "未実装"; e_exit = 4; e_msg = feat }
+   | NotImplemented feat -> Error { e_loc = None; e_word = "未実装"; e_exit = 4; e_msg = feat }
++  | (Stack_overflow | Out_of_memory) as ex -> Error (limit_error ex)
+ 
+ let start_input () =
+   current_out := [];
+@@ -5909,5 +5925,6 @@
+   | Import_error (loc, msg) -> fail { e_loc = Some loc; e_word = "import エラー"; e_exit = 1; e_msg = msg }
+   | NotImplemented_at (loc, feat) -> fail { e_loc = Some loc; e_word = "未実装"; e_exit = 4; e_msg = feat }
+   | NotImplemented feat -> fail { e_loc = None; e_word = "未実装"; e_exit = 4; e_msg = feat }
++  | (Stack_overflow | Out_of_memory) as ex -> fail (limit_error ex)
+ 
+ let () = Show.unit_label := fun o -> Decls.unit_path (Decls.entity_unit o)
+diff -ruN -x _build a/lib/lexer.ml b/lib/lexer.ml
+--- a/lib/lexer.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/lexer.ml	2026-10-17 04:49:28.187337341 +0900
+@@ -51,12 +51,15 @@
+    ASI と `{` の分類を固定する手段は、このゴールデンだけである。
+    このゴールデンは、sample.kel 全文をトークン化したときのトークンの数と末尾も固定している。
+ 
+-   字句解析の途中で本章のコードが投げる例外は `Lex_error` だけで、メッセージと位置を持つ。
++   字句解析の途中で本章が外へ出す例外は `Lex_error` だけで、メッセージと位置を持つ。
+    第16章(driver.ml)がこれを終了コード 2 のエラーとして報告する。
+-   ほかに、driver の別の分岐が受ける例外が 2 つある。
+-   1 つは、不正な UTF-8 バイト列に対して sedlex のデコーダが投げる `Sedlexing.MalFormed` で、
+-   これも終了コード 2 になる(§2.6)。
+-   もう 1 つは `Sys_error` である。
++   メッセージは日本語の文で、利用者に見せる診断の本文になる。
++   閉じていない文字列リテラルとブロックコメントの 2 つだけは、
++   文面に `unterminated_text_msg` と `unterminated_comment_msg` の名前を付ける。
++   第16章の対話的な実行が、この 2 つを続きの行を待つ印として見分けるからである。
++   不正な UTF-8 バイト列に対して sedlex のデコーダが投げる `Sedlexing.MalFormed` も、
++   §2.7 の終わりで位置を付けて `Lex_error` に変えるので、外へは出ない。
++   ほかに driver が受ける例外は `Sys_error` である。
+    `from_filename` は、`In_channel.with_open_bin` が投げる `Sys_error` を捕まえ、
+    ファイル名を付けて投げ直す。
+    ファイルを開けない、または読めないときは、この例外によって終了コード 64 になる。 *)
+@@ -64,6 +67,10 @@
+ 
+ exception Lex_error of string * Lexing.position
+ 
++let unterminated_text_msg = "文字列リテラルが閉じていません"
++
++let unterminated_comment_msg = "ブロックコメントが閉じていません"
++
+ (* ## 2.1 数値リテラルは値ではなく表記を運ぶ
+ 
+    `parse_number` は lexeme の文字列だけを受け取り、
+@@ -289,7 +296,7 @@
+    コメントは 2 種類ある。
+    `//` は行末まで読み飛ばすが、改行は消費しない。
+    改行を消費すると、ASI が文区切りを作れなくなるからである。
+-   `/* */` は入れ子を数え、EOF に達したら「unterminated block comment」の字句エラーにする。
++   `/* */` は入れ子を数え、EOF に達したら「ブロックコメントが閉じていません」の字句エラーにする。
+ 
+    改行を含むブロックコメントは、`NL` 1 個として扱う。
+    コメントを足しただけで前後の行がつながってしまうのを防ぐためである。
+@@ -321,9 +328,9 @@
+         | '\n' ->
+             saw_nl := true;
+             go depth
+-        | eof -> raise (Lex_error ("unterminated block comment", cur_pos lexbuf))
++        | eof -> raise (Lex_error (unterminated_comment_msg, cur_pos lexbuf))
+         | any -> go depth
+-        | _ -> raise (Lex_error ("unterminated block comment", cur_pos lexbuf))
++        | _ -> raise (Lex_error (unterminated_comment_msg, cur_pos lexbuf))
+     in
+     go 1
+ 
+@@ -354,7 +361,8 @@
+    検査を省くと、`\uD800` と書いただけで `Invalid_argument` が字句層から漏れる。
+    `is_valid` は範囲外とサロゲートの域の両方を拒否するので、`\uD800` は普通の字句エラーになる。
+ 
+-   字句エラーも、不正な UTF-8 バイト列(`Sedlexing.MalFormed`)も、終了コードは 2 である。
++   字句エラーも、不正な UTF-8 バイト列(§2.7 の終わりで `Lex_error` に変える)も、
++   終了コードは 2 である。
+    どちらもソースを読めなかったという同じ種類の失敗なので、同じ番号にしている
+    (型エラーは 1、ファイルを開けないときは 64)。
+ 
+@@ -369,7 +377,7 @@
+     let rec loop acc i =
+       if i = limit then
+         if Uchar.is_valid acc then Uchar.of_int acc
+-        else raise (Lex_error ("invalid unicode escape (out of range or surrogate)", cur_pos lexbuf))
++        else raise (Lex_error ("Unicode エスケープの値がサロゲートか、U+10FFFF を超えています", cur_pos lexbuf))
+       else
+         let ret base_char base_value =
+           loop ((acc * 16) + (Uchar.to_int (Sedlexing.lexeme_char lexbuf 0) - Char.code base_char) + base_value) (i + 1)
+@@ -378,7 +386,7 @@
+         | '0' .. '9' -> ret '0' 0
+         | 'a' .. 'f' -> ret 'a' 10
+         | 'A' .. 'F' -> ret 'A' 10
+-        | _ -> raise (Lex_error ("unexpected end of unicode escape", cur_pos lexbuf))
++        | _ -> raise (Lex_error ("Unicode エスケープの 16 進の桁が足りません", cur_pos lexbuf))
+     in
+     loop 0 0
+ 
+@@ -396,14 +404,14 @@
+     | 'r' -> Uchar.of_char '\r'
+     | 't' -> Uchar.of_char '\t'
+     | 'v' -> Uchar.of_int 0x0b
+-    | _ -> raise (Lex_error ("invalid escape sequence", cur_pos lexbuf))
++    | _ -> raise (Lex_error ("不正なエスケープです", cur_pos lexbuf))
+ 
+   let read_text lexbuf =
+     let buf = Buffer.create 64 in
+     let rec aux () =
+       match%sedlex lexbuf with
+       | '"' -> Buffer.contents buf
+-      | eof -> raise (Lex_error ("unterminated string literal", cur_pos lexbuf))
++      | eof -> raise (Lex_error (unterminated_text_msg, cur_pos lexbuf))
+       | '\\' ->
+           Buffer.add_utf_8_uchar buf (read_escape lexbuf);
+           aux ()
+@@ -413,7 +421,7 @@
+       | any ->
+           Buffer.add_string buf (lexeme lexbuf);
+           aux ()
+-      | _ -> raise (Lex_error ("unterminated string literal", cur_pos lexbuf))
++      | _ -> raise (Lex_error (unterminated_text_msg, cur_pos lexbuf))
+     in
+     aux ()
+ 
+@@ -429,14 +437,14 @@
+    複数文字の記号を上にまとめているのは、読みやすさのための整理である。
+ 
+    末尾では、`eof` と `any` を別の分岐にしている。
+-   `eof` だけが `EOF` を返し、`any` に落ちた文字は「unexpected character」の字句エラーにする。
++   `eof` だけが `EOF` を返し、`any` に落ちた文字は「予期しない文字です」の字句エラーにする。
+    知らない文字を `EOF` として返すと、パーサにはそこでファイルが終わったように見え、
+    その先のエラーメッセージがすべて的外れになる。
+ 
+    一方で、`any` に落ちた文字をそのままメッセージに出すと、不可視の文字では診断が読めなくなる。
+    その代表が BOM(U+FEFF)である。
+    仕様 §0 は、文字列リテラルとコメントの外にある BOM を、位置によらず字句エラーと定めている。
+-   BOM を生のまま出すと、`unexpected character: ` の後ろに見えない 3 バイトが並ぶだけで、
++   BOM を生のまま出すと、`予期しない文字です: ` の後ろに見えない 3 バイトが並ぶだけで、
+    ゴールデンにも固定できない(エディタや差分ツールが黙って壊す)。
+    そこで `any` の分岐は、次の文字だけを `U+XXXX` の表記で出し、それ以外の文字は字面のまま出す。
+ 
+@@ -489,7 +497,7 @@
+         if Sedlexing.lexeme_start lexbuf = 0 then (
+           skip_rest_of_line lexbuf;
+           read_raw_token lexbuf)
+-        else raise (Lex_error ("stray '#!'", cur_pos lexbuf))
++        else raise (Lex_error ("#! はファイルの先頭にだけ書けます", cur_pos lexbuf))
+     | "???" -> here HOLE
+     | "..." -> here DOTDOTDOT
+     | "=>" -> here EQ_GREATER
+@@ -549,8 +557,21 @@
+           || (cp >= 0x2060 && cp <= 0x2064)
+         in
+         let shown = if invisible then Printf.sprintf "U+%04X" cp else lexeme lexbuf in
+-        raise (Lex_error ("unexpected character: " ^ shown, cur_pos lexbuf))
+-    | _ -> raise (Lex_error ("unexpected input", cur_pos lexbuf))
++        raise (Lex_error ("予期しない文字です: " ^ shown, cur_pos lexbuf))
++    | _ -> raise (Lex_error ("予期しない入力です", cur_pos lexbuf))
++
++(* 不正な UTF-8 バイト列は、sedlex のデコーダが `Sedlexing.MalFormed` として投げる。
++   この例外は位置を持たないので、ここで受けて位置つきの `Lex_error` に変える。
++   デコーダは正しい前置部分を先にバッファへ入れ、
++   不正なバイトに読み進もうとした時点で例外を投げる。
++   そのため、この時点の現在位置(`lexing_position_curr`)は、不正なバイトそのものの位置である。
++   トークンの開始位置(`cur_pos`)を使わないのは、
++   `ab` の後ろに不正なバイトが続く識別子では、開始位置が `a` を指すからである。
++   ファイル名も lexbuf から取るので、最初のトークンで失敗してもファイル名は失われない。
++   層 2 と層 3 は、この関数を通してだけ生トークンを読む。 *)
++  let read_raw_token lexbuf =
++    try read_raw_token lexbuf
++    with Sedlexing.MalFormed -> raise (Lex_error ("不正な UTF-8 バイト列です", Sedlexing.lexing_position_curr lexbuf))
+ 
+ (* ## 2.8 字句解析器の状態と先読みキュー
+ 
+@@ -562,6 +583,8 @@
+    - `last_sp` / `last_ep`：直前に渡したトークンの開始位置と終了位置。
+      第16章(driver.ml)が `last_sp` を構文エラーの報告に使う。
+      `last_ep` はどこからも読まれていない
++   - `recent`：直前に渡したトークンから遡って高々 3 個(新しいものが先頭)。
++     §2.14 が、構文エラーの直前で数値が別のトークンに割れたかを調べるのに使う
+ 
+    `peek t i` は、キューが足りなければ生トークンを継ぎ足して i 番目を返す。
+    `peek_sig t k` は、`NL` を飛ばして k 個目の有意トークンを覗く。
+@@ -599,6 +622,9 @@
+     mutable prev : token option; (* 直前に消費者へ渡したトークン(昇格した NL を含む) *)
+     mutable last_sp : Lexing.position; (* 直前に消費者へ渡したトークンの位置(エラー報告用) *)
+     mutable last_ep : Lexing.position;
++    mutable before_ep : Lexing.position; (* last_sp のトークンの 1 つ前のトークンの終了位置 *)
++    mutable before_cont : bool; (* 1 つ前のトークンの後ろの改行を、続きとして捨てる状態だったか *)
++    mutable recent : entry list; (* 直前に消費者へ渡したトークンから遡って高々 3 個(§2.14) *)
+   }
+ 
+   let from_sedlex lexbuf =
+@@ -609,6 +635,9 @@
+       prev = None;
+       last_sp = Lexing.dummy_pos;
+       last_ep = Lexing.dummy_pos;
++      before_ep = Lexing.dummy_pos;
++      before_cont = false;
++      recent = [];
+     }
+ 
+   let from_string source = Sedlexing.Utf8.from_string source |> from_sedlex
+@@ -777,7 +806,7 @@
+    逆に `LPAREN` は `can_begin_statement` に含めている。
+    これは、行頭の `(` を前の行の続きとみなさないという sample.kel:295 の規則の実装である。
+    `VAL` も含めている。
+-   これが無いと、クラスの本体の 2 つ目の `val` の前で改行が捨てられ、パースエラーになる。
++   これが無いと、クラスの本体の 2 つ目の `val` の前で改行が捨てられ、構文エラーになる。
+    `IF` も含めている。
+    行頭の `if` は条件式(第3章 §3.18)で、新しい文を始める。
+    ガードの `if` は `RClause` の中にあり、そこでは述語を見ずに改行を捨てるので、
+@@ -831,7 +860,7 @@
+    括弧の深さは region スタックが実質的に見ているので、
+    見分けが要るのは、ガードの最上位に括弧で包まずに置いたラムダの矢印だけである。
+    `RClause` は、まだ矢印の来ていない `fn` の本数を数え、その本数だけ矢印を見送る。
+-   見分けないと、ラムダの矢印で region が早く pop し、続く改行が区切りになってパースエラーになる。
++   見分けないと、ラムダの矢印で region が早く pop し、続く改行が区切りになって構文エラーになる。
+    この形のガードは Boolean にならないので、型の付くプログラムには現れず、影響は診断の質にとどまる。
+ 
+    節のパターンには型注釈の構文が無い(`test/nonfeatures.t` の patannot)。
+@@ -924,10 +953,11 @@
+ 
+ (* ## 2.11 消費者 API
+ 
+-   Menhir の revised API は `unit -> token * position * position` の関数を求める。
+-   `read` がその関数で、あわせて直前に渡したトークンの開始位置と終了位置を状態に控える
+-   (そのうち開始位置を構文エラーの報告に使うのは第16章(driver.ml)である)。
+-   `parse` は、`traditional2revised` で包むだけの薄い層である。
++   パーサの駆動は第16章(driver.ml)の `parse_program` が menhir の増分 API で行う。
++   増分 API はトークンと開始位置と終了位置の三つ組を 1 個ずつ受け取り、`read` がその三つ組を返す。
++   `read` は、あわせて直前に渡したトークンとその開始位置と終了位置と、
++   直近の 3 個のトークンを状態に控える
++   (開始位置を構文エラーの報告に使うのは第16章である)。
+ 
+    `all_tokens` は `--dump-tokens` のための出口で、ASI を適用した後のトークン列を EOF まで集める。
+    3 つの層すべてを通した結果をそのまま見られるので、ゴールデンテストはこの出口を使う。 *)
+@@ -935,12 +965,22 @@
+   (* ---- 消費者 API ---- *)
+ 
+   let read t =
++    t.before_ep <- t.last_ep;
++    t.before_cont <-
++      (match t.regions with (RSuppress | RClause _) :: _ -> true | _ -> false)
++      || (match t.prev with Some NL | None -> false | Some p -> not (can_end_statement p));
+     let e = read_token t in
+     t.last_sp <- e.sp;
+     t.last_ep <- e.ep;
++    t.recent <- (match t.recent with a :: b :: _ -> [ e; a; b ] | l -> e :: l);
+     (e.tok, e.sp, e.ep)
+ 
+-  let parse rule lexer = MenhirLib.Convert.Simplified.traditional2revised rule (fun () -> read lexer)
++  (* 文法に合わなかったトークンの報告位置。1 つ前のトークンが続きを求めていて、
++     合わなかったトークンがそれより後の行で始まるなら、1 つ前のトークンの終わりを主な位置にし、
++     合わなかったトークンの位置を添える *)
++  let error_positions t =
++    if t.before_cont && t.last_sp.Lexing.pos_lnum > t.before_ep.Lexing.pos_lnum then (t.before_ep, Some t.last_sp)
++    else (t.last_sp, None)
+ 
+   (* --dump-tokens 用。ASI を適用した後のトークン列を EOF まで集める *)
+   let all_tokens t =
+@@ -1031,4 +1071,62 @@
+     | VAL -> "val"
+     | VERTICAL -> "|"
+     | WITH -> "with"
++
++(* ## 2.13 予約語の綴り
++
++   `reserved_word` は、トークンが予約語なら、その綴りを返す。
++   予約語の表は §2.4 の `keyword_or_ident` の 1 か所だけに置き、ここでは表を写さない。
++   `show_token` で綴りに戻し、その綴りを `keyword_or_ident` に引き直して同じトークンが返れば予約語である。
++   識別子は引き直すと識別子になり、`_` は予約語の表に無いので、どちらも除く。
++   `true` と `false` は `BOOL` で読むが、§2.2 の表では予約語なので、予約語として扱う。
++   第16章(driver.ml)が、識別子の位置に予約語を書いた構文エラーを報告するときに使う。 *)
++
++  let reserved_word tok =
++    let s = show_token tok in
++    match keyword_or_ident s with
++    | LOWER_IDENTIFIER _ | LOWLINE -> None
++    | t when t = tok -> Some s
++    | _ -> None
++
++(* ## 2.14 数値の綴り間違いが割ったトークン
++
++   §2.2 の規則は最も長く一致する綴りで切るので、数値の綴り間違いは字句エラーにならない。
++   `0b102` は `0b10` と `2` に、`1x` と `0x` は数値と識別子に、
++   `1.2.3` は `1.2` と `.` と `3` に切れる。
++   どれも続きのトークンで文法に合わなくなり、構文エラーになる。
++   そのとき menhir が詰まるのは続きのトークンなので、`last_sp` は数値の後ろの位置を指し、
++   利用者は数値を書き間違えたことを読み取りにくい。
++
++   `glued_number` は、構文エラーのときに直近のトークンを見て、この形を見分ける。
++   見分けるのは次の 2 つの形で、どちらも数値とその直後のトークンの間に隙間が無い。
++
++   - 詰まったトークンの直前が数値で、詰まったトークンが英数字か `_` か `.` で始まる
++   - 詰まったトークンが数値で、1 つ前が `.`、2 つ前が数値である(`1.2.3` の `3` で詰まる形)
++
++   2 つ目の形で詰まったトークンを数値に限るのは、浮動小数の後ろの `.` が、
++   `1.2.foo` のようにフィールド選択として文法に合うからである。
++   `.` の後ろで詰まるのは数値か予約語のときで、
++   `1.2.match` のような予約語の形は数値の綴りの誤りではない。
++   2 つ目の形では、`.` とその後ろの数値をつなげて、
++   数値の直後に続く綴りとして返す(`1.2.3` なら `.3`)。
++
++   英数字で始まるかどうかは `show_token` の表記の先頭の文字で判定する。
++   予約語と識別子と数値は綴りのまま表示し、`<NL>` や文字列は記号で始まるからである。
++   返すのは、数値、その開始位置、数値の直後に続く綴りの 3 つである。
++   この判定は診断の文面と位置を変えるだけで、字句の切り方も受理するプログラムも変えない。
++   `1else` のように数値に予約語が隙間なく続いても文法に合う入力は、従来どおり受理する。 *)
++
++  let glued_number t =
++    let touches a b = a.ep.Lexing.pos_cnum = b.sp.Lexing.pos_cnum in
++    let wordlike tok =
++      let s = show_token tok in
++      s <> ""
++      && match s.[0] with 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' -> true | _ -> false
++    in
++    match t.recent with
++    | ({ tok = NUMBER m; _ } as e) :: ({ tok = DOT; _ } as d) :: ({ tok = NUMBER n; _ } as p) :: _
++      when touches p d && touches d e ->
++        Some (n, p.sp, "." ^ show_number m)
++    | e :: ({ tok = NUMBER n; _ } as p) :: _ when touches p e && wordlike e.tok -> Some (n, p.sp, show_token e.tok)
++    | _ -> None
+ end
+diff -ruN -x _build a/lib/parser.mly b/lib/parser.mly
+--- a/lib/parser.mly	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/parser.mly	2026-10-17 04:48:26.654953403 +0900
+@@ -101,12 +101,12 @@
+    menhir の伝統的な API は `(Lexing.lexbuf -> token) -> Lexing.lexbuf -> 'a` という形をしていて、
+    位置を `Lexing.lexbuf` の可変フィールドから読む。
+    sedlex はその lexbuf を持たない。
+-   そこで第2章(lexer.ml)は、`MenhirLib.Convert.Simplified.traditional2revised` で改訂版の API に変換する。
+-   改訂版の API は `(unit -> token * position * position) -> 'a` という形で、
+-   トークンと開始位置と終了位置の三つ組を 1 個ずつ受け取る。
+-   この関数呼び出し 1 つが、字句層と構文層をつなぐ唯一の継ぎ目である。
++   そこで本章のパーサは表の形(`--table`)で生成し、第16章(driver.ml)が増分 API で駆動する。
++   増分 API は、トークンと開始位置と終了位置の三つ組を 1 個ずつ受け取る。
++   第2章(lexer.ml)の `read` がこの三つ組を返し、第16章の `parse_program` がそれをパーサに渡す。
++   この受け渡し 1 か所が、字句層と構文層をつなぐ唯一の継ぎ目である。
+ 
+-   この変換により `$sloc` が実際の位置を返すので、意味アクションは `mk $sloc x` と書くだけで済む。
++   三つ組で渡すので `$sloc` が実際の位置を返し、意味アクションは `mk $sloc x` と書くだけで済む。
+    位置の出所は、第2章が渡す三つ組の 1 か所だけである。
+    全ノードに入れた位置は、第11章の `at_node` が型エラーに結びつけている。
+ 
+@@ -122,6 +122,10 @@
+    §3.7 で `Seq` を例にこの問題を説明する。 *)
+ let mk (sp, ep) x = (Data.allocate { Location.start = sp; Location.finish = ep }, x)
+ 
++let start_of (d, _) = (Data.loc d).Location.start
++
++let syntax_error_at pos msg = raise (Syntax_error_at (pos, msg))
++
+ (* ## 3.4 大文字かどうかの判定と `dot_select`
+ 
+    Keleut には、モジュールのパスとフィールドの選択を書き分ける構文が無い。
+@@ -164,12 +168,12 @@
+       String.iteri (fun i c -> if i > 0 && not (c >= '0' && c <= '9') then ok := false) s;
+       !ok)
+ 
+-let dot_select sloc e id =
++let dot_select sloc e (id_pos, id) =
+   match e with
+   | (_, Ident (LongId comps)) when List.for_all is_upper comps ->
+       mk sloc (Ident (LongId (comps @ [ id ])))
+   | _ ->
+-      if is_upper id then raise (Syntax_error ("レコードのラベルに大文字識別子は使えません: " ^ id))
++      if is_upper id then syntax_error_at id_pos ("レコードのラベルに大文字識別子は使えません: " ^ id)
+       else if is_index_label id then
+         (* t._N = (t \ _item)^N ._item *)
+         let n = int_of_string (String.sub id 1 (String.length id - 1)) in
+@@ -224,7 +228,7 @@
+   | [ (None, e) ] -> e
+   | args ->
+       if List.exists (fun (l, _) -> l <> None) args then
+-        raise (Syntax_error "#Foo(...) にラベル付き引数は使えません")
++        syntax_error_at (fst sloc) "#Foo(...) にラベル付き引数は使えません"
+       else tuple_exp sloc (List.map snd args)
+ 
+ (* ## 3.6 `call` は先頭が大文字なら構築、小文字なら適用にする
+@@ -309,13 +313,13 @@
+       match block_of_items sloc rest with
+       | (_, Seq es) -> mk sloc (Seq (e :: es))
+       | r -> mk sloc (Seq [ e; r ]))
+-  | (_, DLet (_, b)) :: _ when b.lb_pub ->
+-      raise (Syntax_error "ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)")
+-  | (_, DLetRec bs) :: _ when List.exists (fun (_, b) -> b.lb_pub) bs ->
+-      raise (Syntax_error "ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)")
++  | ((_, DLet (_, b)) as b_node) :: _ when b.lb_pub ->
++      syntax_error_at (start_of b_node) "ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)"
++  | ((_, DLetRec bs) as b_node) :: _ when List.exists (fun (_, b) -> b.lb_pub) bs ->
++      syntax_error_at (start_of b_node) "ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)"
+   | (d, DLet b) :: rest -> (d, Let (b, block_of_items sloc rest))
+   | (d, DLetRec bs) :: rest -> (d, LetRec (bs, block_of_items sloc rest))
+-  | _ :: _ -> raise (Syntax_error "この宣言はブロック内では使えません(let / let rec / 式のみ)")
++  | b_node :: _ -> syntax_error_at (start_of b_node) "この宣言はブロック内では使えません(let / let rec / 式のみ)"
+ 
+ (* ## 3.8 `with_splice` で継続を引数の末尾に差し込む
+ 
+@@ -354,7 +358,7 @@
+     match a with
+     | RecordEmpty -> (ad, RecordExtend (mk sloc RecordEmpty, "_item", k))
+     | RecordExtend (rest, l, v) -> (ad, RecordExtend (splice rest, l, v))
+-    | _ -> raise (Syntax_error "with: 呼び出しの引数形が不正です")
++    | _ -> syntax_error_at (fst sloc) "with: 呼び出しの引数形が不正です"
+   in
+   (d, Apply (f, splice args))
+ 
+@@ -363,7 +367,7 @@
+   let k = mk sloc (Lambda { l_params = k_params; l_body = k_body }) in
+   match call with
+   | (d, Apply (f, args)) -> append_last_arg sloc (d, f, args) k
+-  | _ -> raise (Syntax_error "with の右辺は関数呼び出しでなければなりません")
++  | _ -> syntax_error_at (start_of call) "with の右辺は関数呼び出しでなければなりません"
+ 
+ (* 末尾ブロック(§3.19)の補助関数。
+    `trailing_call` は、`{` の位置(lbrace_pos)と、その直前のトークンの終わり(prev_end)を受け取る。
+@@ -374,6 +378,25 @@
+ let trailing_record pos =
+   raise (Syntax_error_at (pos, "末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)"))
+ 
++(* 末尾ブロックの位置に来た、末尾ブロックにならない波括弧の 3 つの形 *)
++type trailing_other = Tb_record | Tb_params of Lexing.position | Tb_annot of Lexing.position
++
++let trailing_other pos = function
++  | Tb_record -> trailing_record pos
++  | Tb_params pos ->
++      raise (Syntax_error_at (pos,
++        "末尾ブロックの引数は小文字の識別子 1 個です(2 個以上の引数を取る関数は fn(x, y) => 式 と書いて括弧の中に渡します)"))
++  | Tb_annot pos ->
++      raise (Syntax_error_at (pos,
++        "末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)"))
++
++let trailing_misplaced pos =
++  raise (Syntax_error_at (pos, "コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません"))
++
++let trailing_after_paren pos =
++  raise (Syntax_error_at (pos,
++    "括弧で囲んだ式には末尾ブロックを付けられません(関数を括弧の中の引数として渡します)"))
++
+ let trailing_call sloc callee args (lbrace_pos, prev_end, k) =
+   if lbrace_pos.Lexing.pos_lnum <> prev_end.Lexing.pos_lnum then
+     raise (Syntax_error_at (lbrace_pos, "末尾ブロックの { は、呼び出しと同じ行に書きます"));
+@@ -409,7 +432,7 @@
+   | [ { cap_label = None; cap_pat = p } ] -> p
+   | args ->
+       if List.exists (fun a -> a.cap_label <> None) args then
+-        raise (Syntax_error "#Foo(...) パターンにラベル付き引数は使えません")
++        syntax_error_at (fst sloc) "#Foo(...) パターンにラベル付き引数は使えません"
+       else pat_tuple sloc (List.map (fun a -> a.cap_pat) args) None
+ 
+ let tuple_ty sloc tys = mk sloc (EBraceRow (List.map (fun t -> BField ("_item", t)) tys, None))
+@@ -443,7 +466,7 @@
+    そこで、`nt_rhs_raw` という生の中間形でいったん受け(§3.17)、
+    名前が見えている `decl_body` の意味アクション(§3.15)で解釈する。
+    こうすれば、短縮形のために文法を分けずに済む。 *)
+-let set_pub = function
++let set_pub pos = function
+   | DType t -> DType { t with ta_pub = true }
+   | DNewtype n -> DNewtype { n with nt_pub = true }
+   | DEffect e -> DEffect { e with ef_pub = true }
+@@ -452,8 +475,8 @@
+   | DLetRec bs -> DLetRec (List.map (fun (d, b) -> (d, { b with lb_pub = true })) bs)
+   | DModule (_, n, ds) -> DModule (true, n, ds)
+   | DExtern e -> DExtern { e with ex_pub = true }
+-  | DInstance _ -> raise (Syntax_error "type instance に pub は付けられません")
+-  | DExp _ -> raise (Syntax_error "式文に pub は付けられません")
++  | DInstance _ -> syntax_error_at pos "type instance に pub は付けられません"
++  | DExp _ -> syntax_error_at pos "式文に pub は付けられません"
+ 
+ type nt_rhs_raw = RhsNone | RhsShort of field_decl list | RhsCtors of ctor_decl list
+ %}
+@@ -510,7 +533,8 @@
+ 
+ (* ## 3.13 `--strict` で conflict 0 を保つ
+ 
+-   `lib/dune` は menhir を `--explain --strict` で走らせる。
++   `lib/dune` は menhir を `--explain --strict --table` で走らせる。
++   `--table` は、第16章の増分 API による駆動(§3.3)のためである。
+ 
+    menhir は既定では conflict を警告にとどめ、記述順と優先順位で黙って解決する。
+    conflict を放置すると、ビルドは通るのに、文法の意味が書いたつもりと違っている状態になりうる。
+@@ -607,9 +631,9 @@
+    `header` に `semi header` を足す形では、`items` の `semi items` と同じ区切りを
+    2 通りに読むことになり、reduce/reduce の衝突が出る。
+    ファイルの先頭に `;` を書いた後の import は、
+-   `items` の `semi items` に入るのでパースエラーになる。
++   `items` の `semi items` に入るので構文エラーになる。
+    改行だけでは先頭の区切りは生じない(直前のトークンが無いので、最初の改行は捨てられる)。
+-   import の名前は 2 段まで(`M.f`)で、`D.E.f` は 2 個目の `.` でパースエラーになる。 *)
++   import の名前は 2 段まで(`M.f`)で、`D.E.f` は 2 個目の `.` で構文エラーになる。 *)
+ 
+ program: header EOF { $1 }
+ 
+@@ -659,7 +683,7 @@
+ 
+ item: decl { $1 } | exp { mk $sloc (DExp $1) }
+ 
+-decl: PUB decl_body { mk $sloc (set_pub $2) } | decl_body { mk $sloc $1 }
++decl: PUB decl_body { mk $sloc (set_pub $startpos $2) } | decl_body { mk $sloc $1 }
+ 
+ decl_body:
+   | LET binding                                        { DLet $2 }
+@@ -938,6 +962,18 @@
+    また、任意の後置式の後ろと呼び出しの後ろの両方に付ける文法は、
+    shift/reduce の conflict を 1 個生む。
+    呼び出しの位置でも、`call`(§3.6)が構築を作ったとき(大文字の名前や `#Tag`)は構文エラーにする。
++   引数リストの無い大文字の名前、`M.Foo`、`#Tag` と、括弧で囲んだ式の直後の `{` は、
++   `tb_call` の診断用の規則が受ける。
++   これらの規則は `tb_brace` で `{` の 1 トークンだけを読み、中身を読まずに構文エラーにする。
++   ほかの位置でこれらの式の直後に `{` が続く文法は無いので、規則を足しても conflict は生じない。
++
++   末尾ブロックの位置の `{` も、字句の分類(第2章 §2.9)を受ける。
++   `{ x: T => … }` は `LBRACE_TYPE` に、`{ x, y => … }` は `LBRACE_RECORD` に分類されるので、
++   `trailing_block` には届かない。
++   この 2 つとレコードの形は `trailing_other` が受け、引数の誤りかレコードの形かを返す。
++   呼び出しの側の規則が、返った形に応じて診断を出す。
++   `{ (a, b) => … }` は `LBRACE_BLOCK` に分類されるので、`lambda_block` の規則が受ける。
++   この規則は `=>` まで読んだところで構文エラーにし、本体を読まない。
+ 
+    末尾ブロックの `{` は直前のトークンと同じ行に書く。
+    トップレベルとブロックの中では、改行が先に文を区切る(§2.10)ので、
+@@ -948,9 +984,14 @@
+    末尾ブロックの位置の外に現れたときに専用の診断を出す。
+    `{ 文の列 }` は単独でも正しいブロックなので、次の行に書くと独立した式文になる。
+ 
+-   末尾ブロックの診断は、`Syntax_error_at` で誤りの `{`(`{ _ =>` では `_`)の位置を報告する。
+-   診断は `}` の後ろのトークンを読んでから出るので、
++   末尾ブロックの診断は、`Syntax_error_at` で誤りの `{` の位置を報告する。
++   引数の誤り(`_`、括弧で囲んだパターン、型注釈、2 個以上の引数)では、引数の先頭を報告する。
++   レコードの形と `{ _ =>` の診断は `}` の後ろのトークンを読んでから出るので、
+    最後に読んだトークンの位置は誤りの場所を指さない。
++   `tb_brace` は `{` を、`LBRACE_TYPE` の規則は名前を、
++   `lambda_block` の括弧の規則と `LBRACE_RECORD` の規則は `=>` を読んだところで診断を出す。
++   `LBRACE_RECORD` の規則は、2 個以上の名前だけを並べた形を引数の誤りとし、
++   `{ x = 1 =>` や `{ x, =>` のようなほかのフィールドの並びをレコードの形とする。
+ 
+    `atom` の `#Ident` は空のペイロードの `Variant` として作り、
+    引数が付いていれば、後置の呼び出しの規則が `call` で差し替える(§3.6)。
+@@ -969,8 +1010,8 @@
+    そのため `run_body` は 3 種類を束ねた `lbrace` で受ける(§3.14)。 *)
+ 
+ postfix_exp:
+-  | postfix_exp DOT lower_id            { dot_select $sloc $1 $3 }
+-  | postfix_exp DOT upper_id            { dot_select $sloc $1 $3 }
++  | postfix_exp DOT lower_id            { dot_select $sloc $1 ($startpos($3), $3) }
++  | postfix_exp DOT upper_id            { dot_select $sloc $1 ($startpos($3), $3) }
+   | postfix_exp BACKSLASH lower_id      { mk $sloc (RecordRestriction ($1, $3)) }
+   | postfix_exp LPAREN call_args RPAREN { call $sloc $1 $3 }
+   | tb_call                             { $1 }
+@@ -980,14 +1021,30 @@
+   | postfix_exp LPAREN call_args RPAREN trailing_block
+       { trailing_call $sloc $1 $3 ($startpos($5), $endpos($4), $5) }
+   | postfix_exp DOT lower_id trailing_block
+-      { trailing_call $sloc (dot_select $sloc $1 $3) [] ($startpos($4), $endpos($3), $4) }
++      { trailing_call $sloc (dot_select $sloc $1 ($startpos($3), $3)) [] ($startpos($4), $endpos($3), $4) }
+   | lower_id trailing_block
+       { trailing_call $sloc (mk $loc($1) (Ident (LongId [ $1 ]))) [] ($startpos($2), $endpos($1), $2) }
+-  | postfix_exp LPAREN call_args RPAREN record_exp { trailing_record $startpos($5) }
+-  | postfix_exp DOT lower_id record_exp            { trailing_record $startpos($4) }
+-  | lower_id record_exp                            { trailing_record $startpos($2) }
++  | postfix_exp LPAREN call_args RPAREN trailing_other { trailing_other $startpos($5) $5 }
++  | postfix_exp DOT lower_id trailing_other            { trailing_other $startpos($4) $4 }
++  | lower_id trailing_other                            { trailing_other $startpos($2) $2 }
+   | tb_call trailing_block
+       { raise (Syntax_error_at ($startpos($2), "末尾ブロックは 1 つの呼び出しに 1 個までです")) }
++  | tb_call trailing_other
++      { raise (Syntax_error_at ($startpos($2), "末尾ブロックは 1 つの呼び出しに 1 個までです")) }
++  | upper_id tb_brace                                  { trailing_misplaced $startpos($2) }
++  | postfix_exp DOT upper_id tb_brace                  { trailing_misplaced $startpos($4) }
++  | HASH_IDENT tb_brace                                { trailing_misplaced $startpos($2) }
++  | paren_exp tb_brace                                 { trailing_after_paren $startpos($2) }
++
++trailing_other:
++  | record_exp                          { Tb_record }
++  | LBRACE_RECORD field_list EQ_GREATER
++      { let punned (l, e) = match e with _, Ident (LongId [ x ]) -> x = l | _ -> false in
++        if List.length $2 >= 2 && List.for_all punned $2 then Tb_params $startpos($2) else Tb_record }
++  | LBRACE_TYPE lower_id                { Tb_annot $startpos($2) }
++  | LBRACE_TYPE upper_id                { Tb_annot $startpos($2) }
++
++tb_brace: LBRACE_BLOCK {} | LBRACE_RECORD {} | LBRACE_TYPE {}
+ 
+ trailing_block:
+   | block                         { mk $sloc (Lambda { l_params = []; l_body = $1 }) }
+@@ -999,6 +1056,9 @@
+   | LBRACE_BLOCK LOWLINE EQ_GREATER items RBRACE
+       { raise (Syntax_error_at ($startpos($2),
+           "末尾ブロックの引数に _ は書けません(引数なしは { 式 }、引数を捨てる 1 引数は { case _ => 式 })")) }
++  | LBRACE_BLOCK paren_exp EQ_GREATER
++      { raise (Syntax_error_at ($startpos($2),
++          "末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)")) }
+   | LBRACE_BLOCK clause clauses RBRACE
+       { let v = mk $sloc (Ident (LongId [ trailing_param ])) in
+         mk $sloc (Lambda { l_params = [ mk $sloc (PVar trailing_param) ];
+@@ -1018,8 +1078,8 @@
+         match $3 with
+         | [] -> mk $sloc (Resume None)
+         | [ (None, e) ] -> mk $sloc (Resume (Some e))
+-        | [ (Some _, _) ] -> raise (Syntax_error "resume の引数にラベルは付けられません")
+-        | _ -> raise (Syntax_error "resume の引数は高々1個です") }
++        | [ (Some _, _) ] -> syntax_error_at $startpos "resume の引数にラベルは付けられません"
++        | _ -> syntax_error_at $startpos "resume の引数は高々1個です" }
+   | PERFORM perform_op LPAREN call_args RPAREN trailing_block
+       { raise (Syntax_error_at ($startpos($6), "perform には末尾ブロックを付けられません")) }
+   | RESUME LPAREN call_args RPAREN trailing_block
+@@ -1090,7 +1150,7 @@
+            大文字も通るので、レコードでないものはここで落とす *)
+         (match $2 with
+         | _, Ident (LongId [ x ]) when not (is_upper x) -> ()
+-        | _ -> raise (Syntax_error "レコード更新の基底は小文字始まりの識別子 1 個です"));
++        | _ -> syntax_error_at $startpos($2) "レコード更新の基底は小文字始まりの識別子 1 個です");
+         List.fold_left (fun acc (l, v) -> mk $sloc (RecordUpdate (acc, l, v))) $2 $4 }
+ field_list:
+   | field                  { [ $1 ] }
+@@ -1166,7 +1226,7 @@
+    パターンの文法に `|` を出さなければ、必要になってから足しても既存の文法と衝突しない。
+    節パターンの型注釈(`case n: Int32 =>`)も無い。
+    入れる場合は、矢印を含む型注釈に括弧が必須になる(第2章 §2.10)。
+-   どちらも入っていないことを、`test/nonfeatures.t` がパースエラーの位置も含めて固定している。 *)
++   どちらも入っていないことを、`test/nonfeatures.t` が構文エラーの位置も含めて固定している。 *)
+ 
+ pat:
+   | LOWLINE                           { mk $sloc PWildcard }
+diff -ruN -x _build a/lib/syntax.ml b/lib/syntax.ml
+--- a/lib/syntax.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/syntax.ml	2026-10-17 04:48:26.655115962 +0900
+@@ -126,8 +126,6 @@
+ 
+ type long_id = LongId of string list
+ 
+-exception Syntax_error of string
+-
+ (* import 文 1 個。im_names の各要素は [A] か [A; b] の 2 段まで *)
+ type import_name = { in_path : string list; in_loc : Location.span }
+ 
+@@ -827,12 +825,16 @@
+   type t
+ 
+   val allocate : Location.span -> t
++
++  val loc : t -> Location.span
+ end
+ 
+ module EmptyData : Data = struct
+-  type t = unit
++  type t = Location.span
++
++  let allocate loc = loc
+ 
+-  let allocate _ = ()
++  let loc d = d
+ end
+ 
+ module Make (Data : Data) = struct
+diff -ruN -x _build a/lib/tree.ml b/lib/tree.ml
+--- a/lib/tree.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/tree.ml	2026-10-17 04:48:26.655207034 +0900
+@@ -231,10 +231,8 @@
+    位置のない `Type_error` に最も内側のノードの位置を付けて、`Type_error_at` として投げ直す。
+ 
+    `oid_of` は、宣言がどの module に属するかを引くために使う。
+-   `Decls.decl_module` はノードの oid を鍵にしているので、第11章と第14章が `oid_of` を呼ぶ(§6.4)。
+-
+-   `data` を呼ぶ箇所はない。
+-   ファンクタ越しに `ElabData.t` をまるごと取り出す唯一の関数として残してある。 *)
++   `Decls.decl_module` はノードの oid を鍵にしているので、
++   第11章と第14章が `oid_of` を呼ぶ(§6.4)。 *)
+ module ElabData = struct
+   type t = {
+     oid : oid;
+@@ -245,6 +243,8 @@
+   }
+ 
+   let allocate loc = { oid = new_oid (); loc; ty_field = None; resolved = None; dict = DNone }
++
++  let loc d = d.loc
+ end
+ 
+ (* ## 5.3 この木を独立したファイルに置く理由
+@@ -292,8 +292,6 @@
+    どの式についても 1 か所で `set_ty` を通るように書かれているからである。
+    式の種類ごとに `set_ty` を書く形では、書き忘れた分岐だけが実行時に落ちる。
+    しかも落ちる場所は、型検査から遠く離れた評価器の中になる。 *)
+-let data (d, _) = d
+-
+ let loc_of (d, _) = d.ElabData.loc
+ 
+ let oid_of (d, _) = d.ElabData.oid
+diff -ruN -x _build a/test/ast.t b/test/ast.t
+--- a/test/ast.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/ast.t	2026-10-17 04:45:41.763069608 +0900
+@@ -144,13 +144,13 @@
+    Int32)
+   (newtype-pub Parser (A))
+ 
+-パースエラー(exit 2):
++構文エラー(exit 2):
+ 
+   $ cat > bad.kel <<'EOF'
+   > let x = = 1
+   > EOF
+   $ diktor --dump-ast bad.kel
+-  bad.kel:1:9: パースエラー(付近のトークンを確認してください)
++  bad.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ sample.kel 全文がパースできること(M3 完了条件。写しの版は test/sample/README.md):
+diff -ruN -x _build a/test/errloc.t b/test/errloc.t
+--- a/test/errloc.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/errloc.t	2026-10-17 04:45:49.355535578 +0900
+@@ -55,10 +55,10 @@
+ 
+   $ printf 'let bad = { "\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86"; \xc2\xa4 }\n' > mb3.kel
+   $ diktor --type-check mb3.kel
+-  mb3.kel:1:20: 字句エラー: unexpected character: ¤
++  mb3.kel:1:20: 字句エラー: 予期しない文字です: ¤
+   [2]
+ 
+   $ printf 'let bad = { "abc"; \xc2\xa4 }\n' > mb4.kel
+   $ diktor --type-check mb4.kel
+-  mb4.kel:1:20: 字句エラー: unexpected character: ¤
++  mb4.kel:1:20: 字句エラー: 予期しない文字です: ¤
+   [2]
+diff -ruN -x _build a/test/if.t b/test/if.t
+--- a/test/if.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/if.t	2026-10-17 04:47:44.663761781 +0900
+@@ -68,11 +68,11 @@
+ 
+   $ printf 'let g = 1 + if true then 1 else 2\n' > operand.kel
+   $ diktor operand.kel
+-  operand.kel:1:13: パースエラー(付近のトークンを確認してください)
++  operand.kel:1:13: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ else は省略できない。改行が文を区切った位置で else を待っていたことが、
+-パースエラーの位置で分かる:
++構文エラーの位置で分かる:
+ 
+   $ cat > noelse.kel <<'KEL'
+   > let f(b: Boolean): Unit = {
+@@ -81,7 +81,7 @@
+   > }
+   > KEL
+   $ diktor noelse.kel
+-  noelse.kel:2:24: パースエラー(付近のトークンを確認してください)
++  noelse.kel:2:24: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 改行：then と else で始まる行と、then と else で終わる行は、前後の行に続く。
+@@ -190,15 +190,15 @@
+ 
+   $ printf 'let then = 1\n' > kwthen.kel
+   $ diktor kwthen.kel
+-  kwthen.kel:1:5: パースエラー(付近のトークンを確認してください)
++  kwthen.kel:1:5: 構文エラー: 予約語 then はここには書けません(予約語は識別子に使えません)
+   [2]
+   $ printf 'let f(else: Int32): Int32 = else\n' > kwelse.kel
+   $ diktor kwelse.kel
+-  kwelse.kel:1:7: パースエラー(付近のトークンを確認してください)
++  kwelse.kel:1:7: 構文エラー: 予約語 else はここには書けません(予約語は識別子に使えません)
+   [2]
+   $ printf 'let r = {then = 1}\n' > kwlabel.kel
+   $ diktor kwlabel.kel
+-  kwlabel.kel:1:10: パースエラー(付近のトークンを確認してください)
++  kwlabel.kel:1:10: 構文エラー: 予約語 then はここには書けません(予約語は識別子に使えません)
+   [2]
+ 
+ ガードの if と共存する。ガードの中の条件式は、括弧が無くても読める。
+diff -ruN -x _build a/test/import.t b/test/import.t
+--- a/test/import.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/import.t	2026-10-17 04:48:52.703762834 +0900
+@@ -39,34 +39,34 @@
+   (import "./a" (A) (b))
+ 
+ 名前は 2 段まで。ファイルの途中、トップレベルの with の後ろの import、空の {}、波括弧の中の
+-カンマの無い並びは、パースエラーになる:
++カンマの無い並びは、構文エラーになる:
+ 
+   $ printf 'from "./lib/leaf" import D.E.f\n' > deep.kel
+   $ diktor deep.kel
+-  deep.kel:1:29: パースエラー(付近のトークンを確認してください)
++  deep.kel:1:29: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'let x = 1\nfrom "./a" import b\n' > late.kel
+   $ diktor late.kel
+-  late.kel:2:1: パースエラー(付近のトークンを確認してください)
++  late.kel:2:1: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'with x = f()\nfrom "./a" import b\n' > wth.kel
+   $ diktor wth.kel
+-  wth.kel:2:1: パースエラー(付近のトークンを確認してください)
++  wth.kel:2:1: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'from "./a" import {}\n' > empty.kel
+   $ diktor empty.kel
+-  empty.kel:1:20: パースエラー(付近のトークンを確認してください)
++  empty.kel:1:20: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'from "./a" import {\n  A\n  b\n}\n' > nl.kel
+   $ diktor nl.kel
+-  nl.kel:3:3: パースエラー(付近のトークンを確認してください)
++  nl.kel:2:4: 構文エラー: この位置の後ろ、3:3 のトークンが文法に合いません
+   [2]
+ 
+ from と import は予約語である:
+ 
+   $ printf 'let from = 1\n' > letfrom.kel
+   $ diktor letfrom.kel
+-  letfrom.kel:1:5: パースエラー(付近のトークンを確認してください)
++  letfrom.kel:1:5: 構文エラー: 予約語 from はここには書けません(予約語は識別子に使えません)
+   [2]
+ 
+ 差し替えたプレリュードと対話的な実行には import を書けない:
+@@ -86,11 +86,11 @@
+ 
+   $ printf 'let z = { pub let x: Int32 = 1; x }\n' > pb1.kel
+   $ diktor pb1.kel
+-  pb1.kel:2:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
++  pb1.kel:1:11: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+   [2]
+   $ printf 'with x = 1\npub let rec f(n: Int32): Int32 = n\n' > pb2.kel
+   $ diktor pb2.kel
+-  pb2.kel:3:1: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
++  pb2.kel:2:1: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
+   [2]
+ 
+ ## 読み込み
+diff -ruN -x _build a/test/invariants.t b/test/invariants.t
+--- a/test/invariants.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/invariants.t	2026-10-17 04:48:26.655401734 +0900
+@@ -413,7 +413,7 @@
+   $ diff repl_a.out repl_b.out | grep '^[<>]' | sed 's/^>/+/; s/^</-/'
+   + ! <stdin>:2:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+   + 実行時エラー: ゼロ除算です
+-  + <stdin>:7:1: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
++  + <stdin>:6:14: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+   + 実行時エラー: ゼロ除算です
+   + half
+   + 実行時エラー: ゼロ除算です
+diff -ruN -x _build a/test/lexerr.t b/test/lexerr.t
+--- a/test/lexerr.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/lexerr.t	2026-10-17 04:45:49.355565745 +0900
+@@ -0,0 +1,43 @@
++字句エラーの文面は日本語で、位置と終了コード 2 を伴う。
++tokens.t と run_exit.t と errloc.t が固定していない形をここで固定する。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++\u と \U の後の 16 進の桁が足りない:
++
++  $ printf 'let s = "\\u12"\n' > short.kel
++  $ diktor short.kel
++  short.kel:1:14: 字句エラー: Unicode エスケープの 16 進の桁が足りません
++  [2]
++  $ printf 'let s = "\\U0011"\n' > shortU.kel
++  $ diktor shortU.kel
++  shortU.kel:1:16: 字句エラー: Unicode エスケープの 16 進の桁が足りません
++  [2]
++
++逆斜線でファイルが終わる形は、閉じていない文字列ではなく不正なエスケープになる:
++
++  $ printf 'let s = "\\' > esceof.kel
++  $ diktor esceof.kel
++  esceof.kel:1:11: 字句エラー: 不正なエスケープです
++  [2]
++
++閉じていないブロックコメント:
++
++  $ printf 'let a = 1 /* abc' > untermc.kel
++  $ diktor untermc.kel
++  untermc.kel:1:17: 字句エラー: ブロックコメントが閉じていません
++  [2]
++
++ファイルの先頭以外の #!:
++
++  $ printf 'let a = 1\n#!x\n' > stray.kel
++  $ diktor stray.kel
++  stray.kel:2:1: 字句エラー: #! はファイルの先頭にだけ書けます
++  [2]
++
++対話的な実行では、閉じていないブロックコメントは続きの行を待ち、ほかの字句エラーは報告して続ける:
++
++  $ printf '/* a\nb */ echoln("ok")\nlet a = "\\q"\necholn("next")\n' | diktor --repl
++  ok
++  <stdin>:3:11: 字句エラー: 不正なエスケープです
++  next
+diff -ruN -x _build a/test/nonfeatures.t b/test/nonfeatures.t
+--- a/test/nonfeatures.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/nonfeatures.t	2026-10-17 04:48:26.655453121 +0900
+@@ -12,7 +12,7 @@
+   > }
+   > KEL
+   $ diktor --type-check orpat.kel
+-  orpat.kel:2:14: パースエラー(付近のトークンを確認してください)
++  orpat.kel:2:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 節パターンの型注釈も現状は無い(§7。将来入れるなら、矢印を含む型注釈は
+@@ -24,7 +24,7 @@
+   > }
+   > KEL
+   $ diktor --type-check patannot.kel
+-  patannot.kel:2:9: パースエラー(付近のトークンを確認してください)
++  patannot.kel:2:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ レコード更新の基底は小文字始まりの識別子 1 個(§3 が基底を識別子 1 個に
+@@ -35,17 +35,17 @@
+ 
+   $ printf 'let p = {origin = {x = 1.0}}\nlet q = {p.origin with x = 3.0}\n' > updbase.kel
+   $ diktor --type-check updbase.kel
+-  updbase.kel:2:19: パースエラー(付近のトークンを確認してください)
++  updbase.kel:2:19: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let f(n: Int32) = {x = n}\nlet q = {f(1) with x = 3}\n' > updbase2.kel
+   $ diktor --type-check updbase2.kel
+-  updbase2.kel:2:15: パースエラー(付近のトークンを確認してください)
++  updbase2.kel:2:15: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let p = {x = 1}\nlet q = {P with x = 3}\n' > updbase3.kel
+   $ diktor --type-check updbase3.kel
+-  updbase3.kel:3:1: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
++  updbase3.kel:2:10: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+   [2]
+ 
+ (小文字の基底が通ることは test/typecheck.t / test/eval.t / test/ast.t /
+@@ -56,27 +56,27 @@
+ 
+   $ printf 'type foo = Int32\n' > case1.kel
+   $ diktor --type-check case1.kel
+-  case1.kel:1:6: パースエラー(付近のトークンを確認してください)
++  case1.kel:1:6: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'newtype foo = Bar\n' > case2.kel
+   $ diktor --type-check case2.kel
+-  case2.kel:1:9: パースエラー(付近のトークンを確認してください)
++  case2.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'effect foo = { op: () => {} }\n' > case3.kel
+   $ diktor --type-check case3.kel
+-  case3.kel:1:8: パースエラー(付近のトークンを確認してください)
++  case3.kel:1:8: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'module foo { }\n' > case4.kel
+   $ diktor --type-check case4.kel
+-  case4.kel:1:8: パースエラー(付近のトークンを確認してください)
++  case4.kel:1:8: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'effect E = { Op: () => {} }\n' > case5.kel
+   $ diktor --type-check case5.kel
+-  case5.kel:1:14: パースエラー(付近のトークンを確認してください)
++  case5.kel:1:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'newtype T = ctor(Int32)\n' > case6.kel
+   $ diktor --type-check case6.kel
+-  case6.kel:1:13: パースエラー(付近のトークンを確認してください)
++  case6.kel:1:13: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 型パラメータの束縛子はこの規則の例外で、大小を問わない(裁定 D110。仕様 §0、
+@@ -97,11 +97,11 @@
+   use : (Ref[A, B]) => B @ {Heap[A]}
+   $ printf 'let g(): Int32 = run H { 1 }\n' > case8.kel
+   $ diktor --type-check case8.kel
+-  case8.kel:1:22: パースエラー(付近のトークンを確認してください)
++  case8.kel:1:22: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'let g(): Int32 = run _ { 1 }\n' > case9.kel
+   $ diktor --type-check case9.kel
+-  case9.kel:1:22: パースエラー(付近のトークンを確認してください)
++  case9.kel:1:22: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 予約語はラベルの位置でも識別子にならない(D115)。{run: …} が書けない理由は
+@@ -113,7 +113,7 @@
+ 
+   $ printf 'let f(r: {run: Int32}): Int32 = 1\n' > kwlabel.kel
+   $ diktor --type-check kwlabel.kel
+-  kwlabel.kel:1:11: パースエラー(付近のトークンを確認してください)
++  kwlabel.kel:1:11: 構文エラー: 予約語 run はここには書けません(予約語は識別子に使えません)
+   [2]
+ 
+ (スーパークラスの拒否は test/classes.t、Zero / One が無いことは型クラス表に
+@@ -151,7 +151,7 @@
+   > }
+   > KEL
+   $ diktor --type-check derive.kel
+-  derive.kel:3:3: パースエラー(付近のトークンを確認してください)
++  derive.kel:3:3: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ derive は予約語ではない:
+@@ -196,7 +196,7 @@
+ 
+   $ printf 'newtype Hidden = ???\n' > nthole.kel
+   $ diktor --type-check nthole.kel
+-  nthole.kel:1:18: パースエラー(付近のトークンを確認してください)
++  nthole.kel:1:18: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 値束縛には型パラメータを書けない(LangSpec 付録 A.8。binding の値束縛の形は
+@@ -206,7 +206,7 @@
+   > let x[A]: List[A] = Nil
+   > KEL
+   $ diktor --type-check valtyparam.kel
+-  valtyparam.kel:1:9: パースエラー(付近のトークンを確認してください)
++  valtyparam.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 無名関数には返り値の型を注釈できない(付録 A.8。exp の fn の形は返り値の型と
+@@ -216,7 +216,7 @@
+   > let f = fn(x: Int32): Int32 => x
+   > KEL
+   $ diktor --type-check fnret.kel
+-  fnret.kel:1:21: パースエラー(付近のトークンを確認してください)
++  fnret.kel:1:21: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ type class の型パラメータは省略できない(付録 A.8):
+@@ -225,7 +225,7 @@
+   > type class C { val c: (Int32) => Int32 }
+   > KEL
+   $ diktor --type-check classnoparam.kel
+-  classnoparam.kel:1:14: パースエラー(付近のトークンを確認してください)
++  classnoparam.kel:1:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ extern は関数束縛の形だけを持ち、値束縛の形を持たない(付録 A.8):
+@@ -234,5 +234,5 @@
+   > extern "C" let sqrt: (Float64) => Float64
+   > KEL
+   $ diktor --type-check externval.kel
+-  externval.kel:1:20: パースエラー(付近のトークンを確認してください)
++  externval.kel:1:20: 構文エラー: 付近のトークンを確認してください
+   [2]
+diff -ruN -x _build a/test/premise.t b/test/premise.t
+--- a/test/premise.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/premise.t	2026-10-17 04:48:26.655500571 +0900
+@@ -250,11 +250,11 @@
+   $ diktor --type-check --no-prelude pr13.kel
+   $ printf 'newtype List[A] = Cons(A, tail: List[A]) | Nil\ntype instance[] Eq[List[_]] { let rec eq(xs, ys) = true }\n' > pr14.kel
+   $ diktor --type-check --no-prelude pr14.kel
+-  pr14.kel:2:15: パースエラー(付近のトークンを確認してください)
++  pr14.kel:2:15: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'newtype List[A] = Cons(A, tail: List[A]) | Nil\npub type instance[A: Eq] Eq[List[_]] { let rec eq(xs, ys) = true }\n' > pr15.kel
+   $ diktor --type-check --no-prelude pr15.kel
+-  pr15.kel:3:1: 構文エラー: type instance に pub は付けられません
++  pr15.kel:2:1: 構文エラー: type instance に pub は付けられません
+   [2]
+ 
+ instance と [ の間には空白・改行・ブロックコメントのどれを挟んでもよく、束縛子
+diff -ruN -x _build a/test/repl.t b/test/repl.t
+--- a/test/repl.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/repl.t	2026-10-17 04:45:41.763330954 +0900
+@@ -77,7 +77,7 @@
+   _ : Int32 = 42
+   _ : String = "a\nb"
+   ! <stdin>:7:43: 型エラー: 未束縛の変数: od
+-  <stdin>:8:1: パースエラー(付近のトークンを確認してください)
++  <stdin>:8:1: 構文エラー: 付近のトークンを確認してください
+ 
+ println はトップレベルで使える。Print はランタイムのハンドラが標準出力へつなぐ:
+ 
+diff -ruN -x _build a/test/reserved_word.t b/test/reserved_word.t
+--- a/test/reserved_word.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/reserved_word.t	2026-10-17 04:48:52.703762834 +0900
+@@ -0,0 +1,149 @@
++予約語(LangSpec §2.2)を識別子の位置に書くと、構文エラーになる。
++予約語を識別子に置き換えると次のトークンまで読み進められるときは、
++予約語の綴りと位置を示し、その位置には書けないと言う文面になる。終了コードは 2 である。
++
++束縛の名前、引数、型パラメータ:
++
++  $ printf 'let then = 1\n' > bind.kel
++  $ diktor bind.kel
++  bind.kel:1:5: 構文エラー: 予約語 then はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let rec val(x: Int32): Int32 = x\n' > recname.kel
++  $ diktor recname.kel
++  recname.kel:1:9: 構文エラー: 予約語 val はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let f(else: Int32): Int32 = 1\n' > param.kel
++  $ diktor param.kel
++  param.kel:1:7: 構文エラー: 予約語 else はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let f[with](x: Int32): Int32 = x\n' > typaram.kel
++  $ diktor typaram.kel
++  typaram.kel:1:7: 構文エラー: 予約語 with はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let x = true\nlet true = 1\n' > bool.kel
++  $ diktor bool.kel
++  bool.kel:2:5: 構文エラー: 予約語 true はここには書けません(予約語は識別子に使えません)
++  [2]
++
++レコードのラベル。レコード式、更新、レコード型、レコードパターン、フィールドの選択、
++名前付き引数に書いた形である。
++ただし、その位置で式や宣言を始められる予約語は、後ろのブロックのとおり汎用の文面のままになる:
++
++  $ printf 'let r = {then = 1}\n' > reclabel.kel
++  $ diktor reclabel.kel
++  reclabel.kel:1:10: 構文エラー: 予約語 then はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let r = {a = 1}\nlet s = {r with match = 2}\n' > update.kel
++  $ diktor update.kel
++  update.kel:2:17: 構文エラー: 予約語 match はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let f(x: {if: Int32}): Int32 = 1\n' > tylabel.kel
++  $ diktor tylabel.kel
++  tylabel.kel:1:11: 構文エラー: 予約語 if はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let p = {a = 1, b = 2}\nlet {a, then} = p\n' > patlabel.kel
++  $ diktor patlabel.kel
++  patlabel.kel:2:9: 構文エラー: 予約語 then はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let r = {a = 1}\nlet z = r.module\n' > select.kel
++  $ diktor select.kel
++  select.kel:2:11: 構文エラー: 予約語 module はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let f(x: Int32): Int32 = x\nlet y = f(import = 1)\n' > namedarg.kel
++  $ diktor namedarg.kel
++  namedarg.kel:2:11: 構文エラー: 予約語 import はここには書けません(予約語は識別子に使えません)
++  [2]
++
++式の中の変数、case のパターン、エフェクトの操作名、extern の名前:
++
++  $ printf 'let g(x: Int32): Int32 = x\nlet y = g(handle)\n' > arg.kel
++  $ diktor arg.kel
++  arg.kel:2:11: 構文エラー: 予約語 handle はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let x = 1 match { case rec => 1 }\n' > casepat.kel
++  $ diktor casepat.kel
++  casepat.kel:1:24: 構文エラー: 予約語 rec はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'effect E = { run: () => Int32 }\n' > effop.kel
++  $ diktor effop.kel
++  effop.kel:1:14: 構文エラー: 予約語 run はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'extern "c" let pub(x: Int32): Int32\n' > extern.kel
++  $ diktor extern.kel
++  extern.kel:1:16: 構文エラー: 予約語 pub はここには書けません(予約語は識別子に使えません)
++  [2]
++
++予約語を識別子に置き換えても次のトークンで詰まる入力は、汎用の文面のままである。
++括弧で囲まない if のオペランド、宣言の後ろの import、右辺の書き忘れ、
++予約語で終わる入力がそれにあたる:
++
++  $ printf 'let g = 1 + if true then 1 else 2\n' > operand.kel
++  $ diktor operand.kel
++  operand.kel:1:13: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let x = 1\nfrom "./a" import b\n' > late.kel
++  $ diktor late.kel
++  late.kel:2:1: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let x =\nlet y = 2\n' > norhs.kel
++  $ diktor norhs.kel
++  norhs.kel:1:8: 構文エラー: この位置の後ろ、2:1 のトークンが文法に合いません
++  [2]
++  $ printf 'let then\n' > eof.kel
++  $ diktor eof.kel
++  eof.kel:1:5: 構文エラー: 付近のトークンを確認してください
++  [2]
++
++予約語がその位置で式か宣言を始められるときは、予約語ではなく次のトークンで詰まり、汎用の文面になる。
++レコード式のラベルの type と if、呼び出しの引数の if がそれにあたる:
++
++  $ printf 'let r = {type = 1}\n' > decllabel.kel
++  $ diktor decllabel.kel
++  decllabel.kel:1:15: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let r = {if = 1}\n' > exprlabel.kel
++  $ diktor exprlabel.kel
++  exprlabel.kel:1:13: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let g(x: Int32): Int32 = x\nlet y = g(if)\n' > exprarg.kel
++  $ diktor exprarg.kel
++  exprarg.kel:2:13: 構文エラー: 付近のトークンを確認してください
++  [2]
++
++対話的な実行でも同じ文面を出し、セッションは続く。
++行が式を始める予約語(ここでは if)で終わるときは、続きの行を待つ:
++
++  $ printf 'let then = 1\nlet x = 2\nlet y = if\ntrue then 1 else 0\n' | diktor --repl
++  <stdin>:1:5: 構文エラー: 予約語 then はここには書けません(予約語は識別子に使えません)
++  x : Int32 = 2
++  y : Int32 = 1
++
++式を始める予約語を、括弧で囲まずに演算子のオペランドに書いた形は、汎用の文面のままである。
++識別子に置き換えると次の ( まで進めるが、括弧を置けば同じ予約語を書ける位置だからである:
++
++  $ printf 'let g = 1 + if (true) then 1 else 2\n' > operand2.kel
++  $ diktor operand2.kel
++  operand2.kel:1:13: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let g = 1 + fn(x: Int32) => x\n' > operandfn.kel
++  $ diktor operandfn.kel
++  operandfn.kel:1:13: 構文エラー: 付近のトークンを確認してください
++  [2]
++
++予約語を識別子として書いたのではなく、位置を誤って書いた形でも、
++識別子に置き換えると呼び出しや末尾ブロックとして読み進められるときは、同じ文面になる。
++前置の handle と match(LangSpec では後置)、import と from の順序の誤りがそれにあたる。
++文面はその位置に書けないことを先に言うので、これらでも誤りにならない:
++
++  $ printf 'let f(): Int32 = 1\nlet r = handle { f() } with { x => x }\n' > prehandle.kel
++  $ diktor prehandle.kel
++  prehandle.kel:2:9: 構文エラー: 予約語 handle はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let x = 1\nlet y = match(x) { case 1 => 2, case _ => 3 }\n' > prematch.kel
++  $ diktor prematch.kel
++  prematch.kel:2:9: 構文エラー: 予約語 match はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'import { b } from "./a"\nlet x = 1\n' > jsimport.kel
++  $ diktor jsimport.kel
++  jsimport.kel:1:1: 構文エラー: 予約語 import はここには書けません(予約語は識別子に使えません)
++  [2]
+diff -ruN -x _build a/test/run_exit.t b/test/run_exit.t
+--- a/test/run_exit.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/run_exit.t	2026-10-17 04:48:52.703762834 +0900
+@@ -45,13 +45,13 @@
+   $ diktor exitparse.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitparse.kel > /dev/null; echo "exit: $?"
+-  exitparse.kel:3:1: パースエラー(付近のトークンを確認してください)
++  exitparse.kel:2:13: 構文エラー: この位置の後ろ、3:1 のトークンが文法に合いません
+   exit: 2
+   $ printf 'echoln("before")\nlet x = "\\q"\n' > exitlex.kel
+   $ diktor exitlex.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitlex.kel > /dev/null; echo "exit: $?"
+-  exitlex.kel:2:11: 字句エラー: invalid escape sequence
++  exitlex.kel:2:11: 字句エラー: 不正なエスケープです
+   exit: 2
+   $ printf 'echoln("before")\nlet x = "\377"\n' > exitutf8.kel
+   $ od -An -tx1 exitutf8.kel
+@@ -60,7 +60,7 @@
+   $ diktor exitutf8.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitutf8.kel > /dev/null; echo "exit: $?"
+-  exitutf8.kel: 字句エラー: 不正な UTF-8 バイト列です
++  exitutf8.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+   exit: 2
+ 
+ 実行時エラーは 3。止まるまでに標準出力へ書いた内容は残り、診断は標準エラーに出る:
+@@ -159,3 +159,59 @@
+   $ diktor initinst.kel > /dev/null; echo "exit: $?"
+   実行時エラー: R[L] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)
+   exit: 3
++
++型検査に要する領域が処理系の限度を超えたときは、型検査での拒否と同じ 1 で終わる。
++初期化を始めないので、標準出力は空である。
++OCAMLRUNPARAM=l=100k でスタックの上限を 102400 語に絞り、2 万段の入れ子の式を型検査させる:
++
++  $ awk 'BEGIN { print "echoln(\"before\")"; s = "1"; for (i = 0; i < 20000; i++) s = "1 + (" s ")"; print "let x = " s; print "echoln(show(x))" }' > deep.kel
++  $ OCAMLRUNPARAM=l=100k diktor deep.kel 2> /dev/null; echo "exit: $?"
++  exit: 1
++  $ OCAMLRUNPARAM=l=100k diktor deep.kel > /dev/null; echo "exit: $?"
++  ! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
++  exit: 1
++
++--type-check では、それまでの型の行に続けて同じ診断を標準出力に出す:
++
++  $ OCAMLRUNPARAM=l=100k diktor --type-check deep.kel; echo "exit: $?"
++  _ : {}
++  ! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
++  exit: 1
++
++上限を 8M 語に広げれば、同じプログラムは型検査に通り、実行する:
++
++  $ OCAMLRUNPARAM=l=8M diktor deep.kel; echo "exit: $?"
++  before
++  20001
++  exit: 0
++
++対話的な実行では、型検査が限度を超えた入力を受理せず、続く入力を処理する:
++
++  $ printf 'let y = 1\n' > deeprepl.txt
++  $ sed -n 2p deep.kel >> deeprepl.txt
++  $ printf 'echoln(show(y))\n' >> deeprepl.txt
++  $ OCAMLRUNPARAM=l=100k diktor --repl < deeprepl.txt; echo "exit: $?"
++  y : Int32 = 1
++  ! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
++  1
++  exit: 0
++
++構文解析に要する領域が処理系の限度を超えたときは、字句と構文の誤りと同じ 2 で終わる。
++ブロックの文の列は、文の数に比例するスタックで畳まれる。
++OCAMLRUNPARAM=l=16k でスタックの上限を 16384 語に絞り、2 万文のブロックを読ませる:
++
++  $ awk 'BEGIN { print "echoln(\"before\")"; print "let x = {"; for (i = 0; i < 20000; i++) print "  let a" i " = 1"; print "  1"; print "}"; print "echoln(show(x))" }' > seq.kel
++  $ OCAMLRUNPARAM=l=16k diktor seq.kel 2> /dev/null; echo "exit: $?"
++  exit: 2
++  $ OCAMLRUNPARAM=l=16k diktor --type-check seq.kel; echo "exit: $?"
++  seq.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)
++  exit: 2
++
++対話的な実行では、構文解析が限度を超えた入力を受理せず、続く入力を処理する:
++
++  $ awk 'BEGIN { print "let y = 1"; s = "let x = {"; for (i = 0; i < 20000; i++) s = s " let a" i " = 1;"; print s " 1 }"; print "echoln(show(y))" }' > seqrepl.txt
++  $ OCAMLRUNPARAM=l=16k diktor --repl < seqrepl.txt; echo "exit: $?"
++  y : Int32 = 1
++  <stdin>: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)
++  1
++  exit: 0
+diff -ruN -x _build a/test/spec_gaps.t b/test/spec_gaps.t
+--- a/test/spec_gaps.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/spec_gaps.t	2026-10-17 04:45:41.763427457 +0900
+@@ -58,7 +58,7 @@
+   [1]
+   $ printf 'let xs: Array[Int32] = [1, 2, 3]\n' > arrlit.kel
+   $ diktor --type-check arrlit.kel
+-  arrlit.kel:1:24: パースエラー(付近のトークンを確認してください)
++  arrlit.kel:1:24: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 使用時の開きの順序依存(LangSpec §13.2 の制限の 2 つ目)。使用の時点で関数の行や
+@@ -143,13 +143,13 @@
+ 
+ 操作とエフェクトの型パラメータ(LangSpec 付録 A.8)。所有者が後で許すかどうかを
+ 決める形として見張る(doc/log/261009-3-proposal.md の判断 9-9)。eff_op は typarams を
+-持たないので、操作の型パラメータはパースエラーになる:
++持たないので、操作の型パラメータは構文エラーになる:
+ 
+   $ cat > effopparam.kel <<'KEL'
+   > effect E = { op[A]: (A) => A }
+   > KEL
+   $ diktor --type-check effopparam.kel
+-  effopparam.kel:1:16: パースエラー(付近のトークンを確認してください)
++  effopparam.kel:1:16: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ エフェクトの宣言の typarams は文法が受け、型検査が拒む(§13.1):
+diff -ruN -x _build a/test/syntax_error_pos.t b/test/syntax_error_pos.t
+--- a/test/syntax_error_pos.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/syntax_error_pos.t	2026-10-17 04:48:52.703762834 +0900
+@@ -0,0 +1,138 @@
++構文エラーの位置。
++文法には合うが形を拒否する構文エラーは、拒否した構文の始まりを指す。
++前のトークンが続きを求めていて(行末の演算子やカンマ、括弧の中)、文法に合わないトークンが
++それより後ろの行にあるときは、前のトークンの終わりを主な位置にし、
++合わなかったトークンの位置を括弧の中に添える。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++## 形を拒否する構文エラー
++
++ブロックの中の宣言は、ブロックの終わりではなく宣言の始まりを指す:
++
++  $ cat > blkdecl.kel <<'KEL'
++  > let f() = {
++  >   newtype U = U(Int32)
++  >   let a = 1
++  >   a
++  > }
++  > let z = 2
++  > KEL
++  $ diktor blkdecl.kel
++  blkdecl.kel:2:3: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
++  [2]
++
++  $ printf 'let f() = {\n  pub let x = 1\n  x\n}\n' > blkpub.kel
++  $ diktor blkpub.kel
++  blkpub.kel:2:3: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
++  [2]
++
++  $ printf 'let f() = {\n  pub let rec g(x) = x\n  g(1)\n}\n' > blkpubrec.kel
++  $ diktor blkpubrec.kel
++  blkpubrec.kel:2:3: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
++  [2]
++
++with の右辺は、右辺の式の始まりを指す:
++
++  $ printf 'let f() = {\n  with x = 1\n  x\n}\n' > withnc.kel
++  $ diktor withnc.kel
++  withnc.kel:2:12: 構文エラー: with の右辺は関数呼び出しでなければなりません
++  [2]
++
++resume の引数は、次の節が後ろの行にあっても resume の行を指す:
++
++  $ cat > reslabel.kel <<'KEL'
++  > effect Ask = {
++  >   ask: () => Int32
++  > }
++  > let f(): Int32 @ {Ask} = perform ask()
++  > let g(): Int32 = f() handle {
++  >   case ask() => resume(x = 1)
++  > 
++  >   case return(v) => v
++  > }
++  > KEL
++  $ diktor reslabel.kel
++  reslabel.kel:6:17: 構文エラー: resume の引数にラベルは付けられません
++  [2]
++  $ sed 's/resume(x = 1)/resume(1, 2)/' reslabel.kel > res2.kel
++  $ diktor res2.kel
++  res2.kel:6:17: 構文エラー: resume の引数は高々1個です
++  [2]
++
++pub を付けた type instance、ラベルの大文字、ヴァリアントのラベル付き引数、レコード更新の基底:
++
++  $ printf 'newtype N = N(Int32)\npub type instance Show[N] {\n  let show(x) = "n"\n}\n\nlet b = 2\n' > pubinst.kel
++  $ diktor pubinst.kel
++  pubinst.kel:2:1: 構文エラー: type instance に pub は付けられません
++  [2]
++  $ printf 'let r = {a = 1}\nlet x = r.Foo\n\nlet b = 2\n' > upper.kel
++  $ diktor upper.kel
++  upper.kel:2:11: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo
++  [2]
++  $ printf 'let x = #Foo(a = 1, b = 2)\n\nlet b = 2\n' > varlbl.kel
++  $ diktor varlbl.kel
++  varlbl.kel:1:9: 構文エラー: #Foo(...) にラベル付き引数は使えません
++  [2]
++  $ printf 'let f(v) = v match {\n  case #Foo(a = x) => x\n}\n' > varpat.kel
++  $ diktor varpat.kel
++  varpat.kel:2:8: 構文エラー: #Foo(...) パターンにラベル付き引数は使えません
++  [2]
++  $ printf 'let r = {a = 1}\nlet s = {Foo with a = 2}\n\nlet b = 2\n' > upd.kel
++  $ diktor upd.kel
++  upd.kel:2:10: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
++  [2]
++
++## 文法に合わないトークン
++
++続きの無い二項演算子、閉じていない括弧、括弧の中のカンマの抜けは、前のトークンの終わりを指す:
++
++  $ printf 'let x = 1 +\n\n\nlet b = 2\n' > opend.kel
++  $ diktor opend.kel
++  opend.kel:1:12: 構文エラー: この位置の後ろ、4:1 のトークンが文法に合いません
++  [2]
++  $ printf 'let x = (1, 2\n\nlet b = 2\n' > paren.kel
++  $ diktor paren.kel
++  paren.kel:1:14: 構文エラー: この位置の後ろ、3:1 のトークンが文法に合いません
++  [2]
++  $ printf 'let f(a, b) = a\nlet y = f(\n  1\n  2\n)\n' > comma.kel
++  $ diktor comma.kel
++  comma.kel:3:4: 構文エラー: この位置の後ろ、4:3 のトークンが文法に合いません
++  [2]
++
++前のトークンが文を終えられ、括弧の外にあるときは、行頭の余った閉じ括弧そのものを指す:
++
++  $ printf 'let x = 1\n)\n' > stray.kel
++  $ diktor stray.kel
++  stray.kel:2:1: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let f() = {\n  let x = 1\n  x\n}\n}\n' > strayb.kel
++  $ diktor strayb.kel
++  strayb.kel:5:1: 構文エラー: 付近のトークンを確認してください
++  [2]
++
++同じ行にあるときと、区切りになった改行の後ろにあるときは、合わないトークンを指す:
++
++  $ printf 'let x = 1 + * 2\n' > sameline.kel
++  $ diktor sameline.kel
++  sameline.kel:1:13: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let x = 1\n\n\nval y: Int32\n' > afternl.kel
++  $ diktor afternl.kel
++  afternl.kel:4:1: 構文エラー: 付近のトークンを確認してください
++  [2]
++
++## 対話的な実行
++
++対話的な実行でも、次の入力の先頭ではなく、誤りのある宣言を指す:
++
++  $ printf 'let a = 1\nlet z = { newtype M = M(Int32); 1 }\nlet b = 2\n' | diktor --repl
++  a : Int32 = 1
++  <stdin>:2:11: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
++  b : Int32 = 2
++
++括弧の中で続きを待った入力が次の行で合わなくなったときも、前のトークンの終わりを指す:
++
++  $ printf 'let x = (1 +\n)\nlet y = 2\n' | diktor --repl
++  <stdin>:1:13: 構文エラー: この位置の後ろ、2:1 のトークンが文法に合いません
++  y : Int32 = 2
+diff -ruN -x _build a/test/tokens.t b/test/tokens.t
+--- a/test/tokens.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/tokens.t	2026-10-17 05:10:55.673725828 +0900
+@@ -437,7 +437,7 @@
+ 
+   $ printf 'let a = "unterminated' > err.kel
+   $ diktor --dump-tokens err.kel
+-  err.kel:1:22: 字句エラー: unterminated string literal
++  err.kel:1:22: 字句エラー: 文字列リテラルが閉じていません
+   [2]
+ 
+ 先頭の BOM は字句エラー(仕様 §0)。BOM・C0 制御文字・DEL と C1 制御文字・
+@@ -447,7 +447,7 @@
+ 
+   $ printf '\xef\xbb\xbflet x = 1\n' > bom.kel
+   $ diktor --dump-tokens bom.kel
+-  bom.kel:1:1: 字句エラー: unexpected character: U+FEFF
++  bom.kel:1:1: 字句エラー: 予期しない文字です: U+FEFF
+   [2]
+ 
+ 文字列とコメントの外なら、BOM は先頭以外でも読めない。仕様 §0 が「ソースの
+@@ -457,7 +457,7 @@
+ 
+   $ printf 'let x = 1\n\xef\xbb\xbflet y = 2\n' > bom2.kel
+   $ diktor --dump-tokens bom2.kel
+-  bom2.kel:2:1: 字句エラー: unexpected character: U+FEFF
++  bom2.kel:2:1: 字句エラー: 予期しない文字です: U+FEFF
+   [2]
+ 
+   $ printf 'let x = "a\xef\xbb\xbfb"\n' > bomstr.kel
+@@ -482,35 +482,35 @@
+ 
+   $ printf 'let x = 1 \x0b 2\n' > c0.kel
+   $ diktor --dump-tokens c0.kel
+-  c0.kel:1:11: 字句エラー: unexpected character: U+000B
++  c0.kel:1:11: 字句エラー: 予期しない文字です: U+000B
+   [2]
+   $ printf 'let x = 1 \x7f 2\n' > del.kel
+   $ diktor --dump-tokens del.kel
+-  del.kel:1:11: 字句エラー: unexpected character: U+007F
++  del.kel:1:11: 字句エラー: 予期しない文字です: U+007F
+   [2]
+   $ printf 'let x = 1 \xc2\x85 2\n' > nel.kel
+   $ diktor --dump-tokens nel.kel
+-  nel.kel:1:11: 字句エラー: unexpected character: U+0085
++  nel.kel:1:11: 字句エラー: 予期しない文字です: U+0085
+   [2]
+   $ printf 'let x = 1 \xc2\xa0 2\n' > nbsp.kel
+   $ diktor --dump-tokens nbsp.kel
+-  nbsp.kel:1:11: 字句エラー: unexpected character: U+00A0
++  nbsp.kel:1:11: 字句エラー: 予期しない文字です: U+00A0
+   [2]
+   $ printf 'let x = 1 \xc2\xad 2\n' > shy.kel
+   $ diktor --dump-tokens shy.kel
+-  shy.kel:1:11: 字句エラー: unexpected character: U+00AD
++  shy.kel:1:11: 字句エラー: 予期しない文字です: U+00AD
+   [2]
+   $ printf 'let x = 1 \xe2\x80\x8b 2\n' > zwsp.kel
+   $ diktor --dump-tokens zwsp.kel
+-  zwsp.kel:1:11: 字句エラー: unexpected character: U+200B
++  zwsp.kel:1:11: 字句エラー: 予期しない文字です: U+200B
+   [2]
+   $ printf 'let x = 1 \xe2\x80\xae 2\n' > rlo.kel
+   $ diktor --dump-tokens rlo.kel
+-  rlo.kel:1:11: 字句エラー: unexpected character: U+202E
++  rlo.kel:1:11: 字句エラー: 予期しない文字です: U+202E
+   [2]
+   $ printf 'let x = 1 \xe2\x81\xa0 2\n' > wj.kel
+   $ diktor --dump-tokens wj.kel
+-  wj.kel:1:11: 字句エラー: unexpected character: U+2060
++  wj.kel:1:11: 字句エラー: 予期しない文字です: U+2060
+   [2]
+ 
+ CR(仕様 §0。文字列の外の CR は空白、CRLF が改行として働き、単独の CR は
+@@ -531,7 +531,7 @@
+ 
+   $ printf 'let x = 1\rlet y = 2\n' > cronly.kel
+   $ diktor --type-check cronly.kel
+-  cronly.kel:1:11: パースエラー(付近のトークンを確認してください)
++  cronly.kel:1:11: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'echoln("a\rb")\n' > crstr.kel
+@@ -563,21 +563,21 @@
+   > let s = "\uD800"
+   > KEL
+   $ diktor --dump-tokens surr.kel
+-  surr.kel:1:15: 字句エラー: invalid unicode escape (out of range or surrogate)
++  surr.kel:1:15: 字句エラー: Unicode エスケープの値がサロゲートか、U+10FFFF を超えています
+   [2]
+ 
+   $ cat > oor.kel <<'KEL'
+   > let s = "\U00110000"
+   > KEL
+   $ diktor --dump-tokens oor.kel
+-  oor.kel:1:19: 字句エラー: invalid unicode escape (out of range or surrogate)
++  oor.kel:1:19: 字句エラー: Unicode エスケープの値がサロゲートか、U+10FFFF を超えています
+   [2]
+ 
+   $ cat > badesc.kel <<'KEL'
+   > let s = "\q"
+   > KEL
+   $ diktor --dump-tokens badesc.kel
+-  badesc.kel:1:11: 字句エラー: invalid escape sequence
++  badesc.kel:1:11: 字句エラー: 不正なエスケープです
+   [2]
+ 
+ 先頭小数点は許さず、最長一致で 1._0 / 1.foo は「数値の後に識別子」に読む
+@@ -585,7 +585,7 @@
+ 
+   $ printf 'let x = .5\n' > dot5.kel
+   $ diktor --type-check dot5.kel
+-  dot5.kel:1:9: パースエラー(付近のトークンを確認してください)
++  dot5.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ cat > projnum.kel <<'KEL'
+@@ -606,6 +606,79 @@
+      2  foo
+      3  <EOF>
+ 
++数値の綴り間違いも最長一致で割れ、字句エラーにはならない(LangSpec 付録 A.2)。
++割れた続きのトークンでパースが詰まったとき、診断は数値の先頭を指し、
++数値とその直後のトークンを名指す。終了コードは構文エラーの 2 のまま:
++
++  $ printf 'let a = 0b102\n' > glued1.kel
++  $ diktor --type-check glued1.kel
++  glued1.kel:1:9: 構文エラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 0x\n' > glued2.kel
++  $ diktor --type-check glued2.kel
++  glued2.kel:1:9: 構文エラー: 数値リテラル 0 の直後に x が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 1u\n' > glued3.kel
++  $ diktor --type-check glued3.kel
++  glued3.kel:1:9: 構文エラー: 数値リテラル 1 の直後に u が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 1.2.3\n' > glued4.kel
++  $ diktor --type-check glued4.kel
++  glued4.kel:1:9: 構文エラー: 数値リテラル 1.2 の直後に .3 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ diktor --type-check projnum.kel
++  projnum.kel:1:9: 構文エラー: 数値リテラル 1. の直後に _0 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++
++詰まる位置が式の途中でもパターンでも、負の数値リテラルでも同じ。REPL は同じ文面を出して続く:
++
++  $ cat > gluedpos.kel <<'KEL'
++  > let g(x: Int32, y: Int32): Int32 = x
++  > let a = g(1, 2x)
++  > KEL
++  $ diktor --type-check gluedpos.kel
++  gluedpos.kel:2:14: 構文エラー: 数値リテラル 2 の直後に x が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ cat > gluedpat.kel <<'KEL'
++  > let f(x: Int32): Int32 = x match {
++  >   case 0b102 => 1
++  >   case _ => 0
++  > }
++  > KEL
++  $ diktor --type-check gluedpat.kel
++  gluedpat.kel:2:8: 構文エラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = -0b102\n' > gluedneg.kel
++  $ diktor --type-check gluedneg.kel
++  gluedneg.kel:1:10: 構文エラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 0b102\n1 + 1\n' | diktor --repl
++  <stdin>:1:9: 構文エラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  _ : Int32 = 2
++
++数値と続きのトークンの間に空白がある形と、続きが英数字でも . でもない形は、
++従来の文面のまま。浮動小数の後ろの . はフィールド選択として文法に合うので、
++その後ろの予約語で詰まる形は数値の綴りの誤りとはしない(後ろのトークンによって
++予約語の誤用か汎用の文面になる。test/reserved_word.t)。
++数値に予約語が隙間なく続いても文法に合えば受理する:
++
++  $ printf 'let a = 1 x\n' > gluedsp.kel
++  $ diktor --type-check gluedsp.kel
++  gluedsp.kel:1:11: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let a = 1"s"\n' > gluedtext.kel
++  $ diktor --type-check gluedtext.kel
++  gluedtext.kel:1:10: 構文エラー: 付近のトークンを確認してください
++  [2]
++  $ printf 'let a = 1.2.match { case _ => 1 }\n' > gluedkw.kel
++  $ diktor --type-check gluedkw.kel
++  gluedkw.kel:1:13: 構文エラー: 予約語 match はここには書けません(予約語は識別子に使えません)
++  [2]
++  $ printf 'let c = true\nlet a = if c then 1else 2\n' > gluedelse.kel
++  $ diktor --type-check gluedelse.kel
++  c : Boolean
++  a : Int32
++
+ `{` の読み分けの 3 文脈(仕様 §0、sample.kel:26-28)。実装は文脈で先読みを
+ 止めるのではなく、3 種を束ねた %inline lbrace で受ける(D12 / FIX-2b)。
+ したがって分類の結果は文脈ではなく先読みで決まるが、どの分類でも同じ木になる:
+diff -ruN -x _build a/test/trailing_block.t b/test/trailing_block.t
+--- a/test/trailing_block.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/trailing_block.t	2026-10-17 04:48:09.687762317 +0900
+@@ -82,7 +82,7 @@
+      (extend _item 2 (extend _item (fn () k) {})))))
+   $ echo 'let a = %arg' > pct.kel
+   $ diktor --type-check pct.kel
+-  pct.kel:1:9: パースエラー(付近のトークンを確認してください)
++  pct.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ { case (a, b) => e } はタプル 1 個を受け取る関数で、2 引数の関数ではない
+@@ -127,6 +127,50 @@
+   wild.kel:1:13: 構文エラー: 末尾ブロックの引数に _ は書けません(引数なしは { 式 }、引数を捨てる 1 引数は { case _ => 式 })
+   [2]
+ 
++引数は小文字の識別子 1 個に限る。括弧で囲んだパターン、型注釈、2 個以上の
++引数は、それぞれ専用の診断になり、_ と同じく引数の位置を指す。
++{ x: T => ... } の { は字句の分類でレコード型、{ x, y => ... } の { は
++レコードになるが、末尾ブロックの位置では引数の誤りとして報告する:
++
++  $ echo 'let a = f { (a, b) => a + b }' > ptup.kel
++  $ diktor --type-check ptup.kel
++  ptup.kel:1:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
++  [2]
++  $ echo 'let a = f { () => 1 }' > punit.kel
++  $ diktor --type-check punit.kel
++  punit.kel:1:13: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(引数のない関数は { 式 }、タプルを分解する関数は { case (a, b) => 式 } と書きます)
++  [2]
++  $ echo 'let a = g(1) { x: Int32 => x }' > pannot.kel
++  $ diktor --type-check pannot.kel
++  pannot.kel:1:16: 構文エラー: 末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)
++  [2]
++  $ echo 'let a = M.f { x, y => x + y }' > ptwo.kel
++  $ diktor --type-check ptwo.kel
++  ptwo.kel:1:15: 構文エラー: 末尾ブロックの引数は小文字の識別子 1 個です(2 個以上の引数を取る関数は fn(x, y) => 式 と書いて括弧の中に渡します)
++  [2]
++
++=> の前が名前だけの並びでないとき(x = 1 や末尾のカンマ)は、レコードの形の
++診断になる:
++
++  $ echo 'let a = f { x = 1 => 2 }' > prec.kel
++  $ diktor --type-check prec.kel
++  prec.kel:1:11: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
++  [2]
++  $ echo 'let a = f { x, => 1 }' > prec2.kel
++  $ diktor --type-check prec2.kel
++  prec2.kel:1:11: 構文エラー: 末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)
++  [2]
++
++{ x => } のように文の列が空なら、本体の値は Unit である:
++
++  $ cat > pempty.kel <<'EOF'
++  > let each3[E](f: (Int32) => Unit @ E): Unit @ E = { f(1); f(2); f(3) }
++  > each3 { x => }
++  > echoln("done")
++  > EOF
++  $ diktor pempty.kel
++  done
++
+ 中身がレコードの形(空の {} を含む)の末尾ブロックはエラーにする。
+ 末尾ブロックは常に関数を渡す:
+ 
+@@ -144,8 +188,7 @@
+   [2]
+ 
+ コンストラクタ、構造的ヴァリアント、perform、resume には付けられない。
+-引数リストのある形は専用の診断になり、引数リストの無い Foo { k } と
+-#Tag { k } は一般のパースエラーになる:
++引数リストの有無によらず、専用の診断になる:
+ 
+   $ echo 'let a = Some(1) { k }' > ctor.kel
+   $ diktor --type-check ctor.kel
+@@ -165,11 +208,19 @@
+   [2]
+   $ echo 'let a = Foo { k }' > ctor0.kel
+   $ diktor --type-check ctor0.kel
+-  ctor0.kel:1:13: パースエラー(付近のトークンを確認してください)
++  ctor0.kel:1:13: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+   [2]
+   $ echo 'let a = #Tag { k }' > tag0.kel
+   $ diktor --type-check tag0.kel
+-  tag0.kel:1:14: パースエラー(付近のトークンを確認してください)
++  tag0.kel:1:14: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
++  [2]
++  $ echo 'let a = M.Foo { k }' > mctor0.kel
++  $ diktor --type-check mctor0.kel
++  mctor0.kel:1:15: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
++  [2]
++  $ echo 'let a = Foo {}' > ctorrec.kel
++  $ diktor --type-check ctorrec.kel
++  ctorrec.kel:1:13: 構文エラー: コンストラクタと構造的ヴァリアントには末尾ブロックを付けられません
+   [2]
+ 
+ 末尾ブロックは 1 つの呼び出しに 1 個まで:
+@@ -182,13 +233,17 @@
+   $ diktor --type-check two2.kel
+   two2.kel:1:25: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
+   [2]
++  $ echo 'let a = f { 1 } {}' > two3.kel
++  $ diktor --type-check two3.kel
++  two3.kel:1:17: 構文エラー: 末尾ブロックは 1 つの呼び出しに 1 個までです
++  [2]
+ 
+ 括弧で囲んだ式の後ろには書けない。(g(1)) { k } は g(1) の結果への適用にも、
+-g(1, fn() => k) にもならず、パースエラーになる:
++g(1, fn() => k) にもならず、構文エラーになる:
+ 
+   $ echo 'let a = (g(1)) { k }' > paren.kel
+   $ diktor --type-check paren.kel
+-  paren.kel:1:16: パースエラー(付近のトークンを確認してください)
++  paren.kel:1:16: 構文エラー: 括弧で囲んだ式には末尾ブロックを付けられません(関数を括弧の中の引数として渡します)
+   [2]
+ 
+ { x => ... } と { case ... } は、末尾ブロックの位置の外ではエラーになる。
+@@ -239,6 +294,21 @@
+   (dlet (binding r = f))
+   (exp 1)
+ 
++match の節の並びの波括弧の中でも、改行はブロックの中と同じ規則で区切りになる。
++節の本体の後ろに区切りを置けないので、節の本体の呼び出しの { を次の行に
++書くと、どの中身でも構文エラーになる。誤りの位置は区切りになった改行を指す:
++
++  $ cat > nlarm.kel <<'EOF'
++  > let a = 1 match {
++  >   case 1 => f
++  >     { 2 }
++  >   case _ => 0
++  > }
++  > EOF
++  $ diktor --type-check nlarm.kel
++  nlarm.kel:2:14: 構文エラー: 付近のトークンを確認してください
++  [2]
++
+ 末尾ブロックの本体は無名関数の本体なので、操作節の中の末尾ブロックには
+ その節の resume を書けない(LangSpec §13.5)。末尾ブロックの中の別の handle
+ の resume は書ける:
+diff -ruN -x _build a/test/trailing_comma.t b/test/trailing_comma.t
+--- a/test/trailing_comma.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/trailing_comma.t	2026-10-17 04:45:41.763580247 +0900
+@@ -34,7 +34,7 @@
+ 
+   $ printf 'let f(t) = t match { case {x, ...r,} => x }\n' > term1.kel
+   $ diktor --type-check term1.kel
+-  term1.kel:1:35: パースエラー(付近のトークンを確認してください)
++  term1.kel:1:35: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 残る 8 種のリスト(引数・パラメータ・レコード・タプル・パターン・エフェクト行・
+@@ -68,17 +68,17 @@
+ 
+   $ printf 'let f[R](p: {x: Int32 extends R,}): Int32 = p.x\n' > term2.kel
+   $ diktor --type-check term2.kel
+-  term2.kel:1:32: パースエラー(付近のトークンを確認してください)
++  term2.kel:1:32: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let r = {a = 1}\nlet s = {b = 2, extends r,}\n' > term3.kel
+   $ diktor --type-check term3.kel
+-  term3.kel:2:26: パースエラー(付近のトークンを確認してください)
++  term3.kel:2:26: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let f(t) = t match { case (x, ...r,) => x }\n' > term4.kel
+   $ diktor --type-check term4.kel
+-  term4.kel:1:35: パースエラー(付近のトークンを確認してください)
++  term4.kel:1:35: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 終端子の**前**のカンマは要素の末尾カンマなので置ける:
+diff -ruN -x _build a/test/utf8_position.t b/test/utf8_position.t
+--- a/test/utf8_position.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/utf8_position.t	2026-10-17 04:45:41.767074250 +0900
+@@ -0,0 +1,82 @@
++不正な UTF-8 のバイト列の字句エラーは、不正なバイトの位置を ファイル:行:桁 で示す。
++桁は行頭からのコードポイントの数に 1 を足したもので、終了状態は 2 である。
++
++文字列の中、識別子の途中、行コメントの中のどこでも、不正なバイトそのものを指す:
++
++  $ printf 'echoln("before")\nlet x = "\377"\n' > instr.kel
++  $ diktor instr.kel; echo "exit: $?"
++  instr.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf 'let ab\377c = 1\n' > inident.kel
++  $ diktor inident.kel; echo "exit: $?"
++  inident.kel:1:7: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf 'let x = 1 // \377\n' > incomment.kel
++  $ diktor incomment.kel; echo "exit: $?"
++  incomment.kel:1:14: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++最初のトークンを読み終える前に不正なバイトに当たっても、ファイル名を示す:
++
++  $ printf '/* \377 */\nlet x = 1\n' > firstblock.kel
++  $ diktor firstblock.kel; echo "exit: $?"
++  firstblock.kel:1:4: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf '\377\n' > firstbyte.kel
++  $ printf 'let x = 1\n' > fine.kel
++  $ diktor fine.kel firstbyte.kel; echo "exit: $?"
++  firstbyte.kel:1:1: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++途中で切れた多バイト列と、サロゲートを符号化した 3 バイトは、その先頭のバイトを指す:
++
++  $ printf 'let x = 1\n\343\201' > trunc.kel
++  $ diktor trunc.kel; echo "exit: $?"
++  trunc.kel:2:1: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf 'let s = "\355\240\200"\n' > surrogate.kel
++  $ diktor surrogate.kel; echo "exit: $?"
++  surrogate.kel:1:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++前に多バイト文字があっても、桁はコードポイントで数える。
++3 バイトの文字 2 つの後ろの不正なバイトは 12 桁目である:
++
++  $ printf 'let s = "\343\201\202\343\201\204\377"\n' > aftermb.kel
++  $ diktor aftermb.kel; echo "exit: $?"
++  aftermb.kel:1:12: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++字句解析器は入力を 512 コードポイントずつ読み進める。
++その境界をまたいだ先の不正なバイトも、正しい桁を指す:
++
++  $ printf '//%0510d\377\n' 0 > chunk.kel
++  $ diktor chunk.kel; echo "exit: $?"
++  chunk.kel:1:513: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++import 先のファイルの誤りは、そのファイルの名前と位置で示す:
++
++  $ printf 'let y = "\377"\n' > badlib.kel
++  $ printf 'from "./badlib" import y\necholn("a")\n' > useslib.kel
++  $ diktor useslib.kel; echo "exit: $?"
++  badlib.kel:1:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++--type-check と --dump-tokens も同じ診断を出す:
++
++  $ diktor --type-check instr.kel; echo "exit: $?"
++  instr.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ diktor --dump-tokens instr.kel; echo "exit: $?"
++  instr.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++対話的な実行では、入力の行と桁で示し、セッションは続く。
++:type の後ろの式でも、行の中の桁で示す:
++
++  $ printf 'let a = 1\nlet x = "\377"\nlet b = 2\n:type "\377"\n' | diktor --repl
++  a : Int32 = 1
++  <stdin>:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  b : Int32 = 2
++  <stdin>:4:8: 字句エラー: 不正な UTF-8 バイト列です
+diff -ruN -x _build a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:48:26.655705119 +0900
+@@ -342,7 +342,7 @@
+ 
+   $ printf 'let x = 1\n// \xff\xfe\n' > badutf8.kel
+   $ diktor badutf8.kel
+-  badutf8.kel: 字句エラー: 不正な UTF-8 バイト列です
++  badutf8.kel:2:4: 字句エラー: 不正な UTF-8 バイト列です
+   [2]
+ 
+   $ printf 'echoln(show(1i999999999999999999999))\n' > hugesuf.kel
+@@ -723,12 +723,12 @@
+   > }
+   > KEL
+   $ diktor --type-check reslabel.kel
+-  reslabel.kel:7:3: 構文エラー: resume の引数にラベルは付けられません
++  reslabel.kel:6:17: 構文エラー: resume の引数にラベルは付けられません
+   [2]
+ 
+   $ sed 's/resume(x = 1)/resume(1, 2)/' reslabel.kel > res2.kel
+   $ diktor --type-check res2.kel
+-  res2.kel:7:3: 構文エラー: resume の引数は高々1個です
++  res2.kel:6:17: 構文エラー: resume の引数は高々1個です
+   [2]
+ 
+ 組み込みメソッド表の全 39 組が実際に選ばれる(C2 / D37 の網羅回帰):

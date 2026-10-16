@@ -1,0 +1,291 @@
+=== V27/ex/a1.kel
+! a1.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex/a2.kel
+! a2.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex/a3.kel
+a3.kel:2:5: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V27/ex/a4.kel
+! a4.kel:2:19: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/ex/a5.kel
+! a5.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/ex/a6.kel
+! a6.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/ex/a7.kel
+! a7.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex/a8.kel
+! a8.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex/b1.kel
+! b1.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/ex/b2.kel
+! b2.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/ex/b3.kel
+f : (T[F[String]]) => Int32
+[exit 0]
+=== V27/ex/b4.kel
+f : (T[F[String]], F[String, Int32]) => Int32
+[exit 0]
+=== V27/ex/b5.kel
+! b5.kel:3:13: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1 は Type です
+[exit 1]
+=== V27/ex/b6.kel
+! b6.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex/b7.kel
+! b7.kel:2:40: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2]
+[exit 1]
+=== V27/ex/b8.kel
+! b8.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex/b9.kel
+f : (F[A]) => F[A]
+g : (List[Int32]) => List[Int32]
+[exit 0]
+=== V27/ex/c1.kel
+f : (N[{Print}]) => Int32
+[exit 0]
+=== V27/ex/c2.kel
+! c2.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/ex/c3.kel
+! c3.kel:1:1: 型エラー: 型エイリアス Cb の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/ex/d1.kel
+! d1.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/ex/d2.kel
+! d2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/ex/e1.kel
+! e1.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V27/ex/e2.kel
+! e2.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V27/ex/e3.kel
+! e3.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+=== V27/ex/e4.kel
+! e4.kel:2:42: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2] :: Type
+[exit 1]
+=== V27/ex/e5.kel
+f : (Callback[R1]) => Int32
+g : (Callback[{Print}]) => Int32
+[exit 0]
+=== V27/ex/e6.kel
+! e6.kel:1:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+=== V27/ex/f1.kel
+f : (Int32) => Int32 @ {Print extends R1}
+g : (Int32) => Int32 @ {Print}
+[exit 0]
+=== V27/ex2/r1.kel
+! r1.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/r2.kel
+! r2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/ex2/r3.kel
+! r3.kel:3:22: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/r4.kel
+! r4.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/r5.kel
+! r5.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/ex2/r6.kel
+! r6.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/ex2/r7.kel
+! r7.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/r8.kel
+! r8.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/r9.kel
+! r9.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/ex2/s10.kel
+! s10.kel:2:35: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/ex2/s11.kel
+! s11.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/s1.kel
+! s1.kel:1:20: 型エラー: extends の右の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+=== V27/ex2/s2.kel
+! s2.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/s3.kel
+! s3.kel:2:20: 型エラー: 型構成子 Box の第1引数のカインドが一致しません: Row を期待しましたが F[Int32] は行になりません
+[exit 1]
+=== V27/ex2/s4.kel
+! s4.kel:1:1: 型エラー: newtype H の型パラメータ G への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/ex2/s5.kel
+! s5.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/s6.kel
+! s6.kel:3:23: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/ex2/s7.kel
+! s7.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/ex2/s8.kel
+! s8.kel:3:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/ex2/s9.kel
+! s9.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+=== V27/ex2/t10.kel
+! t10.kel:1:20: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+=== V27/ex2/t1.kel
+! t1.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/t2.kel
+! t2.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/t3.kel
+! t3.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/t4.kel
+! t4.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/t5.kel
+! t5.kel:2:13: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[Int32] は行になりません
+[exit 1]
+=== V27/ex2/t6.kel
+! t6.kel:2:20: 型エラー: extends の右の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+=== V27/ex2/t7.kel
+! t7.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/t8.kel
+! t8.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/t9.kel
+! t9.kel:2:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+=== V27/ex2/u10.kel
+! u10.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/u1.kel
+! u1.kel:1:44: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/u2.kel
+! u2.kel:1:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/ex2/u3.kel
+! u3.kel:1:24: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32] :: Type
+[exit 1]
+=== V27/ex2/u4.kel
+! u4.kel:1:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+=== V27/ex2/u5.kel
+! u5.kel:1:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+=== V27/ex2/u6.kel
+! u6.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+=== V27/ex2/u7.kel
+! u7.kel:1:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+=== V27/ex2/u8.kel
+! u8.kel:1:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+=== V27/ex2/u9.kel
+! u9.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/verify/ex/r1.kel
+! r1.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/r2.kel
+! r2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/verify/ex/r3.kel
+! r3.kel:3:22: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/r4.kel
+! r4.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/r5.kel
+! r5.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/verify/ex/r6.kel
+! r6.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/verify/ex/r7.kel
+! r7.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/r8.kel
+! r8.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/r9.kel
+! r9.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/verify/ex/s10.kel
+! s10.kel:2:35: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/verify/ex/s11.kel
+! s11.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/s1.kel
+! s1.kel:1:20: 型エラー: extends の右の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+=== V27/verify/ex/s2.kel
+! s2.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/verify/ex/s3.kel
+! s3.kel:2:20: 型エラー: 型構成子 Box の第1引数のカインドが一致しません: Row を期待しましたが F[Int32] は行になりません
+[exit 1]
+=== V27/verify/ex/s4.kel
+! s4.kel:1:1: 型エラー: newtype H の型パラメータ G への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+=== V27/verify/ex/s5.kel
+! s5.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/verify/ex/s6.kel
+! s6.kel:3:23: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+=== V27/verify/ex/s7.kel
+! s7.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+=== V27/verify/ex/s8.kel
+! s8.kel:3:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+=== V27/verify/ex/s9.kel
+! s9.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+=== V27/verify/ex/t1.kel
+! t1.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/verify/ex/t2.kel
+! t2.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/verify/ex/t3.kel
+! t3.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+=== V27/verify/ex/t4.kel
+t4.kel:1:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V27/verify/ex/t5.kel
+! t5.kel:2:13: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[Int32] は行になりません
+[exit 1]
+=== V27/verify/ex/t6.kel
+! t6.kel:2:20: 型エラー: extends の右の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+=== V27/verify/ex/t7.kel
+! t7.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]

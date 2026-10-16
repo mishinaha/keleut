@@ -1,0 +1,2 @@
+newtype N = N(() => Unit @ {Nope})
+effect Console = { w: (String) => Unit }

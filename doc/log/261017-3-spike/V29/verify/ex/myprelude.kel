@@ -1,0 +1,5 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype H0 = MkH0(Cb[{Print}])
+type Cb[E] = () => Unit @ E
+type Pa[A] = (A, A)

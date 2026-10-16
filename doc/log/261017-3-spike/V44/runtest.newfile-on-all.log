@@ -1,0 +1,82 @@
+File "test/pub_effect_note.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub_effect_note.t b/_build/default/test/pub_effect_note.t.corrected
+index 798aa73..3637137 100644
+--- a/_build/default/test/pub_effect_note.t
++++ b/_build/default/test/pub_effect_note.t.corrected
+@@ -25,7 +25,7 @@ pub の規則を名指して拒否する。入れ子の矢印の行に @ {} と
+   > }
+   > KEL
+   $ diktor --type-check pubvalinner.kel
+-  ! pubvalinner.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル Console がありません(行は閉じています))
++  ! pubvalinner.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+   [1]
+   $ cat > pubvalrec.kel <<'KEL'
+   > module M {
+@@ -33,7 +33,7 @@ pub の規則を名指して拒否する。入れ子の矢印の行に @ {} と
+   > }
+   > KEL
+   $ diktor --type-check pubvalrec.kel
+-  ! pubvalrec.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
++  ! pubvalrec.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+   [1]
+ 
+ 引数のレコードのフィールドと、返り値のヴァリアントの選択肢でも同じである:
+@@ -44,7 +44,7 @@ pub の規則を名指して拒否する。入れ子の矢印の行に @ {} と
+   > }
+   > KEL
+   $ diktor --type-check pubvalarg.kel
+-  ! pubvalarg.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
++  ! pubvalarg.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+   [1]
+   $ cat > pubvalvariant.kel <<'KEL'
+   > module M {
+@@ -52,7 +52,7 @@ pub の規則を名指して拒否する。入れ子の矢印の行に @ {} と
+   > }
+   > KEL
+   $ diktor --type-check pubvalvariant.kel
+-  ! pubvalvariant.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル C がありません(行は閉じています))
++  ! pubvalvariant.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル C がありません(行は閉じています))
+   [1]
+ 
+ 返り値のフィールドが違い、本体がエフェクトも起こす形は、フィールドの失敗を報告する:
+@@ -63,7 +63,7 @@ pub の規則を名指して拒否する。入れ子の矢印の行に @ {} と
+   > }
+   > KEL
+   $ diktor --type-check pubvalboth.kel
+-  ! pubvalboth.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
++  ! pubvalboth.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+   [1]
+ 
+ let rec の値束縛も同じである。フィールドの失敗は、pub でない let rec と同じ文言になる:
+@@ -82,7 +82,7 @@ let rec の値束縛も同じである。フィールドの失敗は、pub で
+   > }
+   > KEL
+   $ diktor --type-check pubrecvalrec.kel
+-  ! pubrecvalrec.kel:2:15: 型エラー: ラベル a がありません(行は閉じています)
++  ! pubrecvalrec.kel:2:15: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+   [1]
+ 
+ 関数束縛の本体の run の中で、単相のフィールドの関数を呼ぶと、ヒープのラベルが
+@@ -99,7 +99,7 @@ let rec の値束縛も同じである。フィールドの失敗は、pub で
+   $ diktor --type-check pubrunleak.kel
+   idf : (A) => A
+   M.r : {go: (Int32) => Int32}
+-  ! pubrunleak.kel:4:32: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  ! pubrunleak.kel:4:32: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています)
+   [1]
+   $ sed 's/pub let f/let f/' pubrunleak.kel > runleak.kel
+   $ diktor --type-check runleak.kel
+@@ -128,11 +128,11 @@ run の本体で、エフェクトを起こす引数の関数を呼ぶ形は、p
+   > }
+   > KEL
+   $ diktor --type-check pubrigidcall.kel
+-  ! pubrigidcall.kel:2:31: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}
++  ! pubrigidcall.kel:2:31: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: スコープ付きの型が一致しません: ς1 と _A => _B @ {})
+   [1]
+   $ cat > purerigidcall.kel <<'KEL'
+   > let f[F](g: F): Int32 @ {} = g()
+   > KEL
+   $ diktor --type-check purerigidcall.kel
+-  ! purerigidcall.kel:1:30: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}
++  ! purerigidcall.kel:1:30: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]

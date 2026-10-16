@@ -1,0 +1,2 @@
+pub effect Log = { log: (String) => {}, flush: () => {} }
+pub let run_log[A](f: () => A @ {Log, Print}): A @ Print = f() handle { case Log.log(s) => { println(s); resume({}) } case Log.flush() => resume({}) }

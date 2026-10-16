@@ -1,0 +1,81 @@
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index b16f029..0677526 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -621,7 +621,7 @@ handle の操作節の resume は通る:
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check guardonly.kel
+-  ! guardonly.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! guardonly.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ 標準出力に書き出せないときも終了コード規約に落ちる(B5 / D33。既定の
+File "test/eval.t", line 1, characters 0-0:
+diff --git a/_build/default/test/eval.t b/_build/default/test/eval.t.corrected
+index 976cfc9..a4d3e00 100644
+--- a/_build/default/test/eval.t
++++ b/_build/default/test/eval.t.corrected
+@@ -503,7 +503,7 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor solelit.kel
+-  ! solelit.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! solelit.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+   $ cat > soleopt.kel <<'EOF2'
+   > newtype OBox = MkO(Option[Int32])
+@@ -515,7 +515,7 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor soleopt.kel
+-  ! soleopt.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! soleopt.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ ラベルが 1 つの閉じた構造的ヴァリアントを分解し、引数が変数だけの節も、取りこぼさない節に数える。
+@@ -541,7 +541,7 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor solevar2.kel
+-  ! solevar2.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! solevar2.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ 絞り込みの節を複数合わせると引数を網羅できる場合も、
+@@ -557,7 +557,7 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor opcover.kel
+-  ! opcover.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! opcover.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ 拒否の診断が案内する節の形は、操作の引数の個数に合わせた `_` の並びである。
+@@ -574,6 +574,8 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor opnone0.kel
++  ! opnone0.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask() を最後に置いてください
++  [1]
+   $ cat > opnone2.kel <<'EOF2'
+   > effect Pair = { pair: (Int32, Boolean) => Int32 }
+   > let r = perform pair(1, true) handle {
+@@ -583,6 +585,8 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor opnone2.kel
++  ! opnone2.kel:2:9: 型エラー: 操作 pair には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case pair(_, _) を最後に置いてください
++  [1]
+   $ cat > opnone2ok.kel <<'EOF2'
+   > effect Pair = { pair: (Int32, Boolean) => Int32 }
+   > let r = perform pair(1, true) handle {
+@@ -593,6 +597,7 @@ Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Optio
+   > echoln(show(r))
+   > EOF2
+   $ diktor opnone2ok.kel
++  1
+ 
+ 操作節の引数パターンの誤りは、取りこぼしより先に報告する。tell には絞り込みの節
+ tell(0) しか無いが、報告するのは、その後ろにある ask の節の未知のコンストラクタである:

@@ -1,0 +1,4 @@
+type Pure: EffectRow = {}
+newtype Box = Box(() => Int32 @ Pure)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = Box(b)

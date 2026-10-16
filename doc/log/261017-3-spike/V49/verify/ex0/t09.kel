@@ -1,0 +1,3 @@
+let read_[A: Show](s: String): A = ???
+let v = { let u = read_("1"); 1 }
+let k = fn() => 2

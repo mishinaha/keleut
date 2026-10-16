@@ -1,0 +1,2 @@
+let g = (fn(y) => y match { case 4294967295 => 1  case _ => 0 })(3)
+let h = 1.5 % 2.0

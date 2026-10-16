@@ -1,0 +1,8 @@
+type class Pair[A] {
+  val first: (A) => Int32
+  val second: (A) => Int32
+}
+type instance Pair[Int32] {
+  let rec first(n: Int32): Int32 = n
+  and pub second(n: Int32): Int32 = n
+}

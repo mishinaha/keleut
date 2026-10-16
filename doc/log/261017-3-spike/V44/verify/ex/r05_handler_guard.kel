@@ -1,0 +1,13 @@
+effect Ask = { ask: () => Int32 }
+module M {
+  pub let f(n: Int32): Int32 = perform ask() handle {
+    case ask() if n > 0 => resume(n + 10)
+    case ask() => resume(0)
+    case return(x) => x
+  }
+  pub let g: (Int32) => Int32 = fn(n) => perform ask() handle {
+    case ask() => resume(f(n) + 1)
+    case return(x) => x * 2
+  }
+}
+with_stdout(fn() => { echoln(show(M.f(5))); echoln(show(M.g(-1))) })

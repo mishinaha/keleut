@@ -1,0 +1,2 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[String] { let describe(n: Int32) = "x" }

@@ -1,0 +1,4 @@
+f : () => Int32 @ {Ask, Log}
+r : Int32
+_ : {}
+rc=0

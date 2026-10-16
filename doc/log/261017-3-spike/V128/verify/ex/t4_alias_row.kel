@@ -1,0 +1,11 @@
+effect Ask = { ask: () => Int32 }
+effect Stop = { stop: () => Int32 }
+type Thunk[A] = () => A @ {Ask, Stop}
+let f: Thunk[Int32] = fn() => perform ask() + perform ask()
+let r = (f() handle {
+  case ask() => if true then perform stop() else resume(1)
+  case cancel => echoln("cancel ask")
+}) handle {
+  case stop() => resume(5)
+}
+echoln(show(r))

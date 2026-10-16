@@ -1,0 +1,259 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:15:12.179726022 +0900
+@@ -187,7 +187,28 @@
+ 
+    残った `Integral` / `Fractional` は、
+    宣言の終わりに `default_numerics` が Int32 / Float64 に落とす(第8章)。
+-   既定化が表示より先に走るので、通常の型表示にこれらの述語は現れない。 *)
++   既定化が表示より先に走るので、通常の型表示にこれらの述語は現れない。
++
++   ### パターンの数値リテラルは、宣言の終わりに型で読む
++
++   `number_ty` は字面の中身を読まないので、桁あふれした数値リテラルも型検査を通る。
++   式の位置では、第14章がリテラルを評価する時点で、範囲外の字面を実行時エラーにする。
++   パターンの位置のリテラルは評価されない。
++   第14章の照合は、値の型で字面を読めなければ、その節を不一致として次へ進む。
++   そのため、Int32 の照合対象に書いた `case 4294967295` は、どの値にも一致しない節として黙って残る。
++   第10章(exhaust.ml)の網羅性検査は列の型を知らないので、この節を報告できない。
++
++   そこで、パターンの数値リテラルを `pattern_numbers` に積み、
++   宣言の終わりの既定化の後に `check_pattern_numbers` で読む。
++   既定化の後なら、どのリテラルのノードの型も Int32、Int64、Float64 のどれかに決まっている。
++   その型で字面を読めなければ、リテラルの位置を指す型エラーにする。
++   読み方は第14章の照合と同じく、OCaml の `Int32.of_string` などに任せる。
++   浮動小数の読みは桁あふれしても無限大になって失敗しないので、調べるのは整数の 2 型だけである。
++
++   検査をパターンの推論のその場で行わないのは、そこではまだ型が決まっていないことがあるからである。
++   注釈の無い引数を照合する `fn(x) => x match { case 4294967295 => … }` では、
++   リテラルの型は `Integral` 述語つきの変数のままで、宣言の終わりに Int32 に落ちる。
++   網羅性検査の時点(束縛の一般化の直前)でも、同じ理由で型が決まっているとは限らない。 *)
+ 
+ let number_ty level (n : number) : ty =
+   match n.n_suffix with
+@@ -204,6 +225,32 @@
+       Unify.add_class v (if n.n_is_float then cls_fractional else cls_integral);
+       v
+ 
++(* パターンの数値リテラルのノードと字面。elab_pat が先頭に積み、check_pattern_numbers が読む *)
++let pattern_numbers : (T.pat * number) list ref = ref []
++
++(* 既定化の後に、パターンの整数リテラルを型で読む。読めなければ、
++   推論した順で最初のものを型エラーにする *)
++let check_pattern_numbers () =
++  let pats = List.rev !pattern_numbers in
++  pattern_numbers := [];
++  List.iter
++    (fun (node, (n : number)) ->
++      let fits =
++        match repr (Tree.get_ty node) with
++        | TCon (c, []) when c = intern "Int32" -> Some ("Int32", Option.is_some (Int32.of_string_opt n.n_text))
++        | TCon (c, []) when c = intern "Int64" -> Some ("Int64", Option.is_some (Int64.of_string_opt n.n_text))
++        | _ -> None
++      in
++      match fits with
++      | Some (tyname, false) ->
++          raise
++            (Type_error_at
++               ( Tree.loc_of node,
++                 "数値リテラルのパターン " ^ Lexer.show_number n ^ " は " ^ tyname
++                 ^ " の範囲を超えるので、どの値にも一致しません" ))
++      | _ -> ())
++    pats
++
+ (* 名前だけを受理し、Diktor では実行できない数値型 *)
+ let unsupported_numeric = [ "Int8"; "Int16"; "UInt8"; "UInt16"; "UInt32"; "UInt64"; "Float32" ]
+ 
+@@ -1334,6 +1381,7 @@
+       env
+   | T.PNumber n ->
+       Unify.unify expected (number_ty level n);
++      pattern_numbers := (node, n) :: !pattern_numbers;
+       env
+   | T.PRecord (fields, rest) -> (
+       let ftys = List.map (fun (l, _) -> (l, new_var level)) fields in
+@@ -5091,6 +5139,7 @@
+       (* 既定化も宣言の包みの中で走らせる。DInstance の本体で作られた数値リテラルの述語は、
+          ここで初めて落ちることがある。包みの外で走らせると、位置なしの型エラーになる *)
+       Unify.default_numerics ();
++      check_pattern_numbers ();
+       (* 宣言の終わりに、台帳に残っている穴をすべて解き直す。前の宣言で型の決まらなかった
+          穴も、この宣言で型が決まれば解ける *)
+       solve_holes_at ~since:0 ~params:[];
+@@ -5144,6 +5193,7 @@
+   warnings_count := 0;
+   Unify.reset ();
+   Exhaust.reset ();
++  pattern_numbers := [];
+   group_stack := [];
+   opened_rows := [];
+   pub_pure_cells := []
+@@ -5569,6 +5619,7 @@
+   Hashtbl.reset top_types;
+   Unify.reset ();
+   Exhaust.reset ();
++  pattern_numbers := [];
+   group_stack := [];
+   opened_rows := []
+ 
+@@ -5595,6 +5646,7 @@
+         Unify.lower_levels ~since:mark 0 t;
+         Unify.check_ambiguity ~all:true ~level:0 [ t ];
+         Unify.default_numerics ());
++      check_pattern_numbers ();
+       t)
+ 
+ (* 実体の型を引く(対話的な実行の結果の表示に使う。直前の check_input の束縛に限る) *)
+diff a/lib/exhaust.ml b/lib/exhaust.ml
+--- a/lib/exhaust.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/exhaust.ml	2026-10-17 04:13:35.498359368 +0900
+@@ -152,22 +152,27 @@
+ 
+    読めない成分を例外にせず印にするのは、ここが評価ではなく検査だからである。
+    網羅性検査は値を作る必要がないので、読めない成分は印のまま鍵に使えば足りる。
+-   桁あふれした数値リテラルは型検査を通る。
++   網羅性検査の時点では、桁あふれした数値リテラルのパターンはまだ落とされていない。
+    第11章(elab.ml)の `number_ty` は接尾辞と浮動小数かどうかだけを見て、`n_text` の中身は読まない。
+-   範囲外のリテラルを落とすのは第14章(interp.ml)である。
+-   評価の時点で「数値リテラルが範囲外です」を出し、終了コード 3 で終わる。
+-   網羅性検査で例外を投げると、利用者には網羅性検査の内部エラーが届き、本当の原因が見えなくなる。
++   パターンのリテラルを型で読んで落とすのは、宣言の終わりの既定化の後に走る、
++   第11章 §11.2 の `check_pattern_numbers` である。
++   検査は束縛の一般化の直前に走るので、それより先に来る。
++   ここで例外を投げると、利用者には網羅性検査の内部エラーが届き、
++   その後に来る第11章の型エラーが見えなくなる。
+ 
+    残る不完全性は、どれも見逃す側の誤りである。
+    積の鍵は、列の型で読んだ鍵より細かい。
+    そのため、実行時には同じ値になる組を別の鍵にし、本当の冗長を見逃す。
+    たとえば Int32 の列では、`case 0xFFFFFFFF` と `case -1` はどちらも `-1l` と一致する。
+    しかし、積の鍵ではこの 2 つは別の鍵になる。
+-   また、列の型で読めない字面の節(Int32 の列の `case 4294967295`)はどの値にも一致しないが、
+-   この節を報告する診断はない。
+-   式の位置では同じ字面が実行時エラーになるので、パターンと式で扱いが対称でない。
+-   両方を直すには、スクルティニの型を `convert` に渡す必要がある(入れ子のパターンの型も要る)。
+-   これは設計を大きく変えるので、Diktor は積の鍵にとどめる。
++   この見逃しを直すには、列の型で読んだ鍵が要る。
++   しかし検査の時点では、列の型がまだ `Integral` 述語つきの変数のことがあり、
++   その変数は後で Int32 にも Int64 にも決まりうる。
++   そのため、Diktor は積の鍵にとどめる。
++   一方、列の型で読めない字面(Int32 の列の `case 4294967295`)は、
++   第11章 §11.2 が宣言の終わりに型エラーにする。
++   そのため、受理されるプログラムでは、整数の列のリテラルはどれも列の型で読める。
++   積の鍵はこの性質に頼らずに正しいので、検査の順序が変わっても誤った警告を出さない。
+ 
+    ### `PCtor` は解決結果を読んで宣言順に並べ替える
+ 
+diff a/lib/lexer.ml b/lib/lexer.ml
+--- a/lib/lexer.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/lexer.ml	2026-10-17 04:12:13.353623347 +0900
+@@ -74,6 +74,7 @@
+    一般化の時点で既定の型に落ちるまで決まらない(仕様 §2)。
+    字句解析の時点で `Int32.of_string` を呼ぶと、その決定を先取りすることになる。
+    実際の変換は、第14章(interp.ml)が精緻化で解決した型を見て行い、範囲外の値は実行時エラーにする。
++   パターンに書いた字面だけは、第11章 §11.2 が宣言の終わりに型で読み、範囲外なら型エラーにする。
+ 
+    接尾辞の切り出しには注意点が 1 つある。
+    16 進では `f` が数字なので、`0xff` の `f` を接尾辞の始まりと読んではならない。
+diff a/test/numeric.t b/test/numeric.t
+--- a/test/numeric.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/numeric.t	2026-10-17 04:27:12.915619727 +0900
+@@ -295,9 +295,8 @@
+   2000.0
+   1.0
+ 
+-鍵は 3 通りの読みの積(260829-5 M12 検証修正)。Int32 列で読めない
+-10 進と折り返す 16 進が同じ鍵に潰れず、到達可能な節に偽の冗長警告を
+-出さない:
++Int32 の列で読めない 10 進 4294967295 は、同じビット列に折り返す
++16 進 0xFFFFFFFF と並べても、宣言の終わりに型エラーになる(LangSpec §4.2):
+ 
+   $ cat > mask.kel <<'KEL'
+   > let f(x: Int32): Int32 = x match {
+@@ -307,10 +306,82 @@
+   > }
+   > echoln(show(f(0 - 1)))
+   > KEL
+-  $ diktor mask.kel
+-  2
+-  $ diktor --type-check --strict-exhaustive mask.kel > /dev/null; echo "exit: $?"
+-  exit: 0
++  $ diktor --type-check mask.kel
++  f : (Int32) => Int32
++  ! mask.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++
++Int64 の列では 0xFFFFFFFF と -1 は別の値なので、網羅性検査は両方の節を
++残し、-1 の節を冗長と報告しない(Int32 の読みでは同じ -1 になる):
++
++  $ cat > mask64.kel <<'KEL'
++  > let f(x: Int64): Int32 = x match {
++  >   case 0xFFFFFFFF => 1
++  >   case -1 => 2
++  >   case _ => 3
++  > }
++  > echoln(show(f(-1i64)) + show(f(4294967295i64)))
++  > KEL
++  $ diktor mask64.kel
++  21
++  $ diktor --type-check --strict-exhaustive mask64.kel
++  f : (Int64) => Int32
++  _ : {}
++
++パターンの整数リテラルは、宣言の終わりに照合する値の型で読み、読めなければ
++リテラルを指す型エラーにする(LangSpec §4.2)。10 進は符号付きの範囲、
++16 進はビット幅で決まる。入れ子のパターン、操作節の引数、型が既定化で
++Int32 に決まる注釈なしの引数でも同じ:
++
++  $ cat > litpat.kel <<'KEL'
++  > let a(x: Int32): Int32 = x match { case 0x1FFFFFFFF => 1  case _ => 2 }
++  > KEL
++  $ diktor litpat.kel
++  ! litpat.kel:1:41: 型エラー: 数値リテラルのパターン 0x1FFFFFFFF は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ printf 'let b(x: Int64): Int32 = x match { case 9223372036854775808 => 1  case _ => 2 }\n' > lit64.kel
++  $ diktor lit64.kel
++  ! lit64.kel:1:41: 型エラー: 数値リテラルのパターン 9223372036854775808 は Int64 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ printf 'let c(o: Option[Int32]): Int32 = o match { case Some(4294967295) => 1  case _ => 2 }\n' > litnest.kel
++  $ diktor litnest.kel
++  ! litnest.kel:1:54: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ printf 'let d = fn(x) => x match { case 4294967295 => 1i32  case _ => 2i32 }\n' > litdef.kel
++  $ diktor litdef.kel
++  ! litdef.kel:1:33: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++  $ cat > litop.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r = { perform ask(7) } handle {
++  >   case ask(4294967295) => resume(1)
++  >   case ask(_) => resume(2)
++  >   case return(v) => v
++  > }
++  > KEL
++  $ diktor litop.kel
++  ! litop.kel:3:12: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
++
++型の境界の字面と、型で読める字面は通る。局所の束縛で、網羅性検査の後に
++照合の型が Int64 に決まる形も、Int64 で読んで受理する:
++
++  $ cat > litok.kel <<'KEL'
++  > let f(x: Int32): Int32 = x match {
++  >   case 2147483647 => 1
++  >   case -2147483648 => 2
++  >   case 0xFFFFFFFF => 3
++  >   case _ => 4
++  > }
++  > let id[A](y: A): A = y
++  > let g(n: Int64): Int32 = {
++  >   let k = id(fn(x) => x match { case 4294967295 => 1  case _ => 2 })
++  >   k(n)
++  > }
++  > echoln(show(f(0 - 1)) + show(g(4294967295i64)))
++  > KEL
++  $ diktor litok.kel
++  31
+ 
+ 浮動小数の本体に整数接尾辞は書けない(D25 の副作用の封鎖。受理すると
+ 型検査を通ったリテラルが実行時に必ず落ちた):

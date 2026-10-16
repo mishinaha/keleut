@@ -1,0 +1,2 @@
+type W: EffectRow = {Print}
+let f[W, E](g: () => Unit @ W): Unit @ {W extends W} = ()

@@ -1,0 +1,9 @@
+let both(): Int32 @ {A, B} = perform a(1) + perform b(2)
+effect A = { a: (Int32) => Int32 }
+effect B = { b: (Int32) => Int32 }
+newtype Box = Box(() => Int32 @ {B, A})
+let r: Int32 = {
+  let bx = Box(both)
+  bx match { case Box(g) => (g() handle { case a(x) if x > 0 => resume(x * 10) case a(x) => resume(0) }) handle { case b(y) => resume(y * 100) } }
+}
+echoln(show(r))

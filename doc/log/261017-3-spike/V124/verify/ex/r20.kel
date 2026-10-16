@@ -1,0 +1,7 @@
+type class Sz[A] { val sz: (A) => Int32 }
+type C = A[{}]
+type A[E] = Box[E]
+newtype Box[X] = Box(X)
+type instance Sz[Box[{}]] { let sz(o) = 1 }
+let v: C = Box({})
+echoln(show(sz(v)))

@@ -1,0 +1,2 @@
+module M { pub newtype V[A] = V(A) }
+let g(x: Int32): Int32 @ V[Int32] = x

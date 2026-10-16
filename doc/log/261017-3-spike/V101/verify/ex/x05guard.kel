@@ -1,0 +1,9 @@
+effect Reg = { reg: ((Int32) => Boolean) => Int32 }
+let main(): Unit @ Console = {
+  let n = { perform reg(fn(x) => x > 2i32) } handle {
+    case reg(f) if f(3i32) => resume(1i32)
+    case reg(f) => resume(0i32)
+  }
+  echoln(show(n))
+}
+main()

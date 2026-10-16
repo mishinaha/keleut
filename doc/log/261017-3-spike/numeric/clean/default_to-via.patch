@@ -1,0 +1,12 @@
+--- a/lib/unify.ml	2026-10-17 04:50:05.338182181 +0900
++++ b/lib/unify.ml	2026-10-17 04:50:05.344743782 +0900
+@@ -812,7 +812,8 @@
+   | Unbound i ->
+       List.iter
+         (fun c ->
+-          try add_class t c
++          let via = Option.map (fun (vt, vc) -> (subst_unbound v t vt, vc)) (Hashtbl.find_opt premise_origins (i.vid, c)) in
++          try add_class ?via t c
+           with Type_error msg -> ( match origin c with Some loc -> raise (Type_error_at (loc, msg)) | None -> raise (Type_error msg)))
+         i.vcls
+   | _ -> ());

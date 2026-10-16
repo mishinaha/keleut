@@ -1,0 +1,5 @@
+let twice[A: Add](x: A): A = x + x
+echoln(show(twice(1.5)))
+echoln(show(twice(3)))
+let m[A: Rem](x: A, y: A): A = x % y
+echoln(show(m(7, 3)))

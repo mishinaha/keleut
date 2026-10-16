@@ -1,0 +1,9 @@
+effect File = { read: () => String, write: (String) => {} }
+effect Sink = { write: (String) => {}, flush: () => {} }
+let prog(n: Int32): String @ File = { perform write("a"); perform read() }
+let h[A](n: Int32, f: (Int32) => A @ File): A @ Print = f(n) handle {
+  case File.read() if n > 0 => resume("pos")
+  case File.read() => resume("neg")
+  case write(s) => { println(s); resume({}) }
+}
+with_stdout { echoln(h(1, prog)); echoln(h(0, prog)) }

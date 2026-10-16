@@ -1,0 +1,155 @@
+diff a/lib/syntax.ml b/lib/syntax.ml
+--- a/lib/syntax.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/syntax.ml	2026-10-17 04:07:31.393636552 +0900
+@@ -705,6 +705,12 @@
+      操作と一緒に直接登録する(理由は §1.10) *)
+   let eff_heap = intern "Heap"
+ 
++  (* 第 1 引数がリージョンである組み込みの型構成子。
++     第8章は、この位置の不一致を述べる文言を選ぶのに使う *)
++  let ty_ref = intern "Ref"
++
++  let ty_mutable_array = intern "MutableArray"
++
+   let eff_blocking = intern "Blocking"
+ end
+ 
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:25:22.353160823 +0900
+@@ -544,6 +544,10 @@
+     | _, Some v -> bind v t1
+     | None, None -> (
+         match (t1, t2) with
++        | TCon (n1, r1 :: as1), TCon (n2, r2 :: as2)
++          when n1 = n2 && (n1 = ty_ref || n1 = ty_mutable_array) && List.length as1 = List.length as2 ->
++            unify_region (name_of n1 ^ " の第 1 引数") (fun msg -> msg) r1 r2;
++            List.iter2 unify as1 as2
+         | TCon (n1, as1), TCon (n2, as2) when n1 = n2 && List.length as1 = List.length as2 ->
+             List.iter2 unify as1 as2
+         | TApp (f1, a1), TApp (f2, a2) ->
+@@ -601,9 +605,21 @@
+    この検査が無いと、推論器が停止しなくなる。
+ 
+    フィールドの単一化が `Heap` ラベルで失敗したときは、エラーメッセージを差し替える。
+-   `Heap[h]` の `h` は `run` が与えた剛定数なので、ここでの不一致はほぼ確実に、
+-   別の `run` のスコープのヒープを使おうとしたことを意味する。
+-   そのため、「スコープ付きの型が一致しません」より原因に近い言葉で伝える。
++   言い換えは `unify_region` が受け持ち、失敗した 2 つの型の形で 2 通りに分かれる。
++
++   - どちらも型変数のとき。
++     元の文言を、別の `run` のスコープのヒープを使おうとしている、という言葉で包む。
++     片方が注釈の型パラメータのリージョンでも、文言は同じである。
++   - どちらかが型変数でないとき。
++     リージョンを表す型は、`run` のリージョン変数と型パラメータだけである。
++     `@ Heap[Int32]` の `Int32` のような型は、どのリージョンとも一致しない。
++     そこで、その型がリージョンではないことを述べる。
++     リージョン変数のカインドは `Type` なので、注釈の検査はこの形を拒否しない。
++     剛定数の名前 `ς1` を見せても、利用者は書いた `Int32` が原因だと読み取れない。
++
++   `Ref` と `MutableArray` の第 1 引数も同じ位置づけなので、§8.7 の `unify` は、
++   この 2 つの型構成子の第 1 引数を `unify_region` で単一化する。
++   こちらは、どちらも型変数のときは元の文言をそのまま使う。
+ 
+    `rewrite_row` はラベルの名前だけで一致を判定し、
+    ラベル引数(`Heap[h]` の `h`)は見つけた後で単一化する。
+@@ -618,10 +634,24 @@
+   (match tail_before with
+   | Some tv -> ( match !tv with Link _ -> type_error "再帰的な行型が発生しました" | _ -> ())
+   | None -> ());
+-  (try unify field field2
+-   with Type_error msg when label = eff_heap -> type_error ("別の run スコープのヒープを使おうとしています(" ^ msg ^ ")"));
++  if label = eff_heap then
++    unify_region "Heap の引数" (fun msg -> "別の run スコープのヒープを使おうとしています(" ^ msg ^ ")") field field2
++  else unify field field2;
+   unify rest rest2
+ 
++(* リージョンの位置の 2 つの型を単一化する。
++   失敗したとき、どちらかが型変数でなければ、その型はリージョンではないと述べる。
++   どちらも型変数なら、元の文言を both で包んで報告する *)
++and unify_region what both r1 r2 =
++  let non_region = match (repr r1, repr r2) with TVar _, TVar _ -> None | TVar _, t | t, _ -> Some t in
++  try unify r1 r2
++  with Type_error msg -> (
++    match non_region with
++    | Some t ->
++        type_error
++          (what ^ " " ^ show t ^ " はリージョンではありません。" ^ what ^ "には run のリージョン変数か型パラメータを書きます")
++    | None -> type_error (both msg))
++
+ (* ## 8.9 一般化
+ 
+    `generalize level t` は `t` を走査し、
+diff a/test/kinds.t b/test/kinds.t
+--- a/test/kinds.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/kinds.t	2026-10-17 04:08:34.595717243 +0900
+@@ -845,8 +845,8 @@
+   g : (Ref[A, Int32]) => Int32
+   h : (MutableArray[String, Int32]) => Int32
+ 
+-@ Heap[Int32] と注釈した関数も型検査に通るが、run の本体からは別のスコープの
+-ヒープとして、トップレベルからは Heap のラベルが無いとして呼べない:
++@ Heap[Int32] と注釈した関数も型検査に通るが、run の本体からは Heap の引数が
++リージョンではないとして、トップレベルからは Heap のラベルが無いとして呼べない:
+ 
+   $ cat > refkind3.kel <<'KEL'
+   > let f(): Int32 @ Heap[Int32] = 0
+@@ -854,7 +854,7 @@
+   > KEL
+   $ diktor --type-check refkind3.kel
+   f : () => Int32 @ {Heap[Int32]}
+-  ! refkind3.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
++  ! refkind3.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+   [1]
+   $ cat > refkind4.kel <<'KEL'
+   > let f(): Int32 @ Heap[Int32] = 0
+@@ -872,5 +872,48 @@
+   > let v: Int32 = run h { let r: Ref[Int32, Int32] = Ref.new(0); 0 }
+   > KEL
+   $ diktor --type-check refkind5.kel
+-  ! refkind5.kel:1:28: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
++  ! refkind5.kel:1:28: 型エラー: 注釈された型を満たしません(Ref の第 1 引数 Int32 はリージョンではありません。Ref の第 1 引数には run のリージョン変数か型パラメータを書きます)
++  [1]
++
++MutableArray の第 1 引数も同じ文言で報告する:
++
++  $ cat > refkind6.kel <<'KEL'
++  > let v: Int32 = run h { let a: MutableArray[String, Int32] = MutableArray.new(3, 0); 0 }
++  > KEL
++  $ diktor --type-check refkind6.kel
++  ! refkind6.kel:1:28: 型エラー: 注釈された型を満たしません(MutableArray の第 1 引数 String はリージョンではありません。MutableArray の第 1 引数には run のリージョン変数か型パラメータを書きます)
++  [1]
++
++run を経由しない Heap どうしの不一致も、リージョンでない側を述べる。
++@ Heap[String] の関数から @ Heap[Int32] の関数を呼ぶ:
++
++  $ cat > refkind7.kel <<'KEL'
++  > let f(): Int32 @ Heap[Int32] = 0
++  > let g(): Int32 @ Heap[String] = f()
++  > KEL
++  $ diktor --type-check refkind7.kel
++  f : () => Int32 @ {Heap[Int32]}
++  ! refkind7.kel:2:33: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
++  [1]
++
++関数の型の注釈の中の Heap[h] と一致させる場合も同じである:
++
++  $ cat > refkind8.kel <<'KEL'
++  > let f(): Int32 @ Heap[Int32] = 0
++  > let g(): Int32 = run h { let k: () => Int32 @ Heap[h] = f; k() }
++  > KEL
++  $ diktor --type-check refkind8.kel
++  f : () => Int32 @ {Heap[Int32]}
++  ! refkind8.kel:2:30: 型エラー: 注釈された型を満たしません(Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます)
++  [1]
++
++どちらの Heap の引数もリージョンを表す型変数のときは、別の run のスコープの
++ヒープを使おうとしたものとして報告する。型パラメータ A のヒープの関数を
++run h の本体で呼ぶ:
++
++  $ cat > refkind9.kel <<'KEL'
++  > let f[A](g: () => Int32 @ Heap[A]): Int32 = run h { g() }
++  > KEL
++  $ diktor --type-check refkind9.kel
++  ! refkind9.kel:1:53: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]

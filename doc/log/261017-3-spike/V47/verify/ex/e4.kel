@@ -1,0 +1,3 @@
+module M { type W[E]: EffectRow = {Print extends E}
+ let f(x: Int32): Int32 @ W[Console] = x }
+module N { let g(x: Int32): Int32 @ W[Console] = x }

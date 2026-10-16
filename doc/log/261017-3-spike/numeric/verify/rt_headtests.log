@@ -1,0 +1,137 @@
+File "lib/parser.mly", line 88, characters 0-26:
+Warning 60 [unused-module]: unused module Diktor.
+File "test/smoke.t", line 1, characters 0-0:
+diff --git a/_build/default/test/smoke.t b/_build/default/test/smoke.t.corrected
+index e5da341..3af2916 100644
+--- a/_build/default/test/smoke.t
++++ b/_build/default/test/smoke.t.corrected
+@@ -24,5 +24,5 @@
+ 
+   $ echo 'let x = 1u8' > u8.kel
+   $ diktor u8.kel; echo "exit: $?"
+-  ! u8.kel:1:9: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  exit: 4
++  ! u8.kel:1:9: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  exit: 1
+File "test/neg_rem.t", line 1, characters 0-0:
+diff --git a/_build/default/test/neg_rem.t b/_build/default/test/neg_rem.t.corrected
+index 413a7e5..a5c424b 100644
+--- a/_build/default/test/neg_rem.t
++++ b/_build/default/test/neg_rem.t.corrected
+@@ -81,7 +81,7 @@ Neg は Int32、Int64、Float64 に、Rem は Int32 と Int64 にインスタン
+ 
+   $ echo 'echoln(show(1.5 % 2.0))' > remf.kel
+   $ diktor remf.kel
+-  ! remf.kel:1:1: 型エラー: Float64 は Rem のインスタンスではありません
++  ! remf.kel:1:13: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
+   $ echo 'echoln(-"abc")' > negs.kel
+   $ diktor negs.kel
+File "test/dictionary_passing.t", line 1, characters 0-0:
+diff --git a/_build/default/test/dictionary_passing.t b/_build/default/test/dictionary_passing.t.corrected
+index 79d7714..b80d3c6 100644
+--- a/_build/default/test/dictionary_passing.t
++++ b/_build/default/test/dictionary_passing.t.corrected
+@@ -417,5 +417,5 @@ s より後ろで宣言されていても、辞書はファイル全体を見て
+   > echoln(show(modulo(1.5, 1.0)))
+   > KEL
+   $ diktor negremf.kel
+-  ! negremf.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
++  ! negremf.kel:2:13: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck.t b/_build/default/test/typecheck.t.corrected
+index d3eb047..9957a06 100644
+--- a/_build/default/test/typecheck.t
++++ b/_build/default/test/typecheck.t.corrected
+@@ -185,8 +185,8 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > let bad = 1u8
+   > EOF
+   $ diktor --type-check --no-prelude numbad2.kel
+-  ! numbad2.kel:1:11: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! numbad2.kel:1:11: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+ 型エイリアスの検査(非再帰・部分適用禁止):
+ 
+@@ -213,8 +213,8 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > EOF2
+   $ diktor --type-check --no-prelude mix.kel
+   ok : Int32
+-  ! mix.kel:2:11: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! mix.kel:2:11: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+ 標準環境の名前は再宣言できない(LangSpec §16.1。newtype、型エイリアス、effect、
+ type class の 4 種別で 1 つずつ。インスタンスは test/verify_fixes.t の coh):
+File "test/numeric.t", line 1, characters 0-0:
+diff --git a/_build/default/test/numeric.t b/_build/default/test/numeric.t.corrected
+index 0fdb920..fa0ecb5 100644
+--- a/_build/default/test/numeric.t
++++ b/_build/default/test/numeric.t.corrected
+@@ -254,13 +254,13 @@ Int64 の 16 進リテラルは値で区別される(A10。63 ビットの int_o
+ 
+   $ printf 'echoln(show(1u8))\n' > u8.kel
+   $ diktor u8.kel
+-  ! u8.kel:1:13: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! u8.kel:1:13: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+   $ printf 'echoln(show(1i9999))\n' > w9999.kel
+   $ diktor w9999.kel
+-  ! w9999.kel:1:13: 未実装: 数値接尾辞 1i9999(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! w9999.kel:1:13: 型エラー: 数値リテラル 1i9999 の接尾辞 i9999 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+ 先頭ゼロの接尾辞も原文のまま(1i032 が 1i32 に化けない):
+ 
+@@ -273,12 +273,12 @@ Int64 の 16 進リテラルは値で区別される(A10。63 ビットの int_o
+ ほかの接尾辞と同じく受理しない(LangSpec §4.2、付録 A.2):
+ 
+   $ diktor lead0.kel
+-  ! lead0.kel:1:9: 未実装: 数値接尾辞 1i032(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! lead0.kel:1:9: 型エラー: 数値リテラル 1i032 の接尾辞 i032 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+   $ printf 'echoln(show(7f064))\n' > lead0f.kel
+   $ diktor lead0f.kel
+-  ! lead0f.kel:1:13: 未実装: 数値接尾辞 7f064(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! lead0f.kel:1:13: 型エラー: 数値リテラル 7f064 の接尾辞 f064 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+ 小数部を省いた浮動小数リテラル(A4 / D25。1. / 2.e3 / 1.f64):
+ 
+@@ -308,9 +308,10 @@ Int64 の 16 進リテラルは値で区別される(A10。63 ビットの int_o
+   > echoln(show(f(0 - 1)))
+   > KEL
+   $ diktor mask.kel
+-  2
++  ! mask.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
++  [1]
+   $ diktor --type-check --strict-exhaustive mask.kel > /dev/null; echo "exit: $?"
+-  exit: 0
++  exit: 1
+ 
+ 浮動小数の本体に整数接尾辞は書けない(D25 の副作用の封鎖。受理すると
+ 型検査を通ったリテラルが実行時に必ず落ちた):
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index 2ecf87b..31255e9 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -347,8 +347,8 @@ let rec の非関数右辺を型検査で拒否:
+ 
+   $ printf 'echoln(show(1i999999999999999999999))\n' > hugesuf.kel
+   $ diktor hugesuf.kel
+-  ! hugesuf.kel:1:13: 未実装: 数値接尾辞 1i999999999999999999999(v0 は i32/i64/f64 のみ)
+-  [4]
++  ! hugesuf.kel:1:13: 型エラー: 数値リテラル 1i999999999999999999999 の接尾辞 i999999999999999999999 はありません(接尾辞は i32、i64、f64 だけです)
++  [1]
+ 
+   $ printf 'module A { module B { let x = 1 } }\n' > nestmod.kel
+   $ diktor nestmod.kel

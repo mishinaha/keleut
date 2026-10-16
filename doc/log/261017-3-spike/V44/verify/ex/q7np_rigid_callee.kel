@@ -1,0 +1,3 @@
+module M {
+  let f[F](g: F): Int32 = g()
+}

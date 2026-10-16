@@ -1,0 +1,2 @@
+newtype H[G] = MkH(Box[G[Int32]])
+newtype Box[R] = MkBox({x: Int32 extends R})

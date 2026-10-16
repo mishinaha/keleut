@@ -1,0 +1,10 @@
+type class Sh[A] { val sh: (A) => String }
+type instance Sh[Int32] { let sh(x: Int32): String = show(x) }
+newtype Box[A] = Box(A)
+let z = 0
+echoln("a")
+type instance [A: Sh] Sh[Box[_]] {
+  let sh: (Box[A]) => String = { let q = 1 / z; fn(b) => "box" }
+}
+echoln("b")
+echoln(sh(Box(1)))

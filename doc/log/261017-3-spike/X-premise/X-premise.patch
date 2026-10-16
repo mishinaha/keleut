@@ -1,0 +1,290 @@
+diff a/lib/show.ml b/lib/show.ml
+--- a/lib/show.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/show.ml	2026-10-17 04:28:01.865162299 +0900
+@@ -495,6 +495,12 @@
+   let strs, _ = show_all [ a; b ] in
+   match strs with [ x; y ] -> x ^ " と " ^ y | _ -> bug "show2"
+ 
++let show_pair a b =
++  (* ctx は捨てる。2 つの型を別々の文に埋め込むので、show2 と同じく前置しない *)
++  let strs, _ = show_all [ a; b ] in
++  match strs with [ x; y ] -> (x, y) | _ -> bug "show_pair"
++
+ let () =
+   Unify.show_ref := show;
+-  Unify.show2_ref := show2
++  Unify.show2_ref := show2;
++  Unify.show_pair_ref := show_pair
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:28:35.606289601 +0900
+@@ -128,6 +128,11 @@
+ 
+ let show2 a b = !show2_ref a b
+ 
++let show_pair_ref : (ty -> ty -> string * string) ref = ref (fun _ _ -> ("<型>", "<型>"))
++
++(* 2 つの型を 1 つの名前の表で印字し、別々の文字列として返す *)
++let show_pair a b = !show_pair_ref a b
++
+ (* ## 8.3 occurs check、レベル調整、脱出検査
+ 
+    型変数 `tv` に型 `t` を代入する前に、`occurs_adjust` が `t` を 1 度だけ走査して、
+@@ -246,10 +251,34 @@
+    `TCon` の分岐は、インスタンス表に登録された前提を使う(前提の表は第6章 §6.9)。
+    `Eq[List[_]]` の前提 `A: Eq` は `(0, Eq)` として表に載っている。
+    `List[Opaque]` に `Eq` を要求すると、`Opaque` に `Eq` が伝播し、
+-   「Opaque は Eq のインスタンスではありません」で落ちる(`test/premise.t` の pr2 / pr3)。
++   「Opaque は Eq のインスタンスではありません」に下で述べる出どころを添えた診断で落ちる(`test/premise.t` の pr2 /
++   pr3)。
+    分岐の中の `if i < List.length args` は到達しない保険である。
+    冒頭のカインドの照合が先に落とすので、前提が位置 `i` を持つなら `args` は `i + 1` 個以上ある。
+ 
++   前提をたどって届いた要求が満たされないとき、診断は満たされなかった型だけでなく、
++   前提をたどり始めた型とクラスも添える。
++   `List[List[Opaque]]` に `Eq` を要求したなら、
++   「Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました」と出る。
++   添えるのはたどり始めた 1 組だけで、途中の `List[Opaque]` は書かない。
++   途中の段を並べると、入れ子の深さに応じて文が伸びるからである。
++   そのため `add_class` は、たどり始めた組を省略可能な引数 `via` で持ち回り、
++   前提の分岐で初めて値を入れ、構造的導出の分岐ではそのまま渡す。
++   文言の型と出どころの型は `show_pair` で 1 つの名前の表に載せて印字する。
++   別々に印字すると、名前は印字ごとに振り直されるので、
++   同じ `ς1` が文の前半と後半で別の型パラメータを指すことがある。
++
++   前提が未定変数に届いたときは、その時点では成否が決まらない。
++   `Nil == Cons(MkOpaque(1i32), Nil)` では、左の `Nil` が先に `List[α]` を `Eq` に結び付け、
++   前提が `α` に `Eq` を付ける。
++   `α` が `Opaque` に決まるのは右辺を読んだ後で、そこで `bind` が `add_class` を呼ぶ。
++   この時点の呼び出しにも出どころを添えるため、
++   前提が未定変数に新しく制約を付けたときは、
++   変数とクラスの組を鍵にして出どころを表 `premise_origins` に控える。
++   `bind` はその表を引き、出どころの型の中の束縛する変数を代入先に置き換えた形で `via` に渡す。
++   置き換えは表示のためだけのもので、セルを書き換えない(`subst_unbound`)。
++   `repr` が経路を縮めるので、一時的に `Link` を張って表示してから戻す方法は使えない。
++
+    `TApp` に制約を付けられないのは、修飾型を持たないからである。
+    Haskell は `Show (f a)` のような制約を残して解決を後回しにできるが、
+    本実装の制約は型変数か具体型の頭にしか付けられない。
+@@ -300,10 +329,56 @@
+   (match v with TVar r when classes <> [] -> note_class_var r | _ -> ());
+   v
+ 
+-let rec add_class t c =
++(* 前提をたどって未定変数に届いた制約の出どころ。
++   鍵は (変数の識別子, クラス) で、値はたどり始めた型とクラスの組である。
++   bind がその変数を具体型に束縛するとき、ここから出どころを引いて add_class に渡す。
++   セルの書き換えの記録が有効の間は、書き込みを戻す閉包も積む *)
++let premise_origins : (int * oid, ty * oid) Hashtbl.t = Hashtbl.create 16
++
++let note_premise_origin (i : var_info) c via =
++  let key = (i.vid, c) in
++  if not (Hashtbl.mem premise_origins key) then (
++    Hashtbl.replace premise_origins key via;
++    if !trailing then trail := (fun () -> Hashtbl.remove premise_origins key) :: !trail)
++
++(* 型 ty の中の未定変数 v を t に置き換えた型。診断の表示にだけ使い、セルは書き換えない *)
++let subst_unbound v t ty =
++  let rec go ty =
++    match repr ty with
++    | TVar r when r == v -> t
++    | TVar _ as ty -> ty
++    | TCon (n, args) -> TCon (n, List.map go args)
++    | TApp (g, a) -> tapp (go g) (go a)
++    | TArrow (p, r, e) -> TArrow (go p, go r, go e)
++    | TRecord row -> TRecord (go row)
++    | TVariant row -> TVariant (go row)
++    | TRowEmpty -> TRowEmpty
++    | TRowExtend (l, fld, rest) -> TRowExtend (l, go fld, go rest)
++  in
++  go ty
++
++(* via は、インスタンスの前提をたどって届いた要求のときだけ値を持ち、
++   たどり始めた型とクラスの組を持つ。
++   要求が満たされないときは、その組を診断に添える *)
++let rec add_class ?via t c =
+   let ci =
+     match Decls.find_class c with Some ci -> ci | None -> type_error ("未知のクラス: " ^ display_of c)
+   in
++  (* ty は文言に現れる型で、mk はその印字から文言を作る。
++     出どころを添えるときは、ty と出どころの型を 1 つの名前の表で印字する *)
++  let fail ?advice ?ty mk =
++    let origin vt vc = "。" ^ vt ^ " が " ^ display_of vc ^ " であるための前提として要求されました" in
++    let shown, suffix =
++      match (ty, via) with
++      | Some ty, None -> (show ty, "")
++      | None, None -> ("", "")
++      | Some ty, Some (vt, vc) ->
++          let s, o = show_pair ty vt in
++          (s, origin o vc)
++      | None, Some (vt, vc) -> ("", origin (show vt) vc)
++    in
++    type_error (mk shown ^ suffix ^ match advice with None -> "" | Some a -> "。" ^ a)
++  in
+   if not (same_kind ci.ci_param_kind (kind_of t)) then
+     type_error
+       ("クラス " ^ display_of c ^ " は " ^ show_kind ci.ci_param_kind ^ " のクラスですが、" ^ show t ^ " に要求されました");
+@@ -313,7 +388,8 @@
+       | Unbound i ->
+           if not (List.mem c i.vcls) then (
+             set_tv v (Unbound { i with vcls = c :: i.vcls });
+-            note_class_var v)
++            note_class_var v;
++            Option.iter (note_premise_origin i c) via)
+       | Rigid i | Generic i ->
+           (* Generic に届くのは、宣言のスキーマの中(newtype のフィールドや
+              クラスメソッドの型)で制約つきエイリアスを展開したとき。規則は
+@@ -323,23 +399,27 @@
+             if is_predicate c then
+               type_error "型パラメータに数値リテラルは使えません。0i32 のように接尾辞を付けるか具体型を使ってください"
+             else
+-              type_error
+-                ("型パラメータ " ^ show (TVar v) ^ " は " ^ display_of c ^ " のインスタンスではありません。[A: " ^ display_of c
+-               ^ "] のように制約を書いてください")
+-      | _ -> type_error (show t ^ " に " ^ display_of c ^ " 制約を付けられません"))
++              fail
++                ~advice:("[A: " ^ display_of c ^ "] のように制約を書いてください")
++                ~ty:(TVar v)
++                (fun s -> "型パラメータ " ^ s ^ " は " ^ display_of c ^ " のインスタンスではありません")
++      | _ -> fail ~ty:t (fun s -> s ^ " に " ^ display_of c ^ " 制約を付けられません"))
+   | TCon (n, args) -> (
+       match Decls.find_instance ~cls:c ~con:n with
+       | Some { ii_premises; _ } ->
+-          List.iter (fun (i, c2) -> if i < List.length args then add_class (List.nth args i) c2) ii_premises
+-      | None -> type_error (display_of n ^ " は " ^ display_of c ^ " のインスタンスではありません"))
++          let via = match via with Some _ -> via | None -> Some (t, c) in
++          List.iter (fun (i, c2) -> if i < List.length args then add_class ?via (List.nth args i) c2) ii_premises
++      | None -> fail (fun _ -> display_of n ^ " は " ^ display_of c ^ " のインスタンスではありません"))
+   | (TRecord row | TVariant row) when ci.ci_derive_structural ->
+       (* 閉じた行への構造的導出(sample.kel:392-396)。開いた行は不可 *)
+       let fields, tail = row_fields row in
+       (match repr tail with
+-      | TRowEmpty -> List.iter (fun (_, f) -> add_class f c) fields
+-      | _ -> type_error ("行変数を含む型 " ^ show t ^ " に " ^ display_of c ^ " の構造的導出は適用できません(行が閉じていません)"))
+-  | TApp _ -> type_error ("制約 " ^ display_of c ^ " を " ^ show t ^ " に付けられません(頭が型変数の適用には制約を貼れません)")
+-  | other -> type_error (show other ^ " は " ^ display_of c ^ " のインスタンスではありません")
++      | TRowEmpty -> List.iter (fun (_, f) -> add_class ?via f c) fields
++      | _ ->
++          fail ~ty:t (fun s ->
++              "行変数を含む型 " ^ s ^ " に " ^ display_of c ^ " の構造的導出は適用できません(行が閉じていません)"))
++  | TApp _ -> fail ~ty:t (fun s -> "制約 " ^ display_of c ^ " を " ^ s ^ " に付けられません(頭が型変数の適用には制約を貼れません)")
++  | other -> fail ~ty:other (fun s -> s ^ " は " ^ display_of c ^ " のインスタンスではありません")
+ 
+ (* ## 8.5 代入の 4 つの手順
+ 
+@@ -367,11 +447,17 @@
+ 
+ let bind v t =
+   match !v with
+-  | Unbound { vlevel; vkind; vcls; _ } ->
++  | Unbound ({ vlevel; vkind; vcls; _ } as i) ->
+       if not (same_kind vkind (kind_of t)) then
+         type_error ("カインドが一致しません: " ^ show (TVar v) ^ " :: " ^ show_kind vkind ^ " と " ^ show t);
+       occurs_adjust v vlevel t;
+-      List.iter (fun c -> add_class t c) vcls;
++      List.iter
++        (fun c ->
++          let via =
++            Option.map (fun (vt, vc) -> (subst_unbound v t vt, vc)) (Hashtbl.find_opt premise_origins (i.vid, c))
++          in
++          add_class ?via t c)
++        vcls;
+       set_tv v (Link t)
+   | _ -> bug "束縛できない変数への bind"
+ 
+@@ -1062,4 +1148,5 @@
+ 
+ let reset () =
+   class_vars := [];
++  Hashtbl.reset premise_origins;
+   holes := []
+diff a/test/premise.t b/test/premise.t
+--- a/test/premise.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/premise.t	2026-10-17 04:28:26.355739853 +0900
+@@ -328,3 +328,86 @@
+   use1 : (P2[Int32, Int32]) => P2[Int32, Int32]
+   ! pr19.kel:8:57: 型エラー: Opaque は Eq のインスタンスではありません
+   [1]
++
++前提をたどって届いた要求が満たされないとき、診断はたどり始めた型とクラスを
++添える。入れ子でも添えるのは外側の 1 組だけで、途中の List[Opaque] は書かない:
++
++  $ cat > pr21.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng(xs: List[List[Opaque]]): Boolean = xs == xs
++  > KEL
++  $ diktor --type-check pr21.kel
++  ! pr21.kel:2:43: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
++  [1]
++
++前提が未定変数に先に届き、その変数が後で具体型に決まる形でも、同じ出どころを
++添える(左の Nil が List[α] を Eq に結び付け、α が Opaque に決まるのは右辺を
++読んだ後):
++
++  $ cat > pr22.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng = Nil == Cons(Cons(MkOpaque(1i32), Nil), Nil)
++  > KEL
++  $ diktor --type-check pr22.kel
++  ! pr22.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
++  [1]
++
++型パラメータに届いた場合は、出どころを制約の書き方の案内より前に置く。前提を
++たどらない要求(Opaque そのものの比較)には何も添えない:
++
++  $ cat > pr23.kel <<'KEL'
++  > let f[A](xs: List[A], ys: List[A]): Boolean = xs == ys
++  > KEL
++  $ diktor --type-check pr23.kel
++  ! pr23.kel:1:47: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。List[ς1] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
++  [1]
++  $ cat > pr24.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng = MkOpaque(1i32) == MkOpaque(1i32)
++  > KEL
++  $ diktor --type-check pr24.kel
++  ! pr24.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
++  [1]
++
++型パラメータが 2 個以上あるときも、診断の型と出どころの型は 1 つの名前の表で
++印字する。下の ς1 はどちらも B である:
++
++  $ cat > pr25.kel <<'KEL'
++  > newtype P2[A, B] = MkP2(A, B)
++  > type instance[A: Eq, B: Eq] Eq[P2[_, _]] {
++  >   let eq(p, q) = (p, q) match { case (MkP2(a, b), MkP2(c, d)) => a == c && b == d }
++  > }
++  > let f[A: Eq, B](x: P2[A, B], y: P2[A, B]): Boolean = x == y
++  > KEL
++  $ diktor --type-check pr25.kel
++  ! pr25.kel:5:54: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。P2[ς2, ς1] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
++  [1]
++
++出どころは、前提が未定変数に制約を付けた時点の要求である。診断の位置は、その
++変数が具体型に決まった式を指すので、前提をたどらない比較(5 行目の x == o)の
++位置に、4 行目の比較の出どころが付くことがある。また、let で一般化された変数
++を経ると出どころは引き継がれず、元の文言だけが出る:
++
++  $ cat > pr26.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng(o: Opaque): Boolean = {
++  >   let k = fn(x) => {
++  >     let a = Cons(x, Nil) == Nil
++  >     x == o
++  >   }
++  >   k(o)
++  > }
++  > KEL
++  $ diktor --type-check pr26.kel
++  ! pr26.kel:5:5: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
++  [1]
++  $ cat > pr27.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng(o: Opaque): Boolean = {
++  >   let k = fn(x) => Cons(x, Nil) == Nil
++  >   k(o)
++  > }
++  > KEL
++  $ diktor --type-check pr27.kel
++  ! pr27.kel:4:5: 型エラー: Opaque は Eq のインスタンスではありません
++  [1]

@@ -1,0 +1,4 @@
+type class Pp[A] { val pp[G[_]: Pure]: (A) => G[A] }
+type instance Pp[Int32] { let pp(x) = pure(x) }
+let o: Option[Int32] = pp(3i32)
+echoln(o match { case None => "n" case Some(v) => show(v) })

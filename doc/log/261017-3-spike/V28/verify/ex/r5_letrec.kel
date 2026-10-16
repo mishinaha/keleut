@@ -1,0 +1,7 @@
+module M {
+  type W: EffectRow = {Print}
+  type WE[E]: EffectRow = {Print extends E}
+  pub let rec ev(n: Int32): Unit @ {WE[{}]} = if n == 0 then perform print("e\n") else od(n - 1)
+  and od(n: Int32): Unit @ {WE[{}]} = if n == 0 then perform print("o\n") else ev(n - 1)
+}
+with_stdout(fn() => M.ev(3))

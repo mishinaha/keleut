@@ -1,0 +1,3 @@
+eval_string: Ok, out="42\n"
+type_check_string: M.f : (Int32) => Int32 @ {}; _ : {} / None
+Interp.run raw: [BUG] module が平坦化されていません(flatten_modules を先に呼んでください)

@@ -1,0 +1,4 @@
+from "./lib/boxes" import { P, Box }
+let b(): Int32 @ Console = { echo("b"); 2 }
+let mkp(): () => Int32 = fn() => 1
+let x = P(mkp(), b)

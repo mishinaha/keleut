@@ -1,0 +1,6 @@
+effect Log = { log: (String) => Unit }
+type Log2 = Log
+type C = A[{}]
+type A[E] = () => Unit @ {Log extends E}
+let f(g: C): Unit = handle g() { case log(s) => { println(s); resume(()) } }
+f(fn() => perform log("hi"))

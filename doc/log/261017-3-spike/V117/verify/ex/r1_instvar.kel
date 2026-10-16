@@ -1,0 +1,6 @@
+type A = (Int32) => Int32
+type class Desc[T] { val desc: (T) => String }
+type instance[A: Show] Desc[List[_]] {
+  pub let desc(x: List[A]): String = show(x)
+}
+echoln(desc(Cons(1i32, Nil)))

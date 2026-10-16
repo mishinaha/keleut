@@ -1,0 +1,5 @@
+effect St[S] = { get: () => S }
+type C = A[{}]
+type A[E] = () => Int32 @ {St[Int32] extends E}
+let f(g: C): Int32 = handle g() { case get() => resume(3) }
+echoln(show(f(fn() => perform get() + 1)))

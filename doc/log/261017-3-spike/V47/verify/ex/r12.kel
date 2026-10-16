@@ -1,0 +1,6 @@
+module M {
+  pub type W[E]: EffectRow = {Print extends E}
+  pub let say[E](s: String, k: () => {} @ {Print extends E}): {} @ W[E] = { perform print(s + "\n"); k() }
+}
+let k(): {} @ M.W[{}] = perform print("k\n")
+with_stdout(fn() => M.say("outer", k))

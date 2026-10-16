@@ -1,0 +1,119 @@
+1c1
+< === ex/absurd.kel
+---
+> === ex/absurd.kel 
+4c4
+< === ex/asc.kel
+---
+> === ex/asc.kel 
+7c7
+< === ex/emptyrec.kel
+---
+> === ex/emptyrec.kel 
+11c11
+< === ex/fnlit.kel
+---
+> === ex/fnlit.kel 
+15c15
+< === ex/guard.kel
+---
+> === ex/guard.kel 
+19c19
+< === ex/helper.kel
+---
+> === ex/helper.kel 
+22c22
+< === ex/int.kel
+---
+> === ex/int.kel 
+26c26
+< === ex/late.kel
+---
+> === ex/late.kel 
+29c29
+< === ex/lit.kel
+---
+> === ex/lit.kel 
+33c33
+< === ex/never.kel
+---
+> === ex/never.kel 
+36c36
+< === ex/openvar.kel
+---
+> === ex/openvar.kel 
+40c40
+< === ex/outer.kel
+---
+> === ex/outer.kel 
+45c45
+< === ex/param.kel
+---
+> === ex/param.kel 
+49c49
+< === ex/rigid.kel
+---
+> === ex/rigid.kel 
+53c53
+< === ex/showvar.kel
+---
+> === ex/showvar.kel 
+57c57
+< === ex/strict.kel
+---
+> === ex/strict.kel 
+65c65,66
+< === verify/ex/p01_laterint.kel
+---
+> [exit 0]
+> === verify/ex/p01_laterint.kel 
+69c70
+< === verify/ex/p02_lateropt.kel
+---
+> === verify/ex/p02_lateropt.kel 
+73c74
+< === verify/ex/p03_instnever.kel
+---
+> === verify/ex/p03_instnever.kel 
+77c78
+< === verify/ex/p04_module.kel
+---
+> === verify/ex/p04_module.kel 
+80c81
+< === verify/ex/p06_alias.kel
+---
+> === verify/ex/p06_alias.kel 
+84c85
+< === verify/ex/p07_nested.kel
+---
+> === verify/ex/p07_nested.kel 
+87c88
+< === verify/ex/p08_hole.kel
+---
+> === verify/ex/p08_hole.kel 
+90c91
+< === verify/ex/p09_record.kel
+---
+> === verify/ex/p09_record.kel 
+94c95
+< === verify/ex/p10_twomatch.kel
+---
+> === verify/ex/p10_twomatch.kel 
+100c101
+< === verify/ex/p11_pubnever.kel
+---
+> === verify/ex/p11_pubnever.kel 
+103c104
+< === verify/ex/p12_generic_eff.kel
+---
+> === verify/ex/p12_generic_eff.kel 
+107c108
+< === verify/ex/p13_prelude.kel
+---
+> === verify/ex/p13_prelude.kel 
+111c112
+< === verify/ex/imp/main.kel
+---
+> === verify/ex/imp/main.kel 
+119a121
+> [exit 0]

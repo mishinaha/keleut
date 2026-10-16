@@ -1,0 +1,2 @@
+let f(b: Boolean): Int32 = if b then 1 else ??? match {}
+echoln(show(f(true)))

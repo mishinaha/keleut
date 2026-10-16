@@ -1,0 +1,18 @@
+effect Res = { use: (String) => Unit }
+effect Fail = { throw: (String) => Never }
+let with_res[A, E](name: String, body: () => A @ {Res, Fail, Console extends E}): A @ {Fail, Console extends E} =
+  body() handle {
+    case use(s) => if s == "bad" then perform throw("bad " + name) else resume(echoln(name + " uses " + s))
+    case return(x) => { echoln("close " + name); x }
+    case cancel => echoln("cancel " + name)
+  }
+let r = {
+  with _ = with_res("outer")
+  with _ = with_res("inner")
+  perform use("ok")
+  perform use("bad")
+  0
+} handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+}
+echoln(show(r))

@@ -1,0 +1,2 @@
+let c = true
+let a = if c then 1else 2

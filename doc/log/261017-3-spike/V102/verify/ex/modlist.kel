@@ -1,0 +1,6 @@
+module M {
+  pub newtype P[A] = P(A, A)
+}
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = M.P(mkp(), b)

@@ -1,0 +1,4 @@
+module M {
+  pub effect Log = { log: (String) => Unit }
+}
+newtype H = MkH((() => Unit @ {}, () => Unit @ {M.Log}))

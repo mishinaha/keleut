@@ -1,0 +1,8 @@
+type Len = (Array[Int32]) => Int32
+type ShowI = (Int32) => String @ Print
+let id[T](x: T): T = x
+let xs: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(4, 0)) }
+let l: Len = id(Array.length)
+let sp: ShowI = id(Show.show)
+let p(): Unit @ Print = println(sp(l(xs)))
+with_stdout(fn() => p())

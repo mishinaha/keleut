@@ -1,0 +1,85 @@
+## u1_string.kel
+   e   c   h   o   l   n   (   "   b   e   f   o   r   e   "   )
+  \n   l   e   t       x       =       " 377   "  \n
+$ diktor u1_string.kel
+u1_string.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u2_ident.kel
+   l   e   t       a   b 377   c       =       1  \n
+$ diktor u2_ident.kel
+u2_ident.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u3_comment.kel
+   l   e   t       x       =       1       /   /     377  \n
+$ diktor u3_comment.kel
+u3_comment.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u4_trunc.kel
+   l   e   t       x       =       1  \n 343 201
+$ diktor u4_trunc.kel
+u4_trunc.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u5_surrogate.kel
+   l   e   t       s       =       " 355 240 200   "  \n
+$ diktor u5_surrogate.kel
+u5_surrogate.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u6_multibyte.kel
+   l   e   t       s       =       " 343 201 202 343 201 204 377
+   "  \n
+$ diktor u6_multibyte.kel
+u6_multibyte.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u7_late.kel
+   l   e   t       v   0       =       0       /   /       x   x
+   x   x   x   x   x   x   x   x   x   x   x   x   x   x   x   x
+*
+$ diktor u7_late.kel
+u7_late.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u8_blockcomment.kel
+   /   *     377       *   /  \n   l   e   t       x       =    
+   1  \n
+$ diktor u8_blockcomment.kel
+: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+## u9_import.kel
+   f   r   o   m       "   .   /   l   i   b   1   "       i   m
+   p   o   r   t       y  \n   e   c   h   o   l   n   (   "   a
+   "   )  \n
+$ diktor u9_import.kel
+lib1.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --type-check u1_string.kel
+u1_string.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --dump-tokens u1_string.kel
+u1_string.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --dump-ast u1_string.kel
+u1_string.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ printf 'let a = 1
+let x = "\377"
+let b = 2
+' | diktor --repl
+a : Int32 = 1
+<stdin>: 字句エラー: 不正な UTF-8 バイト列です
+b : Int32 = 2
+exit: 0
+$ printf ':type "\377"
+' | diktor --repl
+<stdin>: 字句エラー: 不正な UTF-8 バイト列です
+exit: 0
+$ diktor --prelude badprelude.kel u3_comment.kel
+badprelude.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u10_first.kel
+: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor ok.kel u10_first.kel
+: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --dump-tokens u8_blockcomment.kel
+u8_blockcomment.kel: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2

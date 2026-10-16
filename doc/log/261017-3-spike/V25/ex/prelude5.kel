@@ -1,0 +1,5 @@
+effect Ask = { ask: () => String, tell: (String) => Unit }
+let g(): String = (perform Ask.ask()) handle {
+  case Ask.ask() => resume("k")
+  case print(s) => resume(())
+}

@@ -1,0 +1,5 @@
+effect Tick = { tick: () => Unit }
+let rec ticks(n: Int32): Unit @ Tick = (n == 0) match { case true => () case false => { perform tick(); ticks(n - 1) } }
+let rec rep(i: Int32): Unit = if i == 0 then () else { ticks(5000) handle { case tick() => { let u = resume(); u } }; rep(i - 1) }
+rep(200)
+echoln("ok")

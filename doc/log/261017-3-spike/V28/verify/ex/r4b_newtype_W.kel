@@ -1,0 +1,9 @@
+module M {
+  type W: EffectRow = {Print}
+  newtype Cc = Cc(() => Unit @ W)
+  pub let go(u: Unit): Unit @ {Print} = {
+    let Cc(g) = Cc(fn() => perform print("cc\n"))
+    g()
+  }
+}
+with_stdout(fn() => M.go(()))

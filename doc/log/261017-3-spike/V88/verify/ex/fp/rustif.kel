@@ -1,0 +1,2 @@
+let c = true
+let y = if c { 1 } else { 2 }

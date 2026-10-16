@@ -1,0 +1,5 @@
+module M {
+  type WE[E]: EffectRow = {Print extends E}
+  pub let g(): Unit @ WE[{}] = println("m")
+}
+with_stdout(fn() => M.g())

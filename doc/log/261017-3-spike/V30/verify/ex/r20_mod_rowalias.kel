@@ -1,0 +1,6 @@
+module M {
+  pub type W: EffectRow = {Log}
+  pub newtype N = N(() => Unit @ {W})
+}
+effect Log = { log: (String) => Unit }
+let _ = M.N(fn() => perform log("w")) match { case M.N(g) => g() handle { case log(s) => { echoln(s); resume(()) } } }

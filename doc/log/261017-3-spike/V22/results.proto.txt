@@ -1,0 +1,111 @@
+=== specunit2.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype A16 = MkA16(B16[{}])
+newtype B16[E] = MkB16((() => Unit @ E, () => Unit @ {Log}))
+--- proto: diktor --type-check --no-prelude specunit2.kel
+[exit 0]
+=== speclab.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype A17[X] = MkA17(B17[{Log extends X}])
+newtype B17[E] = MkB17((() => Unit @ E, () => Unit @ {Log}))
+let f[E](x: A17[E]): A17[E] = x
+--- proto: diktor --type-check --no-prelude speclab.kel
+f : (A17[R1]) => A17[R1]
+[exit 0]
+=== bare.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ Log))
+let f(x: A): A = x
+--- proto: diktor --type-check --no-prelude bare.kel
+f : (A) => A
+[exit 0]
+=== rowalias.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+type W: EffectRow = {Log}
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ W))
+let f(x: A): A = x
+--- proto: diktor --type-check --no-prelude rowalias.kel
+f : (A) => A
+[exit 0]
+=== modfwd.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+module M {
+  pub newtype A = MkA(B[{}])
+  pub newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+}
+let f(x: M.A): M.A = x
+--- proto: diktor --type-check --no-prelude modfwd.kel
+f : (M.A) => M.A
+[exit 0]
+=== residual.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, C[{Log}]))
+newtype C[F] = MkC(() => Unit @ F)
+let f(x: A): A = x
+--- proto: diktor --type-check --no-prelude residual.kel
+f : (A) => A
+[exit 0]
+=== residual2.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype C[F] = MkC(() => Unit @ F)
+newtype B[E] = MkB((() => Unit @ E, C[{Log}]))
+newtype A = MkA(B[{}])
+let f(x: A): A = x
+--- proto: diktor --type-check --no-prelude residual2.kel
+f : (A) => A
+[exit 0]
+=== typo.kel
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Lgo}))
+--- proto: diktor --type-check --no-prelude typo.kel
+! typo.kel:4:50: 型エラー: 未知のエフェクト: Lgo
+[exit 1]
+=== typealias.kel
+type Unit = {}
+type Log = Int32
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+--- proto: diktor --type-check --no-prelude typealias.kel
+! typealias.kel:4:50: 型エラー: エフェクト行に Type エイリアス Log は置けません(: EffectRow を付けてください)
+[exit 1]
+=== efflater.kel
+type Unit = {}
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+effect Log = { log: (String) => Unit }
+let f(x: A): A = x
+--- proto: diktor --type-check --no-prelude efflater.kel
+! efflater.kel:3:50: 型エラー: 未知のエフェクト: Log
+[exit 1]
+=== v30.kel
+type Unit = {}
+newtype B[E] = MkB(() => Unit @ {Log})
+effect Log = { log: (String) => Unit }
+--- proto: diktor --type-check --no-prelude v30.kel
+! v30.kel:2:33: 型エラー: 未知のエフェクト: Log
+[exit 1]
+=== run.kel
+effect Log = { log: (String) => Unit }
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+let main() = {
+  let a = MkA(MkB((fn() => {}, fn() => perform log("x"))))
+  a match { case MkA(MkB((g, _))) => g() }
+  echoln("ok")
+}
+main()
+--- proto: diktor run.kel
+ok
+[exit 0]

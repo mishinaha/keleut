@@ -1,0 +1,4 @@
+effect UInt32 = { get: () => Int32 }
+let use(): Int32 @ UInt32 = perform get() + 1
+let r = use() handle { case get() => resume(41) }
+echoln(show(r))

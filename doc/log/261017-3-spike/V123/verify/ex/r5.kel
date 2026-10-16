@@ -1,0 +1,2 @@
+from "./imp/bad" import v
+echoln("x")

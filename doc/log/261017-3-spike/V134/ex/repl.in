@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+:type fn(x) => x match {}
+:type fn(m: String) => perform throw(m) match {}

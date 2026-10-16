@@ -1,0 +1,5 @@
+newtype Wrap[F[_, _], A] = W(F[A, Int32])
+let unw[F[_, _], A](w: Wrap[F, A]): F[A, Int32] = w match { case W(x) => x }
+let v = fn(r) => W(r)
+let x[h](r: Ref[h, Int32]) = unw(v(r))
+let bad[h](r: Ref[h, Int32]): Int32 = v(r)

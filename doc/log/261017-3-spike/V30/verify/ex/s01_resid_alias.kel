@@ -1,0 +1,4 @@
+type C[E] = () => Unit @ E
+newtype A = MkA(B[{}])
+newtype B[E] = MkB(C[E])
+let f(x: A): A = x

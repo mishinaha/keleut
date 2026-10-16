@@ -1,0 +1,4 @@
+let mkshow[A: Show](x: A): () => String = fn() => show(x) + "!"
+let f = mkshow(1)
+let g = mkshow(true)
+echoln(f() + g() + f())

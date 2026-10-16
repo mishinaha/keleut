@@ -1,0 +1,7 @@
+effect Test = { test: () => Int32 }
+type TE: EffectRow = {Test}
+let f(): Int32 @ TE = { let a = perform test(); a * 2 }
+let r = f() handle {
+  case Test.test() => 0 match { case n if n == 0 && resume(5) > 9 => 1 case _ => 2 }
+}
+echoln(show(r))

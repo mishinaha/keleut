@@ -1,0 +1,121 @@
+=== ex/absurd.kel 
+-1
+[exit 0]
+=== ex/asc.kel 
+asc.kel:2:44: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== ex/emptyrec.kel 
+⚠ match が非網羅的です。例えば () が漏れています
+ok
+[exit 0]
+=== ex/fnlit.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== ex/guard.kel 
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== ex/helper.kel 
+-1
+[exit 0]
+=== ex/int.kel 
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== ex/late.kel 
+ok
+[exit 0]
+=== ex/lit.kel 
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== ex/never.kel 
+ok
+[exit 0]
+=== ex/openvar.kel 
+⚠ match が非網羅的です。例えば 0 が漏れています
+ok
+[exit 0]
+=== ex/outer.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== ex/param.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== ex/rigid.kel 
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== ex/showvar.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== ex/strict.kel 
+ok
+[exit 0]
+=== ex/strict.kel --strict-exhaustive
+ok
+[exit 0]
+=== ex/repl.in --repl
+g : () => Int32 @ {Fail} = <fn>
+[exit 0]
+=== verify/ex/p01_laterint.kel 
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== verify/ex/p02_lateropt.kel 
+⚠ match が非網羅的です。例えば None が漏れています
+実行時エラー: match のどの節にも一致しません: Some(2)
+[exit 3]
+=== verify/ex/p03_instnever.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+i
+[exit 0]
+=== verify/ex/p04_module.kel 
+ok
+[exit 0]
+=== verify/ex/p06_alias.kel 
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== verify/ex/p07_nested.kel 
+6
+[exit 0]
+=== verify/ex/p08_hole.kel 
+1
+[exit 0]
+=== verify/ex/p09_record.kel 
+⚠ match が非網羅的です。例えば {a = _} が漏れています
+ok
+[exit 0]
+=== verify/ex/p10_twomatch.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== verify/ex/p11_pubnever.kel 
+1
+[exit 0]
+=== verify/ex/p12_generic_eff.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== verify/ex/p13_prelude.kel 
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== verify/ex/imp/main.kel 
+ok
+[exit 0]
+=== verify/ex/p14_repl.in --repl
+⚠ match が非網羅的です。例えば _ が漏れています
+f : (Int32) => Int32 = <fn>
+⚠ match が非網羅的です。例えば _ が漏れています
+g : (A) => Int32 = <fn>
+_ : (Int32) => Int32 = <fn>
+[exit 0]

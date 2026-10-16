@@ -1,0 +1,4 @@
+type Unit = {}
+newtype Q24 = MkQ24(Int32)
+type C24 = A24[{}]
+type A24[E] = (Int32) => Unit @ {Q24 extends E}

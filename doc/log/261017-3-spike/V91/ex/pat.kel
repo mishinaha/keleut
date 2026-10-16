@@ -1,0 +1,2 @@
+let a = 0
+let k = (fn(x) => x match { case 1.5 => 1 case _ => 2 })(2.0 % 1.0)

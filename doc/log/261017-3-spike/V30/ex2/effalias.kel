@@ -1,0 +1,7 @@
+type W: EffectRow = {Log}
+type T = () => Unit @ {Log}
+newtype N1 = N1(() => Unit @ W)
+newtype N2 = N2(T)
+effect A = { a: (T) => Unit }
+effect Log = { log: (String) => Unit }
+let f(x: N1, y: N2): N1 = x

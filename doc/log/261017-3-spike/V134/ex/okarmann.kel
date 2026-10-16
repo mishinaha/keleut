@@ -1,0 +1,7 @@
+effect Fail = { throw: (String) => Never }
+let mk(b: Boolean): #Ok(Never) | #Err(Int32) @ Fail = if b then #Ok(perform throw("x")) else #Err(3)
+let go(b: Boolean): Int32 @ Fail = mk(b) match {
+  case #Ok(v) => v match {}
+  case #Err(n) => n
+}
+echoln(show(go(false) handle { case throw(e) => 0 - 1 }))

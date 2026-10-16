@@ -1,0 +1,68 @@
+== e1.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+effect Reg[F] = { reg: (Callback[F[Int32]]) => Unit }
+-- HEAD
+! e1.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+-- patched
+! e1.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+== e2.kel
+effect Reg[F] = { reg: (Callback[F[Int32]]) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+-- HEAD
+! e2.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+-- patched
+! e2.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+== e3.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+type class C[F] {
+  m[E]: (Callback[F[E]]) => Int32
+}
+-- HEAD
+e3.kel:3:3: パースエラー(付近のトークンを確認してください)
+[exit 2]
+-- patched
+e3.kel:3:3: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== e4.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+type W[F, E]: EffectRow = {Print extends F[E]}
+-- HEAD
+! e4.kel:2:42: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2] :: Type
+[exit 1]
+-- patched
+! e4.kel:2:42: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2] :: Type
+[exit 1]
+== e5.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F](c: Callback[F]): Int32 = 0
+let g(c: Callback[{Print}]): Int32 = f(c)
+-- HEAD
+f : (Callback[R1]) => Int32
+g : (Callback[{Print}]) => Int32
+[exit 0]
+-- patched
+f : (Callback[R1]) => Int32
+g : (Callback[{Print}]) => Int32
+[exit 0]
+== e3.kel
+newtype Callback[E] = Callback(() => Unit @ E)
+type class C[F] { val m: (Callback[F[Int32]]) => Int32 }
+-- HEAD
+! e3.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+-- patched
+! e3.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+== e6.kel
+type class C[F] { val m: (Callback[F[Int32]]) => Int32 }
+newtype Callback[E] = Callback(() => Unit @ E)
+-- HEAD
+! e6.kel:1:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+-- patched
+! e6.kel:1:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]

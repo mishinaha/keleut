@@ -1,0 +1,2 @@
+pub let eqs[A: Eq](xs: List[List[A]], ys: List[List[A]]): Boolean = xs == ys
+pub let nil_eq[A: Eq](x: A): Boolean = Cons(x, Nil) == Nil

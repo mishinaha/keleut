@@ -1,0 +1,2 @@
+let rec a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+and b[E](n: Int32): Int32 @ {Console extends E} = a(n)

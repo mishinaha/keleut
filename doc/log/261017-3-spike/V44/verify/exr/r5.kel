@@ -1,0 +1,1 @@
+pub let leak(): Array[Int32] = run h { MutableArray.new(3, 0) }

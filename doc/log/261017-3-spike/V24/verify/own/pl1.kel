@@ -1,0 +1,4 @@
+pub let f(
+  x: Int32,
+  g: List[(Int32) => Int32]
+): Int32 @ {} = x

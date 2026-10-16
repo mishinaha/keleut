@@ -1,0 +1,4 @@
+module P {
+  type P = Int32
+}
+let x: P = 1

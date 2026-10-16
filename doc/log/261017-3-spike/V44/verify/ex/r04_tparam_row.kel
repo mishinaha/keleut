@@ -1,0 +1,9 @@
+module M {
+  pub let app[E](g: () => Int32 @ E): Int32 @ E = g()
+  pub let twice: ((Int32) => Int32 @ {}) => (Int32) => Int32 @ {} = fn(f) => fn(x) => f(f(x))
+}
+let main(): Unit @ {Console} = {
+  echoln(show(M.app(fn() => { echoln("in"); 3 })))
+  echoln(show(M.twice(fn(x) => x * 2)(5)))
+}
+with_stdout(fn() => main())

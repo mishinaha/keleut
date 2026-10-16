@@ -1,0 +1,3 @@
+pub type class Pretty[A] { val pretty: (A) => String }
+pub newtype Box = Box(Int32)
+type instance Pretty[Box] { let pretty(b) = b match { case Box(v) => "<" + show(v) + ">" } }

@@ -1,0 +1,2 @@
+type C = A[{}]
+type A[E] = {f: (Int32) => Unit @ E}

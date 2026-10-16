@@ -1,0 +1,4 @@
+let a(x: Int64): Int32 = x match { case 4294967295 => 1  case _ => 2 }
+let b(x: Int32): Int32 = x match { case 2147483647 => 1  case _ => 2 }
+let c = a(4294967295i64) + b(2147483647)
+echoln(show(c))

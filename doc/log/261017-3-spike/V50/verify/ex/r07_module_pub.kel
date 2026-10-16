@@ -1,0 +1,5 @@
+module M {
+  pub type W: EffectRow = {Print}
+  pub let f[W](u: Unit): Unit @ {W} = println("mod")
+}
+with_stdout(fn() => M.f(()))

@@ -1,0 +1,9 @@
+effect Get = { get: () => Int32 }
+let with_get[T, A, E](x: T, f: (T) => Int32, ok: Boolean, body: () => A @ {Get, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case get() if ok => resume(f(x))
+    case get() => { echoln("refuse"); ??? }
+    case cancel => echoln("cancel get")
+  }
+echoln(show(with_get("abc", fn(s) => 3, true, fn() => perform get() + 1)))
+echoln(show(with_get("abc", fn(s) => 3, false, fn() => perform get() + 1)))

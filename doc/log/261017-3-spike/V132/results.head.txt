@@ -1,0 +1,171 @@
+### pure.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => A
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s) = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+--- diktor-head pure.kel
+! pure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の本体がエフェクトを起こしています。元の報告: ラベル Fail がありません(行は閉じています)
+[exit 1]
+
+### annot.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => A
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s: String): Int32 @ Fail = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+--- diktor-head annot.kel
+! annot.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の本体がエフェクトを起こしています。元の報告: ラベル Fail がありません(行は閉じています)
+[exit 1]
+
+### show.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	newtype Secret(Int32)
+     3	type instance Show[Secret] {
+     4	  let show(x) = perform throw("secret")
+     5	}
+--- diktor-head show.kel
+! show.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Fail を足せません(注釈側に Fail を(必要なら引数つきで)書き足してください)
+[exit 1]
+
+### closed.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => A @ Fail
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s) = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+     8	type instance Parse[Boolean] {
+     9	  let parse(s) = s == "t"
+    10	}
+    11	let r: Int32 = parse("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+    12	echoln(show(r))
+    13	let b: Boolean = parse("t") handle { case throw(e) => false }
+    14	echoln(show(b))
+--- diktor-head closed.kel
+caught bad: 2
+-1
+true
+[exit 0]
+
+### open.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse[E]: (String) => A @ {Fail extends E}
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse[E](s: String): Int32 @ {Fail extends E} = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+     8	let p[A: Parse, E](s: String): A @ {Fail extends E} = parse(s)
+     9	let r: Int32 = p("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+    10	echoln(show(r))
+--- diktor-head open.kel
+caught bad: 2
+-1
+[exit 0]
+
+### generic.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse[E]: (String) => A @ E
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse[E](s: String): Int32 @ E = if s == "1" then 1 else perform throw("bad: " + s)
+     7	}
+--- diktor-head generic.kel
+! generic.kel:6:64: 型エラー: エフェクト Fail をここでは実行できません(行 ς1 は注釈で固定された行変数なので、ラベル Fail を足せません(注釈側に Fail を(必要なら引数つきで)書き足してください))
+[exit 1]
+
+### via_option.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => Option[A]
+     4	}
+     5	type instance Parse[Int32] {
+     6	  let parse(s) = if s == "1" then Some(1) else None
+     7	}
+     8	let parse_or_fail[A: Parse](s: String): A @ Fail = parse(s) match {
+     9	  case Some(v) => v
+    10	  case None => perform throw("bad: " + s)
+    11	}
+    12	let r: Int32 = parse_or_fail("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+    13	echoln(show(r))
+--- diktor-head via_option.kel
+caught bad: 2
+-1
+[exit 0]
+
+### handler_in_method.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	type class Parse[A] {
+     3	  val parse: (String) => Option[A]
+     4	}
+     5	let digit(s: String): Int32 @ Fail = if s == "1" then 1 else perform throw("bad")
+     6	type instance Parse[Int32] {
+     7	  let parse(s) = Some(digit(s)) handle { case throw(e) => None }
+     8	}
+     9	let a: Option[Int32] = parse("1")
+    10	let b: Option[Int32] = parse("2")
+    11	echoln(show(a))
+    12	echoln(show(b))
+--- diktor-head handler_in_method.kel
+Some(1)
+None
+[exit 0]
+
+### plainE.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	let f[E](s: String): Int32 @ E = perform throw("bad: " + s)
+--- diktor-head plainE.kel
+! plainE.kel:2:34: 型エラー: エフェクト Fail をここでは実行できません(行 ς1 は注釈で固定された行変数なので、ラベル Fail を足せません(注釈側に Fail を(必要なら引数つきで)書き足してください))
+[exit 1]
+
+### specexample.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	
+     3	type class Parse[A] {
+     4	  val parse: (String) => A @ Fail
+     5	}
+     6	
+     7	type instance Parse[Int32] {
+     8	  let parse(s) = if s == "0" then 0 else perform throw("not a digit: " + s)
+     9	}
+    10	
+    11	let parse_or[A: Parse](s: String, d: A): A = parse(s) handle { case throw(_) => d }
+--- diktor-head --type-check specexample.kel
+parse_or : [A: Parse] (String, A) => A
+[exit 0]
+### specexample_run.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	
+     3	type class Parse[A] {
+     4	  val parse: (String) => A @ Fail
+     5	}
+     6	
+     7	type instance Parse[Int32] {
+     8	  let parse(s) = if s == "0" then 0 else perform throw("not a digit: " + s)
+     9	}
+    10	
+    11	let parse_or[A: Parse](s: String, d: A): A = parse(s) handle { case throw(_) => d }
+    12	let a: Int32 = parse_or("0", 7)
+    13	let b: Int32 = parse_or("x", 7)
+    14	echoln(show(a))
+    15	echoln(show(b))
+--- diktor-head specexample_run.kel
+0
+7
+[exit 0]
+### eq.kel
+     1	effect Fail = { throw: (String) => Never }
+     2	newtype Secret(Int32)
+     3	type instance Eq[Secret] {
+     4	  let eq(x, y) = perform throw("no eq")
+     5	}
+--- diktor-head eq.kel
+! eq.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド eq の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Fail を足せません(注釈側に Fail を(必要なら引数つきで)書き足してください)
+[exit 1]

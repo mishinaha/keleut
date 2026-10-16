@@ -1,0 +1,5 @@
+newtype A = MkA(B[{}])
+newtype B[X] = MkB(C[X])
+newtype C[Y] = MkC(D[Y])
+newtype D[E] = MkD(() => Unit @ E)
+let f(x: A): A = x

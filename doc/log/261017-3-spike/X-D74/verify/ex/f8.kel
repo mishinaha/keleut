@@ -1,0 +1,1 @@
+pub let p(): Int32 @ {} = run h { let r = Ref.new(0); run k { Ref.get(r) } }

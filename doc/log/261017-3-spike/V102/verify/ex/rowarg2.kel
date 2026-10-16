@@ -1,0 +1,5 @@
+newtype Cb[R] = Cb(() => Int32 @ R)
+newtype W = W(List[Cb[{Console}]])
+effect Fx = { fx: () => Int32 }
+let b(): Int32 @ {Console, Fx} = { echo("b"); perform fx() }
+let w = W(Cons(Cb(b), Nil))

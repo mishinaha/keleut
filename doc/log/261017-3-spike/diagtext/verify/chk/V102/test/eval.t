@@ -1,0 +1,793 @@
+M8(評価器)のゴールデン。変更時は dune promote で更新し、必ず目視レビューすること。
+
+基本の評価(リテラル既定化・レコード・タプル・newtype・run/MutableArray/freeze・構造的等価):
+
+  $ cat > basics.kel <<'EOF'
+  > echoln("hello, keleut")
+  > let x = 1 + 2
+  > echoln(show(x * 10))
+  > let (a, b) = (10, "ten")
+  > echoln(b + "=" + show(a))
+  > let r = {x = 1, y = 2}
+  > echoln(show(r.x + r.y))
+  > let upd = {r with x = 100}
+  > echoln(show(upd.x + upd.y))
+  > let t = (1, "two", true)
+  > echoln(t._1)
+  > newtype MyList[A] = MyNil | MyCons(A, tail: MyList[A])
+  > let rec sum_l(xs: MyList[Int32]): Int32 = xs match {
+  >   case MyNil => 0
+  >   case MyCons(h, t) => h + sum_l(t)
+  > }
+  > echoln(show(sum_l(MyCons(1, MyCons(2, MyCons(3, MyNil))))))
+  > let frozen = run h {
+  >   let a = MutableArray.new(3, 0)
+  >   MutableArray.set(a, 0, 10)
+  >   MutableArray.set(a, 2, 30)
+  >   MutableArray.freeze(a)
+  > }
+  > echoln(show(Array.get(frozen, 0) + Array.get(frozen, 2)))
+  > echoln(show((1, "a") == (1, "a")))
+  > echoln(show({p = 1, q = 2} == {q = 2, p = 1}))
+  > echoln(show(1.5 + 2.5))
+  > echoln(show(7 / 2))
+  > EOF
+  $ diktor basics.kel
+  hello, keleut
+  30
+  ten=10
+  3
+  102
+  two
+  6
+  40
+  true
+  true
+  4.0
+  3
+
+エフェクトの実行(sample.kel §9 相当: capture / try_ / with_stdout /
+cancel の LIFO 自動巻き戻し):
+
+  $ cat > effects.kel <<'EOF'
+  > let capture[A, E](body: () => A @ {Print extends E}): {value: A, output: String} @ E =
+  >   body() handle {
+  >     case print(message) => {
+  >       let {value, output} = resume()
+  >       {value, output = message + output}
+  >     }
+  >     case return(x) => {value = x, output = ""}
+  >   }
+  > effect Fail = { throw: (String) => Never }
+  > let try_[A, E](body: () => A @ {Fail extends E}): #Ok(A) | #Err(String) @ E =
+  >   body() handle {
+  >     case throw(e)  => #Err(e)
+  >     case return(x) => #Ok(x)
+  >   }
+  > let captured = capture(fn() => { println("one"); println("two"); 42 })
+  > echo("output=" + captured.output)
+  > echoln("value=" + show(captured.value))
+  > let ok = try_(fn() => 1 + 1)
+  > echoln(ok match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+  > let bad = try_(fn() => { perform throw("boom"); 1 })
+  > echoln(bad match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+  > with_stdout(fn() => println("translated"))
+  > effect Res = { use: (String) => Unit }
+  > let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} = {
+  >   echoln("open " + name)
+  >   body() handle {
+  >     case use(s)    => resume(echoln(name + " uses " + s))
+  >     case return(x) => { echoln("close " + name); x }
+  >     case cancel    => echoln("cancel " + name)
+  >   }
+  > }
+  > let res = try_(fn() => {
+  >   with _ = with_res("outer")
+  >   with _ = with_res("inner")
+  >   perform use("both")
+  >   perform throw("abort")
+  >   0
+  > })
+  > echoln(res match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+  > let normal = try_(fn() => {
+  >   with _ = with_res("n1")
+  >   perform use("x")
+  >   7
+  > })
+  > echoln(normal match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+  > EOF
+  $ diktor effects.kel
+  output=one
+  two
+  value=42
+  ok 2
+  err boom
+  translated
+  open outer
+  open inner
+  inner uses both
+  cancel inner
+  cancel outer
+  err abort
+  open n1
+  n1 uses x
+  close n1
+  ok 7
+
+cancel 節は自分のハンドラが外れた文脈で走る(§9 / D100。cancel 節からの
+perform は自分の節ではなく外側の同名ハンドラに届く。第11章 §11.24 が
+cancel 節を外側の行で推論するのと同じ事実の実行側):
+
+  $ cat > cancelouter.kel <<'EOF2'
+  > effect Stop = { stop: () => {} }
+  > effect Log = { note: (String) => {} }
+  > let inner[E](): Int32 @ {Log, Stop, Console extends E} =
+  >   { perform stop(); 1 } handle {
+  >     case note(s) => { echo("INNER:" + s + "\n"); resume({}) }
+  >     case cancel => { perform note("from-cancel"); () }
+  >     case return(x) => x
+  >   }
+  > let mid[E](): Int32 @ {Stop, Console extends E} = inner() handle {
+  >   case note(s) => { echo("MID:" + s + "\n"); resume({}) }
+  >   case return(x) => x
+  > }
+  > let go[E](): Int32 @ {Console extends E} = mid() handle {
+  >   case stop() => 99
+  >   case return(x) => x
+  > }
+  > echoln(show(go()))
+  > EOF2
+  $ diktor cancelouter.kel
+  MID:from-cancel
+  99
+
+届いた先が resume せずに抜けても、その巻き戻しは抑制されてログに回るだけで
+外へは出ない(§9):
+
+  $ cat > cancelnores.kel <<'EOF2'
+  > effect Stop = { stop: () => {} }
+  > effect Log = { note: (String) => {} }
+  > let inner[E](): Int32 @ {Log, Stop, Console extends E} =
+  >   { perform stop(); 1 } handle {
+  >     case note(s) => { echo("INNER:" + s + "\n"); resume({}) }
+  >     case cancel => { perform note("from-cancel"); echo("AFTER\n") }
+  >     case return(x) => x
+  >   }
+  > let mid[E](): Int32 @ {Stop, Console extends E} = inner() handle {
+  >   case note(s) => { echo("MID:" + s + "\n"); 7 }
+  >   case return(x) => x
+  > }
+  > let go[E](): Int32 @ {Console extends E} = mid() handle {
+  >   case stop() => 99
+  >   case return(x) => x
+  > }
+  > echoln(show(go()))
+  > EOF2
+  $ diktor cancelnores.kel
+  MID:from-cancel
+  cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+  99
+
+cancel 節の中で例外が起きると、その cancel 節は打ち切る(後ろの文は実行しない)。
+脱出は外へ伝えずログに記録し、外側のハンドラの cancel 節と後続の文は続けて実行する
+(仕様 sample.kel:585、LangSpec.md §13.6):
+
+  $ cat > cancelabort.kel <<'EOF2'
+  > effect A = { a: () => Unit }
+  > effect B = { b: () => Unit }
+  > effect Fail = { fail: () => Unit }
+  > let r = ((perform fail() handle {
+  >     case a() => resume()
+  >     case cancel => { echoln("inner cancel start"); __panic("boom"); echoln("inner cancel rest") }
+  >   }) handle {
+  >   case b() => resume()
+  >   case cancel => echoln("outer cancel")
+  > }) handle {
+  >   case fail() => echoln("caught")
+  > }
+  > echoln("after")
+  > EOF2
+  $ diktor cancelabort.kel
+  caught
+  inner cancel start
+  cancel 節で例外が抑制されました: panic: boom
+  outer cancel
+  after
+
+深いハンドラと最内一致・resume の返り値 = handle 式全体の型:
+
+  $ cat > deep.kel <<'EOF'
+  > effect Ask = { ask: () => Int32 }
+  > let inner = (perform ask() + perform ask()) handle {
+  >   case ask() => resume(1)
+  >   case return(x) => x
+  > }
+  > echoln(show(inner))
+  > let nested = ((perform ask()) handle {
+  >   case ask() => resume(10)
+  >   case return(x) => x
+  > }) handle {
+  >   case ask() => resume(20)
+  >   case return(x) => x
+  > }
+  > echoln(show(nested))
+  > EOF
+  $ diktor deep.kel
+  2
+  10
+
+ユーザ定義インスタンスのメソッドの呼び出し(D3):
+
+  $ cat > dispatch.kel <<'EOF'
+  > newtype Meters(Int32)
+  > type instance Add[Meters] {
+  >   let add(a, b) = (a, b) match { case (Meters(x), Meters(y)) => Meters(x + y) }
+  > }
+  > let m = Meters(3) + Meters(4)
+  > echoln(m match { case Meters(v) => show(v) })
+  > type class MyShow[A] { val myshow: (A) => String }
+  > type instance MyShow[Meters] {
+  >   let myshow(m) = m match { case Meters(v) => show(v) + "m" }
+  > }
+  > echoln(myshow(Meters(7)))
+  > EOF
+  $ diktor dispatch.kel
+  7
+  7m
+
+実行時エラー(exit 3): ??? 到達、resume のアフィン違反、ゼロ除算。
+ハンドラ節内の ??? でも内側の cancel は走る(例外経路の discontinue、§8.4):
+
+  $ cat > hole.kel <<'EOF'
+  > echoln("before")
+  > let f = fn() => ???
+  > echoln(show(f() + 1))
+  > EOF
+  $ diktor hole.kel
+  before
+  実行時エラー: ??? に到達しました
+  [3]
+
+  $ cat > affine.kel <<'EOF'
+  > effect E1 = { get1: () => Int32 }
+  > let r = (perform get1() + 1) handle {
+  >   case get1() => { let a = resume(1); let b = resume(2); a + b }
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF
+  $ diktor affine.kel
+  実行時エラー: resume は高々1回しか呼べません(アフィン)
+  [3]
+
+  $ cat > divzero.kel <<'EOF'
+  > echoln(show(1 / 0))
+  > EOF
+  $ diktor divzero.kel
+  実行時エラー: ゼロ除算です
+  [3]
+
+  $ cat > holecancel.kel <<'EOF'
+  > effect Res = { use: (String) => Unit }
+  > effect Boom = { boom: () => Unit }
+  > let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  >   body() handle {
+  >     case use(s)    => resume(echoln(name + " uses " + s))
+  >     case return(x) => { echoln("close " + name); x }
+  >     case cancel    => echoln("cancel " + name)
+  >   }
+  > let r = {
+  >   with _ = with_res("r1")
+  >   perform use("a")
+  >   perform boom()
+  >   0
+  > } handle {
+  >   case boom() => ???
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF
+  $ diktor holecancel.kel
+  r1 uses a
+  cancel r1
+  実行時エラー: ??? に到達しました
+  [3]
+
+性能回帰: 10万回の println が、節本体が resume だけの短い経路で完走する(§8.4):
+
+  $ cat > perf.kel <<'EOF'
+  > let rec loop(n: Int32): Unit @ Print =
+  >   (n == 0) match {
+  >     case true => ()
+  >     case false => { println("x"); loop(n - 1) }
+  >   }
+  > with_stdout(fn() => loop(100000))
+  > EOF
+  $ diktor perf.kel | wc -l
+  100000
+
+Run モードでも網羅性警告は stderr に出る:
+
+  $ cat > warn.kel <<'EOF'
+  > newtype Opt2[A] = None2 | Some2(A)
+  > let f = fn(o) => o match { case Some2(x) => x }
+  > echoln("ran")
+  > EOF
+  $ diktor warn.kel
+  ⚠ match が非網羅的です。例えば None2 が漏れています
+  ran
+
+節本体が resume だけの短い経路でも、引数の例外で discontinue が走る(B1 / §14.9。
+捨てた継続の cancel と自分の cancel の両方):
+
+  $ cat > tailresume.kel <<'EOF2'
+  > effect Res = { use: (String) => Unit }
+  > effect Boom = { boom: () => Unit }
+  > let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  >   body() handle {
+  >     case use(s)    => resume(echoln(name + " uses " + s))
+  >     case return(x) => { echoln("close " + name); x }
+  >     case cancel    => echoln("cancel " + name)
+  >   }
+  > let r = {
+  >   with _ = with_res("r1")
+  >   perform use("a")
+  >   perform boom()
+  >   0
+  > } handle {
+  >   case boom() => resume(???)
+  >   case return(x) => x
+  >   case cancel    => echoln("cancel outer")
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor tailresume.kel
+  r1 uses a
+  cancel r1
+  cancel outer
+  実行時エラー: ??? に到達しました
+  [3]
+
+ガード付き操作節は同じハンドラの次の節へ落ちる(B2 / D28。match と同じ規則):
+
+  $ cat > guardop.kel <<'EOF2'
+  > effect Ask = { ask: (Int32) => Int32 }
+  > let r = (perform ask(1) + perform ask(2)) handle {
+  >   case ask(n) if n == 1 => resume(100)
+  >   case ask(n)           => resume(n * 10)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor guardop.kel
+  120
+
+操作節の絞り込みパターンも次の節へ落ちる:
+
+  $ cat > patop.kel <<'EOF2'
+  > effect Ask = { ask: (Int32) => Int32 }
+  > let r = (perform ask(1) + perform ask(2)) handle {
+  >   case ask(1) => resume(100)
+  >   case ask(n) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor patop.kel
+  102
+
+総和的な節より後ろの同じ操作の節には到達不能警告(B8):
+
+  $ cat > deadop.kel <<'EOF2'
+  > effect Ask = { ask: (Int32) => Int32 }
+  > let r = (perform ask(1)) handle {
+  >   case ask(n) => resume(n)
+  >   case ask(n) => resume(99)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor deadop.kel
+  ⚠ 操作 ask の節は到達しません(前の節が既に取りこぼしません)
+  1
+
+コンストラクタが 1 つしかない newtype を分解し、引数が変数だけの操作節は、
+取りこぼさない節に数える(sample.kel:516)。絞り込みの節 MkBox(0) が外れた値は、その節が受け取る:
+
+  $ cat > soleop.kel <<'EOF2'
+  > newtype Box = MkBox(Int32)
+  > effect Ask = { ask: (Box) => Int32 }
+  > let r = (perform ask(MkBox(0)) + perform ask(MkBox(5))) handle {
+  >   case ask(MkBox(0)) => resume(100)
+  >   case ask(MkBox(n)) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor soleop.kel
+  105
+
+コンストラクタが 1 つしかない newtype を分解し、引数が変数だけの節より後ろにある、
+同じ操作の節には到達不能警告:
+
+  $ cat > soledead.kel <<'EOF2'
+  > newtype Box = MkBox(Int32)
+  > effect Ask = { ask: (Box) => Int32 }
+  > let r = perform ask(MkBox(41)) handle {
+  >   case ask(MkBox(n)) => resume(n + 1)
+  >   case ask(b) => resume(0)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor soledead.kel
+  ⚠ 操作 ask の節は到達しません(前の節が既に取りこぼしません)
+  42
+
+Int32 を 1 つ持つ newtype の引数にリテラルを書いた節と、Option を 1 つ持つ newtype の
+引数に Some(n) を書いた節は、取りこぼす節とみなす:
+
+  $ cat > solelit.kel <<'EOF2'
+  > newtype Box = MkBox(Int32)
+  > effect Ask = { ask: (Box) => Int32 }
+  > let r = perform ask(MkBox(0)) handle {
+  >   case ask(MkBox(0)) => resume(1)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor solelit.kel
+  ! solelit.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+  [1]
+  $ cat > soleopt.kel <<'EOF2'
+  > newtype OBox = MkO(Option[Int32])
+  > effect Ask = { ask: (OBox) => Int32 }
+  > let r = perform ask(MkO(Some(1))) handle {
+  >   case ask(MkO(Some(n))) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor soleopt.kel
+  ! soleopt.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+  [1]
+
+ラベルが 1 つの閉じた構造的ヴァリアントを分解し、引数が変数だけの節も、取りこぼさない節に数える。
+ラベルが 2 つある型では、1 つを選ぶ節だけでは取りこぼす:
+
+  $ cat > solevar.kel <<'EOF2'
+  > effect Ask = { ask: (#A(Int32)) => Int32 }
+  > let r = perform ask(#A(3)) handle {
+  >   case ask(#A(n)) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor solevar.kel
+  3
+  $ cat > solevar2.kel <<'EOF2'
+  > type AB = #A(Int32) | #B
+  > effect Ask = { ask: (AB) => Int32 }
+  > let r = perform ask(#A(3)) handle {
+  >   case ask(#A(n)) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor solevar2.kel
+  ! solevar2.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+  [1]
+
+絞り込みの節を複数合わせると引数を網羅できる場合も、
+取りこぼさない節が 1 つも無ければ拒否する(sample.kel:516):
+
+  $ cat > opcover.kel <<'EOF2'
+  > effect Ask = { ask: (Option[Int32]) => Int32 }
+  > let r = perform ask(Some(1)) handle {
+  >   case ask(Some(n)) => resume(n)
+  >   case ask(None) => resume(0)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor opcover.kel
+  ! opcover.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+  [1]
+
+操作節の引数パターンの誤りは、取りこぼしより先に報告する。tell には絞り込みの節
+tell(0) しか無いが、報告するのは、その後ろにある ask の節の未知のコンストラクタである:
+
+  $ cat > opunk.kel <<'EOF2'
+  > newtype Box = MkBox(Int32)
+  > effect Ask = { tell: (Int32) => Unit, ask: (Box) => Int32 }
+  > let r = perform ask(MkBox(41)) handle {
+  >   case tell(0) => resume(())
+  >   case ask(Foo(n)) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor opunk.kel
+  ! opunk.kel:5:12: 型エラー: 未知のコンストラクタ: Foo
+  [1]
+
+操作節の引数パターンの誤りは、handle の本体の誤りより先に報告する。本体の + "x" より
+後ろの行にある、節のパターンのフィールドの個数の誤りを報告する:
+
+  $ cat > oporder.kel <<'EOF2'
+  > newtype Box = MkBox(Int32)
+  > effect Ask = { ask: (Box) => Int32 }
+  > let r = (perform ask(MkBox(41)) + "x") handle {
+  >   case ask(MkBox(n, m)) => resume(n)
+  >   case return(x) => x
+  > }
+  > echoln(show(r))
+  > EOF2
+  $ diktor oporder.kel
+  ! oporder.kel:4:12: 型エラー: コンストラクタ MkBox のパターンは 1 個のフィールドを取ります(2 個与えられました)
+  [1]
+
+操作節のガードで起きた例外も 3 径路の規約に乗る(260829-5 M13 検証修正。
+かつては素の raise で cancel が一切走らなかった):
+
+  $ cat > gexc.kel <<'EOF2'
+  > effect Res = { use: (String) => Unit }
+  > effect Ask = { ask: (Int32) => Int32 }
+  > let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  >   body() handle {
+  >     case use(s)    => resume(echoln(name + " uses " + s))
+  >     case return(x) => { echoln("close " + name); x }
+  >     case cancel    => echoln("cancel " + name)
+  >   }
+  > let main() = {
+  >   with _ = with_res("r1")
+  >   perform use("a")
+  >   let n = perform ask(1)
+  >   echoln("got " + show(n))
+  > } handle {
+  >   case ask(n) if ??? => resume(n)
+  >   case ask(n) => resume(n * 10)
+  >   case return(x) => x
+  >   case cancel => echoln("cancel outer")
+  > }
+  > main()
+  > EOF2
+  $ diktor gexc.kel
+  r1 uses a
+  cancel r1
+  cancel outer
+  実行時エラー: ??? に到達しました
+  [3]
+
+ガードの perform で外側が継続を捨てても cancel が走る(Unwind の通過):
+
+  $ cat > gdrop.kel <<'EOF2'
+  > effect Res = { use: (String) => Unit }
+  > effect Esc = { esc: () => Boolean }
+  > effect Ask = { ask: (Int32) => Int32 }
+  > let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  >   body() handle {
+  >     case use(s)    => resume(echoln(name + " uses " + s))
+  >     case return(x) => { echoln("close " + name); x }
+  >     case cancel    => echoln("cancel " + name)
+  >   }
+  > let inner() = {
+  >   with _ = with_res("r1")
+  >   perform use("a")
+  >   let n = perform ask(1)
+  >   echoln("got " + show(n))
+  > } handle {
+  >   case ask(n) if perform esc() => resume(n)
+  >   case ask(n) => resume(n * 10)
+  >   case return(x) => x
+  >   case cancel => echoln("cancel inner")
+  > }
+  > let outer() = {
+  >   inner()
+  >   echoln("after inner")
+  > } handle {
+  >   case esc() => { echoln("esc: continuation dropped"); {} }
+  >   case return(x) => x
+  >   case cancel => echoln("cancel outer")
+  > }
+  > outer()
+  > echoln("done")
+  > EOF2
+  $ diktor gdrop.kel
+  r1 uses a
+  esc: continuation dropped
+  cancel r1
+  cancel inner
+  done
+
+sink の故障でも discontinue が走る(B6 の観測点。stdout を閉じてバッファを
+溢れさせると、cancel 節の例外が抑制ログ = stderr に出る。ログが出た =
+例外が fiber へ配送された = discontinue が走った証拠):
+
+  $ cat > sinkfail.kel <<'EOF2'
+  > effect Res = { use: (String) => Unit }
+  > let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  >   body() handle {
+  >     case use(s)    => resume(echoln(name + " uses " + s))
+  >     case return(x) => { echoln("close " + name); x }
+  >     case cancel    => __panic("cancel of " + name + " blew up")
+  >   }
+  > let rec loop(n: Int32): Unit @ Console = (n == 0) match {
+  >   case true => {}
+  >   case false => { echoln("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); loop(n - 1) }
+  > }
+  > let main() = {
+  >   with _ = with_res("r1")
+  >   perform use("a")
+  >   loop(100000)
+  > }
+  > main()
+  > EOF2
+  $ diktor sinkfail.kel >&-
+  cancel 節で例外が抑制されました: panic: cancel of r1 blew up
+  diktor: 標準出力に書き出せません: Bad file descriptor
+  [74]
+
+トップレベルの再束縛は定義時点の実体を守る(V1。かつては評価器が
+呼び出し時に globals を引くため、先に定義した関数まで新しい実体を見て
+黙って別の値を返した):
+
+  $ cat > shadow.kel <<'EOF2'
+  > let f(): String = show(42)
+  > let show(x: Int32): String = "SHADOW"
+  > echoln(f())
+  > echoln(show(1))
+  > EOF2
+  $ diktor shadow.kel
+  42
+  SHADOW
+
+前方参照(1c 署名)は途中に再束縛があっても新しい名前として届く:
+
+  $ cat > fwd5.kel <<'EOF2'
+  > let f[E](): Int32 @ E = g(1)
+  > let show(x: Int32): String = "SHADOW"
+  > let g[E](x: Int32): Int32 @ E = x + 1
+  > echoln(f() match { case 2 => "two" case _ => "other" })
+  > EOF2
+  $ diktor fwd5.kel
+  two
+
+組み込みクラスと同名の module がメソッド名と衝突する形は宣言時に拒否する
+(M16 検証。修飾名 Add.add が値環境でクラスメソッドと区別できず、かつては
+綴りの一致だけで可視性検査を免除していたため、同名クラスがあるだけで任意の
+非 pub 値が外から呼べた):
+
+  $ cat > k3.kel <<'EOF2'
+  > let f(): Int32 = Add.add(1, 2)
+  > module Add { extern "prim" let add(x: String, y: String): String }
+  > echoln(show(f()))
+  > EOF2
+  $ diktor k3.kel
+  ! k3.kel:2:14: 型エラー: module Add の add は型クラス Add のメソッド add と修飾名が衝突します(module か メソッドを改名してください)
+  [1]
+
+前方参照と再束縛の合流点は先勝ちで整合する(M15 検証 V1 残穴の解消。
+かつて elab のパス 1c は後勝ちだったので、同名 let 2 本を前方参照する
+関数だけが型検査と別の実体を呼び、黙って別の型の値を返した):
+
+  $ cat > fwd6.kel <<'EOF2'
+  > let f[E](): String @ E = g("s")
+  > let g[E](x: Int32): Int32 @ E = 7
+  > let g[E](x: String): String @ E = "STR"
+  > echoln(show(f()))
+  > EOF2
+  $ diktor fwd6.kel
+  ! fwd6.kel:1:28: 型エラー: 型が一致しません: String と Int32
+  [1]
+
+クラスメソッドと同名のトップレベル let の前方参照も先勝ち(elab は
+プレリュードの show の型で検査し、実行も組み込みラッパを呼ぶ):
+
+  $ cat > fwd7.kel <<'EOF2'
+  > let f(): String = show(42)
+  > let show[E](x: Int32): String @ E = "SHADOW"
+  > echoln(f())
+  > echoln(show(42))
+  > EOF2
+  $ diktor fwd7.kel
+  42
+  SHADOW
+
+  $ cat > fwd8.kel <<'EOF2'
+  > let f(): Int32 = show(42)
+  > let show[E](x: Int32): Int32 @ E = 99
+  > echoln(Show.show(f() + 1))
+  > EOF2
+  $ diktor fwd8.kel
+  ! fwd8.kel:1:5: 型エラー: 注釈された返り値型を満たしません(型が一致しません: Int32 と String)
+  [1]
+
+プレリュード extern と同名のクラスメソッドも先勝ち(非修飾名は
+プレリュードの実体の型で検査され、実行と一致する。かつては elab が
+クラスメソッドを選び、実行だけが 3 引数のプリミティブを呼んだ):
+
+  $ cat > fwd9.kel <<'EOF2'
+  > type class W[A] { val __string_length: (A) => Int32 }
+  > type instance W[String] { let __string_length(x) = 999 }
+  > echoln(show(__string_length("abcdefgh")))
+  > EOF2
+  $ diktor fwd9.kel
+  8
+
+修飾した操作は、その完全名のハンドラにだけ届く。E2 のハンドラが内側に
+あっても、E1.op は素通りして外側の h1 に届く:
+
+  $ cat > leftmostrun.kel <<'EOF2'
+  > effect E1 = { op: (String) => {} }
+  > effect E2 = { op: (String) => {} }
+  > let f[E](): {} @ {E1, E2 extends E} = perform E1.op("f")
+  > let h1[A, E](b: () => A @ {E1, Console extends E}): A @ {Console extends E} =
+  >   b() handle {
+  >     case E1.op(s) => resume(echo("E1:" + s + "\n"))
+  >     case return(x) => x
+  >   }
+  > let h2[A, E](b: () => A @ {E2, Console extends E}): A @ {Console extends E} =
+  >   b() handle {
+  >     case E2.op(s) => resume(echo("E2:" + s + "\n"))
+  >     case return(x) => x
+  >   }
+  > h1(fn() => h2(fn() => f()))
+  > EOF2
+  $ diktor leftmostrun.kel
+  E1:f
+
+評価は正格である(LangSpec §5.1)。関数を呼ぶ前にすべての引数を評価するので、
+使わない引数も評価する。let の右辺とレコードのフィールドは束縛するときに評価し、
+fn の本体は呼ぶまで評価しない(使うたびに評価する値束縛は §6.4):
+
+  $ cat > strict.kel <<'KEL'
+  > let ignore2(a: Int32, b: Int32): Int32 = a
+  > let noisy(n: Int32): Int32 @ Console = { echoln("eval " + show(n)); n }
+  > let r = ignore2(noisy(1), noisy(2))
+  > let unused = noisy(3)
+  > let rec_ = {a = noisy(4), b = noisy(5)}
+  > let lazy = fn() => noisy(6)
+  > echoln("end " + show(r))
+  > KEL
+  $ diktor strict.kel
+  eval 1
+  eval 2
+  eval 3
+  eval 4
+  eval 5
+  end 1
+
+with _ と with (_) は引数のない無名関数を、with _x は 1 引数の関数を渡す(LangSpec §6.5。
+この _ はほかの位置の _ と意味が異なる)。1 引数を要求する関数に with _ を使うと型エラー:
+
+  $ cat > with1.kel <<'KEL'
+  > let zero[A, E](body: () => A @ E): A @ E = body()
+  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+  > let a(): Int32 = {
+  >   with _ = zero()
+  >   1
+  > }
+  > let b(): Int32 = {
+  >   with _x = one()
+  >   2
+  > }
+  > let c(): Int32 = {
+  >   with (_) = zero()
+  >   3
+  > }
+  > echoln(show(a() + b() + c()))
+  > KEL
+  $ diktor with1.kel
+  6
+  $ cat > with2.kel <<'KEL'
+  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+  > let b(): Int32 = {
+  >   with _ = one()
+  >   2
+  > }
+  > KEL
+  $ diktor --type-check with2.kel
+  one : ((Int32) => A) => A
+  ! with2.kel:3:3: 型エラー: ラベル _item がありません(行は閉じています)
+  [1]

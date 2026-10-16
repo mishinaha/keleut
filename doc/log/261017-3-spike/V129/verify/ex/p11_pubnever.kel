@@ -1,0 +1,4 @@
+effect Fail = { throw: (String) => Never }
+pub let die(m: String): Never @ Fail = perform throw(m)
+let get(o: Option[Int32]): Int32 @ Fail = o match { case Some(v) => v  case None => die("n") match {} }
+echoln(show(get(Some(1i32)) handle { case throw(e) => 0i32 }))

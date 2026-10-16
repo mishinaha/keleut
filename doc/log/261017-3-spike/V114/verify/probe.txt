@@ -1,0 +1,189 @@
+== H e01_app.kel
+! e01_app.kel:1:10: 型エラー: 未知の型: Int8
+[exit 1]
+== N e01_app.kel
+! e01_app.kel:1:10: 型エラー: 未知の型: Int8
+[exit 1]
+== H e02_arg.kel
+! e02_arg.kel:1:17: 未実装: 数値型 UInt8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N e02_arg.kel
+! e02_arg.kel:1:17: 型エラー: 未知の型: UInt8(数値型は Int32、Int64、Float64 だけです)
+[exit 1]
+== H e03_row.kel
+! e03_row.kel:1:26: 型エラー: 未知のエフェクト: Int8
+[exit 1]
+== N e03_row.kel
+! e03_row.kel:1:26: 型エラー: 未知のエフェクト: Int8
+[exit 1]
+== H e04_alias_app.kel
+! e04_alias_app.kel:2:10: 型エラー: 型エイリアス Int8 の引数は 0 個必要です(1 個与えられました。部分適用は禁止)
+[exit 1]
+== N e04_alias_app.kel
+! e04_alias_app.kel:2:10: 型エラー: 型エイリアス Int8 の引数は 0 個必要です(1 個与えられました。部分適用は禁止)
+[exit 1]
+== H e05_hk.kel
+! e05_hk.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N e05_hk.kel
+! e05_hk.kel:2:10: 型エラー: 型構成子 Int8 には型引数が必要です
+[exit 1]
+== H e06_let.kel
+! e06_let.kel:1:8: 未実装: 数値型 Float32(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N e06_let.kel
+! e06_let.kel:1:8: 型エラー: 未知の型: Float32(数値型は Int32、Int64、Float64 だけです)
+[exit 1]
+== H e07_ascr.kel
+e07_ascr.kel:1:12: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== N e07_ascr.kel
+e07_ascr.kel:1:12: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== H e08_modqual.kel
+4
+[exit 0]
+== N e08_modqual.kel
+4
+[exit 0]
+== H m1.kel
+! m1.kel:2:11: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== N m1.kel
+! m1.kel:2:11: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== H m2.kel
+! m2.kel:3:11: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== N m2.kel
+! m2.kel:3:11: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+== H m3.kel
+! m3.kel:2:12: 未実装: module の入れ子(M10)
+[exit 4]
+== N m3.kel
+! m3.kel:2:12: 未実装: module の入れ子(M10)
+[exit 4]
+== H myprelude.kel
+! myprelude.kel:122:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+[exit 1]
+== N myprelude.kel
+! myprelude.kel:122:1: 型エラー: 標準環境の型エイリアス Unit は再宣言できません
+[exit 1]
+== H r01_alias.kel
+! r01_alias.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r01_alias.kel
+42
+[exit 0]
+== H r02_module.kel
+! r02_module.kel:3:18: 未実装: 数値型 UInt8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r02_module.kel
+7
+8
+[exit 0]
+== H r03_tparam.kel
+3
+5
+[exit 0]
+== N r03_tparam.kel
+3
+5
+[exit 0]
+== H r04_strings.kel
+Int8 u8 1u8 Float32
+1
+[exit 0]
+== N r04_strings.kel
+Int8 u8 1u8 Float32
+1
+[exit 0]
+== H r05_class.kel
+0
+[exit 0]
+== N r05_class.kel
+0
+[exit 0]
+== H r06_newtype_param.kel
+3
+[exit 0]
+== N r06_newtype_param.kel
+3
+[exit 0]
+== H r07_suffix_ok.kel
+255
+10
+7.0
+1500.0
+15
+1
+[exit 0]
+== N r07_suffix_ok.kel
+255
+10
+7.0
+1500.0
+15
+1
+[exit 0]
+== H r08_effect.kel
+42
+[exit 0]
+== N r08_effect.kel
+42
+[exit 0]
+== H r09_guard_nested.kel
+1
+[exit 0]
+== N r09_guard_nested.kel
+1
+[exit 0]
+== H r10_import.kel
+! lib/nums.kel:2:17: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r10_import.kel
+2
+[exit 0]
+== H r11_import_noname.kel
+! lib/nums.kel:2:17: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r11_import_noname.kel
+5
+[exit 0]
+== H r12_extern.kel
+! r12_extern.kel:2:23: 未実装: 数値型 Float32(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r12_extern.kel
+ok
+[exit 0]
+== H r13_pub.kel
+! r13_pub.kel:2:14: 未実装: 数値型 UInt16(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r13_pub.kel
+3
+[exit 0]
+== H r14_prelude.kel
+! r14_prelude.kel:1:10: 未実装: 数値型 Int16(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== N r14_prelude.kel
+42
+[exit 0]
+== H r16_sfx_in_dead.kel
+1
+[exit 0]
+== N r16_sfx_in_dead.kel
+1
+[exit 0]
+== H repl r15_repl.txt
+! <stdin>:2:8: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+! <stdin>:3:1: 型エラー: 未束縛の変数: z
+! <stdin>:4:9: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+! <stdin>:5:1: 型エラー: 未束縛の変数: z
+[exit 0]
+== N repl r15_repl.txt
+z : Int32 = 5
+_ : Int32 = 6
+! <stdin>:4:9: 型エラー: 数値リテラル 1u8 の接尾辞 u8 はありません(接尾辞は i32、i64、f64 だけです)
+_ : Int32 = 5
+[exit 0]

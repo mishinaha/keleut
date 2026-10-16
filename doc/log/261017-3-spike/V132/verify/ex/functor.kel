@@ -1,0 +1,13 @@
+effect Fail = { throw: (String) => Never }
+type class Functor[F[_]] {
+  val map[A, B, E]: (F[A], (A) => B @ E) => F[B] @ E
+}
+type instance Functor[List[_]] {
+  let rec map[A, B, E](xs: List[A], f: (A) => B @ E): List[B] @ E =
+    xs match {
+      case Nil => Nil
+      case Cons(x, tail) => Cons(f(x), map(tail, f))
+    }
+}
+let r: List[Int32] = map(Cons(1, Cons(2, Nil)), fn(x: Int32) => if x == 2 then perform throw("two") else x) handle { case throw(e) => { echoln("caught " + e); Nil } }
+echoln(show(r))

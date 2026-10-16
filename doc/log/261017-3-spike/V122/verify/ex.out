@@ -1,0 +1,118 @@
+== r10_secondarg.kel diktor-head
+! r10_secondarg.kel:1:68: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+[1]
+== r10_secondarg.kel main.exe
+! r10_secondarg.kel:1:68: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+[1]
+== r11_nested.kel diktor-head
+! r11_nested.kel:1:58: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: ς1 と ς2)
+[1]
+== r11_nested.kel main.exe
+! r11_nested.kel:1:58: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: ς1 と ς2)
+[1]
+== r12_pub_mod.kel diktor-head
+! r12_pub_mod.kel:4:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== r12_pub_mod.kel main.exe
+! r12_pub_mod.kel:4:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== r13_guard.kel diktor-head
+3
+[0]
+== r13_guard.kel main.exe
+3
+[0]
+== r14_handler.kel diktor-head
+r14_handler.kel:4:12: パースエラー(付近のトークンを確認してください)
+[2]
+== r14_handler.kel main.exe
+r14_handler.kel:4:12: パースエラー(付近のトークンを確認してください)
+[2]
+== r15_arr.kel diktor-head
+! r15_arr.kel:1:86: 型エラー: 注釈された型を満たしません(型が一致しません: String と Int32)
+[1]
+== r15_arr.kel main.exe
+! r15_arr.kel:1:86: 型エラー: 注釈された型を満たしません(型が一致しません: String と Int32)
+[1]
+== r2_moduleref.kel diktor-head
+! r2_moduleref.kel:5:20: 型エラー: 型が一致しません: String と Int32
+[1]
+== r2_moduleref.kel main.exe
+! r2_moduleref.kel:5:20: 型エラー: 型が一致しません: String と Int32
+[1]
+== r4_alias.kel diktor-head
+5
+[0]
+== r4_alias.kel main.exe
+5
+[0]
+== r5_alias_bad.kel diktor-head
+! r5_alias_bad.kel:2:30: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== r5_alias_bad.kel main.exe
+! r5_alias_bad.kel:2:30: 型エラー: 注釈された型を満たしません(Ref の第 1 引数 Int32 はリージョンではありません。Ref の第 1 引数には run のリージョン変数か型パラメータを書きます)
+[1]
+== r6_ok.kel diktor-head
+11
+[0]
+== r6_ok.kel main.exe
+11
+[0]
+== r7b_import_ok.kel diktor-head
+42
+[0]
+== r7b_import_ok.kel main.exe
+42
+[0]
+== r7b_import_ok_lib.kel diktor-head
+[0]
+== r7b_import_ok_lib.kel main.exe
+[0]
+== r7_import.kel diktor-head
+! r7_import.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== r7_import.kel main.exe
+! r7_import.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== r7_import_lib.kel diktor-head
+[0]
+== r7_import_lib.kel main.exe
+[0]
+== r8_hk.kel diktor-head
+! r8_hk.kel:2:48: 型エラー: スコープ付きの型が一致しません: ς1 と Int32
+[1]
+== r8_hk.kel main.exe
+! r8_hk.kel:2:48: 型エラー: スコープ付きの型が一致しません: ς1 と Int32
+[1]
+== r9_refval.kel diktor-head
+0
+[0]
+== r9_refval.kel main.exe
+0
+[0]
+== r14 diktor-head
+7
+9
+[0]
+== repl diktor-head
+f : () => Int32 @ {Heap[Int32]} = <fn>
+! <stdin>:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+_ : Int32 = 3
+[0]
+== r14 main.exe
+7
+9
+[0]
+== repl main.exe
+f : () => Int32 @ {Heap[Int32]} = <fn>
+! <stdin>:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+_ : Int32 = 3
+[0]
+== diktor-head
+f : () => Int32 @ {Heap[Int32]}
+! r17_noprelude.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== main.exe
+f : () => Int32 @ {Heap[Int32]}
+! r17_noprelude.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]

@@ -1,0 +1,4 @@
+newtype Box[A] = Box(A)
+type instance[A: Eq] Eq[Box[_]] { let eq(a, b) = (a, b) match { case (Box(x), Box(y)) => x == y } }
+echo(show(Box(1i32) == Box(1i32)))
+echo(show(Box("a") == Box("b")))

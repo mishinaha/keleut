@@ -1,0 +1,39 @@
+File "test/spec_gaps.t", line 1, characters 0-0:
+diff --git a/_build/default/test/spec_gaps.t b/_build/default/test/spec_gaps.t.corrected
+index fbe395a..28d2a6d 100644
+--- a/_build/default/test/spec_gaps.t
++++ b/_build/default/test/spec_gaps.t.corrected
+@@ -110,8 +110,8 @@ test/verify_fixes.t の vrgen が通す):
+   > KEL
+   $ diktor --type-check ordervr.kel
+   idf : (A) => A
+-  ! ordervr.kel:9:11: 型エラー: ラベル Ask がありません(行は閉じています)
+-  [1]
++  main : () => {} @ {Console}
++  _ : {}
+ 
+ 型変数の仮引数に名前の参照 b と名前の参照でない式 mkp() を並べて渡すとき、先の b で
+ 型変数が矢印に決まれば、mkp() の位置は関数型を要求する位置になって開く。mkp() を
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index a8875bd..9922562 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -49,7 +49,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  weak : [_A: Show] (_A) => String @ {}
+   _ : String
+ 
+ ファイルの終わりまでに型が決まらなければ、曖昧性エラーになる。辞書はファイルごとに
+@@ -61,7 +61,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e2.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  weak : [_A: Show] (_A) => String @ {}
+   ! ml9e2.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+   [1]
+ 

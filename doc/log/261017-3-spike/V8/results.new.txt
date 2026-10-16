@@ -1,0 +1,118 @@
+=== dead.kel
+--- new dead.kel
+! dead.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check dead.kel
+f : (Int32) => Int32
+! dead.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== expr.kel
+--- new expr.kel
+実行時エラー: 数値リテラルが範囲外です: 4294967295
+[exit 3]
+--- new --type-check expr.kel
+x : Int32
+_ : {}
+[exit 0]
+=== i64.kel
+--- new i64.kel
+! i64.kel:2:8: 型エラー: 数値リテラルのパターン 9223372036854775808 は Int64 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check i64.kel
+g : (Int64) => Int32
+! i64.kel:2:8: 型エラー: 数値リテラルのパターン 9223372036854775808 は Int64 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== hex.kel
+--- new hex.kel
+! hex.kel:2:8: 型エラー: 数値リテラルのパターン 0x1FFFFFFFF は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check hex.kel
+f : (Int32) => Int32
+! hex.kel:2:8: 型エラー: 数値リテラルのパターン 0x1FFFFFFFF は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== nested.kel
+--- new nested.kel
+! nested.kel:2:13: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check nested.kel
+f : (Option[Int32]) => Int32
+! nested.kel:2:13: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== only.kel
+--- new only.kel
+! only.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check only.kel
+f : (Int32) => Int32
+! only.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== dflt.kel
+--- new dflt.kel
+! dflt.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check dflt.kel
+h : (Int32) => Int32
+! dflt.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== i64ok.kel
+--- new i64ok.kel
+1
+[exit 0]
+--- new --type-check i64ok.kel
+g : (Int64) => Int32
+_ : {}
+[exit 0]
+=== dup.kel
+--- new dup.kel
+! dup.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check dup.kel
+f : (Int32) => Int32
+! dup.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== handler.kel
+--- new handler.kel
+! handler.kel:3:12: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check handler.kel
+r : Int32
+! handler.kel:3:12: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== mask2.kel
+--- new mask2.kel
+! mask2.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check mask2.kel
+f : (Int32) => Int32
+! mask2.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+=== ok.kel
+--- new ok.kel
+! ok.kel:14:8: 型エラー: Float64 は Integral のインスタンスではありません
+[exit 1]
+--- new --type-check ok.kel
+f : (Int32) => Int32
+g : (Int64) => Int32
+! ok.kel:14:8: 型エラー: Float64 は Integral のインスタンスではありません
+[exit 1]
+=== local.kel
+--- new local.kel
+! local.kel:6:5: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+--- new --type-check local.kel
+! local.kel:6:5: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+=== local64.kel
+--- new local64.kel
+! local64.kel:6:5: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+--- new --type-check local64.kel
+! local64.kel:6:5: 型エラー: 型が一致しません: Int64 と Int32
+[exit 1]
+=== inst.kel
+--- new inst.kel
+! inst.kel:6:10: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+--- new --type-check inst.kel
+! inst.kel:6:10: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]

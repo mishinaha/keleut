@@ -1,0 +1,4 @@
+type W: EffectRow = {Print}
+newtype Box[W] = Box(() => Unit @ {W}, W)
+let b = Box(fn() => println("box"), 1)
+with_stdout(fn() => b match { case Box(g, _) => g() })

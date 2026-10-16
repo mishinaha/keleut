@@ -1,0 +1,3 @@
+pub newtype Empt
+pub newtype Absurd = MkA(Empt)
+pub newtype Opt2[A] = Sm(A) | Nn

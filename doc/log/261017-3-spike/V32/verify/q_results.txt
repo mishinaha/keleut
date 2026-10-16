@@ -1,0 +1,103 @@
+### q01_closed_calls_ext.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+--- HEAD --type-check
+! q01_closed_calls_ext.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+### q02_bare_fwd.kel
+let rec a[E](n: Int32): Int32 @ E = b(n)
+and b[F](n: Int32): Int32 @ F = n
+--- HEAD --type-check
+! q02_bare_fwd.kel:1:37: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### q03_ext_calls_closed.kel
+let rec a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+and b(n: Int32): Int32 @ Console = { echo("b"); n }
+--- HEAD --type-check
+a : (Int32) => Int32 @ {Console extends R1}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### q04_unann_calls_ext.kel
+let rec a(n: Int32) = b(n)
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+let use(): Int32 @ {Console, Print} = { println("p"); a(1) }
+--- HEAD --type-check
+a : (Int32) => Int32 @ {Console extends R1}
+b : (Int32) => Int32 @ {Console extends R1}
+use : () => Int32 @ {Console, Print}
+[exit 0]
+### q05_pure_calls_ext.kel
+let rec a(n: Int32): Int32 @ {} = b(n)
+and b[F](n: Int32): Int32 @ F = n
+--- HEAD --type-check
+! q05_pure_calls_ext.kel:1:35: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+### q06_ho_fwd.kel
+let rec a[E](f: () => Int32 @ E): Int32 @ E = b(f)
+and b[F](f: () => Int32 @ F): Int32 @ F = f()
+--- HEAD --type-check
+! q06_ho_fwd.kel:1:47: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### q07_closed_calls_bare.kel
+let rec a(n: Int32): Int32 @ Console = b(n)
+and b[F](n: Int32): Int32 @ F = n
+--- HEAD --type-check
+! q07_closed_calls_bare.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側に Console を(必要なら引数つきで)書き足してください)
+[exit 1]
+### q08_ext_mutual_one_closed.kel
+let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }
+and b(n: Int32): Int32 @ Console = { echo("b"); a(n) }
+--- HEAD --type-check
+a : (Int32) => Int32 @ {Console extends R1}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### q09_q01_rev.kel
+let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+and a(n: Int32): Int32 @ Console = b(n)
+--- HEAD --type-check
+b : (Int32) => Int32 @ {Console extends R1}
+a : (Int32) => Int32 @ {Console}
+[exit 0]
+### q10_q07_rev.kel
+let rec b[F](n: Int32): Int32 @ F = n
+and a(n: Int32): Int32 @ Console = b(n)
+--- HEAD --type-check
+b : (Int32) => Int32
+a : (Int32) => Int32 @ {Console}
+[exit 0]
+### q11_q01_nonrec.kel
+let b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+let a(n: Int32): Int32 @ Console = b(n)
+--- HEAD --type-check
+b : (Int32) => Int32 @ {Console extends R1}
+a : (Int32) => Int32 @ {Console}
+[exit 0]
+### q12_closed_mutual_ext.kel
+let rec a(n: Int32): Int32 @ Console = n match { case 0 => 0 case m => b(m - 1) }
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); a(n) }
+--- HEAD --type-check
+! q12_closed_mutual_ext.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+### q13_val_calls_ext.kel
+let rec a: (Int32) => Int32 @ Console = fn(n) => b(n)
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+--- HEAD --type-check
+! q13_val_calls_ext.kel:1:9: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+### q14_pub_calls_ext.kel
+module M {
+  pub let rec a(n: Int32): Int32 = b(n)
+  and b[F](n: Int32): Int32 @ F = n
+}
+--- HEAD --type-check
+! q14_pub_calls_ext.kel:2:36: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+### q15_q14_nonrec.kel
+module M {
+  pub let b[F](n: Int32): Int32 @ F = n
+  pub let a(n: Int32): Int32 = b(n)
+}
+--- HEAD --type-check
+M.b : (Int32) => Int32
+M.a : (Int32) => Int32 @ {}
+[exit 0]

@@ -1,0 +1,3 @@
+let f[G](r: {x: Int32 extends G[Int32]}): Int32 = r.x
+let main(): Unit @ Console = with_stdout(fn() => println(show(f({x = 1}))))
+main()

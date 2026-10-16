@@ -1,0 +1,9 @@
+module M {
+  pub let inc: (Int32) => Int32 = fn(x) => x + 1
+  pub let rec loop: (Int32) => Int32 = fn(n) => if n <= 0 then 0 else loop(n - 1) + 1
+}
+let main(): Unit @ {Console} = {
+  echoln(show(M.inc(41)))
+  echoln(show(M.loop(5)))
+}
+with_stdout(fn() => main())

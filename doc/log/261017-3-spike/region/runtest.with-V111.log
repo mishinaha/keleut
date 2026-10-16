@@ -1,0 +1,26 @@
+File "test/rec_tparam_note.t", line 1, characters 0-0:
+diff --git a/_build/default/test/rec_tparam_note.t b/_build/default/test/rec_tparam_note.t.corrected
+index 1f631bc..ee42230 100644
+--- a/_build/default/test/rec_tparam_note.t
++++ b/_build/default/test/rec_tparam_note.t.corrected
+@@ -87,5 +87,5 @@ g の引数の型が f の A に決まる。g の本体が f を呼ぶ位置(引
+   > and bump[k](a: MutableArray[k, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+   > KEL
+   $ diktor --type-check region.kel
+-  ! region.kel:2:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! region.kel:2:74: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 2f3183f..b6b3e8d 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -1048,7 +1048,7 @@ rectpflowrev):
+   > with_stdout(fn() => f(1))
+   > KEL
+   $ diktor --type-check recrejtpflow.kel
+-  ! recrejtpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! recrejtpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。f の型パラメータ A が g の型に入り込んでいます。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。§6.3)
+   [1]
+   $ cat > rectpflowrev.kel <<'KEL'
+   > let rec g[A](x: A): Unit @ {} = ()

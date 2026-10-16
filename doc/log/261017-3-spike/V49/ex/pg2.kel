@@ -1,0 +1,6 @@
+let f(): Unit @ {Console} = {
+  let (a) = fn(x) => x
+  echoln(a("s"))
+  echoln(show(a(1)))
+}
+f()

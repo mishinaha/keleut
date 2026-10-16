@@ -1,0 +1,2 @@
+pub newtype Box = Box(() => Int32 @ {})
+pub newtype P[A] = P(A, A)

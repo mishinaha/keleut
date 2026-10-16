@@ -1,0 +1,2 @@
+from "./lib1" import y
+echoln("a")

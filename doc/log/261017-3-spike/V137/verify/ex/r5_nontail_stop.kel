@@ -1,0 +1,15 @@
+effect Fail = { throw: (String) => Never, ask: () => Int32 }
+effect Res = { use: () => Unit }
+let r = {
+  let q = perform ask()
+  echoln("q " + show(q))
+  ({ perform use(); perform throw("inner"); 1 }) handle {
+    case use() => resume()
+    case cancel => { echoln("cancel res"); perform throw("from cancel") }
+  }
+} handle {
+  case ask() => { let y = resume(3); echoln("ask got " + show(y)); y + 1000 }
+  case throw(e) => { echoln("caught " + e); 40 }
+  case return(x) => { echoln("ret " + show(x)); x }
+}
+echoln(show(r))

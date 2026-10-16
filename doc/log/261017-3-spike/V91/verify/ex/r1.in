@@ -1,0 +1,8 @@
+let x = 1.5
+let y = 2
+echoln(show(x * 2.0 + 1.0))
+let bad = "a" + 1.5
+let z = 3 % 2
+echoln(show(z))
+let c = 1.5 % 2.0
+echoln(show(y % 2))

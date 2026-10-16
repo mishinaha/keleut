@@ -1,0 +1,3 @@
+let say(s: String): Unit @ W[{}] = perform print(s + "\n")
+type W[E]: EffectRow = {Print extends E}
+with_stdout(fn() => say("fwd"))

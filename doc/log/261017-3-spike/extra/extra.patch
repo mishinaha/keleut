@@ -1,0 +1,1189 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 05:32:39.718631404 +0900
++++ b/lib/elab.ml	2026-10-17 06:35:59.723878744 +0900
+@@ -286,18 +286,15 @@
+           type_error ("未束縛の変数: " ^ name ^ "(" ^ String.concat " か " (List.map display_of qs) ^ " と修飾してください)"))
+ 
+ (* 構文的に反駁できないパターンかどうか。
+-   関数の引数と return 節の網羅性検査では、
++   関数の引数、ラムダの引数、return 節の網羅性検査では、
+    警告が出ないと分かっている形を queue に積まないための節約に使う。
+-   この用途では、判定が厳しすぎても安全側に倒れる(queue が正しく判定する)。
++   反駁できないパターンは、受ける型に値があればそのすべてに一致するので、
++   queue に積んでも警告は出ない。
++   受ける型に値が無いときは、パターンが 1 つのエントリなので、
++   queue が警告を出さない(第10章 §10.13)。
++   どちらの場合も、ここで真にして積むのを省いても、警告の有無は変わらない。
++   判定が厳しすぎても、積んだ先の queue が正しく判定するので、安全側に倒れる。
+    コンストラクタパターンは、コンストラクタが 1 つしかない型のものでも偽とし、queue に任せる。
+-   queue は、コンストラクタが 0 個の型(Never や右辺を省いた newtype)を受ける位置を
+-   パターンの中に持つものに、一致する値が無いことも警告する
+-   (newtype Absurd = MkA(Never) に対する MkA(n) など)。
+-   ここで真にして積むのを省くと、その警告が出なくなる。
+-   関数の引数と return 節では、この警告は、ここで偽と判定されて queue に積まれたパターン
+-   (コンストラクタやヴァリアントのパターンと、それを含むレコードやタプル)にしか出ない。
+-   変数や、反駁できない要素だけのレコードのパターンは、値の無い型を受けても、
+-   ここで真になって積まれないので、警告は出ない。
+    操作節の総和性の検査(§11.23)はこの判定を使わず、第10章の missing で型を見て判定する *)
+ let rec irrefutable_pat ((_, p) : T.pat) =
+   match p with
+@@ -330,7 +327,7 @@
+ 
+ (* 失敗が行の単一化に由来するかどうか(エラー文言を言い換えるかどうかの判定)。
+    引数の型の不一致まで、仕様 §9 の行の話にしないために使う。
+-   pub の言い換え(§11.12、§11.28、§11.29)、行が空の位置の言い換え(§11.12)、
++   pub の言い換え(§11.12)、行が空の位置の言い換え(§11.12)、
+    newtype のフィールドの言い換え(§11.18)、
+    インスタンスメソッドの純粋性の言い換え(§11.38)が共用する *)
+ let has_sub sub s =
+@@ -342,6 +339,14 @@
+   let has = has_sub in
+   has "行型ではありません" msg || has "スコープ付きの型" msg || has "ラベル " msg || has "は注釈で固定された行変数" msg
+ 
++(* 失敗が、剛定数がスコープの外に漏れたことによるかどうか。
++   pub の言い換えのうち、呼び出し先の行の単一化(§11.12)は、この失敗を言い換えから除く。
++   pub で @ を省略した本体の行は空の行で、剛定数を含まない。
++   そこで漏れが起きるのは、run の本体の行のヒープのような、本体の中で作った剛定数を、
++   外側の単相の型変数に入れようとしたときである。
++   その原因は本体がエフェクトを起こすことではないので、pub の規則を名指さない *)
++let escape_failure msg = has_sub "がスコープの外に漏れています" msg
++
+ (* 型の中に、閉じた行を書いた位置があるかどうか。
+    数えるのは、最外の行が閉じた矢印と、型の型引数に書いた閉じた行(`Cb[{}]` の `{}`)である。
+    newtype のフィールドの言い換え(§11.18)が、言い換えの条件に使う。
+@@ -444,6 +449,28 @@
+   | Some _ -> b.T.lb_eff <> None
+   | None -> ( match b.T.lb_ret with Some (_, T.EArrow (_, _, eff)) -> eff <> None | Some _ -> true | None -> false)
+ 
++(* pub で頭の @ を省略した値束縛の、注釈と初期化式の型の単一化(§11.28、§11.29)。
++   注釈の頭の行は空の行である。
++   初期化式の型の頭も矢印なら、引数と返り値を先に単一化し、頭の行どうしを最後に単一化する。
++   pub の規則を名指す文言にするのは、頭の行どうしの失敗だけである。
++   引数、返り値、入れ子の矢印の行の失敗は other に渡す。
++   レコードのフィールドやヴァリアントの選択肢の失敗も、エフェクトの行の失敗と同じ
++   「ラベル … がありません」の文言になるので、文言からは見分けられないからである。
++   単一化する組と順序は、Unify.unify の矢印どうしの分岐(§8.7)と同じである。
++   引数の個数の比べ方と、その報告に示す 2 つの型も同じである *)
++let unify_pub_value_annot vty body ~other =
++  match (repr vty, repr body) with
++  | (TArrow (p1, r1, e1) as ta), (TArrow (p2, r2, e2) as tb) ->
++      (try
++         Unify.check_arity ta tb p1 p2;
++         Unify.unify p1 p2;
++         Unify.unify r1 r2
++       with Type_error msg -> other msg);
++      (try Unify.unify e1 e2
++       with Type_error msg ->
++         type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")"))
++  | _ -> ( try Unify.unify vty body with Type_error msg -> other msg)
++
+ (* 注釈の中の矢印のうち、@ を省略したものを探す。pub の完全注釈検査
+    (check_pub_annots と、§11.31 の pub newtype のフィールド)が使う。
+    パス 1c の前方参照の署名は、頭の矢印だけを見る別の判定を使う(§11.36)。
+@@ -623,6 +650,10 @@
+    3. 宣言表の型構成子。カインドを引いて引数の個数を照合し、
+       パラメータのカインドで引数を読み分けて照合する。
+ 
++   どれにも無ければ未知の型である。
++   スコープ外の module に同名の pub の型があれば、引数の有無によらず修飾名を案内する
++   (`unknown_type`。`test/visibility.t` の vis4b と vis4c)。
++
+    `elab_type` は、型構成子とエイリアスの名前を必ず `Decls.resolve_con` を通して引く。
+    module の平坦化(§11.42)の同義語表を引くためである。
+    `module Parser` の中で `Parser` と書いても、外から `Parser.Parser` と書いても、
+@@ -715,6 +746,22 @@
+    型としても行としても読める字面をパラメータとの照合に使わない *)
+ let speculating = ref false
+ 
++(* 修飾しない名前 n を引いて、エイリアスにも宣言表にも無かったときの診断。
++   引数の有無によらず同じ文面にする(W と W[A] の両方)。
++   スコープ外の module の内部型なら候補を添える。
++   案内するのは pub の型だけで、非 pub の型は従っても直らない。
++   引数の個数は見ないので、修飾した後の個数の誤りは修飾名の分岐が報告する *)
++let unknown_type n oid =
++  match
++    List.filter
++      (fun q -> match Hashtbl.find_opt Decls.con_visibility q with Some v -> v.Decls.vis_pub | None -> true)
++      (Decls.con_synonym_candidates oid)
++  with
++  | _ :: _ as cands -> "未知の型: " ^ n ^ "(" ^ String.concat " か " (List.map display_of cands) ^ " と修飾してください)"
++  | _ ->
++      if List.mem n absent_numeric then "未知の型: " ^ n ^ "(数値型は Int32、Int64、Float64 だけです)"
++      else "未知の型: " ^ n
++
+ let rec elab_type env level ~expanding ?(outer = false) (((_, te) as t) : T.type_exp) : ty =
+   (* 内部の再帰にも at_node を掛ける。入口だけを包むと、入れ子の注釈のどこで落ちても、
+      注釈全体の先頭が診断の位置になってしまう *)
+@@ -733,21 +780,7 @@
+                 match Decls.con_kind oid 0 with
+                 | KStar -> TCon (oid, [])
+                 | _ -> type_error ("型構成子 " ^ n ^ " には型引数が必要です"))
+-              else
+-                (* スコープ外の module の内部型なら候補を添える。
+-                   案内するのは pub の型だけで、非 pub の型は従っても直らない *)
+-                match
+-                  List.filter
+-                    (fun q -> match Hashtbl.find_opt Decls.con_visibility q with Some v -> v.Decls.vis_pub | None -> true)
+-                    (Decls.con_synonym_candidates oid)
+-                with
+-                | _ :: _ as cands ->
+-                    type_error
+-                      ("未知の型: " ^ n ^ "(" ^ String.concat " か " (List.map display_of cands) ^ " と修飾してください)")
+-                | _ ->
+-                    if List.mem n absent_numeric then
+-                      type_error ("未知の型: " ^ n ^ "(数値型は Int32、Int64、Float64 だけです)")
+-                    else type_error ("未知の型: " ^ n)))
++              else type_error (unknown_type n oid)))
+   | T.EIdent li -> (
+       (* 平坦化済みの module の修飾型参照(Parser.Parser など)。
+          修飾名でもエイリアスを引く(M.A の形) *)
+@@ -809,7 +842,7 @@
+                 if expected <> List.length args then
+                   type_error (Printf.sprintf "型構成子 %s の引数は %d 個必要です(%d 個与えられました)" n expected (List.length args))
+                 else TCon (oid, elab_con_args env level ~expanding n k args))
+-              else type_error ("未知の型: " ^ n)))
++              else type_error (unknown_type n oid)))
+   | T.EApply _ -> type_error "型適用の頭は型名でなければなりません"
+ (* ## 11.4 矢印、レコード行、ヴァリアント和
+ 
+@@ -1332,14 +1365,18 @@
+    ラベルの引数の欄がそのままエフェクトのパラメータで、
+    パラメータを持たないエフェクトはそこに `Unit` を置く。
+    行変数の中置の合成(`{E1, Print}` の `E1`)は受け付けない。
+-   波括弧の中に引数なしで書いた型パラメータは、同名の EffectRow エイリアスが無ければ、
+-   行にならないエイリアスや可視性を調べる前に、この合成として拒否する。
+-   同名の Type エイリアスや Type エイリアスのコンパニオンがあっても、診断は変わらない
+-   (`test/visibility.t` の visrow22 から visrow25)。
+-   同名の EffectRow エイリアスがあれば、波括弧の中ではエイリアスが先に当たる(visrow26)。
+-   そのエイリアスが pub でないコンパニオンなら、可視性の誤りになる。
+-   `@ W` の形は 1 の判定で型パラメータを先に引くので、
+-   型パラメータと EffectRow エイリアスが同名のとき、`@ W` と `@ {W}` は別のものを指す。
++   波括弧の中に引数なしで書いた型パラメータは、エイリアスや可視性を調べる前に、
++   この合成として拒否する。
++   型パラメータは、型の位置と同じく、同名のエイリアスとコンパニオンを種類を問わず覆う。
++   同名の EffectRow エイリアスや、pub でないコンパニオンがあっても、診断は変わらない
++   (`test/visibility.t` の visrow22 から visrow28)。
++   `@ W` の形も 1 の判定で型パラメータを先に引くので、
++   型パラメータと EffectRow エイリアスが同名のとき、`@ W` と `@ {W}` はどちらも型パラメータを指す
++   (visrow29)。
++   引数つきの要素 `{W[E]}` でも、型パラメータと同名のエイリアスは引かない。
++   型パラメータへの適用は行の要素になれないので、effect の宣言表に無ければ未知のエフェクトになる
++   (visrow30)。
++   `@ W[E]` の形も、型パラメータと同名のエイリアスを引かない。
+    行の合成を末尾の `extends` だけに限ると、
+    `row_append` の左辺が常に閉じているという不変条件を保てる。
+    例外は、開いた行に展開されるエイリアスの splice である。
+@@ -1356,10 +1393,17 @@
+    名前が型として登録されているなら、綴りの誤りではなく位置の誤りなので、
+    `Callback[Int32]` には「型 Int32 はエフェクトではありません」と報告する(`unknown_effect`)。
+ 
++   頭がどこにも宣言されていない適用(module の外から修飾せずに書いた `@ W[E]`)も、
++   未知のエフェクトとして報告する。
++   最後の分岐へ回すと、`elab_type` が「未知の型」として落とし、エフェクトの語も修飾の案内も出ない。
++   引数の無い `@ W` や行の要素の `{W[E]}` と同じく、
++   スコープ外の module にある pub の EffectRow エイリアスを修飾名として案内する
++   (`test/visibility.t` の visrow4b)。
++
+    上の分岐のどれにも当たらなかった型式は、最後の分岐に進む。
+    `@` の後(文法の `eff` / `eff_name`)に書いた型式のうち、ここへ届く形は 2 つある。
+    module 修飾の名前とその適用(`M.T` / `M.W` / `M.W[E]`)と、
+-   エフェクト名でも EffectRow エイリアスでもない頭への適用
++   エフェクト名でも EffectRow エイリアスでもない、宣言のある頭への適用
+    (型パラメータへの適用 `F[E]`、`MutableArray[Int32, Int32]`、Type エイリアスの適用)である。
+    このほか `elab_eff` は、文法では `ty` を取る位置を 3 つ読む。
+    `{… extends <ty>}` の右(`parser.mly` の `lbrace EXTENDS ty RBRACE`)、
+@@ -1466,6 +1510,18 @@
+           | [ a ] -> elab_type env level ~expanding a
+           | _ -> type_error "エフェクトラベルの引数は1個までです"),
+           TRowEmpty )
++  | T.EApply ((_, T.EIdent (LongId [ n ])), _)
++    when (not (SMap.mem n env.types))
++         &&
++         let oid = Decls.resolve_con (intern n) in
++         not (Hashtbl.mem Decls.aliases oid || Hashtbl.mem Decls.con_kinds oid) ->
++      (* 頭が型パラメータでもエイリアスでも宣言表の型でもない適用(@ W[E])。最後の分岐へ
++         回すと elab_type が未知の型として落とすので、ここで未知のエフェクトとして報告し、
++         引数の無い @ W や行の要素の {W[E]} と同じく、スコープ外の pub な EffectRow
++         エイリアスへの修飾を案内する。条件は elab_type の EApply の分岐が名前を引く順
++         (型パラメータ、エイリアス表、宣言表)を写したもので、elab_type の側で未知の名前に
++         検査を足すときは、この条件も合わせる *)
++      type_error (unknown_effect n)
+   | T.EBraceRow (elems, ext) ->
+       let tail =
+         match ext with
+@@ -1482,24 +1538,20 @@
+           match elem with
+           | T.BLabel (li, args) -> (
+               let n = show_long_id li in
+-              (* エイリアスを先に調べ、引数の有無で経路を分けない。エフェクト名と型名は
+-                 同じ名前空間(claim_type_name)にあるので、Heap[h](ラベルの引数)と
+-                 WithPrint[E](エイリアスの適用)を取り違えない。修飾名(M.W)も同じ
+-                 経路で引く。effect は module に宣言できないので、修飾名が指しうるのは
+-                 エイリアスだけで、ほかは unknown_effect の診断になる *)
+-              (* `{E1, Print}` のような行変数の合成は受け付けない(末尾の extends だけ)。
+-                 引数つきのときに env.types を見ないのは、型パラメータへの適用が
+-                 行の要素になれないからである。
+-                 型パラメータは、同名の EffectRow エイリアスの次に調べる。
+-                 EffectRow エイリアスは型パラメータより先に当たるが、
+-                 行にならないエイリアスは型パラメータを覆わない。
+-                 find_alias より先に調べるので、型パラメータと同名の Type エイリアスや
+-                 pub でない Type エイリアスのコンパニオンがあっても、
+-                 診断は行変数の位置の誤りのままである *)
+-              if args = [] && SMap.mem n env.types && Option.is_none (find_row_alias n) then
+-                type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
++              (* 型パラメータでなければエイリアスを先に調べ、引数の有無で経路を分けない。
++                 エフェクト名と型名は同じ名前空間(claim_type_name)にあるので、
++                 Heap[h](ラベルの引数)と WithPrint[E](エイリアスの適用)を取り違えない。
++                 修飾名(M.W)も同じ経路で引く。effect は module に宣言できないので、
++                 修飾名が指しうるのはエイリアスだけで、ほかは unknown_effect の診断になる *)
++              (* 型パラメータは find_alias より先に調べ、同名のエイリアスとコンパニオンを覆う。
++                 @ W の形の 1 番目の分岐と同じ順である。
++                 `{E1, Print}` のような行変数の合成は受け付けない(末尾の extends だけ)。
++                 引数つきの型パラメータは、型パラメータへの適用が行の要素になれないので、
++                 エイリアスを引かずに effect の宣言表へ進む *)
++              let is_param = SMap.mem n env.types in
++              if args = [] && is_param then type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
+               else
+-                match find_alias n with
++                match if is_param then None else find_alias n with
+                 | Some info when info.Decls.al_kind = Some "EffectRow" ->
+                     splice_row n (expand_alias env level ~expanding info args) acc (* 行を splice する *)
+                 | Some _ -> type_error ("エフェクト行に Type エイリアス " ^ n ^ " は置けません(: EffectRow を付けてください)")
+@@ -1517,8 +1569,9 @@
+         elems tail
+   | _ ->
+       (* 最後の分岐。ここへ通るのは、@ の後に書いた module 修飾の名前と、エフェクト名でも
+-         EffectRow エイリアスでもない頭への適用と、文法が ty を取る 3 つの位置(extends の右、
+-         EffectRow エイリアスの本体、行カインドのパラメータへの型引数)から来る型式である。
++         EffectRow エイリアスでもない、宣言のある頭への適用と、文法が ty を取る 3 つの位置
++         (extends の右、EffectRow エイリアスの本体、行カインドのパラメータへの型引数)から来る
++         型式である。
+          型引数の経路は ~check_row:false を渡すので照合しない。修飾した EffectRow エイリアス
+          (M.W / M.W[E])はここを通って正しく行になるので、落とすのではなく、読んだ結果の
+          カインドを照合する。判定は kind_repr の構造の一致で行い、same_kind は使わない。
+@@ -1989,8 +2042,19 @@
+    pub の規則を名指しする。
+    この位置の行が空(注釈の `@ {}` か、高階の引数の行が `@ {}`)である形では、
+    仕様 §9 の、入れ子の矢印で省略した `@` を `@ {}`(純粋)と読む規則を案内する。
+-   言い換えるのは行に由来する失敗だけで、その判定を `row_failure` が行う。
++   言い換えるのは、呼び出し先の型が矢印で、行に由来する失敗だけである。
++   行に由来するかどうかは `row_failure` が判定する。
++   呼び出し先が矢印なら、単一化の相手の引数と返り値は新しい型変数なので、
++   落ちるのは行の単一化か、剛定数の漏れだけである。
++   呼び出し先が型パラメータの剛定数のように矢印でない型なら、
++   失敗は呼び出し先が関数でないことによるので、言い換えない。
++   その報告の文面も `スコープ付きの型` を含み、`row_failure` だけでは見分けられない。
+    引数の型の不一致は言い換えない。
++   pub の規則を名指すのは、剛定数がスコープの外に漏れた失敗(`escape_failure`)を除いた場合である。
++   run の本体の行には、本体の中で作ったヒープのラベルが積まれている。
++   呼び出し先の関数の行が外側の単相の行変数なら、単一化はそのラベルを行変数に入れようとして、
++   ヒープがスコープの外に漏れたと報告する。
++   この失敗は pub の有無によらず起き、本体のエフェクトが原因ではない。
+ 
+    引数を検査する前に、`check_call_arity` が実引数の個数と仮引数の個数を比べる。
+    実引数の並びが `_item` だけでできていて、仮引数の行が閉じた `_item` 行のときに限り、
+@@ -2015,9 +2079,10 @@
+             衝突する形は perform よりよく起きるのに、一般的な文言「行型ではありません: ς1」では
+             原因にたどり着けない。そこで perform の側(§11.15)と同じ言い換えをここにも置く *)
+          let pub_pure = is_pub_pure_row eff in
+-         if pub_pure && row_failure msg then
++         let callee_arrow = match repr tf with TArrow _ -> true | _ -> false in
++         if pub_pure && callee_arrow && row_failure msg && not (escape_failure msg) then
+            type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")")
+-         else if row_failure msg && repr eff = TRowEmpty then
++         else if callee_arrow && row_failure msg && repr eff = TRowEmpty then
+            type_error
+              (msg
+             ^ "(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)")
+@@ -2995,11 +3060,15 @@
+      絞り込みの節を複数合わせると網羅できる場合も、総和的な節が無ければ拒否する(sample.kel:516) *)
+   List.iter
+     (fun (op, _) ->
+-      if not (List.exists (fun ((o, _, _, _), _, _, total) -> o = op && total) op_clauses) then
++      let mine = List.filter (fun ((o, _, _, _), _, _, _) -> o = op) op_clauses in
++      if not (List.exists (fun (_, _, _, total) -> total) mine) then begin
++        (* 網羅の検査で節は 1 つ以上あり、引数の個数の検査でどの節の引数の数も宣言と一致する *)
++        let arity = match mine with ((_, _, args, _), _, _, _) :: _ -> List.length args | [] -> 0 in
+         type_error
+           ("操作 " ^ display_of op
+-         ^ " の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case "
+-         ^ display_of op ^ "(...) を最後に置いてください"))
++         ^ " には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case "
++         ^ display_of op ^ "(" ^ String.concat ", " (List.init arity (fun _ -> "_")) ^ ") を最後に置いてください")
++      end)
+     target_info.Decls.ef_ops;
+   (* 到達不能な操作節の警告。総和的な節より後ろにある同じ操作の節は走らない。
+      この検出は match の useful 判定(第10章)より弱い。
+@@ -3189,6 +3258,7 @@
+     (fun tp kind ->
+       let classes = class_names_of tp in
+       let r = new_rigid_ref ~kind ~classes level in
++      (match !r with Rigid i -> Hashtbl.replace Unify.rigid_tparams i.vid tp.tp_name | _ -> ());
+       (tp.tp_name, TVar r, r))
+     tparams kinds
+ 
+@@ -3439,10 +3509,14 @@
+ 
+    注釈と本体の単一化が落ちたとき、`pub` で頭の `@` を省略した値束縛だけは、
+    言い換えをもう 1 段詳しくする。
+-   その形で行の単一化が落ちる原因は、本体が純粋でないことである。
++   注釈の頭の行は空の行なので、頭の行どうしの単一化が落ちる原因は、本体が純粋でないことである。
+    そこで関数束縛(§11.12)と同じく、`pub` の規則を名指しして元の報告を添える。
+    `let rec` の値束縛(§11.29)も、同じ形で同じ言い換えをする。
+-   行に由来する失敗かどうかは、`row_failure` で判定する。
++   頭の行の失敗を見分けるために、`unify_pub_value_annot` が頭の行を最後に分けて単一化する。
++   引数や返り値のレコードのフィールド、ヴァリアントの選択肢、入れ子の矢印の行の失敗は、
++   `pub` でない束縛と同じ文言で報告する。
++   これらの失敗も「ラベル … がありません」の文言になるので、
++   `row_failure` では頭の行の失敗と見分けられない。
+ 
+    ここでいう本体は、注釈の頭の矢印の本体である。
+    値束縛の初期化式そのものは `eff`(束縛の外側の行)で推論するので、
+@@ -3524,13 +3598,14 @@
+               t
+           | _ -> elab_exp env_ty lvl eff b.T.lb_body
+         in
+-        (try Unify.unify vty (subsume_closed lvl body_ty vty)
+-         with Type_error msg when b.T.lb_ret <> None ->
+-           (* pub の省略 @ の値束縛では、失敗の原因は本体が純粋でないこと。
+-              関数束縛(§11.12)と同じ言い換えをここでも置く *)
+-           if b.T.lb_pub && (not (outer_eff_written b)) && row_failure msg then
+-             type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")")
+-           else type_error ("注釈された型を満たしません(" ^ msg ^ ")"));
++        let body_ty = subsume_closed lvl body_ty vty in
++        (* pub の省略 @ の値束縛では、頭の行の失敗の原因は、初期化式が返す関数が純粋でないこと。
++           関数束縛(§11.12)と同じ言い換えを、頭の行の失敗にだけ置く *)
++        if b.T.lb_pub && not (outer_eff_written b) then
++          unify_pub_value_annot vty body_ty ~other:(fun msg -> type_error ("注釈された型を満たしません(" ^ msg ^ ")"))
++        else (
++          try Unify.unify vty body_ty
++          with Type_error msg when b.T.lb_ret <> None -> type_error ("注釈された型を満たしません(" ^ msg ^ ")"));
+         vty
+   in
+   Tree.set_ty node fn_ty;
+@@ -3890,9 +3965,9 @@
+                省略した注釈の行は {} に読んであり、本体がエフェクトを起こす失敗は
+                let(§11.28)と同じ言い換えをする *)
+             let vty = match sig_vty with Some t -> t | None -> new_var lvl in
+-            (try Unify.unify vty (subsume_closed lvl (elab_exp env_ty lvl eff b.T.lb_body) vty)
+-             with Type_error msg when b.T.lb_pub && (not (outer_eff_written b)) && row_failure msg ->
+-               type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")"));
++            let body_ty = subsume_closed lvl (elab_exp env_ty lvl eff b.T.lb_body) vty in
++            if b.T.lb_pub && not (outer_eff_written b) then unify_pub_value_annot vty body_ty ~other:type_error
++            else Unify.unify vty body_ty;
+             vty
+       in
+       (try Unify.unify pre fn_ty
+diff a/lib/exhaust.ml b/lib/exhaust.ml
+--- a/lib/exhaust.ml	2026-10-17 05:27:46.453922575 +0900
++++ b/lib/exhaust.ml	2026-10-17 06:35:59.724598914 +0900
+@@ -882,6 +882,35 @@
+    キューは大域状態である。
+    空にしないと、前のファイルの処理やエラーで中断した推論が積んだエントリが残る。
+ 
++   ### 値の無い型を受ける 1 つのパターン
++
++   関数の引数、let のパターン束縛、return 節、節が 1 つの `match` のエントリは、行が 1 つである。
++   受ける型に値が無ければ、その位置に値が来ることはない。
++   照合が失敗して実行時エラーになることもないので、`check_entry` はこのエントリに警告を出さない。
++   網羅漏れの警告も、一致する値が無いという警告も出さない。
++
++   §10.11 の `useful` は、パターンの中でコンストラクタが 0 個の型を受ける位置に届くと、
++   その行を到達不能と判定する。
++   この判定をそのまま報告すると、警告の有無がパターンの形で変わる。
++   `newtype Absurd = MkA(Never)` の値を `MkA(n)` で受けると警告が出て、変数 `a` で受けると出ない。
++   `a` は `IWild` なので、`Absurd` の完全シグネチャを開かずに `default_matrix` で降りるからである。
++   型の側で判定すれば、形によらず、どちらにも警告は出ない。
++
++   値があるかどうかは `inhabited` が調べる。
++   完全シグネチャ(§10.7)のどれかのコンストラクタについて、引数の型すべてに値があれば、値がある。
++   シグネチャが `None` の型は、値があるとみなす。
++   再帰するデータ型をたどって同じ名前に戻ったときも、値があるとみなして打ち切る。
++   どちらも、警告を出す側に倒れる。
++   1 回の判定の中で調べ終えたデータ型は、型引数まで含めた鍵で結果を覚え、たどり直さない。
++   たどり直すと、2 つのコンストラクタがどちらも次の段の型を引数に持つ型が段になって続く形で、
++   段数に対して指数の時間がかかる。
++   `close_variant_rows` は行を閉じて型を決めるので、`inhabited` はその後で呼ぶ。
++   開いたままのヴァリアント行は、値があるとみなされる。
++
++   節が 2 つ以上の `match` は、この扱いの対象にしない。
++   値の無い型を照合する節は、§10.11 のとおり到達不能と報告する。
++   ペイロードの型に値の無いケースの節(`#Err(Never)` に対する `case #Err(e)`)も同じである。
++
+    ### 照合対象の型が検査の時点で未定の節のない `match`
+ 
+    節のない `match {}` の照合対象の型が、検査の時点で未束縛の型変数のままのことがある。
+@@ -932,6 +961,63 @@
+   "match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません"
+   ^ "(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)"
+ 
++(* 型を表の鍵にする文字列。値の有無を決める部分だけを書き出す。
++   シグネチャが None になる型(関数型、型変数、型適用)は区別しない。
++   どれも値があるとみなすからである *)
++let ty_key ty =
++  let b = Buffer.create 32 in
++  let rec go ty =
++    match repr ty with
++    | TCon (n, args) ->
++        Buffer.add_string b (string_of_int n);
++        Buffer.add_char b '[';
++        List.iter (fun a -> go a; Buffer.add_char b ',') args;
++        Buffer.add_char b ']'
++    | TRecord r -> Buffer.add_char b '{'; go r; Buffer.add_char b '}'
++    | TVariant r -> Buffer.add_char b '<'; go r; Buffer.add_char b '>'
++    | TRowEmpty -> Buffer.add_char b '.'
++    | TRowExtend (l, f, rest) ->
++        Buffer.add_string b (string_of_int l);
++        Buffer.add_char b ':';
++        go f;
++        Buffer.add_char b ';';
++        go rest
++    | TArrow _ | TApp _ | TVar _ -> Buffer.add_char b '_'
++  in
++  go ty;
++  Buffer.contents b
++
++(* 型に値があるかどうか。完全シグネチャのどれかのコンストラクタについて、
++   引数の型すべてに値があれば、値がある。
++   シグネチャが None の型(Int32、型変数、開いたヴァリアント行、不透明な型)は、値があるとみなす。
++   seen は、たどっている途中のデータ型の名前である。
++   同じ名前に戻ったら、値があるとみなして打ち切る。
++   newtype L = C(L) のように本当は値の無い型も、値があるほうに倒れる。
++   memo は、1 回の判定の中で調べ終えたデータ型の結果を、型引数まで含めた鍵で覚える。
++   同じ型を 2 度は開かない *)
++let inhabited ty =
++  let memo = Hashtbl.create 16 in
++  let rec go seen ty =
++    let ty = repr ty in
++    match ty with
++    | TCon (n, _) when Hashtbl.mem Decls.datas n -> (
++        let k = ty_key ty in
++        match Hashtbl.find_opt memo k with
++        | Some r -> r
++        | None ->
++            if List.mem n seen then true
++            else
++              let r = expand (n :: seen) ty in
++              Hashtbl.replace memo k r;
++              r)
++    | _ -> expand seen ty
++  and expand seen ty =
++    match complete_sig ty with
++    | None -> true
++    | Some cs -> List.exists (fun c -> List.for_all (go seen) (sub_types c ty)) cs
++  in
++  go [] ty
++
+ let check_entry { qe_rows; qe_ty } =
+   let out = ref [] in
+   let all = List.map (fun (p, guarded) -> ([ convert p ], guarded)) qe_rows in
+@@ -943,25 +1029,29 @@
+      節番号を出すと、利用者が存在しない第 1 節を探すことになる。
+      節が 1 つだけの match も同じ扱いになる *)
+   let single = match qe_rows with [ _ ] -> true | _ -> false in
+-  (* ガード付き節は必ず一致する節として数えない(sample.kel:322-324)ので、網羅性の判定から除く *)
+-  (match missing unguarded tys with
+-  | Some _ when qe_rows = [] && undetermined qe_ty -> out := !out @ [ undetermined_msg ]
+-  | Some w -> out := !out @ [ "match が非網羅的です。例えば " ^ String.concat ", " (List.map show_ipat w) ^ " が漏れています" ]
+-  | None -> ());
+-  (* 到達不能の判定では、先行するガードのない節だけを被覆として数える *)
+-  List.iteri
+-    (fun i (row, _) ->
+-      let prior = List.filteri (fun j _ -> j < i) all in
+-      let prior_unguarded = List.filter_map (fun (r, g) -> if g then None else Some r) prior in
+-      if not (useful prior_unguarded row tys) then
+-        out :=
+-          !out
+-          @ [
+-              (if single then "このパターンには一致する値がありません"
+-               else Printf.sprintf "第 %d 節は到達不能です(冗長)" (i + 1));
+-            ])
+-    all;
+-  !out
++  (* パターンが 1 つのエントリは、受ける型に値が無ければ警告しない。
++     その位置には値が来ないので、照合が失敗して実行時エラーになることもない *)
++  if single && not (inhabited qe_ty) then []
++  else (
++    (* ガード付き節は必ず一致する節として数えない(sample.kel:322-324)ので、網羅性の判定から除く *)
++    (match missing unguarded tys with
++    | Some _ when qe_rows = [] && undetermined qe_ty -> out := !out @ [ undetermined_msg ]
++    | Some w -> out := !out @ [ "match が非網羅的です。例えば " ^ String.concat ", " (List.map show_ipat w) ^ " が漏れています" ]
++    | None -> ());
++    (* 到達不能の判定では、先行するガードのない節だけを被覆として数える *)
++    List.iteri
++      (fun i (row, _) ->
++        let prior = List.filteri (fun j _ -> j < i) all in
++        let prior_unguarded = List.filter_map (fun (r, g) -> if g then None else Some r) prior in
++        if not (useful prior_unguarded row tys) then
++          out :=
++            !out
++            @ [
++                (if single then "このパターンには一致する値がありません"
++                 else Printf.sprintf "第 %d 節は到達不能です(冗長)" (i + 1));
++              ])
++      all;
++    !out)
+ 
+ let rec mentions_var r t =
+   match repr t with
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 05:31:58.927271675 +0900
++++ b/lib/unify.ml	2026-10-17 06:35:59.718849330 +0900
+@@ -166,7 +166,28 @@
+    `Generic` に当たったときは、`type_error` ではなく `bug` にする。
+    `Generic` は一般化済みのスキーマの中にしか現れない。
+    単一化まで流れてきたなら第11章(elab.ml)が `instantiate` を呼び忘れており、
+-   利用者のプログラムの誤りではなく実装の誤りである。 *)
++   利用者のプログラムの誤りではなく実装の誤りである。
++
++   脱出の報告には、剛定数が型パラメータなら、その名前と漏れの原因を添える。
++   型パラメータの剛定数が浅いレベルの変数に入り込むのは、
++   その変数がまだ型が決まっておらず、型パラメータのスコープの外の型と共有されているときである。
++   外側の注釈の無い引数の型や、一般化しない束縛の型がそれに当たる。
++   スコープの中で作られた変数も、外側の変数と単一化されると共有され、レベルが下がる。
++   剛定数の表示 `ς1` だけでは、どの型パラメータがどこへ漏れたのかが読めない。
++   名前は `rigid_tparams` に、第11章の `make_rigids` が剛定数を作るときに登録する。
++   `run` のヒープとインスタンス検査の skolem は登録しないので、報告に名前を添えない。 *)
++
++let rigid_tparams : (oid, string) Hashtbl.t = Hashtbl.create 16
++
++let escape_message v (i : var_info) =
++  let name = show (TVar v) in
++  let base = "スコープ付きの型 " ^ name ^ " がスコープの外に漏れています" in
++  match Hashtbl.find_opt rigid_tparams i.vid with
++  | None -> base
++  | Some n ->
++      base ^ "(" ^ name ^ " は型パラメータ " ^ n ^ " です。" ^ n
++      ^ " のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に "
++      ^ n ^ " を入れようとしています)"
+ 
+ let rec occurs_adjust tv lvl t =
+   match repr t with
+@@ -176,7 +197,7 @@
+       | Unbound i -> if i.vlevel > lvl then set_tv v (Unbound { i with vlevel = lvl })
+       | Rigid i ->
+           (* 剛定数はレベルを下げられない。下げる代わりにエラーにする *)
+-          if i.vlevel > lvl then type_error ("スコープ付きの型 " ^ show (TVar v) ^ " がスコープの外に漏れています")
++          if i.vlevel > lvl then type_error (escape_message v i)
+       | Generic _ -> bug "単一化中に Generic 変数が現れました"
+       | Link _ -> ())
+   | TCon (_, args) -> List.iter (occurs_adjust tv lvl) args
+diff a/test/eval.t b/test/eval.t
+--- a/test/eval.t	2026-10-17 05:27:29.619805188 +0900
++++ b/test/eval.t	2026-10-17 06:35:59.721713008 +0900
+@@ -503,7 +503,7 @@
+   > echoln(show(r))
+   > EOF2
+   $ diktor solelit.kel
+-  ! solelit.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! solelit.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+   $ cat > soleopt.kel <<'EOF2'
+   > newtype OBox = MkO(Option[Int32])
+@@ -515,7 +515,7 @@
+   > echoln(show(r))
+   > EOF2
+   $ diktor soleopt.kel
+-  ! soleopt.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! soleopt.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ ラベルが 1 つの閉じた構造的ヴァリアントを分解し、引数が変数だけの節も、取りこぼさない節に数える。
+@@ -541,7 +541,7 @@
+   > echoln(show(r))
+   > EOF2
+   $ diktor solevar2.kel
+-  ! solevar2.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! solevar2.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ 絞り込みの節を複数合わせると引数を網羅できる場合も、
+@@ -557,9 +557,48 @@
+   > echoln(show(r))
+   > EOF2
+   $ diktor opcover.kel
+-  ! opcover.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! opcover.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
++拒否の診断が案内する節の形は、操作の引数の個数に合わせた `_` の並びである。
++引数が無い操作では case ask() を、2 引数の操作では case pair(_, _) を案内する。
++案内のとおり、ガードの無い case pair(_, _) を最後に置くと型検査を通る:
++
++  $ cat > opnone0.kel <<'EOF2'
++  > effect Ask = { ask: () => Int32 }
++  > let flag = true
++  > let r = perform ask() handle {
++  >   case ask() if flag => resume(1)
++  >   case return(x) => x
++  > }
++  > echoln(show(r))
++  > EOF2
++  $ diktor opnone0.kel
++  ! opnone0.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask() を最後に置いてください
++  [1]
++  $ cat > opnone2.kel <<'EOF2'
++  > effect Pair = { pair: (Int32, Boolean) => Int32 }
++  > let r = perform pair(1, true) handle {
++  >   case pair(n, true) => resume(n)
++  >   case return(x) => x
++  > }
++  > echoln(show(r))
++  > EOF2
++  $ diktor opnone2.kel
++  ! opnone2.kel:2:9: 型エラー: 操作 pair には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case pair(_, _) を最後に置いてください
++  [1]
++  $ cat > opnone2ok.kel <<'EOF2'
++  > effect Pair = { pair: (Int32, Boolean) => Int32 }
++  > let r = perform pair(1, true) handle {
++  >   case pair(n, true) => resume(n)
++  >   case pair(_, _) => resume(0)
++  >   case return(x) => x
++  > }
++  > echoln(show(r))
++  > EOF2
++  $ diktor opnone2ok.kel
++  1
++
+ 操作節の引数パターンの誤りは、取りこぼしより先に報告する。tell には絞り込みの節
+ tell(0) しか無いが、報告するのは、その後ろにある ask の節の未知のコンストラクタである:
+ 
+diff a/test/instance_param_types.t b/test/instance_param_types.t
+--- a/test/instance_param_types.t	2026-10-17 05:28:27.057471175 +0900
++++ b/test/instance_param_types.t	2026-10-17 06:35:59.724700327 +0900
+@@ -18,8 +18,9 @@
+   > KEL
+   $ diktor --strict-exhaustive --type-check insnever.kel
+ 
+-同じ理由で、署名の引数が Never か閉じた構造的ヴァリアントのとき、case _ の節には
+-一致する値が無いという警告や冗長の警告が出る:
++同じ理由で、署名の引数が閉じた構造的ヴァリアントのとき、ケースをすべて挙げた後の
++case _ の節には冗長の警告が出る。署名の引数が Never で節が 1 つなら、仮引数を Never と
++注釈した関数と同じく、照合に値が来ないので警告は出ない:
+ 
+   $ cat > inswild.kel <<'KEL'
+   > type class Describe[A] { val describe: (A) => String }
+@@ -31,11 +32,9 @@
+   > echo(lv(1, #Hi))
+   > KEL
+   $ diktor inswild.kel
+-  ⚠ このパターンには一致する値がありません
+   ⚠ 第 3 節は到達不能です(冗長)
+   3hi
+   $ diktor --strict-exhaustive --type-check inswild.kel
+-  ⚠ このパターンには一致する値がありません
+   ⚠ 第 3 節は到達不能です(冗長)
+   _ : {}
+   _ : {}
+diff a/test/pub_effect_note.t b/test/pub_effect_note.t
+--- a/test/pub_effect_note.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/pub_effect_note.t	2026-10-17 06:35:59.716135960 +0900
+@@ -0,0 +1,138 @@
++pub で @ を省略した宣言の本体は純粋で(LangSpec §13.2)、本体がエフェクトを起こすと
++「pub な宣言はエフェクトを起こせません」と報告する。この文言を出すのは、原因が
++本体のエフェクトである失敗だけで、レコードのフィールドやヴァリアントの選択肢の
++失敗、run のヒープがスコープの外に漏れる失敗、関数でない型の値を呼ぶ失敗には
++出さない。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++値束縛の注釈の頭の @ を省略すると、初期化式が返す関数がエフェクトを起こす形は
++pub の規則を名指して拒否する。入れ子の矢印の行に @ {} と書いた形と、返り値の
++レコードのフィールドが違う形は、pub でない束縛と同じく「注釈された型を満たしません」
++で拒否する:
++
++  $ cat > pubvaleff.kel <<'KEL'
++  > module M {
++  >   pub let g: (Int32) => Int32 = fn(x) => { echoln("a"); x }
++  > }
++  > KEL
++  $ diktor --type-check pubvaleff.kel
++  ! pubvaleff.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
++  [1]
++  $ cat > pubvalinner.kel <<'KEL'
++  > module M {
++  >   pub let g: (Int32) => (Int32) => Int32 @ {} = fn(x) => fn(y) => { echoln("a"); y }
++  > }
++  > KEL
++  $ diktor --type-check pubvalinner.kel
++  ! pubvalinner.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル Console がありません(行は閉じています))
++  [1]
++  $ cat > pubvalrec.kel <<'KEL'
++  > module M {
++  >   pub let g: (Int32) => {a: Int32} = fn(x) => {b = x}
++  > }
++  > KEL
++  $ diktor --type-check pubvalrec.kel
++  ! pubvalrec.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
++  [1]
++
++引数のレコードのフィールドと、返り値のヴァリアントの選択肢でも同じである:
++
++  $ cat > pubvalarg.kel <<'KEL'
++  > module M {
++  >   pub let g: ({a: Int32}) => Int32 = fn(r: {b: Int32}) => r.b
++  > }
++  > KEL
++  $ diktor --type-check pubvalarg.kel
++  ! pubvalarg.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
++  [1]
++  $ cat > pubvalvariant.kel <<'KEL'
++  > module M {
++  >   pub let g: (Int32) => #A | #B = fn(x) => #C
++  > }
++  > KEL
++  $ diktor --type-check pubvalvariant.kel
++  ! pubvalvariant.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル C がありません(行は閉じています))
++  [1]
++
++返り値のフィールドが違い、本体がエフェクトも起こす形は、フィールドの失敗を報告する:
++
++  $ cat > pubvalboth.kel <<'KEL'
++  > module M {
++  >   pub let g: (Int32) => {a: Int32} = fn(x) => { echoln("a"); {b = x} }
++  > }
++  > KEL
++  $ diktor --type-check pubvalboth.kel
++  ! pubvalboth.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
++  [1]
++
++let rec の値束縛も同じである。フィールドの失敗は、pub でない let rec と同じ文言になる:
++
++  $ cat > pubrecvaleff.kel <<'KEL'
++  > module M {
++  >   pub let rec g: (Int32) => Int32 = fn(x) => { echoln("a"); x }
++  > }
++  > KEL
++  $ diktor --type-check pubrecvaleff.kel
++  ! pubrecvaleff.kel:2:15: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
++  [1]
++  $ cat > pubrecvalrec.kel <<'KEL'
++  > module M {
++  >   pub let rec g: (Int32) => {a: Int32} = fn(x) => {b = x}
++  > }
++  > KEL
++  $ diktor --type-check pubrecvalrec.kel
++  ! pubrecvalrec.kel:2:15: 型エラー: ラベル a がありません(行は閉じています)
++  [1]
++
++関数束縛の本体の run の中で、単相のフィールドの関数を呼ぶと、ヒープのラベルが
++フィールドの関数の行に入ろうとして、スコープの外に漏れる。pub の有無によらず、
++漏れとして報告する:
++
++  $ cat > pubrunleak.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > module M {
++  >   let r = idf({go = fn(u: Int32) => u + 1})
++  >   pub let f(): Int32 = run h { r.go(1) }
++  > }
++  > KEL
++  $ diktor --type-check pubrunleak.kel
++  idf : (A) => A
++  M.r : {go: (Int32) => Int32}
++  ! pubrunleak.kel:4:32: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
++  $ sed 's/pub let f/let f/' pubrunleak.kel > runleak.kel
++  $ diktor --type-check runleak.kel
++  idf : (A) => A
++  M.r : {go: (Int32) => Int32}
++  ! runleak.kel:4:28: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
++
++run の本体で、エフェクトを起こす引数の関数を呼ぶ形は、pub の規則を名指して拒否する:
++
++  $ cat > pubruneff.kel <<'KEL'
++  > module M {
++  >   pub let f(g: () => Int32 @ {Console}): Int32 = run h { g() }
++  > }
++  > KEL
++  $ diktor --type-check pubruneff.kel
++  ! pubruneff.kel:2:58: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
++  [1]
++
++呼び出し先が型パラメータの値のように関数でない型のときは、失敗は行ではなく
++呼び出し先の型によるので、pub の規則も、行が空の位置の案内も添えない:
++
++  $ cat > pubrigidcall.kel <<'KEL'
++  > module M {
++  >   pub let f[F](g: F): Int32 = g()
++  > }
++  > KEL
++  $ diktor --type-check pubrigidcall.kel
++  ! pubrigidcall.kel:2:31: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}
++  [1]
++  $ cat > purerigidcall.kel <<'KEL'
++  > let f[F](g: F): Int32 @ {} = g()
++  > KEL
++  $ diktor --type-check purerigidcall.kel
++  ! purerigidcall.kel:1:30: 型エラー: スコープ付きの型が一致しません: ς1 と _A => _B @ {}
++  [1]
+diff a/test/scope_escape_tparam.t b/test/scope_escape_tparam.t
+--- a/test/scope_escape_tparam.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/scope_escape_tparam.t	2026-10-17 06:35:59.718942116 +0900
+@@ -0,0 +1,71 @@
++型パラメータの剛定数が、そのスコープの外の型と共有された型の決まっていない変数に入り込むと、
++脱出の報告に、その型パラメータの名前と原因を添える。
++
++関数 f の型パラメータ A を、外側の無名関数の注釈の無い引数 y の型に入れる。
++f の中の値束縛 z の注釈で落ち、報告は A を名指しする:
++
++  $ cat > escval.kel <<'KEL'
++  > let bad = fn(y) => {
++  >   let f[A](x: A): A = {
++  >     let z: A = y
++  >     x
++  >   }
++  >   f
++  > }
++  > KEL
++  $ diktor --type-check escval.kel
++  ! escval.kel:3:9: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています(ς1 は型パラメータ A です。A のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に A を入れようとしています))
++  [1]
++
++トップレベルの一般化されない束縛 k を、型パラメータの値で呼ぶ形も同じ報告になる:
++
++  $ cat > esctop.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > let k = idf(fn(x) => x)
++  > let f[A](x: A): A = k(x)
++  > KEL
++  $ diktor --type-check esctop.kel
++  idf : (A) => A
++  k : (_A) => _A
++  ! esctop.kel:3:23: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています(ς1 は型パラメータ A です。A のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に A を入れようとしています)
++  [1]
++
++f の中で作った変数でも、外側の引数 y の型と単一化されると共有される。
++q の型は f の中で作られるが、y(r) で y の引数の型と共有され、r(x) で落ちる:
++
++  $ cat > escshared.kel <<'KEL'
++  > let idf[A](x: A): A = x
++  > let bad = fn(y) => {
++  >   let f[A](x: A): A = {
++  >     let r = idf(fn(q) => q)
++  >     let _ = y(r)
++  >     r(x)
++  >   }
++  >   f
++  > }
++  > KEL
++  $ diktor --type-check escshared.kel
++  idf : (A) => A
++  ! escshared.kel:6:7: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています(ς1 は型パラメータ A です。A のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に A を入れようとしています)
++  [1]
++
++行の型パラメータ E も同じく名指しする:
++
++  $ cat > escrow.kel <<'KEL'
++  > let bad = fn(y) => {
++  >   let f[E](go: () => Unit @ E): Unit @ E = { y(go); go() }
++  >   f
++  > }
++  > KEL
++  $ diktor --type-check escrow.kel
++  ! escrow.kel:2:46: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています(ς1 は型パラメータ E です。E のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に E を入れようとしています)
++  [1]
++
++run のリージョン変数の脱出には、何も添えない:
++
++  $ cat > escrun.kel <<'KEL'
++  > let esc = run h { Ref.new(0) }
++  > KEL
++  $ diktor --type-check escrun.kel
++  ! escrun.kel:1:11: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
++  [1]
+diff a/test/typecheck_m7.t b/test/typecheck_m7.t
+--- a/test/typecheck_m7.t	2026-10-17 05:30:24.358384921 +0900
++++ b/test/typecheck_m7.t	2026-10-17 06:35:59.724746384 +0900
+@@ -397,7 +397,8 @@
+ 
+ 関数の引数とラムダの引数に書いたコンストラクタパターンは、
+ コンストラクタが 1 つしかない型のものでも網羅性検査に掛ける。
+-フィールドの型に値が無いので、一致する値が無いと警告する:
++フィールドの型に値が無いので Absurd にも値が無く、引数に値が来ないので、警告は出ない
++(値の無い型を受けるパターンの扱いは uninhabited_pattern.t):
+ 
+   $ cat > v10h.kel <<'KEL'
+   > newtype Empt
+@@ -407,6 +408,4 @@
+   > KEL
+   $ diktor --type-check --no-prelude v10h.kel
+   f : (Absurd) => Int32
+-  ⚠ このパターンには一致する値がありません
+   g : (Absurd) => Int32
+-  ⚠ このパターンには一致する値がありません
+diff a/test/typecheck.t b/test/typecheck.t
+--- a/test/typecheck.t	2026-10-17 05:29:18.495215524 +0900
++++ b/test/typecheck.t	2026-10-17 06:36:18.223879154 +0900
+@@ -116,7 +116,7 @@
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude ml5c.kel
+-  ! ml5c.kel:2:7: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
++  ! ml5c.kel:2:7: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています(ς1 は型パラメータ A です。A のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に A を入れようとしています))
+   [1]
+ 
+ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順に依存しない。§7.2 の2パス。
+diff a/test/uninhabited_pattern.t b/test/uninhabited_pattern.t
+--- a/test/uninhabited_pattern.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/uninhabited_pattern.t	2026-10-17 06:35:59.724777503 +0900
+@@ -0,0 +1,147 @@
++値の無い型を受けるパターン(LangSpec §11.2)。関数の引数、ラムダの引数、let のパターン
++束縛、return 節、節が 1 つの match のように、パターンが 1 つだけの位置では、受ける型に
++値が無ければ、パターンの形によらず網羅性の警告を出さない。その位置には値が来ないので、
++照合が失敗することもない。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++関数の引数。変数、レコード、タプル、コンストラクタ、ヴァリアント、入れ子のどの形でも、
++Never や右辺を省いた newtype や、値の無い型をフィールドに持つ型を受けると、警告は出ない:
++
++  $ cat > params.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > let pv(n: Empt) = 1
++  > let pr({x}: {x: Empt}) = 2
++  > let pt((a, b): (Int32, Never)) = 3
++  > let pc(MkA(n)) = 4
++  > let pnest({x = MkA(n)}: {x: Absurd}) = 5
++  > let pvar(#V(n): #V(Never)) = 6
++  > let lc = fn(MkA(n)) => 7
++  > KEL
++  $ diktor --strict-exhaustive --type-check --no-prelude params.kel
++  pv : (Empt) => Int32
++  pr : ({x: Empt}) => Int32
++  pt : ((Int32, Never)) => Int32
++  pc : (Absurd) => Int32
++  pnest : ({x: Absurd}) => Int32
++  pvar : (#V(Never)) => Int32
++  lc : (Absurd) => Int32
++
++let のパターン束縛、節が 1 つの match、return 節も同じ:
++
++  $ cat > single.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > effect Fail = { throw: (String) => Never }
++  > effect Nop = { nop: () => Int32 }
++  > let bt(): Int32 @ Fail = { let (a, b): (Int32, Never) = (1, perform throw("y")); a }
++  > let bc(): Int32 @ Fail = { let MkA(n) = perform throw("z"); 2 }
++  > let mv(n: Never): Int32 = n match { case m => 1 }
++  > let mc(a: Absurd): Int32 = a match { case MkA(_) => 2 }
++  > let rc(t: () => Absurd @ Nop): Int32 = t() handle { case nop() => resume(1)  case return(MkA(n)) => 3 }
++  > KEL
++  $ diktor --strict-exhaustive --type-check --no-prelude single.kel
++  bt : () => Int32 @ {Fail}
++  bc : () => Int32 @ {Fail}
++  mv : (Never) => Int32
++  mc : (Absurd) => Int32
++  rc : (() => Absurd @ {Nop}) => Int32
++
++値の無いデータ型を、コンストラクタパターンで開いて消去できる。--strict-exhaustive でも
++実行する:
++
++  $ cat > elim.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > let elimA[A](MkA(n)): A = n match {}
++  > let elimB[A](a: Absurd): A = a match { case MkA(n) => n match {} }
++  > let pick(r: #Ok(Int32) | #Err(Absurd)): Int32 = r match {
++  >   case #Ok(n) => n
++  >   case #Err(a) => elimA(a)
++  > }
++  > echo(show(pick(#Ok(41)) + 1))
++  > KEL
++  $ diktor --strict-exhaustive elim.kel
++  42
++
++受ける型に値があれば、どの値にも一致しないパターンに警告を出す。Opt2[Empt] には Nn が
++あるので、Sm(x) には一致する値が無いと警告する。節が 2 つ以上の match では、値の無い型
++を照合する節を到達不能と報告する。ペイロードの型に値の無いケースの節も同じである。
++コンストラクタを持つ値の無い型には、節のない match {} は網羅的でない:
++
++  $ cat > keep.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > newtype Opt2[A] = Sm(A) | Nn
++  > let k1(Sm(x): Opt2[Empt]) = 1
++  > let k2(n: Never): Int32 = n match { case a => 1  case b => 2 }
++  > let k3(o: #Ok(Int32) | #Err(Never)): Int32 = o match { case #Ok(n) => n  case #Err(e) => 0 }
++  > let k4[A](a: Absurd): A = a match {}
++  > KEL
++  $ diktor --type-check --no-prelude keep.kel
++  k1 : (Opt2[Empt]) => Int32
++  ⚠ match が非網羅的です。例えば Nn が漏れています
++  ⚠ このパターンには一致する値がありません
++  k2 : (Never) => Int32
++  ⚠ 第 1 節は到達不能です(冗長)
++  ⚠ 第 2 節は到達不能です(冗長)
++  k3 : (#Ok(Int32) | #Err(Never)) => Int32
++  ⚠ 第 2 節は到達不能です(冗長)
++  k4 : (Absurd) => A
++  ⚠ match が非網羅的です。例えば MkA(_) が漏れています
++
++再帰するデータ型は、同じ型に戻ったところで値があるとみなす。M[Never] には S(Z(1)) の
++値があるので、Z(x) の引数に警告を出す。値の無い L = C(L) を受ける C(x) にも、変数で受け
++る形と同じく警告は出ない:
++
++  $ cat > rec.kel <<'KEL'
++  > newtype M[A] = Z(A) | S(M[Int32])
++  > newtype L = C(L)
++  > let r1(Z(x): M[Never]) = 1
++  > let r2(C(x)) = 2
++  > KEL
++  $ diktor --type-check --no-prelude rec.kel
++  r1 : (M[Never]) => Int32
++  ⚠ match が非網羅的です。例えば S(_) が漏れています
++  ⚠ このパターンには一致する値がありません
++  r2 : (L) => Int32
++
++基本型、関数型、型パラメータ、組み込みの不透明な型、開いた行の構造的ヴァリアントは、値が
++あるものとして扱う。これらを引数に持つ W は値があるので、Wr(x, true) の漏れを警告する。
++Never と、閉じた行の #A(Never) を引数に持つ W は値が無いので、警告しない:
++
++  $ cat > valued.kel <<'KEL'
++  > newtype W[A] = Wr(A, Boolean)
++  > let a1(Wr(x, true): W[(Int32) => Never]) = 1
++  > let a2(Wr(x, true): W[Array[Never]]) = 2
++  > let a3[B](Wr(x, true): W[B]) = 3
++  > let a4(Wr(x, true): W[String]) = 4
++  > let a5(Wr(x, true): W[Never]) = 5
++  > let a6[R](Wr(x, true): W[#A(Never) | R]) = 6
++  > let a7(Wr(x, true): W[#A(Never)]) = 7
++  > KEL
++  $ diktor --type-check valued.kel
++  a1 : (W[(Int32) => Never @ {}]) => Int32
++  ⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
++  a2 : (W[Array[Never]]) => Int32
++  ⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
++  a3 : (W[A]) => Int32
++  ⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
++  a4 : (W[String]) => Int32
++  ⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
++  a5 : (W[Never]) => Int32
++  a6 : (W[#A(Never) | R1]) => Int32
++  ⚠ match が非網羅的です。例えば Wr(_, false) が漏れています
++  a7 : (W[#A(Never)]) => Int32
++
++同じデータ型を何度たどっても、値の有無は 1 回の判定の中で型ごとに 1 度だけ調べる。T0 から
++T31 は、どのコンストラクタも次の段の型を引数に持ち、最後の段は値の無い型だけを引数に持つ。
++コンストラクタが 2 つずつあるので、たどり直すと 2 の 32 乗の手間になる:
++
++  $ { echo 'newtype Empt'
++  >   for i in $(seq 0 31); do echo "newtype T$i = A$i(T$((i+1))) | B$i(T$((i+1)))"; done
++  >   echo 'newtype T32 = A32(Empt) | B32(Empt)'
++  >   echo 'let f(A0(x)) = 1'; } > deep.kel
++  $ diktor --type-check --no-prelude deep.kel
++  f : (T0) => Int32
+diff a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 05:30:24.358443993 +0900
++++ b/test/verify_fixes.t	2026-10-17 06:35:59.721795755 +0900
+@@ -621,7 +621,7 @@
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check guardonly.kel
+-  ! guardonly.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
++  ! guardonly.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+   [1]
+ 
+ 標準出力に書き出せないときも終了コード規約に落ちる(B5 / D33。既定の
+diff a/test/visibility.t b/test/visibility.t
+--- a/test/visibility.t	2026-10-17 05:32:39.710058677 +0900
++++ b/test/visibility.t	2026-10-17 06:35:59.713456543 +0900
+@@ -58,6 +58,22 @@
+   ! vis4b.kel:2:10: 型エラー: 未知の型: Pub(M.Pub と修飾してください)
+   [1]
+ 
++引数つきの型を修飾せずに書いても、同じく pub の型だけを候補として案内する。
++newtype でも Type エイリアスでも同じである:
++
++  $ printf 'module M { pub newtype V[A] = V(A) }\nlet u(x: V[Int32]): Int32 = 0\n' > vis4c.kel
++  $ diktor --type-check vis4c.kel
++  ! vis4c.kel:2:10: 型エラー: 未知の型: V(M.V と修飾してください)
++  [1]
++  $ printf 'module M { newtype V[A] = V(A) }\nlet u(x: V[Int32]): Int32 = 0\n' > vis4d.kel
++  $ diktor --type-check vis4d.kel
++  ! vis4d.kel:2:10: 型エラー: 未知の型: V
++  [1]
++  $ printf 'module M { pub type T[A] = (A, A) }\nlet u(x: T[Int32]): Int32 = 0\n' > vis4e.kel
++  $ diktor --type-check vis4e.kel
++  ! vis4e.kel:2:10: 型エラー: 未知の型: T(M.T と修飾してください)
++  [1]
++
+ 非 pub newtype のコンストラクタは外から使えない(D42 — コンストラクタの
+ 可視性は所属 newtype の pub に従う):
+ 
+@@ -204,6 +220,30 @@
+   ! visrow5.kel:2:26: 型エラー: 未知のエフェクト: W
+   [1]
+ 
++引数つきの W[E] を、module の外から修飾せずに @ の後ろに書いても、未知のエフェクトとして
++拒否し、引数の無い W と同じく、pub の EffectRow エイリアスなら修飾を案内し、pub でなければ
++案内しない。extends の右と、行を取る型引数の位置でも同じである。案内どおり修飾すると通る:
++
++  $ printf 'module M { pub type W[E]: EffectRow = {Print extends E} }\nlet g(x: Int32): Int32 @ W[Console] = x\n' > visrow4b.kel
++  $ diktor --type-check visrow4b.kel
++  ! visrow4b.kel:2:26: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
++  [1]
++  $ printf 'module M { type W[E]: EffectRow = {Print extends E} }\nlet g(x: Int32): Int32 @ W[Console] = x\n' > visrow5b.kel
++  $ diktor --type-check visrow5b.kel
++  ! visrow5b.kel:2:26: 型エラー: 未知のエフェクト: W
++  [1]
++  $ printf 'module M { pub type W[E]: EffectRow = {Print extends E} }\nlet g(x: Int32): Int32 @ {Console extends W[Print]} = x\n' > visrow4c.kel
++  $ diktor --type-check visrow4c.kel
++  ! visrow4c.kel:2:43: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
++  [1]
++  $ printf 'module M { pub type W[E]: EffectRow = {Print extends E} }\nnewtype Cb[E] = Cb(() => Unit @ E)\nlet h(c: Cb[W[Console]]): Int32 = 0\n' > visrow4d.kel
++  $ diktor --type-check visrow4d.kel
++  ! visrow4d.kel:3:13: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
++  [1]
++  $ printf 'module M { pub type W[E]: EffectRow = {Print extends E} }\nlet g(x: Int32): Int32 @ M.W[Console] = x\n' > visrow4e.kel
++  $ diktor --type-check visrow4e.kel
++  g : (Int32) => Int32 @ {Print, Console}
++
+ 型の位置では、module の中の非修飾名は、同名のトップレベルの宣言より module の宣言を指す。
+ エフェクト位置の EffectRow エイリアスも、型の位置の T と同じく module の W を指し、
+ module の外では、トップレベルの W と T を指す:
+@@ -418,13 +458,38 @@
+   ! visrow25.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+   [1]
+ 
+-同名の EffectRow エイリアスは、行の要素では型パラメータより先に当たる。
+-`@ E` と書くと型パラメータが当たるので、`@ E` と `@ {E}` は別のものを指す。
+-`@ Print` を `@ {Print}` の略記とする doc/sample.kel の規則とは食い違う、現状の振る舞いである:
++型パラメータは、行の要素でも同名の EffectRow エイリアスを覆う。
++エイリアスが同じ module にあっても、トップレベルにあっても、pub でない
++コンパニオンでも、引数なしの要素は行変数の合成として拒否する:
+ 
+   $ printf 'module M {\n  type E: EffectRow = {Print}\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow26.kel
+   $ diktor --type-check visrow26.kel
+-  M.f : (Int32) => Int32 @ {Print}
++  ! visrow26.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++  $ printf 'type E: EffectRow = {Print}\nlet f[E](x: Int32): Int32 @ {Console, E} = x\n' > visrow27.kel
++  $ diktor --type-check visrow27.kel
++  ! visrow27.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++  $ printf 'module E { type E: EffectRow = {Print} }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow28.kel
++  $ diktor --type-check visrow28.kel
++  ! visrow28.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
++
++@ E も型パラメータを指すので、@ E と @ {E} は同じものを指す。
++型パラメータの外では、@ {E} は同名のエイリアスを指す:
++
++  $ printf 'module M {\n  type E: EffectRow = {Print}\n  let f[E](x: Int32): Int32 @ E = x\n  let g(x: Int32): Int32 @ {E} = x\n}\n' > visrow29.kel
++  $ diktor --type-check visrow29.kel
++  M.f : (Int32) => Int32
++  M.g : (Int32) => Int32 @ {Print}
++
++引数つきの要素でも、型パラメータは同名のエイリアスを覆う。
++型パラメータへの適用は行の要素になれないので、未知のエフェクトになる:
++
++  $ printf 'type E[R]: EffectRow = {Print extends R}\nlet f[E, R](x: Int32): Int32 @ {E[R]} = x\n' > visrow30.kel
++  $ diktor --type-check visrow30.kel
++  ! visrow30.kel:2:32: 型エラー: 未知のエフェクト: E
++  [1]
+ 
+ 同名クラスによる可視性の迂回は宣言時に拒否(M16 検証。修飾名 M.f が
+ クラス M のメソッド f と値環境で区別できないため):

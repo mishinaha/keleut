@@ -1,0 +1,4 @@
+newtype Box = Box(Int32)
+type Fn[E] = (Box) => Int32 @ E
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size: Fn[{Print}] = fn(b) => 1 }

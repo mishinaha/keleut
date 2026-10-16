@@ -1,0 +1,7 @@
+let k = { f = show, n = 1 }
+k
+let m = Some(show)
+m
+let c = { n = 1, e = (x: Int32) => x }
+c
+k.n

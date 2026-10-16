@@ -1,0 +1,5 @@
+let f(x: Int64): Int32 = x match {
+  case 4294967295 => 1
+  case 1u64 => 3
+  case _ => 2
+}

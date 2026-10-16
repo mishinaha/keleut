@@ -1,0 +1,11 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub type Msg = String
+  pub newtype N = N((Msg) => Unit @ {Log})
+  pub let mk(): N = N(fn(s) => perform log(s))
+}
+let n: Int32 = {
+  M.mk() match { case M.N(g) => g("hi") handle { case log(s) => { echoln(s); resume(()) } } }
+  1
+}
+echoln(show(n))

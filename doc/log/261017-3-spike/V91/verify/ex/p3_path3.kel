@@ -1,0 +1,9 @@
+type class C[A] { val c: (A) => Int32 }
+type instance C[Int32] { let c(x) = x }
+newtype Box[A] = Box(A)
+type instance[A: C] C[Box[_]] { let c(b) = 0 }
+let ident[T](x: T): T = x
+let f() = {
+  let g = ident(fn(y) => c(y))
+  g(Box(1.5))
+}

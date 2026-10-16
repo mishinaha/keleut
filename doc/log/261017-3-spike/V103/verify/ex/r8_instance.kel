@@ -1,0 +1,12 @@
+newtype V(Int32, Int32)
+type instance Add[V] {
+  let add(a, b) = (a, b) match { case (V(x1, y1), V(x2, y2)) => V(x1 + x2, y1 + y2) }
+}
+type instance Show[V] {
+  let show(v: V): String @ {} = v match { case V(x, y) => "V(" + show(x) + "," + show(y) + ")" }
+}
+type instance Eq[V] {
+  let eq(a, b) = show(a) == show(b)
+}
+let main(): Unit @ Console = echoln(show(V(1, 2) + V(3, 4)) + show(V(1,1) == V(1,1)) + show(V(1,1) != V(1,2)))
+main()

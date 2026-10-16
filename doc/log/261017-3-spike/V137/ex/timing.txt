@@ -1,0 +1,4 @@
+retry: head 1.42s new 1.39s ratio 0.98 (best of 7, no OCAMLRUNPARAM)
+nontail5000: head 0.72s new 0.73s ratio 1.01 (best of 7, no OCAMLRUNPARAM)
+grow_outer: head 0.30s new 0.23s ratio 0.75 (best of 7, no OCAMLRUNPARAM)
+same: head 0.23s new 0.23s ratio 1.02 (best of 7, no OCAMLRUNPARAM)

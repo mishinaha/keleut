@@ -1,0 +1,11 @@
+effect File = { write: (String) => Unit }
+effect Reg = { reg: (() => Unit @ File) => Unit }
+let main(): Unit @ Console = {
+  perform reg(fn() => perform write("x"))
+} handle {
+  case reg(f) => {
+    { f() } handle { case write(s) => { echoln(s); resume() } }
+    resume()
+  }
+}
+main()

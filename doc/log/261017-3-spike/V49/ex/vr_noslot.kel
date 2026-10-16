@@ -1,0 +1,4 @@
+let escaped[E](): (Int32) => Int32 @ {Console extends E} = run h {
+  let cell = Ref.new(41)
+  fn(x) => Ref.get(cell) + x
+}

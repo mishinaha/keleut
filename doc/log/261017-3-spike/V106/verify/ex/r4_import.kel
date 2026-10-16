@@ -1,0 +1,2 @@
+from "./lib/cls" import Pp
+echoln(pp(3i32))

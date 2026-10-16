@@ -1,0 +1,4 @@
+type W[E]: EffectRow = {Print extends E}
+let f[F, E](x: Int32): Int32 @ W[F[E]] = { println("in f"); x }
+let main(): Unit @ Console = with_stdout(fn() => println(show(f(5))))
+main()

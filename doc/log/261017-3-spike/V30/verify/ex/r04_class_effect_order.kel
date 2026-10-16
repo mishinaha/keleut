@@ -1,0 +1,4 @@
+effect Log = { log: (String) => Unit }
+type class Logger[T] { val logit: (T) => Unit @ {Log} }
+type instance Logger[Int32] { let logit(x) = perform log(show(x)) }
+let _ = logit(5) handle { case log(s) => { echoln(s); resume(()) } }

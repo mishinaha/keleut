@@ -1,0 +1,8 @@
+type P = {x: Int32, y: Int32}
+let mk(x: Int32): P = {x = x, y = x}
+let m = mk(1)
+let r: P = {m with y = 5}
+let id[A](a: A): A = a
+let s = id({x = 1, y = 2})
+let v = id(m) match { case {x, y} => x + y }
+echoln(show(r.y + s.x + v))

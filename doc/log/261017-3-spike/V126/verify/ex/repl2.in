@@ -1,0 +1,3 @@
+type class D[A] { val d: (A) => Int32 }
+type instance D[Int32] { let d(n: Int32): Int32 = n }
+d(3i32)

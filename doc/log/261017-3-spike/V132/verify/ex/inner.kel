@@ -1,0 +1,10 @@
+effect Fail = { throw: (String) => Never }
+type class Mk[A] {
+  val mk: (A) => (() => Int32 @ Fail)
+}
+type instance Mk[Int32] {
+  let mk(x) = fn() => if x == 1 then 1 else perform throw("bad")
+}
+let f = mk(2)
+let r: Int32 = f() handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+echoln(show(r))

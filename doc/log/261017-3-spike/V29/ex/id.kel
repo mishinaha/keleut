@@ -1,0 +1,2 @@
+type Id[A] = A
+newtype N[X] = MkN(() => Unit @ Id[X])

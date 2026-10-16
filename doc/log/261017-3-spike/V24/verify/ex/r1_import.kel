@@ -1,0 +1,5 @@
+from "./lib/p" import { Parser, run_p, Log }
+let p: Parser[Int32] = Parser(fn(s: String) => Some(1), fn(s: String) => ())
+echoln(show(run_p(p, "x")))
+let r = { perform log("hi"); 7 } handle { case log(m) => { echoln("L:" + m); resume(()) } case flush() => resume(()) }
+echoln(show(r))

@@ -1,0 +1,2 @@
+newtype H = MkH(A[{}])
+type A[E] = (Int32) => Unit @ E

@@ -1,0 +1,9 @@
+f : ({}) => {} @ {Print} = <fn>
+repl
+[exit 0]
+f : ({}) => {} @ {Print} = <fn>
+repl
+[exit 0]
+! <stdin>:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+! <stdin>:3:21: 型エラー: 未束縛の変数: f
+[exit 0]

@@ -1,0 +1,8 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+let memo[E](f: (Foo) => Int32 @ E): (Foo) => Int32 @ E = { let v = f(Foo); fn(x) => v }
+let g = memo(fn(x) => 7i32)
+type instance Sz[Foo] {
+  let sz = g
+}
+echoln(show(sz(Foo)))

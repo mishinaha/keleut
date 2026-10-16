@@ -1,0 +1,5 @@
+type R[E] = {x: Int32 extends E}
+let r: R[{y: Int32}] = {x = 1, y = 2}
+type S = R[{}]
+let s: S = {x = 3}
+echoln(show(r.y + s.x))

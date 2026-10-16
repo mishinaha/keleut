@@ -1,0 +1,2 @@
+from "./lib/nums" import { Int8, val8 }
+echoln(show(val8(Int8(5))))

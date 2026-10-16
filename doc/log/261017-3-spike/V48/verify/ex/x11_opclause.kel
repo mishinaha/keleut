@@ -1,0 +1,13 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+effect T = { take: (Absurd) => Int32, take2: (Option[Never]) => Int32 }
+let f(t: () => Int32 @ T): Int32 = t() handle {
+  case take(MkA(n)) => resume(1)
+  case take2(x) => resume(2)
+}
+let g(t: () => Int32 @ T): Int32 = t() handle {
+  case take(a) => resume(1)
+  case take2(None) => resume(2)
+  case take2(o) => resume(3)
+}
+echo(show(f(fn() => 7)))

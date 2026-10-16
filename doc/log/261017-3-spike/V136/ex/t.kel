@@ -1,0 +1,3 @@
+type class Sz[A] { val size: (A) => Int64 }
+type instance Sz[String] { let size(s) = 0 }
+echo(show(size("a")))

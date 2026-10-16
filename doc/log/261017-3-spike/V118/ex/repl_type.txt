@@ -1,0 +1,3 @@
+let r = {a = 1}
+:type {Foo with a = 1}
+:type r.Foo

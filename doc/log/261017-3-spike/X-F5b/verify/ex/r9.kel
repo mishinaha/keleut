@@ -1,0 +1,2 @@
+from "./lib/b" import w
+echoln(show(w))

@@ -1,0 +1,44 @@
+合成の順(写し clusters/kinds/diktor、snap/diktor = diktor 39d4091 から)
+
+1. V30.patch          そのまま当たる(-p1)。
+2. V22+V124.patch     V124.patch と V22-on-V124.patch を合わせた HEAD からの差分。V30 の上では
+                      elab.ml の 5 hunk(章頭の表、§11.31 の記事、speculate_newtype の注釈、§11.39 の
+                      1a の後始末と 1b の段落)と kinds.t の 7 hunk(前書きと specunit2 / speclab の期待値)が
+                      当たらない。コードの hunk はすべて当たる。
+   手直し:
+   - is_effect_name(D[V22-1])を消し、4 か所を Hashtbl.mem Decls.effects に戻す(V30 で不要)。
+     speculating の注釈から is_effect_name の文を消す。
+   - D[V124-3] の枝は V22+V124.patch に含まれない(V22 が消している)。
+   - 章頭の表: 1a は V30 の文面、1a' と 1b は V22+V124 の文面に V30 の「エフェクトの名前」を足す。
+   - §11.31: V30 の記事(effect の名前は 1a で宣言表にある)を土台に、手当てを 3 つ(フィールドごとの
+     握り潰し、要素なしの波括弧を照合に使わない + expand_alias は新しい型変数を渡す、繰り返し)に
+     書き直す。V30 の「1 周だけ走るので残る形(specres)」の段落は、繰り返しの段落に置き換える。
+   - §11.39: 1a の後始末は V22+V124 の文面から is_effect_name の文を除いたもの。1b の段落は V30 の
+     文面から「例外は…」の 2 行を消し、「原則として」を「カインドについては」にする。1b の後始末の
+     2 つ目の処理の理由を「1b が newtype の本体を読んで決めたカインドも使える」にする。
+   - kinds.t: V30 の前書きと期待値を採る。V30 の specres / specres2 と前書きを消し、V22 の specfix で
+     置き換える。fwdrow の前書きの「届かない形は下の specres」を消す。spectypo、aliaslab、ntalias の
+     前書きを、V30 の後の事実(名前は 1a で表にある)と規則の文に直す。
+3. V29 の cram       V29.patch の kinds.t の追加を、名前を fwdalias〜fwdalias5 に変えて写す
+                      (V31 の aliasrow〜と、HEAD の aliasfwd に紛れるため)。aliasrow3 は aliasunit3 と重なるので写さない。
+                      aliasrow6 は合成で通るので、期待値を受理(fwdalias5)にする。aliaskind2 は合成では
+                      HEAD と同じ診断(2:27)のままなので写さない。
+4. V56.patch          そのまま当たる(offset 1)。
+5. V57.patch          当たる(visibility.t は V56 の後ろに fuzz 1)。V57 のブロック名 visrow16〜16e が
+                      V56 の visrow16〜21 と衝突するので、visrow22〜26 に改め、§11.6 の記事の参照も直す。
+6. V27.patch          expand_alias の照合の hunk(#7)が V124 の (not ambiguous) と衝突。
+                      if (not ambiguous) && not (arg_kind_ok pk t) に合わせる。
+   追加: 1b の後始末の 2 周目の行を返すカインドの検査を、エイリアスのパラメータにも掛ける
+         (V27 の ex/c3.kel が合成で受理に変わったため)。kinds.t に hktrow9 を足す。
+7. V31.patch          check_alias_body_kind の hunk(#1)が speculating の注釈の書き換えと衝突。位置を合わせる。
+   追加: 本体が型パラメータそのもの(type Id[A] = A)のエイリアスは照合しない
+         (V27 の hktrowok の Callback[Id[X]] が V31 の照合で落ちたため)。§11.40 の記事に 3 行。
+   検証の反映: 判定を本体の字面から展開後の型(精緻化した本体がエイリアスのパラメータの剛変数そのもの)に
+         改めた(type Id2[A] = Id[A] を字面の判定が拒否したため)。hktrowok に Id2 の形を足した。
+8. V117.patch         そのまま当たる。
+9. 記事の節番号       elab_con_args と arg_kind_ok を指す「§11.3」のうち、合成で足した文と V27 の新しい
+                      文を「§11.5」に直す(HEAD の既存の文は V[V124-1] のまま)。
+10. litwrap.py(変化なし)、litcheck.py --base <HEAD>: elab.ml と decls.ml は code の不一致のみ、marker 0 件。
+
+合成の差分: kinds.patch(写しの git で、diktor 39d4091 と同じ内容の最初のコミットからの git diff。a/ と b/ の見出し。
+            snap の写しに -p1 で当てて合成の写しと一致することを確かめた)

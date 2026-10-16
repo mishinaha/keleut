@@ -1,0 +1,18 @@
+diff -ruN -x _build <一時領域>/items/V56/verify/diktor/lib/elab.ml diktor/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 04:14:35.090920606 +0900
++++ b/lib/elab.ml	2026-10-17 04:18:22.241241037 +0900
+@@ -1249,6 +1249,14 @@
+          カインドを照合する。判定は kind_repr の構造の一致で行い、same_kind は使わない。
+          カインドが未確定のまま届く経路があり(F[E] と、カインドが未推論のエイリアスの適用)、
+          same_kind で調べると、検査ではなく Row への既定化になる(§11.6) *)
++      (match te with
++      | T.EIdent (LongId (_ :: _ :: _) as li) -> (
++          let n = show_long_id li in
++          match find_alias n with
++          | Some info when info.Decls.al_kind <> Some "EffectRow" ->
++              type_error ("エフェクト位置に Type エイリアス " ^ n ^ " は使えません(: EffectRow を付けてください)")
++          | _ -> ())
++      | _ -> ());
+       let ty = elab_type env level ~expanding t in
+       if check_row && kind_repr (Unify.kind_of ty) <> KRow then kind_error "エフェクト位置の型" ~expected:"Row" ty;
+       ty

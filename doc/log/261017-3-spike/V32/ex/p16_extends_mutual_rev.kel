@@ -1,0 +1,2 @@
+let rec b[F](n: Int32): Int32 @ {Console extends F} = n match { case 0 => 0 case m => a(m - 1) }
+and a[E](n: Int32): Int32 @ {Console extends E} = b(n)

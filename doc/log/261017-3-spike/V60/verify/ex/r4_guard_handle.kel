@@ -1,0 +1,10 @@
+effect Ask = { ask: () => Int32 }
+let twice(f: () => Int32): Int32 = f() + f()
+let a = (perform Ask.ask() + 1) handle {
+  case Ask.ask() => resume(twice { 10 })
+  case return(v) => (v, 0) match {
+    case (x, _) if (x) == twice { 10 } + 1 => x
+    case _ => 0
+  }
+}
+echoln(show(a))

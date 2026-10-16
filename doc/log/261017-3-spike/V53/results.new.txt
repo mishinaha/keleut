@@ -1,0 +1,55 @@
+=== guard.kel
+--- $ diktor(試作) guard.kel
+! guard.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+[exit 1]
+=== lit.kel
+--- $ diktor(試作) lit.kel
+! lit.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+[exit 1]
+=== cover.kel
+--- $ diktor(試作) cover.kel
+! cover.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+[exit 1]
+=== zero.kel
+--- $ diktor(試作) zero.kel
+! zero.kel:3:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask() を最後に置いてください
+[exit 1]
+=== two.kel
+--- $ diktor(試作) two.kel
+! two.kel:2:9: 型エラー: 操作 pair には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case pair(_, _) を最後に置いてください
+[exit 1]
+=== qual.kel
+--- $ diktor(試作) qual.kel
+! qual.kel:2:9: 型エラー: 操作 ask には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case ask(_) を最後に置いてください
+[exit 1]
+=== never.kel
+--- $ diktor(試作) never.kel
+! never.kel:2:9: 型エラー: 操作 fail には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case fail(_) を最後に置いてください
+[exit 1]
+=== ok.kel
+--- $ diktor(試作) ok.kel
+100
+[exit 0]
+=== two_fixed.kel
+     1	effect Pair = { pair: (Int32, Boolean) => Int32 }
+     2	let r = perform pair(1, true) handle {
+     3	  case pair(n, true) => resume(n)
+     4	  case pair(_, _) => resume(0)
+     5	  case return(x) => x
+     6	}
+     7	echoln(show(r))
+--- $ diktor(試作) two_fixed.kel
+1
+[exit 0]
+=== qual_fixed.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	effect Ask2 = { ask: (Int32) => Int32 }
+     3	let r = perform Ask.ask(1) handle {
+     4	  case Ask.ask(1) => resume(100)
+     5	  case ask(_) => resume(0)
+     6	  case return(x) => x
+     7	}
+     8	echoln(show(r))
+--- $ diktor(試作) qual_fixed.kel
+100
+[exit 0]

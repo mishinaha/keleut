@@ -1,0 +1,3 @@
+let f[E](x: Int32): Int32 @ {RR extends E} = { echoln("p9"); x }
+let y: E = f(4)
+echoln(show(y))

@@ -1,0 +1,2 @@
+pub type R = {a: R}
+pub type Id[A] = A

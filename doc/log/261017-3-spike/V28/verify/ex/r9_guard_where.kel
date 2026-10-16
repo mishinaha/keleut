@@ -1,0 +1,10 @@
+module M {
+  type W: EffectRow = {Print}
+  type WE[E]: EffectRow = {Print extends E}
+  pub let rec pick[E](xs: List[Int32], f: (Int32) => Unit @ {WE[E]}): Unit @ {WE[E]} = xs match {
+    case Cons(x, rest) if x > 0 => { f(x); pick(rest, f) }
+    case Cons(_, rest) => pick(rest, f)
+    case Nil => ()
+  }
+}
+with_stdout(fn() => M.pick(Cons(1, Cons(-2, Cons(3, Nil))), fn(n) => perform print(show(n) + "\n")))

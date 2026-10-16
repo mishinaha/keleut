@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = {a: P}

@@ -1,0 +1,7 @@
+type class Pp[F[_]] {
+  val pp[B: Show]: (F[B]) => String
+}
+type instance Pp[Option[_]] {
+  let pp(o) = o match { case Some(x) => show(x) case None => "N" }
+}
+echoln(pp(Some(5)))

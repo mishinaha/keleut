@@ -1,0 +1,25 @@
+分野 never の合成後の dune runtest
+
+(1) 合成後(手直し 1〜3 を含む)の dune runtest: 差分なし(緑)。
+
+(2) 合成後のコードに HEAD の cram(test/never_ops.t を HEAD に戻し、empty_match.t を除く)を当てた dune runtest:
+    差分は test/never_ops.t の absurd(HEAD の 92 行)の警告 1 行が消えることだけ。
+
+分類:
+- 新しく落ちるブロック: 無い
+- 期待値が変わる既存のブロック: test/never_ops.t の absurd 1 ブロック(V134)。
+  V129 の差分はこの行を新しい文面に替えるが、V134 の後では行ごと消える。前書き 77〜78 行も V134 で書き換える。
+- 新しいブロック: test/never_ops.t の absurdshow、absurdother(V129、2 ブロック)、neverclass + neverclasshelper、neverclassann(V135、2 ブロック)、
+  test/empty_match.t(V134、9 ブロック)
+- 変わらない: ほかの全ブロック
+
+(3) 項目の主張の再確認(合成後の処理系):
+- V134: items/V134/ex の全 .kel と REPL 4 本を results.new.txt と比べた。差は「例えば _ が漏れています」が V129 の新しい文面に替わる行だけ
+  (lamdefer, r11, r12, r13, r1, r2, r3, r6, r7, r9, rowkind, toplevelstmt, unannparam, unannparam_call, v136, w1〜w4, REPL の r10 と w1)。
+  受理、終了状態、出力、警告の数は変わらない。従来の文面のまま: laterint, numvar, r4_order, r5_local_nongen, rigid。
+- V129: results.spike.txt の [F] 欄と全例で一致(見出しの空白と REPL の終了状態の行を除く)。
+- V135: items/V135/ex と verify/ex の全 .kel と REPL を HEAD(bin/diktor-head)と比べて全一致。
+
+(4) 最終稿の作業(反証の反映)での再確認:
+    never.patch の見出しの旧側を一時領域の絶対パスから diktor.orig/ に書き換えた(本文は変えていない)。
+    HEAD の写しに patch -p1 で当て(--dry-run で 4 ファイルとも fuzz なし)、dune build はエラー 0、dune runtest の出力は 0 行(差分なし)。

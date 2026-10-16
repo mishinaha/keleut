@@ -1,0 +1,1 @@
+let g(): Int32 = run h { let r: Ref[h, String] = Ref.new("a"); let s: Ref[h, Int32] = r; 0 }

@@ -1,0 +1,2 @@
+let f[A](): Int32 @ Heap[A] = 0
+let g(): Int32 = run h { f() }

@@ -1,0 +1,32 @@
+syntax の差分を当てた順と手直し(基点は diktor 39d4091 の写し)
+
+1. V115  そのまま当たる。build、runtest とも差分 0(期待値と前書きを差分が含む)。
+2. X-E8  そのまま当たる。
+3. V121  当たる(driver.ml の hunk 1 は fuzz 2 で、内容は意図どおり)。build、runtest 差分 0。
+4. V123  driver.ml の try_parse の hunk と lexer.ml の冒頭の記事の hunk が当たらない。
+         手直し: 照合の 1 行を when 照合に置き換え(V115 の後の文脈で)、冒頭の記事は V121 の段落に V123 の 4 行を差し込む。
+         runtest 差分 0。
+5. X-E13 driver.ml の parse_with の記事の hunk と try_parse の hunk が当たらない。
+         手直し: 記事は V121 の後の 3 種類に限度を足して 4 種類にし、MalFormed の行を除く。try_parse の節は末尾に足す。
+         runtest 差分 0。
+6. V88   driver.ml の §16.3a の挿入と parse_unit_with の hunk、if.t、import.t、nonfeatures.t の期待値の hunk が当たらない(V115 の文面のため)。
+         手直し: §16.3a をそのまま差し込み、parse_with の記事の箇条を V88 の形にし、try を parse_program にする。
+         misused_reserved_word の Lex_error の握りつぶしから Sedlexing.MalFormed を外す(V121 の後は届かない)。
+         期待値: 既存 3 ファイル 5 行は promote、reserved_word.t の汎用の文面 9 行は V115 の文面に promote。
+7. V60   trailing_block.t の 3 hunk が当たらない(V115 が前書きと期待値を変えたため)。
+         手直し: 前書き 1 か所、mctor0、ctorrec、two3 を手で足し、ctor0、tag0、paren は promote。nlarm は V115 の文面に promote。
+8. V118  driver.ml の 2 hunk と import.t の nl、run_exit.t の exitparse の hunk が当たらない。
+         手直し: parse_error_message を V115 の文面(構文エラー: …、構文エラー: この位置の後ろ、行:桁 のトークンが文法に合いません)で足す。
+         V88 の misused_reserved_word に before_ep と before_cont の退避と復元を足し、Syntax_error の照合を Syntax_error_at だけにする。
+         期待値: nl、exitparse は promote。syntax_error_pos.t は 8 行を V115 の文面に promote。reserved_word.t の norhs が 2:1 から 1:8(この位置の後ろ、2:1)に変わる。
+9. X-F5b driver.ml の 2 hunk、lexer.ml の状態と §2.11 の記事と末尾の節の hunk が当たらない。
+         手直し: 節を §2.14 に繰り下げ(V88 の §2.13 の後)、parse_error_message を 1 つにまとめ、数値の判定を先、V118 の位置の判定を後にする。
+         V88 の misused_reserved_word に recent の退避と復元を足す。lexer.ml と tokens.t の「パースエラー」を「構文エラー」にする。
+         期待値: tokens.t の 11 行を V115 の文面に、gluedkw(1.2.match)は V88 の予約語の文面に変わる。前書きを 1 か所直した。
+
+合成後: dune build は通る(parser.mly 88 行の Warning 60 は HEAD からある)。dune runtest は差分 0。
+menhir --explain --strict --table を合成後の parser.mly に単独で走らせ、parser.conflicts は 0 バイト(HEAD も 0 バイト)。
+速さ(perf.txt): --dump-ast big.kel HEAD 683.1 ms / 合成 849.0 ms(約 24% 増)、--type-check HEAD 820.9 ms / 合成 1030.3 ms(約 26% 増)、tiny.kel 3.0 ms / 2.9 ms。
+退避と復元の要否(ex/results.norestore.txt): 復元を外すと (1else) は数値の文面を失い、norhs は 2:1 に戻る。
+grep -rn パースエラー lib bin test tools は 0 件。litcheck --old は 6 ファイルとも marker 0 件(code の不一致はコードの変更による)。
+V118 のソースコメントの改訂(syntax.ml §1.1、parser.mly の Syntax_error への言及など)は試作の差分に含まれていないので、合成差分にも無い。

@@ -1,0 +1,7 @@
+patching file lib/elab.ml
+Hunk #4 succeeded at 2045 (offset 26 lines).
+Hunk #5 succeeded at 2082 (offset 26 lines).
+Hunk #6 succeeded at 3507 (offset 26 lines).
+Hunk #7 succeeded at 3596 (offset 26 lines).
+Hunk #8 succeeded at 3963 (offset 26 lines).
+patching file test/pub_effect_note.t

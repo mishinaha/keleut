@@ -1,0 +1,46 @@
+# HEAD の lib/prelude.kel(diktor 39d4091)の 11-15 行
+// - `Unit` / `Option` / `List`
+// - 4 つの `effect`
+// - 52 本の `extern` 署名
+// - `echo` / `echoln` / `println` / `with_stdout`
+// - `List` と `Option` の `Show` インスタンス 2 つ
+
+# 種類ごとの数(grep -c、行頭で数える)
+^type [A-Z]      1
+^newtype         2
+^effect          2
+^extern          48
+^let             4
+^type instance   4
+
+# 宣言の行
+122:type Unit = {}
+124:newtype Option[A] = None | Some(A)
+125:newtype List[A] = Nil | Cons(head: A, tail: List[A])
+188:effect Console = { write: (String) => Unit }
+189:effect Print   = { print: (String) => Unit }
+322:let echo(message: String): Unit @ Console = perform write(message)
+323:let echoln(message: String): Unit @ Console = perform write(message + "\n")
+324:let println(message: String): Unit @ Print = perform print(message + "\n")
+385:let with_stdout[A, E](body: () => A @ {Print, Console extends E}): A @ {Console extends E} =
+434:type instance[A: Show] Show[List[_]] {
+447:type instance[A: Show] Show[Option[_]] {
+464:type instance[A: Eq] Eq[List[_]] {
+477:type instance[A: Eq] Eq[Option[_]] {
+
+# §15.1 の表の行(32 行)
+// | 本章 | データ型、エフェクト、`extern` 署名、素の関数、`List` と `Option` の `Show` | 宣言機構がすでに動いている |
+
+$ diktor-head eqlist.kel
+echoln(show(Cons(1, Nil) == Cons(1, Nil)))
+echoln(show(Some(1) == None))
+--
+true
+false
+exit=0
+
+$ diktor-head --type-check fs.kel
+let f(): Unit @ Fs = {}
+--
+! fs.kel:1:17: 型エラー: 未知のエフェクト: Fs
+exit=1

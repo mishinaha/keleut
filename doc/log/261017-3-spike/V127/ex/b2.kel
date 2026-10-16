@@ -1,0 +1,3 @@
+let fst[A, R](t: {_item: A extends R}): A = t._0
+let a = fst((1, 2))
+let b = fst(1, 2)

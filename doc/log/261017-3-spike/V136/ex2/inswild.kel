@@ -1,0 +1,7 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n) = n match { case _ => "never" } }
+type instance Describe[Int32] { let describe(n) = show(n) }
+type class Lv[A] { val lv: (A, #Lo | #Hi) => String }
+type instance Lv[Int32] { let lv(n, l) = l match { case #Lo => "lo" case #Hi => "hi" case _ => "other" } }
+echo(describe(3i32))
+echo(lv(1, #Hi))

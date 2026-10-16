@@ -1,0 +1,4 @@
+type Fn[A] = (A) => A
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x)
+let f[B](x: B): B = { let g: Fn[B] = k; g(x) }

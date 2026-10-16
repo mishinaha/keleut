@@ -1,0 +1,159 @@
+# HEAD (diktor-head) と試作の比較。入力は ex/ の各ファイル
+== blk_eof.kel
+HEAD: blk_eof.kel:3:1: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+NEW:  blk_eof.kel:2:14: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+== blk_file.kel
+HEAD: blk_file.kel:2:39: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+NEW:  blk_file.kel:2:14: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+== dummy.kel
+HEAD: dummy.kel:2:11: パースエラー(付近のトークンを確認してください)
+NEW:  dummy.kel:2:11: パースエラー(付近のトークンを確認してください)
+== parse_err2.kel
+HEAD: parse_err2.kel:3:1: パースエラー(付近のトークンを確認してください)
+NEW:  parse_err2.kel:1:14: パースエラー(この位置の後ろ、3:1 のトークンが文法に合いません)
+== parse_err.kel
+HEAD: parse_err.kel:4:1: パースエラー(付近のトークンを確認してください)
+NEW:  parse_err.kel:1:12: パースエラー(この位置の後ろ、4:1 のトークンが文法に合いません)
+== p_comma.kel
+HEAD: p_comma.kel:4:3: パースエラー(付近のトークンを確認してください)
+NEW:  p_comma.kel:3:4: パースエラー(この位置の後ろ、4:3 のトークンが文法に合いません)
+== p_stray2.kel
+HEAD: p_stray2.kel:3:3: パースエラー(付近のトークンを確認してください)
+NEW:  p_stray2.kel:1:10: パースエラー(この位置の後ろ、3:3 のトークンが文法に合いません)
+== p_stray.kel
+HEAD: p_stray.kel:2:1: パースエラー(付近のトークンを確認してください)
+NEW:  p_stray.kel:1:10: パースエラー(この位置の後ろ、2:1 のトークンが文法に合いません)
+== pub_inblock.kel
+HEAD: pub_inblock.kel:4:2: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+NEW:  pub_inblock.kel:2:3: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+== s10_blkdecl_long.kel
+HEAD: s10_blkdecl_long.kel:7:2: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+NEW:  s10_blkdecl_long.kel:2:3: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+== s11_pubrec.kel
+HEAD: s11_pubrec.kel:5:1: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
+NEW:  s11_pubrec.kel:2:3: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
+== s1_upper.kel
+HEAD: s1_upper.kel:2:14: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo
+NEW:  s1_upper.kel:2:11: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo
+== s2_varlbl.kel
+HEAD: s2_varlbl.kel:1:27: 構文エラー: #Foo(...) にラベル付き引数は使えません
+NEW:  s2_varlbl.kel:1:9: 構文エラー: #Foo(...) にラベル付き引数は使えません
+== s3b_witharg.kel
+HEAD: ! s3b_witharg.kel:3:14: 型エラー: (Int32) => _A は Integral のインスタンスではありません
+NEW:  ! s3b_witharg.kel:3:14: 型エラー: (Int32) => _A は Integral のインスタンスではありません
+== s3_withnc.kel
+HEAD: s3_withnc.kel:4:1: 構文エラー: with の右辺は関数呼び出しでなければなりません
+NEW:  s3_withnc.kel:2:12: 構文エラー: with の右辺は関数呼び出しでなければなりません
+== s4_varpat.kel
+HEAD: s4_varpat.kel:2:20: 構文エラー: #Foo(...) パターンにラベル付き引数は使えません
+NEW:  s4_varpat.kel:2:8: 構文エラー: #Foo(...) パターンにラベル付き引数は使えません
+== s5_pubinst.kel
+HEAD: s5_pubinst.kel:2:47: パースエラー(付近のトークンを確認してください)
+NEW:  s5_pubinst.kel:2:47: パースエラー(付近のトークンを確認してください)
+== s6_pubexp.kel
+HEAD: s6_pubexp.kel:1:5: パースエラー(付近のトークンを確認してください)
+NEW:  s6_pubexp.kel:1:5: パースエラー(付近のトークンを確認してください)
+== s7b_res2.kel
+HEAD: s7b_res2.kel:1:10: パースエラー(付近のトークンを確認してください)
+NEW:  s7b_res2.kel:1:10: パースエラー(付近のトークンを確認してください)
+== s7_reslbl.kel
+HEAD: s7_reslbl.kel:1:10: パースエラー(付近のトークンを確認してください)
+NEW:  s7_reslbl.kel:1:10: パースエラー(付近のトークンを確認してください)
+== s8_upd.kel
+HEAD: s8_upd.kel:2:25: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+NEW:  s8_upd.kel:2:10: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+== s9_blkdecl.kel
+HEAD: s9_blkdecl.kel:4:2: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+NEW:  s9_blkdecl.kel:2:3: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+== upper_label.kel
+HEAD: upper_label.kel:1:9: パースエラー(付近のトークンを確認してください)
+NEW:  upper_label.kel:1:9: パースエラー(付近のトークンを確認してください)
+== s5_pubinst.kel
+HEAD: s5_pubinst.kel:4:2: 構文エラー: type instance に pub は付けられません
+NEW:  s5_pubinst.kel:2:1: 構文エラー: type instance に pub は付けられません
+== s7_reslbl.kel
+HEAD: s7_reslbl.kel:9:3: 構文エラー: resume の引数にラベルは付けられません
+NEW:  s7_reslbl.kel:6:17: 構文エラー: resume の引数にラベルは付けられません
+== s7b_res2.kel
+HEAD: s7b_res2.kel:9:3: 構文エラー: resume の引数は高々1個です
+NEW:  s7b_res2.kel:6:17: 構文エラー: resume の引数は高々1個です
+
+# 対話的な実行
+== --repl < repl_b.txt
+-- HEAD
+idf : (A) => A = <fn>
+! <stdin>:2:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+g : (_A) => _A = <fn>
+実行時エラー: ゼロ除算です
+<stdin>:7:1: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+実行時エラー: ゼロ除算です
+_ : N = N(1)
+half
+実行時エラー: ゼロ除算です
+_ : N = N(2)
+h : (N) => N @ {Console, Blocking, Print extends R1} = <fn>
+-- NEW
+idf : (A) => A = <fn>
+! <stdin>:2:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+g : (_A) => _A = <fn>
+実行時エラー: ゼロ除算です
+<stdin>:6:14: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+実行時エラー: ゼロ除算です
+_ : N = N(1)
+half
+実行時エラー: ゼロ除算です
+_ : N = N(2)
+h : (N) => N @ {Console, Blocking, Print extends R1} = <fn>
+== --repl < repl_c.txt
+-- HEAD
+a : Int32 = 1
+<stdin>:3:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+y : (Int32, Int32) = (1, 2)
+w : Int32 = 4
+-- NEW
+a : Int32 = 1
+<stdin>:2:11: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+y : (Int32, Int32) = (1, 2)
+w : Int32 = 4
+
+# 新しい cram (test/syntax_error_pos.t) を HEAD で走らせた差分(- が試作の期待値、+ が HEAD)
+-  blkdecl.kel:2:3: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
++  blkdecl.kel:5:2: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+-  blkpub.kel:2:3: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
++  blkpub.kel:5:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+-  blkpubrec.kel:2:3: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
++  blkpubrec.kel:5:1: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
+-  withnc.kel:2:12: 構文エラー: with の右辺は関数呼び出しでなければなりません
++  withnc.kel:4:1: 構文エラー: with の右辺は関数呼び出しでなければなりません
+-  reslabel.kel:6:17: 構文エラー: resume の引数にラベルは付けられません
++  reslabel.kel:8:3: 構文エラー: resume の引数にラベルは付けられません
+-  res2.kel:6:17: 構文エラー: resume の引数は高々1個です
++  res2.kel:8:3: 構文エラー: resume の引数は高々1個です
+-  pubinst.kel:2:1: 構文エラー: type instance に pub は付けられません
++  pubinst.kel:4:2: 構文エラー: type instance に pub は付けられません
+-  upper.kel:2:11: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo
++  upper.kel:2:14: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo
+-  varlbl.kel:1:9: 構文エラー: #Foo(...) にラベル付き引数は使えません
++  varlbl.kel:1:27: 構文エラー: #Foo(...) にラベル付き引数は使えません
+-  varpat.kel:2:8: 構文エラー: #Foo(...) パターンにラベル付き引数は使えません
++  varpat.kel:2:20: 構文エラー: #Foo(...) パターンにラベル付き引数は使えません
+-  upd.kel:2:10: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
++  upd.kel:2:25: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+-  opend.kel:1:12: パースエラー(この位置の後ろ、4:1 のトークンが文法に合いません)
++  opend.kel:4:1: パースエラー(付近のトークンを確認してください)
+-  paren.kel:1:14: パースエラー(この位置の後ろ、3:1 のトークンが文法に合いません)
++  paren.kel:3:1: パースエラー(付近のトークンを確認してください)
+-  stray.kel:1:10: パースエラー(この位置の後ろ、2:1 のトークンが文法に合いません)
++  stray.kel:2:1: パースエラー(付近のトークンを確認してください)
+-  <stdin>:2:11: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
++  <stdin>:3:1: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+
+# :type の後ろの式(ex/repl_type.txt)
+-- HEAD
+r : {a: Int32} = {a = 1}
+<stdin>:2:23: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+<stdin>:3:12: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo
+-- NEW
+r : {a: Int32} = {a = 1}
+<stdin>:2:8: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+<stdin>:3:9: 構文エラー: レコードのラベルに大文字識別子は使えません: Foo

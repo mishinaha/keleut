@@ -1,0 +1,120 @@
+=== cls1.kel
+type class Pp[A] {
+  val pp[B: Show]: (A) => String
+}
+type instance Pp[Int32] {
+  let pp(x) = "i" + show(x)
+}
+echoln(pp(3i32))
+--- run
+i3
+[exit 0]
+--- --type-check
+_ : {}
+[exit 0]
+=== cls2.kel
+type class Pp[A] {
+  val pp[B: Show]: (A) => String
+}
+type instance Pp[Int32] {
+  let pp[B: Show](x: Int32): String = "i" + show(x)
+}
+echoln(pp(3i32))
+--- run
+! cls2.kel:5:7: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[exit 1]
+--- --type-check
+! cls2.kel:5:7: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[exit 1]
+=== let1.kel
+let pp[B: Show](x: Int32): String = "i" + show(x)
+echoln(pp(3i32))
+--- run
+! let1.kel:1:5: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[exit 1]
+--- --type-check
+! let1.kel:1:5: 型エラー: 曖昧な制約: 型パラメータ B の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[exit 1]
+=== cls3.kel
+type class Pp[A] {
+  val pp[B]: (A) => String
+}
+type instance Pp[Int32] {
+  let pp(x) = "i" + show(x)
+}
+echoln(pp(3i32))
+--- run
+i3
+[exit 0]
+--- --type-check
+_ : {}
+[exit 0]
+=== cls4.kel
+type class Pp[A] {
+  val pp[B: Show]: (A, B) => String
+}
+type instance Pp[Int32] {
+  let pp(x, y) = show(x) + show(y)
+}
+echoln(pp(3i32, true))
+--- run
+3true
+[exit 0]
+--- --type-check
+_ : {}
+[exit 0]
+=== cls5.kel
+type class Pp[A] {
+  val pp[B: Show + Eq]: (A) => String
+}
+type instance Pp[Int32] {
+  let pp(x) = "i" + show(x)
+}
+let f[A: Pp](x: A): String = pp(x)
+echoln(f(3i32))
+echoln(Pp.pp(4i32))
+--- run
+i3
+i4
+[exit 0]
+--- --type-check
+f : [A: Pp] (A) => String
+_ : {}
+_ : {}
+[exit 0]
+=== cls6.kel
+type class Pp[A] {
+  val pp[B: Show]: (A) => String
+}
+type instance Pp[Int32] {
+  let pp[B](x: Int32): String = "i" + show(x)
+}
+echoln(pp(3i32))
+--- run
+i3
+[exit 0]
+=== let2.kel
+let pp[B](x: Int32): String = "i" + show(x)
+echoln(pp(3i32))
+--- run
+i3
+[exit 0]
+=== ext1.kel
+extern "prim" let int_to_string[A: Show](x: Int32): String
+echoln(int_to_string(3i32))
+--- run
+! ext1.kel:1:1: 型エラー: 曖昧な制約: 型パラメータ A の制約 Show を束縛の型から決められません(束縛の型に現れない型パラメータに制約が付いています)
+[exit 1]
+=== cls7.kel
+type class Pp[A] {
+  val pp[B: Show]: (A) => String
+}
+--- run
+[exit 0]
+=== cls8.kel
+type class Pp[F[_]] {
+  val pp[A, B: Show]: (F[A]) => String
+}
+--- run
+[exit 0]
+_ : [A: Pp] (A) => String = <fn>

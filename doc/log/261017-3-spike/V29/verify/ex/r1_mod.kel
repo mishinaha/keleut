@@ -1,0 +1,8 @@
+module M {
+  pub type Cb[E] = Callback[E]
+  pub newtype Callback[E] = Callback(() => Unit @ E)
+  pub newtype H = MkH(Cb[{Print}])
+  pub let fire(h: H): Unit @ Print = h match { case MkH(Callback(f)) => f() }
+}
+let h = M.MkH(M.Callback(fn() => println("mod")))
+with_stdout(fn() => M.fire(h))

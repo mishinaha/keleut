@@ -1,0 +1,4 @@
+newtype N = N(Int32)
+let mk(): ((N) => String) = fn(v) => "m"
+type instance Show[N] { let show: (N) => String = mk() }
+echoln(show(N(0)))

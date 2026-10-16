@@ -1,0 +1,160 @@
+=== V117/ex/a10_alias_written.kel
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a11_param_written.kel
+! a11_param_written.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/ex/a12_module.kel
+M.h : ((Int32) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a13b_extern_direct.kel
+! a13b_extern_direct.kel:1:1: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/ex/a13_extern.kel
+cb : ((Int32) => Int32 @ {}) => Int32 @ {Blocking}
+[exit 0]
+=== V117/ex/a15_tparam_shadow.kel
+h : (A) => A @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a16_chain.kel
+k : (Int32) => Int32 @ {}
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a1_direct.kel
+! a1_direct.kel:1:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/ex/a2_pubalias.kel
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+[exit 0]
+=== V117/ex/a3_privalias.kel
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a4_ret.kel
+mk : () => ((Int32) => Int32 @ {}) @ {}
+[exit 0]
+=== V117/ex/a5b_nt_direct.kel
+! a5b_nt_direct.kel:1:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/ex/a5_nt.kel
+
+[exit 0]
+=== V117/ex/a6_valhead_alias.kel
+k : (Int32) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a7_valhead_direct.kel
+k : (Int32) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/a8_valnest_alias.kel
+k : ((Int32) => Int32 @ {}) => Int32 @ {}
+[exit 0]
+=== V117/ex/a9_param_arg.kel
+! a9_param_arg.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/ex/b10_valhead_param.kel
+! b10_valhead_param.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/ex/b1_nt_param.kel
+
+[exit 0]
+=== V117/ex/b2_hk.kel
+! b2_hk.kel:2:18: 型エラー: 型構成子 List には型引数が必要です
+[exit 1]
+=== V117/ex/b3_modscope.kel
+M.h : ((Int32) => Int32 @ {}) => Int32 @ {}
+[exit 0]
+=== V117/ex/b4_modscope2.kel
+M.h : ((Int32) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/ex/b5_qualified.kel
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+[exit 0]
+=== V117/ex/b6_alias_arg_scope.kel
+h : (((Int32) => Int32 @ {}) => Int32 @ {}) => Int32 @ {}
+[exit 0]
+=== V117/ex/b7_letrec.kel
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+[exit 0]
+=== V117/ex/b8_recursive_alias.kel
+! b8_recursive_alias.kel:1:11: 型エラー: 型エイリアス F が再帰しています(エイリアスは非再帰)
+[exit 1]
+=== V117/ex/b9_rowalias.kel
+h : (() => {} @ {Console}) => {} @ {Console}
+_ : {}
+[exit 0]
+=== V117/ex/c1_invisible.kel
+! c1_invisible.kel:4:14: 型エラー: 型 M.F は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V117/ex/c2_arity.kel
+! c2_arity.kel:2:14: 型エラー: 型エイリアス F の引数は 1 個必要です(0 個与えられました。部分適用は禁止)
+[exit 1]
+=== V117/ex/c3_unknown.kel
+! c3_unknown.kel:1:11: 型エラー: 未知の型: Foo
+[exit 1]
+=== V117/ex/c4_unknown_direct.kel
+! c4_unknown_direct.kel:1:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/verify/ex/myprelude.kel
+__int32_add : (Int32, Int32) => Int32
+__int32_sub : (Int32, Int32) => Int32
+__int32_mul : (Int32, Int32) => Int32
+__int32_div : (Int32, Int32) => Int32
+[exit 0]
+=== V117/verify/ex/r11_prelude_shadow.kel
+h : ((Int32) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/verify/ex/r12_prelude_alias.kel
+! r12_prelude_alias.kel:1:14: 型エラー: 未知の型: Cb
+[exit 1]
+=== V117/verify/ex/r13_order.kel
+! r13_order.kel:2:20: 型エラー: 未知の型: Foo
+[exit 1]
+=== V117/verify/ex/r14_rowalias_phantom.kel
+h : (() => {} @ {Console}) => {} @ {Console}
+_ : {}
+[exit 0]
+=== V117/verify/ex/r15_nt_phantom.kel
+! r15_nt_phantom.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/verify/ex/r16_tuple_ok.kel
+r16_tuple_ok.kel:2:51: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V117/verify/ex/r1_instvar.kel
+_ : {}
+[exit 0]
+=== V117/verify/ex/r2_phantom.kel
+! r2_phantom.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== V117/verify/ex/r3_ntparam_shadow.kel
+_ : {}
+[exit 0]
+=== V117/verify/ex/r4_rowalias_arg.kel
+! r4_rowalias_arg.kel:1:1: 型エラー: 型エイリアス W の型パラメータ E には型クラスの制約を書けません
+[exit 1]
+=== V117/verify/ex/r5_valtparam.kel
+idf : (A) => A @ {}
+_ : {}
+[exit 0]
+=== V117/verify/ex/r6_modshadow.kel
+M.h : (M.F) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/verify/ex/r7_variant.kel
+h : (#A((Int32) => Int32 @ {}) | #B) => Int32 @ {}
+_ : {}
+[exit 0]
+=== V117/verify/ex/r8_effectop.kel
+r8_effectop.kel:4:45: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V117/verify/ex/r9_tparam_hk.kel
+h : (F[Int32], (F[Int32]) => Int32 @ {}) => Int32 @ {}
+_ : {}
+[exit 0]

@@ -1,0 +1,3 @@
+module M {
+  pub let f(): Int32 = run h { let c = Ref.new(0); run h2 { Ref.get(c) } }
+}

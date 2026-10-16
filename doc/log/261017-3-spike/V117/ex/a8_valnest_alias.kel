@@ -1,0 +1,2 @@
+type F = (Int32) => Int32
+pub let k: (F) => Int32 = fn(f) => f(1)

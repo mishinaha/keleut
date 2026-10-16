@@ -1,0 +1,152 @@
+File "test/trailing_comma.t", line 1, characters 0-0:
+diff --git a/_build/default/test/trailing_comma.t b/_build/default/test/trailing_comma.t.corrected
+index f300af8..5681a26 100644
+--- a/_build/default/test/trailing_comma.t
++++ b/_build/default/test/trailing_comma.t.corrected
+@@ -27,7 +27,7 @@ ty_args は instance の型引数とエフェクト行のラベル引数でも
+   > KEL
+   $ diktor --type-check tc2.kel
+   n : Int32
+-  g : (Ref[A, Int32]) => Int32 @ {Heap[A]}
++  g : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+ 
+ 末尾カンマが付くのは最後の**要素**の後だけ。...rest と extends T は
+ 要素ではなく終端子なので、その後には付けられない(検証で確定した境界):
+File "test/region.t", line 1, characters 0-0:
+diff --git a/_build/default/test/region.t b/_build/default/test/region.t.corrected
+index be70cf0..bf7c37f 100644
+--- a/_build/default/test/region.t
++++ b/_build/default/test/region.t.corrected
+@@ -34,7 +34,7 @@
+   >   MutableArray.set(a, 0, 42)
+   > KEL
+   $ diktor --type-check honest.kel
+-  bump : (MutableArray[A, Int32]) => {} @ {Heap[A] extends R1}
++  bump : (MutableArray[h, Int32]) => {} @ {Heap[h] extends R1}
+ 
+ MutableArray.length も Heap[h] を要求する(長さは変わらないが、可変配列に
+ 触れること自体が行に載る — 仕様 §10 の署名一覧と、その理由を書いた
+@@ -165,7 +165,7 @@ MutableArray[h, A] は型注釈として書ける。仕様 §10 の署名一覧
+ 
+   $ printf 'let use[h, A](a: MutableArray[h, A], i: Int32): A @ Heap[h] = MutableArray.get(a, i)\n' > maannot.kel
+   $ diktor --type-check maannot.kel
+-  use : (MutableArray[A, B], Int32) => B @ {Heap[A]}
++  use : (MutableArray[h, A], Int32) => A @ {Heap[h]}
+ 
+ 添字が範囲外なら実行時エラー(不変・可変とも)。負の長さも実行時に弾く:
+ 
+File "test/nonfeatures.t", line 1, characters 0-0:
+diff --git a/_build/default/test/nonfeatures.t b/_build/default/test/nonfeatures.t.corrected
+index 19d4f63..c621716 100644
+--- a/_build/default/test/nonfeatures.t
++++ b/_build/default/test/nonfeatures.t.corrected
+@@ -94,7 +94,7 @@ test/parallel.t が固定している):
+   f : (A) => A
+   $ printf 'let use[h, A](r: Ref[h, A]): A @ Heap[h] = Ref.get(r)\n' > case7c.kel
+   $ diktor --type-check case7c.kel
+-  use : (Ref[A, B]) => B @ {Heap[A]}
++  use : (Ref[h, A]) => A @ {Heap[h]}
+   $ printf 'let g(): Int32 = run H { 1 }\n' > case8.kel
+   $ diktor --type-check case8.kel
+   case8.kel:1:22: パースエラー(付近のトークンを確認してください)
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index 3e1e396..89e5086 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -325,7 +325,7 @@ MiniLang §16-7(run と脱出検査、全6例。§9.3 の期待どおり):
+   $ diktor --type-check --no-prelude st.kel
+   ok1 : Int32
+   ok2 : Int32
+-  poly : (A) => Ref[B, Int32] @ {Heap[B] extends R1}
++  poly : (A) => Ref[h, Int32] @ {Heap[h] extends R1}
+ 
+   $ cat > stbad1.kel <<'EOF'
+   > let bad = run h { Ref.new(0) }
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck.t b/_build/default/test/typecheck.t.corrected
+index d3eb047..8884856 100644
+--- a/_build/default/test/typecheck.t
++++ b/_build/default/test/typecheck.t.corrected
+@@ -283,7 +283,7 @@ Int32 がプレリュードの List を黙って奪った):
+ 
+   $ printf 'let g[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)\n' > effshort.kel
+   $ diktor --type-check effshort.kel
+-  g : (Ref[A, Int32]) => Int32 @ {Heap[A]}
++  g : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+ 
+ 組み込みクラスのメソッドスキーマ(arrow1 / arrow2 の 1 枚から出る):
+ 
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index dde1b11..eed13c7 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -249,7 +249,7 @@ module に宣言すると、module の中では、引数の無い形も引数つ
+   M.k : (Int32) => Int32 @ {Print extends R1}
+   M.o : (Int32) => Int32 @ {Console}
+   m : (Int32) => Int32 @ {Console}
+-  n : (Int32) => Int32 @ {Heap[A]}
++  n : (Int32) => Int32 @ {Heap[h]}
+ 
+ module の中でエフェクト名を EffectRow エイリアスで覆うと、エイリアスの本体に書いた
+ 同じ名前もエイリアス自身を指すので、使う箇所が無くても、宣言を再帰として拒否する。
+@@ -282,8 +282,8 @@ module の中でエフェクト名を EffectRow エイリアスで覆うと、
+   $ diktor --type-check visrow10.kel
+   M.f : (Int32) => Int32 @ {Console}
+   M.g : (Int32) => Int32 @ {Print, Console}
+-  M.h : (Int32) => Int32 @ {Heap[A]}
+-  M.k : (Int32) => Int32 @ {Heap[A]}
++  M.h : (Int32) => Int32 @ {Heap[h]}
++  M.k : (Int32) => Int32 @ {Heap[h]}
+   $ cat > visrow10b.kel <<'KEL'
+   > module N {
+   >   pub newtype Heap[A] = MkH(A)
+@@ -297,8 +297,8 @@ module の中でエフェクト名を EffectRow エイリアスで覆うと、
+   $ diktor --type-check visrow10b.kel
+   N.f : (Int32) => Int32 @ {Console}
+   N.g : (Int32) => Int32 @ {Console, Print}
+-  N.h : (Int32) => Int32 @ {Heap[A]}
+-  N.k : (Int32) => Int32 @ {Heap[A]}
++  N.h : (Int32) => Int32 @ {Heap[h]}
++  N.k : (Int32) => Int32 @ {Heap[h]}
+ 
+ 同じく、module の newtype や Type エイリアスは、同名のトップレベルの EffectRow
+ エイリアスも覆わない。module の中のエフェクト位置のその名前は、引数の有無に
+@@ -495,7 +495,7 @@ module 名そのものは予約しない。組み込みに無い綴りを同じ
+   Array.sum : (Array[Int32]) => Int32 @ {}
+   $ printf 'module Ref { pub let swap[A](a: Ref[A, Int32]): Int32 = 0 }\n' > visbi4.kel
+   $ diktor --type-check visbi4.kel
+-  Ref.swap : (Ref[A, Int32]) => Int32 @ {}
++  Ref.swap : (Ref[h, Int32]) => Int32 @ {}
+ 
+ --prelude で差し替えたプレリュードも、ユーザのプログラムと同じに拒否される。
+ 平坦化は in_prelude のフラグが立つ前に走るので、プレリュードだからという免除が
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 1898e94..b47e864 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -842,7 +842,7 @@ Ref[Int32, Int32] や MutableArray[String, Int32] も拒否しない(LangSpec §
+   > KEL
+   $ diktor --type-check refkind.kel
+   f : (Ref[Int32, Int32]) => Int32
+-  g : (Ref[A, Int32]) => Int32
++  g : (Ref[h, Int32]) => Int32
+   h : (MutableArray[String, Int32]) => Int32
+ 
+ @ Heap[Int32] と注釈した関数も型検査に通るが、run の本体からは別のスコープの
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 1413192..2f3183f 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -1009,7 +1009,7 @@ pub で @ を省略した関数は @ {} と読み、宣言より前から参照
+   > and g[k](n: Int32): Int32 @ {} = n
+   > KEL
+   $ diktor --type-check recfwdheap.kel
+-  f : (Ref[A, Int32], Int32) => Int32 @ {Heap[A], Print}
++  f : (Ref[h, Int32], Int32) => Int32 @ {Heap[h], Print}
+   g : (Int32) => Int32 @ {}
+   $ cat > recfwdval.kel <<'KEL'
+   > let rec a: (Int32) => Int32 @ {Console, Print} = fn(n) => b(n)

@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+newtype Money(Int32)
+type instance Add[Money] {
+  let add(a, b) = perform throw("no")
+}

@@ -1,0 +1,9 @@
+effect Defer = { defer: (() => Unit @ {Out}) => Unit }
+let main_[E](): Unit @ {Out extends E} = {
+  perform defer(fn() => perform out("later"))
+  perform out("now")
+} handle {
+  case defer(k) => { resume(); k() }
+  case return(x) => x
+}
+let top(): Unit @ {Out} = main_()

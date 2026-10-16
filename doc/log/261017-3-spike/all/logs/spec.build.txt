@@ -1,0 +1,4 @@
+File "lib/parser.mly", line 88, characters 0-26:
+Warning 60 [unused-module]: unused module Diktor.
+File "lib/parser.mly", line 88, characters 0-26:
+Warning 60 [unused-module]: unused module Diktor.

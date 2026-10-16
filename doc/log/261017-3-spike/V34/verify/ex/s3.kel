@@ -1,0 +1,7 @@
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let inner[F](h: () => Int32 @ F): Int32 @ F = {
+    let k: () => Int32 @ {} = h
+    k()
+  }
+  inner(g)
+}

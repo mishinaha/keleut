@@ -1,0 +1,5 @@
+newtype Box[A] = Box(v: A)
+type instance[A: Show] Show[Box[_]] {
+  let show(b) = "x"
+  let rec strs(ys, acc) = acc
+}

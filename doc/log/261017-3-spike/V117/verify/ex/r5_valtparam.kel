@@ -1,0 +1,3 @@
+type A = (Int32) => Int32
+pub let idf[A](x: A): A = x
+echoln(show(idf(3)))

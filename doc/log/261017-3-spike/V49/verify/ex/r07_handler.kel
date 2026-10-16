@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let bad = fn(y) => {
+  let f[A](x: A): A @ {} = { let _ = y(x); x } handle { case ask() => resume(1) case return(v) => v }
+  f
+}

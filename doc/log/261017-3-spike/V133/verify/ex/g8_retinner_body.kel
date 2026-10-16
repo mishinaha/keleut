@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = perform ask() handle {
+  case ask() => (perform ask2() + 1) handle { case ask2() => resume(2)  case return(y) => y * 10 } match { case z => resume(z) }
+}
+echoln(show(r))

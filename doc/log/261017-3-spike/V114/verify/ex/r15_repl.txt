@@ -1,0 +1,5 @@
+type Int8 = Int32
+let z: Int8 = 5
+z + 1
+let w = 1u8
+z

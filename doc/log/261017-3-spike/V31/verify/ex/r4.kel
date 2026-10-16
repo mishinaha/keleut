@@ -1,0 +1,6 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+type Pure = Cb[{}]
+let run_cb(c: Pure): Unit = c match { case Callback(g) => g() }
+run_cb(Callback(fn() => ()))
+echoln("ok")

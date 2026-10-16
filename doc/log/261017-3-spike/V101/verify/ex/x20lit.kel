@@ -1,0 +1,6 @@
+effect Reg = { reg: ((Int64) => Int64) => Int64 }
+let main(): Unit @ Console = {
+  let r = { perform reg(fn(x) => x + 1) } handle { case reg(f) => resume(f(41)) }
+  echoln(show(r))
+}
+main()

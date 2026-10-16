@@ -1,0 +1,8 @@
+let pick(f: (Int32) => Boolean, x: Int32): Int32 = x match {
+  case n if f(n) => n
+  case _ => 0
+}
+let pick2[E](f: (Int32) => Boolean @ E, x: Int32): Int32 @ E = x match {
+  case n if f(n) => n
+  case _ => 0
+}

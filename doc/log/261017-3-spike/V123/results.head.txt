@@ -1,0 +1,73 @@
+## badesc.kel
+0000000   l   e   t       x       =       "   \   q   "  \n
+0000015
+$ diktor badesc.kel
+badesc.kel:1:11: 字句エラー: invalid escape sequence
+exit: 2
+## surr.kel
+0000000   l   e   t       s       =       "   \   u   D   8   0   0   "
+0000020  \n
+0000021
+$ diktor surr.kel
+surr.kel:1:15: 字句エラー: invalid unicode escape (out of range or surrogate)
+exit: 2
+## short.kel
+0000000   l   e   t       s       =       "   \   u   1   2   "  \n
+0000017
+$ diktor short.kel
+short.kel:1:14: 字句エラー: unexpected end of unicode escape
+exit: 2
+## shortU.kel
+0000000   l   e   t       s       =       "   \   U   0   0   1   1   "
+0000020  \n
+0000021
+$ diktor shortU.kel
+shortU.kel:1:16: 字句エラー: unexpected end of unicode escape
+exit: 2
+## esceof.kel
+0000000   l   e   t       s       =       "   \
+0000012
+$ diktor esceof.kel
+esceof.kel:1:11: 字句エラー: invalid escape sequence
+exit: 2
+## unterm.kel
+0000000   l   e   t       a       =       "   a   b   c
+0000014
+$ diktor unterm.kel
+unterm.kel:1:13: 字句エラー: unterminated string literal
+exit: 2
+## untermc.kel
+0000000   l   e   t       a       =       1       /   *       a   b   c
+0000020
+$ diktor untermc.kel
+untermc.kel:1:17: 字句エラー: unterminated block comment
+exit: 2
+## stray.kel
+0000000   l   e   t       a       =       1  \n   #   !   x  \n
+0000016
+$ diktor stray.kel
+stray.kel:2:1: 字句エラー: stray '#!'
+exit: 2
+## char.kel
+0000000   l   e   t       a       =       1     302 244  \n
+0000015
+$ diktor char.kel
+char.kel:1:11: 字句エラー: unexpected character: ¤
+exit: 2
+## bom.kel
+0000000   l   e   t       a       =       1     357 273 277  \n
+0000016
+$ diktor bom.kel
+bom.kel:1:11: 字句エラー: unexpected character: U+FEFF
+exit: 2
+## repl: unterminated string continues
+a : String = "x\ny"
+x
+y
+exit: 0
+## repl: bad escape
+<stdin>:1:11: 字句エラー: invalid escape sequence
+exit: 0
+## repl: unterminated comment continues
+ok
+exit: 0

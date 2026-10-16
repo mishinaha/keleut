@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+type class D[A] { val d: (A) => String }
+type instance D[Int32] { let d(n: Int32) = { let z = if n == 0 then perform throw("x") match {} else n; "i" } }
+let main(): String @ Fail = d(1)
+echoln(main() handle { case throw(e) => e })

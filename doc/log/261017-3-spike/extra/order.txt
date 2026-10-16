@@ -1,0 +1,19 @@
+分野 extra の合成の順と当たり方(基点 all/diktor = 10 分野の合成の木。作業木 clusters/extra/diktor、_build を消して作り直した)
+各差分の見出しは all/diktor、base/diktor、diktor/ など形がまちまちなので、見出しを x/<path> に正規化して(norm/<id>.patch)patch -p1 で当てた。
+内容は items/<id>/<id>.patch と同じ。各段の前に --dry-run で確かめた。
+
+1. V47  V47.patch   lib/elab.ml、test/visibility.t。offset 0、fuzz 0、失敗 0。手直し 0。
+2. V50  V50.patch   lib/elab.ml #1 (+6)、#2 (+25)、test/visibility.t #1 (+40)。fuzz 0、失敗 0。手直し 0。
+                    offset は V47 の unknown_type と elab_eff の分岐、vis4c〜e と visrow4b〜5b のブロックの分。
+3. V44  V44.patch   lib/elab.ml #4〜#8 (+26)、test/pub_effect_note.t は新設。fuzz 0、失敗 0。手直し 0。
+4. V49  V49.patch   lib/elab.ml #1 (+68)、lib/unify.ml offset 0、test/scope_escape_tparam.t は新設。fuzz 0、失敗 0。手直し 0。
+5. V53  V53.patch   lib/elab.ml #1 (+68)、test/eval.t、test/verify_fixes.t offset 0。fuzz 0、失敗 0。手直し 0。
+6. V48  V48.patch   lib/elab.ml、lib/exhaust.ml、test/instance_param_types.t、test/typecheck_m7.t offset 0、
+                    test/uninhabited_pattern.t は新設。fuzz 0、失敗 0。手直し 0。(V48-head.patch は使わない)
+
+dune build: 成功(警告は parser.mly:88 の Warning 60 のみ。all/diktor と同じ)。
+dune runtest(1 回目): 1 ファイル 1 ブロック 1 行の差分。test/typecheck.t の ml5c(119 行)。V49 の予告どおり。promote した。
+dune runtest(2 回目): 差分 0。
+手直しの合計: 0(期待値の promote 1)。
+
+合成差分: extra.patch = diff -ruN -x _build all/diktor diktor(12 ファイル、1189 行)。

@@ -1,0 +1,23 @@
+diff a/test/std_names.t b/test/std_names.t
+--- a/test/std_names.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/std_names.t	2026-10-17 04:14:30.068573618 +0900
+@@ -54,3 +54,19 @@
+   > KEL
+   $ diktor s8.kel
+   ok
++
++標準環境と同じ名前のクラスは、メソッドの型が標準環境のものと違っても同じでも、照合せずに
++落ちる。import されたファイル(起点でない単位)の宣言と、--prelude で差し替えたプレリュードの
++宣言も同じ:
++
++  $ mkdir -p sc/lib
++  $ printf 'pub type class Show[A] { val show: (A) => Boolean }\n' > sc/lib/s.kel
++  $ printf 'from "./lib/s" import Show\necholn("x")\n' > sc/s9.kel
++  $ (cd sc && diktor --type-check s9.kel)
++  ! lib/s.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
++  [1]
++  $ printf 'type class Show[A] { val show: (A) => String }\n' > p10.kel
++  $ printf 'echoln("x")\n' > s10.kel
++  $ diktor --prelude p10.kel --type-check s10.kel
++  ! p10.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
++  [1]

@@ -1,0 +1,4 @@
+pub module P {
+  type P = Int32
+  pub let one: Int32 = 1
+}

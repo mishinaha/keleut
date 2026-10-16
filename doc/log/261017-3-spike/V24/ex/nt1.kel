@@ -1,0 +1,3 @@
+module P {
+  pub newtype Parser[A] = Parser(go: (String) => Option[A] @ {}, fail: (String) => Unit)
+}

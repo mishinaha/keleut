@@ -1,0 +1,30 @@
+(library
+ (public_name diktor)
+ (libraries sedlex menhirLib unix)
+ (modules lexer parser syntax tree aux location dump prims decls unify show
+   exhaust elab value builtin interp prelude_embed driver)
+ (preprocess
+  (pps sedlex.ppx)))
+
+(menhir
+ (flags --explain --strict --table)
+ (modules parser))
+
+; プレリュードを文字列として埋め込む(--prelude PATH で差し替えられる)
+(rule
+ (targets prelude_embed.ml)
+ (deps prelude.kel)
+ (action
+  (with-stdout-to
+   %{targets}
+   (progn
+    (echo "let source = {prelude|")
+    (cat %{deps})
+    (echo "|prelude}\n")))))
+
+(env
+ (dev
+  (flags
+   ; Warning 8(非網羅 match)は noimpl の取りこぼし検出のため必ず残す
+   (:standard -w +a-4-9-40-41-42-44-45-70)
+   (:standard -warn-error -a+31))))

@@ -1,0 +1,78 @@
+===== r15_recsel.kel
+-- HEAD tc
+idf2 : (A) => A
+r : {f: (Int32) => Int32}
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+idf2 : (A) => A
+r : {f: (Int32) => Int32}
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+2
+exit=0
+-- proto run
+2
+exit=0
+===== r16_recsel2.kel
+-- HEAD tc
+idf2 : (A) => A
+r : {f: (Array[_A]) => Int32}
+xs : Array[Int32]
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+idf2 : (A) => A
+r : {f: (Array[_A]) => Int32}
+xs : Array[Int32]
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+4
+exit=0
+-- proto run
+4
+exit=0
+===== r17_tuplelam.kel
+-- HEAD tc
+idf2 : (A) => A
+t : ((Int32) => Int32, Int32)
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+idf2 : (A) => A
+t : ((Int32) => Int32, Int32)
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+-1
+exit=0
+-- proto run
+-1
+exit=0
+===== r18_ctorlam.kel
+-- HEAD tc
+idf2 : (A) => A
+o : Option[(Int32) => Int32]
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- proto tc
+idf2 : (A) => A
+o : Option[(Int32) => Int32]
+main : () => {} @ {Console}
+_ : {}
+exit=0
+-- HEAD run
+6
+exit=0
+-- proto run
+6
+exit=0

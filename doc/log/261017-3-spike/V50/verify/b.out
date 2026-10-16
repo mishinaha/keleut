@@ -1,0 +1,79 @@
+== b01.kel
+| module M {
+|   type E[R]: EffectRow = {Print extends R}
+|   let f[E, R](x: Int32): Int32 @ {E[R]} = x
+| }
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+[exit 0]
+-- _build
+! b01.kel:3:34: 型エラー: 未知のエフェクト: E
+[exit 1]
+== b02.kel
+| module M {
+|   type E: EffectRow = {Print}
+|   let f[E](u: Unit): Unit @ {M.E} = println("q")
+| }
+| with_stdout(fn() => M.f(()))
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+! b02.kel:5:21: 型エラー: M.f は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+-- _build
+! b02.kel:5:21: 型エラー: M.f は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+== b03.kel
+| module M {
+|   pub type E: EffectRow = {Print}
+|   let f[E](u: Unit): Unit @ {M.E} = println("q")
+| }
+| with_stdout(fn() => M.f(()))
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+! b03.kel:5:21: 型エラー: M.f は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+-- _build
+! b03.kel:5:21: 型エラー: M.f は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+== b04.kel
+| module W { pub type W: EffectRow = {Print} }
+| let f[W](u: Unit): Unit @ {W} = println("comp")
+| with_stdout(fn() => f(()))
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+comp
+[exit 0]
+-- _build
+! b04.kel:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== b05.kel
+| let f[Print](x: Int32): Int32 @ {Print[Int32]} = x
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+[exit 0]
+-- _build
+[exit 0]
+== b06.kel
+| type W: EffectRow = {Print}
+| let f[W](u: Unit): Unit @ {Print} = { let g: () => Unit @ {W} = fn() => println("v"); g() }
+| with_stdout(fn() => f(()))
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+v
+[exit 0]
+-- _build
+! b06.kel:2:59: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== b07.kel
+| type W: EffectRow = {Print}
+| type Cb = () => Unit @ {W}
+| let f[W](g: Cb): Unit @ {Print} = g()
+| with_stdout(fn() => f(fn() => println("alias-body")))
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+alias-body
+[exit 0]
+-- _build
+alias-body
+[exit 0]
+== b08.kel
+| type W: EffectRow = {Print}
+| let f[W](u: Unit): Unit @ {W} = println("x")
+-- 0c9c47ee-be87-463e-9238-3f21c285a8f5
+[exit 0]
+-- _build
+! b08.kel:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]

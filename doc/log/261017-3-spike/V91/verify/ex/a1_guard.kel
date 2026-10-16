@@ -1,0 +1,7 @@
+let classify(x: Int32): String = x match {
+  case n if n % 2 == 0 => "even"
+  case _ => "odd"
+}
+echoln(classify(3))
+echoln(show(7 % 3))
+echoln(show(1.5 + 2.0))

@@ -1,0 +1,8 @@
+pub newtype Parser[A] = Parser(
+  go: (String) => Option[A] @ {},
+  fail: (String) => Unit @ {})
+pub effect Log = {
+  log: (String) => Unit,
+  flush: () => Unit
+}
+pub let run_p[A](p: Parser[A], s: String): Option[A] @ {} = p match { case Parser(g, _) => g(s) }

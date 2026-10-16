@@ -1,0 +1,5 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype Holder[F, E] = Holder(Callback[F[E]])
+let mk[F, E](): Holder[F, E] = Holder(Callback(fn() => {}))
+let main(): Unit @ Console = with_stdout(fn() => mk() match { case Holder(_) => println("ok") })
+main()

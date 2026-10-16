@@ -1,0 +1,4 @@
+from "./lib/m" import P
+let f(x: Int32): Int32 @ {P, Console} = { echoln("imp"); x }
+let r = f(7) handle { case print(s) => resume({}) case return(v) => v }
+echoln(show(r))

@@ -1,0 +1,2 @@
+type class C[T] { val m: (T) => Unit @ {Log} }
+effect Log = { log: (String) => Unit }

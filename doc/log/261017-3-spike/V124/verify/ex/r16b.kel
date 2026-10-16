@@ -1,0 +1,1 @@
+type A[F] = F[Int32]

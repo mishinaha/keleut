@@ -1,0 +1,3 @@
+module M {
+  let g: ({ a: Int32 }) => Int32 = fn(r: { b: Int32 }) => r.b
+}

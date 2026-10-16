@@ -1,0 +1,5 @@
+from "./b" import BM.k
+module L {
+  pub let k2(x: Int32): Int32 = k(x) + 1
+}
+echoln(show(L.k2(4)))

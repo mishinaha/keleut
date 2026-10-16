@@ -1,0 +1,3 @@
+type Unit = {}
+effect Out = { out: (String) => Unit }
+let g(): () => Unit = fn() => perform out("x")

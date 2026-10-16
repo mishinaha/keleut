@@ -1,0 +1,5 @@
+let f(x) = {
+  let r: Int32 = x match {}
+  x match { case Some(v) => v  case None => 0i32 }
+}
+echoln(show(f(Some(2i32))))

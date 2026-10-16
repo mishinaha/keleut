@@ -1,0 +1,25 @@
+### diktor-head
+l=16k seq5000.kel: stderr=[実行時エラー: スタックオーバーフロー(再帰が深すぎます)] stdout_bytes=0 exit=3
+l=16k seqexp5000.kel: stderr=[実行時エラー: スタックオーバーフロー(再帰が深すぎます)] stdout_bytes=0 exit=3
+l=16k topwith.kel: stderr=[実行時エラー: スタックオーバーフロー(再帰が深すぎます)] stdout_bytes=0 exit=3
+l=16k tup5000.kel: stderr=[実行時エラー: スタックオーバーフロー(再帰が深すぎます)] stdout_bytes=0 exit=3
+l=16k rec5000.kel: stderr=[実行時エラー: スタックオーバーフロー(再帰が深すぎます)] stdout_bytes=0 exit=3
+l=16k tup20000.kel: stderr=[実行時エラー: スタックオーバーフロー(再帰が深すぎます)] stdout_bytes=0 exit=3
+l=16k imp/main.kel (import 先 big.kel が 2 万文): 実行時エラー: スタックオーバーフロー(再帰が深すぎます) exit=3 
+l=16k --repl seqrepl.txt: y : Int32 = 1 実行時エラー: スタックオーバーフロー(再帰が深すぎます) exit=3 
+l=100k --repl typerepl.txt: 実行時エラー: スタックオーバーフロー(再帰が深すぎます) exit=0 
+### main.exe
+l=16k seq5000.kel: stderr=[seq5000.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)] stdout_bytes=0 exit=2
+l=16k seqexp5000.kel: stderr=[seqexp5000.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)] stdout_bytes=0 exit=2
+l=16k topwith.kel: stderr=[topwith.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)] stdout_bytes=0 exit=2
+l=16k tup5000.kel: stderr=[tup5000.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)] stdout_bytes=0 exit=2
+l=16k rec5000.kel: stderr=[rec5000.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)] stdout_bytes=0 exit=2
+l=16k tup20000.kel: stderr=[tup20000.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー)] stdout_bytes=0 exit=2
+l=16k imp/main.kel (import 先 big.kel が 2 万文): big.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー) exit=2 
+l=16k --repl seqrepl.txt: y : Int32 = 1 <stdin>: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー) 1 exit=0 
+l=100k --repl typerepl.txt: ! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー) after exit=0 
+試作 l=16k s1500.kel: before
+1 exit=0
+試作 l=16k s2000.kel: ! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー) exit=1
+試作 l=16k s2500.kel: ! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー) exit=1
+試作 l=16k s3000.kel: s3000.kel: 処理系の限度: 構文解析で再帰が深すぎます(スタックオーバーフロー) exit=2

@@ -1,0 +1,3 @@
+let rec f[A](x: A): Int32 = g(x)
+and g(y: Int32): Int32 = 0
+echoln(show(f(1)))

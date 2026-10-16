@@ -1,0 +1,2 @@
+module R { pub let r(x: Int32): Int32 = x }
+R.r(5)

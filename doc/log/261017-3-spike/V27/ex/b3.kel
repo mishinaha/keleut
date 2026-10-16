@@ -1,0 +1,2 @@
+newtype T[G] = MkT(G[Int32])
+let f[F[_, _]](x: T[F[String]]): Int32 = 0

@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+type C = A[{}]
+type A[E] = (() => Unit @ E, () => Unit @ Log)
+let f(c: C): Int32 = 0
+echoln("ok")

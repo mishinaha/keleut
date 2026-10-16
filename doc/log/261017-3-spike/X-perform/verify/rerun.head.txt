@@ -1,0 +1,133 @@
+== a10.kel
+     1	type Unit = {}
+     2	effect P = { put: (Int32) => Unit }
+     3	let take(x: Int32): Unit = {}
+     4	let bad(): Unit = take("x")
+     5	let bad2(): Unit = take(1, 2)
+-- out
+take : (Int32) => {}
+! a10.kel:4:24: 型エラー: 型が一致しません: String と Int32
+[exit 1]
+== a11.kel
+     1	type Unit = {}
+     2	effect P = { put: ({x: Int32}) => Unit }
+     3	let take(r: {x: Int32}): Unit = {}
+     4	let bad(): Unit = take({y = 1})
+-- out
+take : ({x: Int32}) => {}
+! a11.kel:4:24: 型エラー: ラベル y がありません(行は閉じています)
+[exit 1]
+== a12.kel
+     1	type Unit = {}
+     2	effect P = { put: ((Int32) => Unit) => Unit }
+     3	let bad(): Unit @ P = perform put(fn(x: String) => {})
+-- out
+! a12.kel:3:23: 型エラー: 型が一致しません: String と Int32
+[exit 1]
+== a13.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	effect NurP = { spawnp: ((Int32) => Unit) => Unit }
+     4	let bad(f: (String) => Unit @ Async2): Unit @ NurP = perform spawnp(f)
+-- out
+! a13.kel:4:54: 型エラー: 型が一致しません: String と Int32
+[exit 1]
+== a14.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	effect Nur = { spawn: (() => Unit @ Async2) => Unit }
+     4	effect Other = { o: () => Unit }
+     5	let bad(f: () => Unit @ Other): Unit @ Nur = perform spawn(f)
+-- out
+! a14.kel:5:46: 型エラー: ラベル Other がありません(行は閉じています)
+[exit 1]
+== a15.kel
+     1	type Unit = {}
+     2	type Thunk = () => Unit
+     3	effect Async2 = { yield2: () => Unit }
+     4	effect NurA = { spawna: (Thunk) => Unit }
+     5	let bad(f: () => Unit @ Async2): Unit @ NurA = perform spawna(f)
+-- out
+! a15.kel:5:48: 型エラー: ラベル Async2 がありません(行は閉じています)
+[exit 1]
+== a1.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	effect NurP = { spawnp: (() => Unit) => Unit }
+     4	let bad(f: () => Unit @ Async2): Unit @ NurP = perform spawnp(f)
+-- out
+! a1.kel:4:48: 型エラー: ラベル Async2 がありません(行は閉じています)
+[exit 1]
+== a2.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	let take(g: () => Unit): Unit = g()
+     4	let bad(f: () => Unit @ Async2): Unit = take(f)
+-- out
+take : (() => {} @ {}) => {}
+! a2.kel:4:46: 型エラー: ラベル Async2 がありません(行は閉じています)
+[exit 1]
+== a3.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	newtype Box = Box(() => Unit)
+     4	let bad(f: () => Unit @ Async2): Box = Box(f)
+-- out
+! a3.kel:4:40: 型エラー: ラベル Async2 がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+== a4.kel
+     1	type Unit = {}
+     2	effect NurP = { spawnp: (() => Unit) => Unit }
+     3	let bad(): Unit @ NurP = perform spawnp(fn() => perform yield9())
+-- out
+! a4.kel:3:49: 型エラー: 未知の操作: yield9
+[exit 1]
+== a5.kel
+     1	type Unit = {}
+     2	effect P = { put: (Int32) => Unit }
+     3	let bad(): Unit @ P = perform put("x")
+-- out
+! a5.kel:3:23: 型エラー: 型が一致しません: String と Int32
+[exit 1]
+== a6.kel
+     1	type Unit = {}
+     2	effect P = { put: (Int32) => Unit }
+     3	let bad(): Unit @ P = perform put(1, 2)
+-- out
+! a6.kel:3:23: 型エラー: ラベル _item がありません(行は閉じています)
+[exit 1]
+== a7.kel
+     1	type Unit = {}
+     2	effect P = { put: ({x: Int32}) => Unit }
+     3	let bad(): Unit @ P = perform put({y = 1})
+-- out
+! a7.kel:3:23: 型エラー: ラベル y がありません(行は閉じています)
+[exit 1]
+== a8.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	effect NurP = { spawnp: (() => Unit) => Unit }
+     4	let bad(): Unit @ {NurP, Async2} = perform spawnp(fn() => perform yield2())
+-- out
+! a8.kel:4:36: 型エラー: ラベル Async2 がありません(行は閉じています)
+[exit 1]
+== a9.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	let take(g: () => Unit): Unit = g()
+     4	let bad(): Unit @ Async2 = take(fn() => perform yield2())
+-- out
+take : (() => {} @ {}) => {}
+! a9.kel:4:41: 型エラー: エフェクト Async2 をここでは実行できません(ラベル Async2 がありません(行は閉じています))
+[exit 1]
+== r3.kel
+     1	type Unit = {}
+     2	effect Async2 = { yield2: () => Unit }
+     3	effect Mk = { mk: () => (() => Unit) }
+     4	let g(f: () => Unit @ Async2): Unit = (perform mk())() handle {
+     5	  case mk() => resume(f)
+     6	  case return(x) => x
+     7	}
+-- out
+! r3.kel:5:16: 型エラー: ラベル Async2 がありません(行は閉じています)
+[exit 1]

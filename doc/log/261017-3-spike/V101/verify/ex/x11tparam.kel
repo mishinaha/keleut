@@ -1,0 +1,6 @@
+effect Reg = { reg: (() => String) => String }
+let go[A: Show](x: A): String @ Reg = perform reg(fn() => show(x))
+let main(): Unit @ Console = {
+  echoln({ go(5i32) + go("s") } handle { case reg(f) => resume(f() + "!") })
+}
+main()

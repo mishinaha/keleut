@@ -1,0 +1,4 @@
+pub effect Bad = {
+  ok: () => Unit,
+  oops: Int32
+}

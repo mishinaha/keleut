@@ -1,0 +1,94 @@
+== v33a.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 @ Print = b match { case Box(x) => x } }
+-- HEAD (--type-check)
+! v33a.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+
+== v33b.kel
+newtype Box = Box(Int32)
+type class Pr2[T] { val pr2[E]: (T) => Unit @ E }
+type instance Pr2[Box] { let pr2(b: Box): Unit @ Print = () }
+-- HEAD (--type-check)
+! v33b.kel:3:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド pr2 の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+[exit 1]
+
+== v33c.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 @ Print = b match { case Box(x) => { echo("e"); x } } }
+-- HEAD (--type-check)
+! v33c.kel:3:89: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+
+== v33d.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 @ {} = b match { case Box(x) => x } }
+-- HEAD (--type-check)
+[exit 0]
+
+== v33e.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size: (Box) => Int32 @ Print = fn(b) => 1 }
+-- HEAD (--type-check)
+! v33e.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+
+== v33f.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size: (Box) => Int32 = fn(b) => 1 }
+-- HEAD (--type-check)
+[exit 0]
+
+== v33g.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 @ Print = b match { case Box(x) => { println("e"); x } } }
+-- HEAD (--type-check)
+! v33g.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+
+== v33h.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 = b match { case Box(x) => { println("e"); x } } }
+-- HEAD (--type-check)
+! v33h.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+
+== v33i.kel
+newtype Box = Box(Int32)
+type Fn = (Box) => Int32 @ Print
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size: Fn = fn(b) => 1 }
+-- HEAD (--type-check)
+! v33i.kel:4:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+
+== v33k.kel
+newtype Box = Box(Int32)
+type class Pr[T] { val pr: (T) => Unit @ Print }
+type instance Pr[Box] { let pr(b: Box): Unit @ Console = () }
+-- HEAD (--type-check)
+! v33k.kel:3:29: 型エラー: インスタンスメソッド pr がクラス宣言の型を満たしません(ラベル Console がありません(行は閉じています))
+[exit 1]
+
+== v33l.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let rec size(b: Box): Int32 @ Print = b match { case Box(x) => x } }
+-- HEAD (--type-check)
+! v33l.kel:3:36: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+[exit 1]
+
+== v33m.kel
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size[E](b: Box): Int32 @ E = b match { case Box(x) => x } }
+-- HEAD (--type-check)
+[exit 0]
+

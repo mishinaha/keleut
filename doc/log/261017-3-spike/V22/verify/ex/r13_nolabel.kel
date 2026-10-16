@@ -1,0 +1,1 @@
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {})) | MkC(List[E])

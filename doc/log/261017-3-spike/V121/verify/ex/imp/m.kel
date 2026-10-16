@@ -1,0 +1,1 @@
+pub let greet(n: String): String = "こんにちは " + n

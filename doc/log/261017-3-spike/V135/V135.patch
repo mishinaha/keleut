@@ -1,0 +1,49 @@
+diff a/test/never_ops.t b/test/never_ops.t
+--- a/test/never_ops.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/never_ops.t	2026-10-17 04:12:39.443784250 +0900
+@@ -118,6 +118,45 @@
+   $ diktor absurdann.kel
+   -1
+ 
++Never にインスタンスを持つクラスの制約を要求する位置に perform の式を直接置くと、
++穴と同じく型が決まらないので曖昧性エラーになる。注釈しない補助関数を経由しても同じ:
++
++  $ cat > neverclass.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > type class Describe[A] { val describe: (A) => String }
++  > type instance Describe[Never] { let describe(n: Never) = n match {} }
++  > let f(): String @ Fail = describe(perform throw("x"))
++  > EOF
++  $ diktor neverclass.kel
++  ! neverclass.kel:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
++  [1]
++  $ cat > neverclasshelper.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > type class Describe[A] { val describe: (A) => String }
++  > type instance Describe[Never] { let describe(n: Never) = n match {} }
++  > let fail(m: String) = perform throw(m)
++  > let f(): String @ Fail = describe(fail("x"))
++  > EOF
++  $ diktor neverclasshelper.kel
++  ! neverclasshelper.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
++  [1]
++
++補助関数の返り値か値束縛を Never と注釈すると型が決まり、Never のインスタンスが選ばれる:
++
++  $ cat > neverclassann.kel <<'EOF'
++  > effect Fail = { throw: (String) => Never }
++  > type class Describe[A] { val describe: (A) => String }
++  > type instance Describe[Never] { let describe(n: Never) = n match {} }
++  > let fail(m: String): Never @ Fail = perform throw(m)
++  > let f(): String @ Fail = describe(fail("x"))
++  > let g(): String @ Fail = { let v: Never = perform throw("y"); describe(v) }
++  > echoln(f() handle { case throw(m) => "caught " + m })
++  > echoln(g() handle { case throw(m) => "caught " + m })
++  > EOF
++  $ diktor neverclassann.kel
++  caught x
++  caught y
++
+ 再開しない操作の節に resume は書けない。閉包の本体に書いても、節の中の入れ子の
+ handle の本体に書いても(外側の節の継続を指す)、同じ診断になる:
+ 

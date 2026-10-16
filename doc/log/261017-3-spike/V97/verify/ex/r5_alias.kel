@@ -1,0 +1,10 @@
+type Fn = (Int32) => Int32
+let idf[A](x: A): A = x
+let g: Fn = idf(fn(x) => x + 1)
+let p(): Unit @ Console = echoln(show(g(1)))
+let q(): Unit @ Print = println(show(g(2)))
+p()
+with_stdout(q)
+let s: (Int32) => String = show
+let k(): Unit @ Console = echoln(s(9))
+k()

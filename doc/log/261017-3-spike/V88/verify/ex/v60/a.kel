@@ -1,0 +1,2 @@
+newtype T = Foo(Int32)
+let y = Foo { 1 }

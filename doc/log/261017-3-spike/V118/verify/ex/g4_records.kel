@@ -1,0 +1,10 @@
+let r = {a = 1, b = "x"}
+let s = {r with a = 2}
+echoln(show(s.a))
+let t = (1, (2, 3))
+echoln(show(t._1._0))
+let v = #Foo(1, 2)
+let w = v match {
+  case #Foo(a, b) => a + b
+}
+echoln(show(w))

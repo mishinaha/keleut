@@ -1,0 +1,7 @@
+pub let pu: (Int32) => Int32 = fn(x) => x * 2
+let ap(h: () => Int32 @ {}): Int32 = h()
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: () => Int32 @ {} = fn() => 3
+  ap(k) + g()
+}
+echoln(show(f(fn() => pu(4))))

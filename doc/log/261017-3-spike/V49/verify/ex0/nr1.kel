@@ -1,0 +1,6 @@
+let f(): Int32 = run h1 {
+  let r = Ref.new(1)
+  let x = run h2 { Ref.get(r) }
+  x
+}
+echoln(show(f()))

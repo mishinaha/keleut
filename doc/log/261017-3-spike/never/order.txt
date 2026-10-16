@@ -1,0 +1,16 @@
+分野 never の合成(snap/diktor = diktor 39d4091 に対して)
+
+当てた順:
+1. V134 (items/V134/V134.patch, -p1)  当たり方: そのまま
+2. V129 (items/V129/V129.patch, -p1)  lib/exhaust.ml の hunk 2 が fuzz 2, offset 13(V134 の追加の後ろに置かれる。内容は正しい)
+                                       test/never_ops.t の hunk 1(absurd の期待値)は当たるが、V134 の後では誤り(下の手直し 2)
+3. V135 (items/V135/V135.patch, -p1)  test/never_ops.t の hunk 1 が fuzz 2, offset 34(V129 の absurdshow と absurdother の後ろ、resumedirect の前書きの前に入る)
+
+手直し:
+1. lib/exhaust.ml: V129 の記事の例から perform throw(e) match {} を外す(V134 の後はこの形は Never に決まり警告が出ない)。
+   「注釈のない引数を照合する `fn(x) => x match {}` や、/ 返り値が `Never` の操作を起こす `perform throw(e) match {}` がその例である。/ 後者の `perform` の型は、どの型にも単一化できる新しい型変数になる。」
+   を「注釈のない引数を照合する `fn(x) => x match {}` がその例である。/ 照合対象の型変数が束縛の型に現れるので、上の規則で `Never` に決めない。」に替えた。
+2. test/never_ops.t: absurd の期待値から警告の行を消し(V134)、77〜78 行の前書きを V134 の規則に合わせて 3 行に書き換えた。
+3. test/empty_match.t を新設(V134 の final.md (5) の計画を items/V134/ex の 14 本で起こしたもの。9 ブロック、14 プログラム、コマンド 19)。期待値は合成後の処理系で promote した。
+
+V136(分野 classes)を合成の上に当てた確認: patch はそのまま当たり、runtest の差分は premise.t の pr7(V136 自身の期待値の変化)だけ。v136.kel は警告なし。

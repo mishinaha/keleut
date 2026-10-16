@@ -1,0 +1,7 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+type class D[A] { val d: (A) => Int32 }
+type instance D[Absurd] { let d(MkA(n)) = 1 }
+type instance D[Never] { let d(n) = n match { case (m) => 2 } }
+type instance D[Int32] { let d(n) = n match { case 0 => 3 } }
+echo(show(d(5i32)))

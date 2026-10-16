@@ -1,0 +1,508 @@
+diff a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:02:24.680228658 +0900
+@@ -157,7 +157,7 @@
+   in
+   go default_options args
+ 
+-(* ## 16.3 前段の実体化と、パースエラーの整形
++(* ## 16.3 前段の実体化と、字句エラーと構文エラーの整形
+ 
+    字句解析器(第2章)とパーサ(第3章)は、AST のノードに貼るデータをパラメータに取るファンクタである。
+    本章は第5章の `Tree.ElabData` を渡して、両者を実体化する。
+@@ -268,7 +268,7 @@
+          どれが壊れているかが分かるよう、ファイル名を付ける *)
+       raise (Parse_error (Printf.sprintf "%s: 字句エラー: 不正な UTF-8 バイト列です" lexer.Lexer'.last_sp.Lexing.pos_fname))
+   | Parser'.Error ->
+-      raise (Parse_error (Printf.sprintf "%s: パースエラー(付近のトークンを確認してください)" (show_pos lexer.Lexer'.last_sp)))
++      raise (Parse_error (Printf.sprintf "%s: 構文エラー: 付近のトークンを確認してください" (show_pos lexer.Lexer'.last_sp)))
+   | Syntax.Syntax_error msg ->
+       raise (Parse_error (Printf.sprintf "%s: 構文エラー: %s" (show_pos lexer.Lexer'.last_sp) msg))
+   | Syntax.Syntax_error_at (pos, msg) -> raise (Parse_error (Printf.sprintf "%s: 構文エラー: %s" (show_pos pos) msg))
+@@ -766,7 +766,7 @@
+       Failed (Printf.sprintf "%s: 構文エラー: import は対話的な実行では書けません" (show_pos im.Syntax.im_loc.Location.start))
+   | exception Parser'.Error ->
+       if lx.Lexer'.prev = Some Lexer'.Parser.EOF then Incomplete
+-      else Failed (Printf.sprintf "%s: パースエラー(付近のトークンを確認してください)" (show_pos lx.Lexer'.last_sp))
++      else Failed (Printf.sprintf "%s: 構文エラー: 付近のトークンを確認してください" (show_pos lx.Lexer'.last_sp))
+   | exception Lexer.Lex_error (("unterminated string literal" | "unterminated block comment"), _) -> Incomplete
+   | exception Lexer.Lex_error (msg, pos) -> Failed (Printf.sprintf "%s: 字句エラー: %s" (show_pos pos) msg)
+   | exception Syntax.Syntax_error msg -> Failed (Printf.sprintf "%s: 構文エラー: %s" (show_pos lx.Lexer'.last_sp) msg)
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:02:24.681624897 +0900
+@@ -645,7 +645,7 @@
+    表の 2 行目のうち、レコード型のフィールドとタプル型の要素は、
+    仕様 §9 の入れ子の矢印の一覧にも挙がっている(sample.kel:498-500)。
+    レコード型のフィールドにも裸の矢印を書ける。
+-   `{run: () => Unit}` がパースエラーになるのは矢印のせいではなく、
++   `{run: () => Unit}` が構文エラーになるのは矢印のせいではなく、
+    `run` が予約語(§2.4)で、ラベルの位置に置けないからである。
+    フィールド名を変えれば書け、省略した `@` はほかの入れ子と同じく `@ {}` になる
+    (`test/annot_rows.t` の nestrec、`test/nonfeatures.t` の kwlabel)。
+diff a/lib/lexer.ml b/lib/lexer.ml
+--- a/lib/lexer.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/lexer.ml	2026-10-17 04:02:24.681451077 +0900
+@@ -777,7 +777,7 @@
+    逆に `LPAREN` は `can_begin_statement` に含めている。
+    これは、行頭の `(` を前の行の続きとみなさないという sample.kel:295 の規則の実装である。
+    `VAL` も含めている。
+-   これが無いと、クラスの本体の 2 つ目の `val` の前で改行が捨てられ、パースエラーになる。
++   これが無いと、クラスの本体の 2 つ目の `val` の前で改行が捨てられ、構文エラーになる。
+    `IF` も含めている。
+    行頭の `if` は条件式(第3章 §3.18)で、新しい文を始める。
+    ガードの `if` は `RClause` の中にあり、そこでは述語を見ずに改行を捨てるので、
+@@ -831,7 +831,7 @@
+    括弧の深さは region スタックが実質的に見ているので、
+    見分けが要るのは、ガードの最上位に括弧で包まずに置いたラムダの矢印だけである。
+    `RClause` は、まだ矢印の来ていない `fn` の本数を数え、その本数だけ矢印を見送る。
+-   見分けないと、ラムダの矢印で region が早く pop し、続く改行が区切りになってパースエラーになる。
++   見分けないと、ラムダの矢印で region が早く pop し、続く改行が区切りになって構文エラーになる。
+    この形のガードは Boolean にならないので、型の付くプログラムには現れず、影響は診断の質にとどまる。
+ 
+    節のパターンには型注釈の構文が無い(`test/nonfeatures.t` の patannot)。
+diff a/lib/parser.mly b/lib/parser.mly
+--- a/lib/parser.mly	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/parser.mly	2026-10-17 04:02:24.681183149 +0900
+@@ -607,9 +607,9 @@
+    `header` に `semi header` を足す形では、`items` の `semi items` と同じ区切りを
+    2 通りに読むことになり、reduce/reduce の衝突が出る。
+    ファイルの先頭に `;` を書いた後の import は、
+-   `items` の `semi items` に入るのでパースエラーになる。
++   `items` の `semi items` に入るので構文エラーになる。
+    改行だけでは先頭の区切りは生じない(直前のトークンが無いので、最初の改行は捨てられる)。
+-   import の名前は 2 段まで(`M.f`)で、`D.E.f` は 2 個目の `.` でパースエラーになる。 *)
++   import の名前は 2 段まで(`M.f`)で、`D.E.f` は 2 個目の `.` で構文エラーになる。 *)
+ 
+ program: header EOF { $1 }
+ 
+@@ -1166,7 +1166,7 @@
+    パターンの文法に `|` を出さなければ、必要になってから足しても既存の文法と衝突しない。
+    節パターンの型注釈(`case n: Int32 =>`)も無い。
+    入れる場合は、矢印を含む型注釈に括弧が必須になる(第2章 §2.10)。
+-   どちらも入っていないことを、`test/nonfeatures.t` がパースエラーの位置も含めて固定している。 *)
++   どちらも入っていないことを、`test/nonfeatures.t` が構文エラーの位置も含めて固定している。 *)
+ 
+ pat:
+   | LOWLINE                           { mk $sloc PWildcard }
+diff a/test/ast.t b/test/ast.t
+--- a/test/ast.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/ast.t	2026-10-17 04:02:43.499382144 +0900
+@@ -144,13 +144,13 @@
+    Int32)
+   (newtype-pub Parser (A))
+ 
+-パースエラー(exit 2):
++構文エラー(exit 2):
+ 
+   $ cat > bad.kel <<'EOF'
+   > let x = = 1
+   > EOF
+   $ diktor --dump-ast bad.kel
+-  bad.kel:1:9: パースエラー(付近のトークンを確認してください)
++  bad.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ sample.kel 全文がパースできること(M3 完了条件。写しの版は test/sample/README.md):
+diff a/test/if.t b/test/if.t
+--- a/test/if.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/if.t	2026-10-17 04:02:43.499473147 +0900
+@@ -68,11 +68,11 @@
+ 
+   $ printf 'let g = 1 + if true then 1 else 2\n' > operand.kel
+   $ diktor operand.kel
+-  operand.kel:1:13: パースエラー(付近のトークンを確認してください)
++  operand.kel:1:13: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ else は省略できない。改行が文を区切った位置で else を待っていたことが、
+-パースエラーの位置で分かる:
++構文エラーの位置で分かる:
+ 
+   $ cat > noelse.kel <<'KEL'
+   > let f(b: Boolean): Unit = {
+@@ -81,7 +81,7 @@
+   > }
+   > KEL
+   $ diktor noelse.kel
+-  noelse.kel:2:24: パースエラー(付近のトークンを確認してください)
++  noelse.kel:2:24: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 改行：then と else で始まる行と、then と else で終わる行は、前後の行に続く。
+@@ -190,15 +190,15 @@
+ 
+   $ printf 'let then = 1\n' > kwthen.kel
+   $ diktor kwthen.kel
+-  kwthen.kel:1:5: パースエラー(付近のトークンを確認してください)
++  kwthen.kel:1:5: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'let f(else: Int32): Int32 = else\n' > kwelse.kel
+   $ diktor kwelse.kel
+-  kwelse.kel:1:7: パースエラー(付近のトークンを確認してください)
++  kwelse.kel:1:7: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'let r = {then = 1}\n' > kwlabel.kel
+   $ diktor kwlabel.kel
+-  kwlabel.kel:1:10: パースエラー(付近のトークンを確認してください)
++  kwlabel.kel:1:10: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ ガードの if と共存する。ガードの中の条件式は、括弧が無くても読める。
+diff a/test/import.t b/test/import.t
+--- a/test/import.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/import.t	2026-10-17 04:02:43.499530746 +0900
+@@ -39,34 +39,34 @@
+   (import "./a" (A) (b))
+ 
+ 名前は 2 段まで。ファイルの途中、トップレベルの with の後ろの import、空の {}、波括弧の中の
+-カンマの無い並びは、パースエラーになる:
++カンマの無い並びは、構文エラーになる:
+ 
+   $ printf 'from "./lib/leaf" import D.E.f\n' > deep.kel
+   $ diktor deep.kel
+-  deep.kel:1:29: パースエラー(付近のトークンを確認してください)
++  deep.kel:1:29: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'let x = 1\nfrom "./a" import b\n' > late.kel
+   $ diktor late.kel
+-  late.kel:2:1: パースエラー(付近のトークンを確認してください)
++  late.kel:2:1: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'with x = f()\nfrom "./a" import b\n' > wth.kel
+   $ diktor wth.kel
+-  wth.kel:2:1: パースエラー(付近のトークンを確認してください)
++  wth.kel:2:1: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'from "./a" import {}\n' > empty.kel
+   $ diktor empty.kel
+-  empty.kel:1:20: パースエラー(付近のトークンを確認してください)
++  empty.kel:1:20: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'from "./a" import {\n  A\n  b\n}\n' > nl.kel
+   $ diktor nl.kel
+-  nl.kel:3:3: パースエラー(付近のトークンを確認してください)
++  nl.kel:3:3: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ from と import は予約語である:
+ 
+   $ printf 'let from = 1\n' > letfrom.kel
+   $ diktor letfrom.kel
+-  letfrom.kel:1:5: パースエラー(付近のトークンを確認してください)
++  letfrom.kel:1:5: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 差し替えたプレリュードと対話的な実行には import を書けない:
+diff a/test/nonfeatures.t b/test/nonfeatures.t
+--- a/test/nonfeatures.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/nonfeatures.t	2026-10-17 04:02:43.487709986 +0900
+@@ -12,7 +12,7 @@
+   > }
+   > KEL
+   $ diktor --type-check orpat.kel
+-  orpat.kel:2:14: パースエラー(付近のトークンを確認してください)
++  orpat.kel:2:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 節パターンの型注釈も現状は無い(§7。将来入れるなら、矢印を含む型注釈は
+@@ -24,7 +24,7 @@
+   > }
+   > KEL
+   $ diktor --type-check patannot.kel
+-  patannot.kel:2:9: パースエラー(付近のトークンを確認してください)
++  patannot.kel:2:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ レコード更新の基底は小文字始まりの識別子 1 個(§3 が基底を識別子 1 個に
+@@ -35,12 +35,12 @@
+ 
+   $ printf 'let p = {origin = {x = 1.0}}\nlet q = {p.origin with x = 3.0}\n' > updbase.kel
+   $ diktor --type-check updbase.kel
+-  updbase.kel:2:19: パースエラー(付近のトークンを確認してください)
++  updbase.kel:2:19: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let f(n: Int32) = {x = n}\nlet q = {f(1) with x = 3}\n' > updbase2.kel
+   $ diktor --type-check updbase2.kel
+-  updbase2.kel:2:15: パースエラー(付近のトークンを確認してください)
++  updbase2.kel:2:15: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let p = {x = 1}\nlet q = {P with x = 3}\n' > updbase3.kel
+@@ -56,27 +56,27 @@
+ 
+   $ printf 'type foo = Int32\n' > case1.kel
+   $ diktor --type-check case1.kel
+-  case1.kel:1:6: パースエラー(付近のトークンを確認してください)
++  case1.kel:1:6: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'newtype foo = Bar\n' > case2.kel
+   $ diktor --type-check case2.kel
+-  case2.kel:1:9: パースエラー(付近のトークンを確認してください)
++  case2.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'effect foo = { op: () => {} }\n' > case3.kel
+   $ diktor --type-check case3.kel
+-  case3.kel:1:8: パースエラー(付近のトークンを確認してください)
++  case3.kel:1:8: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'module foo { }\n' > case4.kel
+   $ diktor --type-check case4.kel
+-  case4.kel:1:8: パースエラー(付近のトークンを確認してください)
++  case4.kel:1:8: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'effect E = { Op: () => {} }\n' > case5.kel
+   $ diktor --type-check case5.kel
+-  case5.kel:1:14: パースエラー(付近のトークンを確認してください)
++  case5.kel:1:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'newtype T = ctor(Int32)\n' > case6.kel
+   $ diktor --type-check case6.kel
+-  case6.kel:1:13: パースエラー(付近のトークンを確認してください)
++  case6.kel:1:13: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 型パラメータの束縛子はこの規則の例外で、大小を問わない(裁定 D110。仕様 §0、
+@@ -97,11 +97,11 @@
+   use : (Ref[A, B]) => B @ {Heap[A]}
+   $ printf 'let g(): Int32 = run H { 1 }\n' > case8.kel
+   $ diktor --type-check case8.kel
+-  case8.kel:1:22: パースエラー(付近のトークンを確認してください)
++  case8.kel:1:22: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'let g(): Int32 = run _ { 1 }\n' > case9.kel
+   $ diktor --type-check case9.kel
+-  case9.kel:1:22: パースエラー(付近のトークンを確認してください)
++  case9.kel:1:22: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 予約語はラベルの位置でも識別子にならない(D115)。{run: …} が書けない理由は
+@@ -113,7 +113,7 @@
+ 
+   $ printf 'let f(r: {run: Int32}): Int32 = 1\n' > kwlabel.kel
+   $ diktor --type-check kwlabel.kel
+-  kwlabel.kel:1:11: パースエラー(付近のトークンを確認してください)
++  kwlabel.kel:1:11: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ (スーパークラスの拒否は test/classes.t、Zero / One が無いことは型クラス表に
+@@ -151,7 +151,7 @@
+   > }
+   > KEL
+   $ diktor --type-check derive.kel
+-  derive.kel:3:3: パースエラー(付近のトークンを確認してください)
++  derive.kel:3:3: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ derive は予約語ではない:
+@@ -196,7 +196,7 @@
+ 
+   $ printf 'newtype Hidden = ???\n' > nthole.kel
+   $ diktor --type-check nthole.kel
+-  nthole.kel:1:18: パースエラー(付近のトークンを確認してください)
++  nthole.kel:1:18: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 値束縛には型パラメータを書けない(LangSpec 付録 A.8。binding の値束縛の形は
+@@ -206,7 +206,7 @@
+   > let x[A]: List[A] = Nil
+   > KEL
+   $ diktor --type-check valtyparam.kel
+-  valtyparam.kel:1:9: パースエラー(付近のトークンを確認してください)
++  valtyparam.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 無名関数には返り値の型を注釈できない(付録 A.8。exp の fn の形は返り値の型と
+@@ -216,7 +216,7 @@
+   > let f = fn(x: Int32): Int32 => x
+   > KEL
+   $ diktor --type-check fnret.kel
+-  fnret.kel:1:21: パースエラー(付近のトークンを確認してください)
++  fnret.kel:1:21: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ type class の型パラメータは省略できない(付録 A.8):
+@@ -225,7 +225,7 @@
+   > type class C { val c: (Int32) => Int32 }
+   > KEL
+   $ diktor --type-check classnoparam.kel
+-  classnoparam.kel:1:14: パースエラー(付近のトークンを確認してください)
++  classnoparam.kel:1:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ extern は関数束縛の形だけを持ち、値束縛の形を持たない(付録 A.8):
+@@ -234,5 +234,5 @@
+   > extern "C" let sqrt: (Float64) => Float64
+   > KEL
+   $ diktor --type-check externval.kel
+-  externval.kel:1:20: パースエラー(付近のトークンを確認してください)
++  externval.kel:1:20: 構文エラー: 付近のトークンを確認してください
+   [2]
+diff a/test/premise.t b/test/premise.t
+--- a/test/premise.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/premise.t	2026-10-17 04:02:43.487709986 +0900
+@@ -250,7 +250,7 @@
+   $ diktor --type-check --no-prelude pr13.kel
+   $ printf 'newtype List[A] = Cons(A, tail: List[A]) | Nil\ntype instance[] Eq[List[_]] { let rec eq(xs, ys) = true }\n' > pr14.kel
+   $ diktor --type-check --no-prelude pr14.kel
+-  pr14.kel:2:15: パースエラー(付近のトークンを確認してください)
++  pr14.kel:2:15: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ printf 'newtype List[A] = Cons(A, tail: List[A]) | Nil\npub type instance[A: Eq] Eq[List[_]] { let rec eq(xs, ys) = true }\n' > pr15.kel
+   $ diktor --type-check --no-prelude pr15.kel
+diff a/test/repl.t b/test/repl.t
+--- a/test/repl.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/repl.t	2026-10-17 04:02:43.487709986 +0900
+@@ -77,7 +77,7 @@
+   _ : Int32 = 42
+   _ : String = "a\nb"
+   ! <stdin>:7:43: 型エラー: 未束縛の変数: od
+-  <stdin>:8:1: パースエラー(付近のトークンを確認してください)
++  <stdin>:8:1: 構文エラー: 付近のトークンを確認してください
+ 
+ println はトップレベルで使える。Print はランタイムのハンドラが標準出力へつなぐ:
+ 
+diff a/test/run_exit.t b/test/run_exit.t
+--- a/test/run_exit.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/run_exit.t	2026-10-17 04:02:43.487709986 +0900
+@@ -45,7 +45,7 @@
+   $ diktor exitparse.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitparse.kel > /dev/null; echo "exit: $?"
+-  exitparse.kel:3:1: パースエラー(付近のトークンを確認してください)
++  exitparse.kel:3:1: 構文エラー: 付近のトークンを確認してください
+   exit: 2
+   $ printf 'echoln("before")\nlet x = "\\q"\n' > exitlex.kel
+   $ diktor exitlex.kel 2> /dev/null; echo "exit: $?"
+diff a/test/spec_gaps.t b/test/spec_gaps.t
+--- a/test/spec_gaps.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/spec_gaps.t	2026-10-17 04:02:43.499609666 +0900
+@@ -58,7 +58,7 @@
+   [1]
+   $ printf 'let xs: Array[Int32] = [1, 2, 3]\n' > arrlit.kel
+   $ diktor --type-check arrlit.kel
+-  arrlit.kel:1:24: パースエラー(付近のトークンを確認してください)
++  arrlit.kel:1:24: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 使用時の開きの順序依存(LangSpec §13.2 の制限の 2 つ目)。使用の時点で関数の行や
+@@ -143,13 +143,13 @@
+ 
+ 操作とエフェクトの型パラメータ(LangSpec 付録 A.8)。所有者が後で許すかどうかを
+ 決める形として見張る(doc/log/261009-3-proposal.md の判断 9-9)。eff_op は typarams を
+-持たないので、操作の型パラメータはパースエラーになる:
++持たないので、操作の型パラメータは構文エラーになる:
+ 
+   $ cat > effopparam.kel <<'KEL'
+   > effect E = { op[A]: (A) => A }
+   > KEL
+   $ diktor --type-check effopparam.kel
+-  effopparam.kel:1:16: パースエラー(付近のトークンを確認してください)
++  effopparam.kel:1:16: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ エフェクトの宣言の typarams は文法が受け、型検査が拒む(§13.1):
+diff a/test/tokens.t b/test/tokens.t
+--- a/test/tokens.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/tokens.t	2026-10-17 04:02:43.487709986 +0900
+@@ -531,7 +531,7 @@
+ 
+   $ printf 'let x = 1\rlet y = 2\n' > cronly.kel
+   $ diktor --type-check cronly.kel
+-  cronly.kel:1:11: パースエラー(付近のトークンを確認してください)
++  cronly.kel:1:11: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'echoln("a\rb")\n' > crstr.kel
+@@ -585,7 +585,7 @@
+ 
+   $ printf 'let x = .5\n' > dot5.kel
+   $ diktor --type-check dot5.kel
+-  dot5.kel:1:9: パースエラー(付近のトークンを確認してください)
++  dot5.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ cat > projnum.kel <<'KEL'
+diff a/test/trailing_block.t b/test/trailing_block.t
+--- a/test/trailing_block.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/trailing_block.t	2026-10-17 04:02:43.499650564 +0900
+@@ -82,7 +82,7 @@
+      (extend _item 2 (extend _item (fn () k) {})))))
+   $ echo 'let a = %arg' > pct.kel
+   $ diktor --type-check pct.kel
+-  pct.kel:1:9: パースエラー(付近のトークンを確認してください)
++  pct.kel:1:9: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ { case (a, b) => e } はタプル 1 個を受け取る関数で、2 引数の関数ではない
+@@ -145,7 +145,7 @@
+ 
+ コンストラクタ、構造的ヴァリアント、perform、resume には付けられない。
+ 引数リストのある形は専用の診断になり、引数リストの無い Foo { k } と
+-#Tag { k } は一般のパースエラーになる:
++#Tag { k } は一般の構文エラーになる:
+ 
+   $ echo 'let a = Some(1) { k }' > ctor.kel
+   $ diktor --type-check ctor.kel
+@@ -165,11 +165,11 @@
+   [2]
+   $ echo 'let a = Foo { k }' > ctor0.kel
+   $ diktor --type-check ctor0.kel
+-  ctor0.kel:1:13: パースエラー(付近のトークンを確認してください)
++  ctor0.kel:1:13: 構文エラー: 付近のトークンを確認してください
+   [2]
+   $ echo 'let a = #Tag { k }' > tag0.kel
+   $ diktor --type-check tag0.kel
+-  tag0.kel:1:14: パースエラー(付近のトークンを確認してください)
++  tag0.kel:1:14: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 末尾ブロックは 1 つの呼び出しに 1 個まで:
+@@ -184,11 +184,11 @@
+   [2]
+ 
+ 括弧で囲んだ式の後ろには書けない。(g(1)) { k } は g(1) の結果への適用にも、
+-g(1, fn() => k) にもならず、パースエラーになる:
++g(1, fn() => k) にもならず、構文エラーになる:
+ 
+   $ echo 'let a = (g(1)) { k }' > paren.kel
+   $ diktor --type-check paren.kel
+-  paren.kel:1:16: パースエラー(付近のトークンを確認してください)
++  paren.kel:1:16: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ { x => ... } と { case ... } は、末尾ブロックの位置の外ではエラーになる。
+diff a/test/trailing_comma.t b/test/trailing_comma.t
+--- a/test/trailing_comma.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/trailing_comma.t	2026-10-17 04:02:43.487709986 +0900
+@@ -34,7 +34,7 @@
+ 
+   $ printf 'let f(t) = t match { case {x, ...r,} => x }\n' > term1.kel
+   $ diktor --type-check term1.kel
+-  term1.kel:1:35: パースエラー(付近のトークンを確認してください)
++  term1.kel:1:35: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 残る 8 種のリスト(引数・パラメータ・レコード・タプル・パターン・エフェクト行・
+@@ -68,17 +68,17 @@
+ 
+   $ printf 'let f[R](p: {x: Int32 extends R,}): Int32 = p.x\n' > term2.kel
+   $ diktor --type-check term2.kel
+-  term2.kel:1:32: パースエラー(付近のトークンを確認してください)
++  term2.kel:1:32: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let r = {a = 1}\nlet s = {b = 2, extends r,}\n' > term3.kel
+   $ diktor --type-check term3.kel
+-  term3.kel:2:26: パースエラー(付近のトークンを確認してください)
++  term3.kel:2:26: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+   $ printf 'let f(t) = t match { case (x, ...r,) => x }\n' > term4.kel
+   $ diktor --type-check term4.kel
+-  term4.kel:1:35: パースエラー(付近のトークンを確認してください)
++  term4.kel:1:35: 構文エラー: 付近のトークンを確認してください
+   [2]
+ 
+ 終端子の**前**のカンマは要素の末尾カンマなので置ける:

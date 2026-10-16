@@ -1,0 +1,7 @@
+module M {
+  pub newtype T = Foo(Int32)
+  pub let mk(f: () => Int32 @ {}): T = Foo(f())
+}
+let a = M.mk { 3 }
+let b = a match { case M.Foo(n) => n }
+echoln(show(b))

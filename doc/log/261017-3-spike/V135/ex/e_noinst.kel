@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+type class Describe[A] { val describe: (A) => String }
+let f(): String @ Fail = describe(perform throw("x"))

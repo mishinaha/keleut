@@ -1,0 +1,3 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe(n) = n match {} }
+echoln("ok")

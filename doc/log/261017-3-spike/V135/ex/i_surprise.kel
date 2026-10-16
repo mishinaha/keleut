@@ -1,0 +1,5 @@
+type class Parse[A] { val parse: (String) => A }
+type instance Parse[Never] { let parse(s: String): Never = ??? }
+type instance Parse[Int32] { let parse(s: String): Int32 = 1 }
+let check(s: String): Boolean = { parse(s); true }
+echoln(show(check("1")))

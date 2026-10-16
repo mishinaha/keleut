@@ -1,0 +1,2 @@
+extern "C" let __int32_add(x: Int32, y: Int32): Int32
+echoln(show(__int32_add(1, 2)))

@@ -1,0 +1,8 @@
+let same[F, A](x: F[A, Int32], y: F[A, Int32]): Unit = ()
+let g(): Int32 = run h {
+  let r = Ref.new(1)
+  let s = Ref.new(2)
+  same(r, s)
+  Ref.get(r) + Ref.get(s)
+}
+echoln(show(g()))

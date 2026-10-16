@@ -1,0 +1,11 @@
+effect Fail = { throw: (String) => Never }
+
+type class Parse[A] {
+  val parse: (String) => A @ Fail
+}
+
+type instance Parse[Int32] {
+  let parse(s) = if s == "0" then 0 else perform throw("not a digit: " + s)
+}
+
+let parse_or[A: Parse](s: String, d: A): A = parse(s) handle { case throw(_) => d }

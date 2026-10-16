@@ -1,0 +1,3 @@
+type class Pp[A] { val pp[B: Show]: (A) => String }
+type instance Pp[Int32] { let pp(x) = handle { show(x) } { return(v) => v } }
+echoln(pp(7i32))

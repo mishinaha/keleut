@@ -1,0 +1,4 @@
+let f() = {
+  pub let rec g(x) = x
+  g(1)
+}

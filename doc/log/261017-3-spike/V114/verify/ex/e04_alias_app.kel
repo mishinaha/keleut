@@ -1,0 +1,2 @@
+type Int8 = Int32
+let f(x: Int8[Int32]): Int32 = 1

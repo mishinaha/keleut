@@ -1,0 +1,3 @@
+type Cb[E] = () => Unit @ E
+type Bad[E] = (E, Cb[E])
+let f(x: Bad[{}]): Int32 = 0

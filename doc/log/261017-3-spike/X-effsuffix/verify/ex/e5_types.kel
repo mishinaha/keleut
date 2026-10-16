@@ -1,0 +1,5 @@
+let ap[A, B, E](f: (A) => B @ E, x: A): B @ E = f(x)
+let ap0[A, B](f: (A) => B @ {}, x: A): B @ {} = f(x)
+let curry(x: Int32): (Int32) => Int32 @ {} = fn(y) => x + y
+let curry2(x: Int32) = fn(y: Int32) => x + y
+pub let curry3(x: Int32): (Int32) => Int32 = fn(y) => x + y

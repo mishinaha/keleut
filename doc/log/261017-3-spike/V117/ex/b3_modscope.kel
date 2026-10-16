@@ -1,0 +1,5 @@
+type F = (Int32) => Int32 @ {}
+module M {
+  type F = (Int32) => Int32
+  pub let h(f: F): Int32 = f(1)
+}

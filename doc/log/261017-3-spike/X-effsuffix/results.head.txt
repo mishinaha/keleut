@@ -1,0 +1,18 @@
+== ex/rows.kel
+effect Out = { say: (String) => Unit }
+let closed_empty(x: Int32): Int32 @ {} = x + 1
+let bare_var[E](f: () => Int32 @ E): Int32 @ E = f()
+let open_tail[E](f: () => Unit @ {Out extends E}): Unit @ {Out extends E} = f()
+let closed_label(): Unit @ Out = perform say("a")
+let nested_closed(f: () => Int32): Int32 @ {} = f()
+let inferred(x: Int32) = x
+pub let pub_omitted(x: Int32): Int32 = x
+== $ diktor-head --type-check ex/rows.kel
+closed_empty : (Int32) => Int32 @ {}
+bare_var : (() => Int32) => Int32
+open_tail : (() => {} @ {Out extends R1}) => {} @ {Out extends R1}
+closed_label : () => {} @ {Out}
+nested_closed : (() => Int32 @ {}) => Int32 @ {}
+inferred : (Int32) => Int32
+pub_omitted : (Int32) => Int32 @ {}
+exit=0

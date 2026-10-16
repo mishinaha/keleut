@@ -1,0 +1,6 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub newtype H[E] = H(() => Unit @ {Log extends E})
+  pub let mk(): H[{}] = H(fn() => perform log("m"))
+}
+let _ = M.mk() match { case M.H(g) => g() handle { case log(s) => { echoln(s); resume(()) } } }

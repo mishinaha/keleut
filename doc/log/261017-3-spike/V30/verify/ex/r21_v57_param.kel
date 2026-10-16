@@ -1,0 +1,3 @@
+module E { pub type E = Int32 }
+effect Log = { log: (String) => Unit }
+newtype N[E] = N(() => Unit @ {Log, E})

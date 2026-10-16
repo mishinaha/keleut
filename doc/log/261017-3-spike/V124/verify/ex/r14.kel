@@ -1,0 +1,5 @@
+type C = A[{}]
+type A[E] = (Int32) => Int32 @ {St[Int32] extends E}
+effect St[S] = { get: () => S }
+let go(g: C): Int32 = g(2) handle { case get() => resume(40) }
+echoln(show(go(fn(x) => perform get() + x)))

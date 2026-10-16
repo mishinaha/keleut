@@ -1,0 +1,11 @@
+type class Pretty[A] {
+  val pretty: (A) => String
+}
+type instance Pretty[Int32] {
+  let pretty(x) = "i" + show(x)
+}
+let both[A: Pretty, B: Pretty](a: A, b: B): String = pretty(a) + "," + pretty(b)
+type Pair[A] = (A, A)
+let p: Pair[Int32] = (1, 2)
+let x = if p._0 == 1 then both(1, 2) else "no"
+echoln(x)

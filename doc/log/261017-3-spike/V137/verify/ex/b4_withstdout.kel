@@ -1,0 +1,13 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 @ {Print, Fail} =
+  if n == 0 then 0 else
+  ({ perform use(); perform throw("a"); 1 }) handle {
+    case use() => resume()
+    case cancel => { perform print("c" + show(n)); perform throw("b") }
+  } handle {
+    case throw(e) => { perform print(e); loop(n - 1) }
+  }
+let r = with_stdout(fn() => loop(3) handle { case throw(e) => 9 })
+echoln("")
+echoln(show(r))

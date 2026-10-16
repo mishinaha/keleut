@@ -1,0 +1,20 @@
+分野 eval の差分を当てた順(HEAD の写し snap/diktor に patch -p1、作業領域 clusters/eval/diktor)
+1. V137 (V137.patch)      lib/interp.ml lib/value.ml test/tail_calls.t   当たり方: そのまま
+   V138 は V137 に吸収(V138.patch は当てない)
+2. V109 (V109.patch)      lib/driver.ml lib/interp.ml lib/value.ml test/dictionary_passing.t
+                          当たり方: offset のみ(interp.ml -14、value.ml -1)。fuzz なし
+3. V108 (V108.patch)      lib/driver.ml lib/interp.ml lib/value.ml test/repl.t
+                          当たり方: offset のみ(interp.ml -14/-15、value.ml +8/+17)。fuzz なし
+4. X-B11 (X-B11.patch)    lib/interp.ml   当たり方: offset -13。fuzz なし
+5. V37 (V37.patch)        lib/prelude.kel test/classes.t   当たり方: そのまま
+手直し: なし(patch が作った lib/*.orig を消しただけ)
+4 と 5 は触るファイルが他と重ならないので、順を入れ替えても同じ木になる。
+合成差分: clusters/eval/eval.patch(810 行)
+
+合成後: dune build は通る(lib/parser.mly の Warning 60 が 2 件、HEAD と同じ)。dune runtest は差分 0 バイト。
+litcheck --old(HEAD の写しと比較): interp.ml、value.ml、driver.ml、prelude.kel の marker 0 件、lex/block/width の指摘なし(code の不一致はコード変更による)。
+litwrap.py を interp.ml、value.ml、driver.ml に掛けても変化なし。
+
+ほかの分野の差分の当たり方(合成後の木に --dry-run、単独):
+V128.patch: offset -1 で当たり、当てた木の dune runtest は差分 0。V128-alt.patch: 当たるが hunk 3 が fuzz 1(Unwind の形が変わったため)。
+V103 V106 V114 V115 V118 V121 V123 V33 V83 V88 V97 X-E13 X-F5b: いずれも fuzz なしで当たる。

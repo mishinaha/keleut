@@ -1,0 +1,2 @@
+from "./lib" import { Ask, with_ask }
+echoln(show(with_ask(fn() => perform ask() + 1)))

@@ -1,0 +1,8 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = {
+  perform ask() + 1i32
+} handle {
+  case ask() => resume({ perform throw("x") match {} } handle { case throw(e) => 5i32 })
+}
+echoln(show(r))

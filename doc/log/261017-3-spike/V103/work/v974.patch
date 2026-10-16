@@ -1,0 +1,157 @@
+
+--- diktor/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:09:20.851693806 +0900
+@@ -4401,10 +4403,11 @@
+    実装の行が空なら、宣言の行とは単一化せずに受理する。
+    空の行は行の最小元で、純粋な実装は、宣言がどの行を名乗っていても、
+    その行の下で呼んでよいからである。
+-   宣言の行が閉じた空の行(最外の `@` を省略した利用者のメソッド。§11.33)なら、
++   宣言の行が閉じた空の行(最外の `@` を省略した利用者のメソッドと、
++   組み込みのクラスのメソッド。§11.33、第6章 §6.10)なら、
+    空の実装の行は単一化してもそのまま一致する。
+    この扱いが効くのは、宣言の行が空でないときである。
+-   宣言の行が行変数の剛定数(`@ E` と書いたメソッドと、組み込みのクラスのメソッド。第6章 §6.10)なら、
++   宣言の行が行変数の剛定数(`@ E` と書いたメソッド)なら、
+    空の実装の行と単一化すると、剛定数に空の行を代入しようとして落ちる。
+    宣言が `@ Print` のようにラベルを書いていれば、閉じた行どうしのラベルの食い違いで落ちる。
+ 
+@@ -4459,7 +4462,8 @@
+    ラベルを持たないかどうかの判定は、期待型を剛定数に写した行の形に依存している。
+    最外の `@` を省略した利用者のメソッドの行は、登録で `TRowEmpty` に置き換えるので(§11.33)、
+    閉じた空の行のまま届く。
+-   `@ E` と書いたメソッドと組み込みのクラスのメソッドの行は、
++   組み込みのクラスのメソッドの行も、登録の時点から `TRowEmpty` である(第6章 §6.12)。
++   `@ E` と書いたメソッドの行は、
+    `generalize` が `Generic` にした行変数を、剛定数への写しが `Rigid` に戻して届く。
+    この経路のどこかが変わると名指しが黙って働かなくなるので、
+    clsimpure と clsbarerow がこれを見張っている。
+@@ -4537,8 +4541,8 @@
+     (* 最外の行は最後に見る。仕様 §9 は、型クラスのメソッドの実装は純粋でなければ
+        ならないと定める。引数と返り値を先に合わせたあと、
+        実装の行が空(純粋)なら、宣言の行と単一化せずに受理する。
+-       空の行は行の最小元なので、宣言の行が剛定数(@ E と書いたメソッドや組み込みの
+-       メソッド)でも、純粋な実装はその行の下で呼んでよい。メソッドの引数に @ を省略した
++       空の行は行の最小元なので、宣言の行が剛定数(@ E と書いたメソッド)でも、
++       純粋な実装はその行の下で呼んでよい。メソッドの引数に @ を省略した
+        矢印があると、実装の行は {} に固まるので、この扱いが無いと、宣言できるのに
+        実装できないメソッドが生じる *)
+     match (repr inf, repr skol) with
+@@ -4573,12 +4577,14 @@
+       match d with
+       | T.DLet ((_, b) as bnode) ->
+           let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+-          let env2 = elab_binding env 0 (new_row_var 0) bnode in
++          (* 値束縛の初期化式は空の行の下で検査する。メソッドの実装は純粋でなければならず、
++             初期化式の評価もその実装に含まれるからである *)
++          let env2 = elab_binding env 0 TRowEmpty bnode in
+           (* 包摂のエラーは、そのメソッドの束縛を指す。宣言の先頭を指すと、複数のメソッドの
+              どれが悪いかを位置から読めない *)
+           at_node bnode (fun () -> subsume bnode mname (SMap.find mname env2.values))
+       | T.DLetRec bs ->
+-          let env2 = elab_rec_bindings env 0 (new_row_var 0) bs in
++          let env2 = elab_rec_bindings env 0 TRowEmpty bs in
+           List.iter
+             (fun (((_, b) as bnode) : T.let_binding) ->
+               let mname = match binding_name b with Some x -> x | None -> bug "instance: 名前なし" in
+
+--- diktor/test/annot_rows.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/annot_rows.t	2026-10-17 04:10:35.325144794 +0900
+@@ -1074,8 +1074,8 @@
+ 
+ 組み込みの Show のインスタンスで、構文上の値でない初期化式を持ち注釈の最外の @ を
+ 省略した値束縛 k をメソッドの本体から呼ぶ形と、同じ形の値束縛でメソッド show そのものを
+-書く形も通る。k の行は初期化式の閉じた {} に決まるので、組み込みのメソッドの行変数と
+-単一化しても剛定数のスコープの外に漏れない:
++書く形も通る。k の行は初期化式の閉じた {} に決まり、組み込みのクラスのメソッドの行も
++閉じた {} なので、利用者のクラスと同じく通る:
+ 
+   $ cat > instmonorow.kel <<'KEL'
+   > newtype N = N(Int32)
+
+--- diktor/test/inst_init_pure.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/inst_init_pure.t	2026-10-17 04:10:43.443962590 +0900
+@@ -0,0 +1,63 @@
++インスタンスのメソッドを値束縛で書いたときの初期化式は、空の行の下で検査する。
++型クラスのメソッドの実装は純粋でなければならず(LangSpec §13.2 の表)、初期化式の
++評価もその実装に含まれる。利用者のクラスと組み込みのクラスで同じ扱いである。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++初期化式で操作を起こす形は、利用者のクラスでも型検査で拒否する:
++
++  $ cat > iniask.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > type class Sh[A] { val sh: (A) => String }
++  > newtype Foo = Foo
++  > type instance Sh[Foo] {
++  >   let sh: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
++  > }
++  > echoln(sh(Foo))
++  > KEL
++  $ diktor iniask.kel
++  ! iniask.kel:5:39: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  [1]
++
++組み込みのクラス Show のインスタンスでも同じである:
++
++  $ cat > iniaskb.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > newtype Foo = Foo
++  > type instance Show[Foo] {
++  >   let show: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
++  > }
++  > echoln(show(Foo))
++  > KEL
++  $ diktor iniaskb.kel
++  ! iniaskb.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  [1]
++
++トップレベルで許される Console も、初期化式では起こせない:
++
++  $ cat > inicon.kel <<'KEL'
++  > type class Sh[A] { val sh: (A) => String }
++  > newtype Foo = Foo
++  > type instance Sh[Foo] {
++  >   let sh: (Foo) => String = { echoln("init"); fn(x) => "foo" }
++  > }
++  > echoln(sh(Foo))
++  > KEL
++  $ diktor inicon.kel
++  ! inicon.kel:4:31: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++
++ゼロ除算は行に現れないので、初期化式に書いても型検査を通り、インスタンス宣言を
++実行する時点で実行時エラーになる(LangSpec §15.5):
++
++  $ cat > inidiv.kel <<'KEL'
++  > newtype N = N(Int32)
++  > let z = 0
++  > echoln("a")
++  > type instance Show[N] { let show: (N) => String = { let q = 1 / z; fn(x) => "n" } }
++  > echoln("b")
++  > KEL
++  $ diktor inidiv.kel
++  a
++  実行時エラー: ゼロ除算です
++  [3]
+
+--- diktor/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:10:43.444950956 +0900
+@@ -46,7 +46,7 @@
+   > effect Ask = { ask: () => Int32 }
+   > let idf[A](x: A): A = x
+   > let main(): Unit @ {Console} = {
+-  >   let g: (Int32) => Int32 = idf(fn(x) => x + 1)
++  >   let g: (Int32) => Int32 = idf(fn(x) => x)
+   >   let a = g(1)
+   >   let b = (g(2) + perform ask()) handle {
+   >     case ask() => resume(10)
+@@ -57,7 +57,7 @@
+   > main()
+   > EOF
+   $ diktor vrgen.kel
+-  15
++  13
+ 
+ g の本体を無名関数(値)に替えると、g は一般化され、同じく 2 つの文脈から呼べる:
+ 

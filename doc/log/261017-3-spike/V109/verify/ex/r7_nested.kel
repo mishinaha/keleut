@@ -1,0 +1,16 @@
+effect A1 = { a1: () => Int32 }
+effect A2 = { a2: (Int32) => Int32 }
+let tw[T: Show + Eq](x: T, y: T): String = {
+  let inner[U: Show](u: U): String =
+    ({ let p = perform a1(); let q = perform a2(p); show(u) + show(q) + show(x == y) } handle {
+      case a2(n) if x == y => resume(n * 2)
+      case a2(n) => resume(n * 3)
+      case return(s) => s + show(x)
+    }) handle {
+      case a1() => resume(7)
+      case return(s) => s + "/" + show(y)
+    }
+  inner(1) + ";" + inner(x)
+}
+echoln(tw("a", "a"))
+echoln(tw(1.5, 2.5))

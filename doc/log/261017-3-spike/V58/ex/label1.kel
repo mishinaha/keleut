@@ -1,0 +1,7 @@
+effect Ask = { ask: (x: Int32, y: Int32) => Int32 }
+let r =
+  perform ask(x = 1, y = 2) handle {
+    case return(v) => v
+    case ask(x = a, z = b) => resume(a)
+  }
+echoln(show(r))

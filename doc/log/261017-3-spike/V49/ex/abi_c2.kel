@@ -1,0 +1,2 @@
+extern "C" let __show_int32(x: Int32): String
+echoln(__show_int32(1))

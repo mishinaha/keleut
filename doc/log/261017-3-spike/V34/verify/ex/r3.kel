@@ -1,0 +1,14 @@
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1[E](a: Int32, g: () => Int32 @ E): Int32 @ E = {
+    let k: () => Int32 @ E = g
+    a + k()
+  }
+}
+type instance Run[Boolean] {
+  let run1 = fn(a, g) => if a then g() else 0
+}
+echoln(show(run1(1, fn() => 2)))
+echoln(show(run1(true, fn() => 5)))

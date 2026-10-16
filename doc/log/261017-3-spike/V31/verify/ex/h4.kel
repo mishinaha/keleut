@@ -1,0 +1,4 @@
+type Q[F[_]] = F
+type class Fx[F[_]] {
+  val fx: (Q[F][Int32]) => Int32
+}

@@ -1,0 +1,8 @@
+module M {
+  pub type W[E]: EffectRow = {Print extends E}
+  type V[E]: EffectRow = W[E]
+  pub let say(s: String): Unit @ V[{}] = perform print(s + "\n")
+  pub let twice(s: String): Unit @ {Console extends W[{}]} = { say(s); say(s) }
+}
+let outer(s: String): Unit @ M.W[{}] = M.say(s)
+with_stdout(fn() => { outer("a"); M.say("b") })

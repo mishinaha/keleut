@@ -1,0 +1,7 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let f(#A(MkA(n))) = 1
+let g = fn(#A(MkA(n))) => 2
+let h(#A(x) : #A(Never) | #B) = 3
+let k(v: #A(Never) | #B): Int32 = v match { case #A(x) => 1 }
+echo("ok")

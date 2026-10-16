@@ -1,0 +1,6 @@
+module M {
+  pub let g: (Int32) => Int32 = fn(x) => x * 3
+  pub let rec h: (Int32) => Int32 = fn(x) => if x <= 0 then 0 else h(x - 1) + 2
+  pub let f(n: Int32): Int32 = run r { let c = Ref.new(n); Ref.set(c, g(Ref.get(c))); Ref.get(c) }
+}
+with_stdout(fn() => { echoln(show(M.f(2))); echoln(show(M.h(3))) })

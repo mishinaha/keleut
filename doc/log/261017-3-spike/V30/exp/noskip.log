@@ -1,0 +1,24 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 1e6953c..96c3b22 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -291,7 +291,8 @@ effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @
+   > let f[E](x: A15[E]): A15[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude specunit.kel
+-  f : (A15[R1]) => A15[R1]
++  ! specunit.kel:3:37: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+   $ cat > specunit2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -299,6 +300,8 @@ effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @
+   > newtype B16[E] = MkB16((() => Unit @ E, () => Unit @ {Log}))
+   > EOF
+   $ diktor --type-check --no-prelude specunit2.kel
++  ! specunit2.kel:4:38: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 型引数にラベルを書く形も、宣言順によらず通る(speclab / speclab2):
+ 

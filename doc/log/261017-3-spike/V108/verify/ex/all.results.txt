@@ -1,0 +1,356 @@
+### ex/e10.txt
+--- HEAD
+_ : [A: Pp, B: Show] (A, B) => String = <fn>
+_ : [A: Pp, B: Show] ((A, B) => String, Int32) = <fn>
+ppv : [A: Pp, B: Show, C: Pp, D: Show] ((A, B) => String, (C, D) => String) = <fn>
+! <stdin>:6:1: 型エラー: メソッド df の型は矢印型でなければなりません
+! <stdin>:7:1: 型エラー: 未知のクラス: Df
+! <stdin>:8:1: 型エラー: 未束縛の変数: df
+! <stdin>:9:2: 型エラー: 未束縛の変数: df
+! <stdin>:10:11: 型エラー: 未束縛の変数: df
+[rc=0]
+--- PROTO
+_ : [A: Pp, B: Show] (A, B) => String = <fn>
+_ : [A: Pp, B: Show] ((A, B) => String, Int32) = (<fn>, 1)
+ppv : [A: Pp, B: Show, C: Pp, D: Show] ((A, B) => String, (C, D) => String) = (<fn>, <fn>)
+! <stdin>:6:1: 型エラー: メソッド df の型は矢印型でなければなりません
+! <stdin>:7:1: 型エラー: 未知のクラス: Df
+! <stdin>:8:1: 型エラー: 未束縛の変数: df
+! <stdin>:9:2: 型エラー: 未束縛の変数: df
+! <stdin>:10:11: 型エラー: 未束縛の変数: df
+[rc=0]
+### ex/e11.txt
+--- HEAD
+qq : [A: Show] (Q, (A) => String) = <fn>
+_ : [A: Show] (Q, (A) => String) = <fn>
+_ : Q = Q!
+<stdin>:6:9: パースエラー(付近のトークンを確認してください)
+! <stdin>:7:1: 型エラー: 未束縛の変数: a
+e : #E | R1 = #E
+<stdin>:9:28: 字句エラー: unexpected character: '
+! <stdin>:10:1: 型エラー: 未束縛の変数: s
+[rc=0]
+--- PROTO
+qq : [A: Show] (Q, (A) => String) = (Q(1), <fn>)
+_ : [A: Show] (Q, (A) => String) = (Q(1), <fn>)
+_ : Q = Q!
+<stdin>:6:9: パースエラー(付近のトークンを確認してください)
+! <stdin>:7:1: 型エラー: 未束縛の変数: a
+e : #E | R1 = #E
+<stdin>:9:28: 字句エラー: unexpected character: '
+! <stdin>:10:1: 型エラー: 未束縛の変数: s
+[rc=0]
+### ex/e12.txt
+--- HEAD
+<stdin>:1:1: パースエラー(付近のトークンを確認してください)
+! <stdin>:2:1: 型エラー: 未束縛の変数: mm
+! <stdin>:3:2: 型エラー: 未束縛の変数: mm
+[rc=0]
+--- PROTO
+<stdin>:1:1: パースエラー(付近のトークンを確認してください)
+! <stdin>:2:1: 型エラー: 未束縛の変数: mm
+! <stdin>:3:2: 型エラー: 未束縛の変数: mm
+[rc=0]
+### ex/e13.txt
+--- HEAD
+p : [A: Sh] ((A) => String, Int32) = <fn>
+_ : [A: Sh] ((A) => String, Int32) = <fn>
+h : (Int32) => String = <prim Sh.sh>
+_ : (Int32) => String = <prim Sh.sh>
+[rc=0]
+--- PROTO
+p : [A: Sh] ((A) => String, Int32) = (<fn>, 1)
+_ : [A: Sh] ((A) => String, Int32) = (<fn>, 1)
+h : (Int32) => String = <fn>
+_ : (Int32) => String = <fn>
+[rc=0]
+### ex/e14.txt
+--- HEAD
+f : [A: Show] (A) => String = <fn>
+! <stdin>:2:10: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+gg : [A: Show] ((A) => String, B) = <fn>
+_ : [A: Show] ((A) => String, B) = <fn>
+v : Int32 = 1
+w : [A: Show] ((A) => String, Int32) = <fn>
+_ : [A: Show] ((A) => String, Int32) = <fn>
+z : [A: Show] ((A) => String, Int32) = <fn>
+[rc=0]
+--- PROTO
+f : [A: Show] (A) => String = <fn>
+! <stdin>:2:10: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+gg : [A: Show] ((A) => String, B) = <unevaluated>
+_ : [A: Show] ((A) => String, B) = <unevaluated>
+v : Int32 = 1
+w : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+z : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+[rc=0]
+### ex/e15.txt
+--- HEAD
+x : [A: Show] ((A) => String, Int32) = <fn>
+y : String = "1"
+_ : String = "1"
+q : [A: Show] ((A) => String, B) = <fn>
+実行時エラー: ??? に到達しました
+[rc=0]
+--- PROTO
+x : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+y : String = "1"
+_ : String = "1"
+q : [A: Show] ((A) => String, B) = <unevaluated>
+実行時エラー: ??? に到達しました
+[rc=0]
+### ex/e16.txt
+--- HEAD
+! <stdin>:1:24: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:2:35: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:3:28: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:4:33: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:5:26: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+_ : [A: Show] ((A) => String, Int32) = <fn>
+z6 : [A: Show] ((A) => String, String) = <fn>
+<stdin>:8:17: パースエラー(付近のトークンを確認してください)
+[rc=0]
+--- PROTO
+! <stdin>:1:24: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:2:35: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:3:28: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:4:33: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:5:26: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+_ : [A: Show] ((A) => String, Int32) = (<fn>, -1)
+z6 : [A: Show] ((A) => String, String) = (<fn>, "a${1}")
+<stdin>:8:17: パースエラー(付近のトークンを確認してください)
+[rc=0]
+### ex/e17.txt
+--- HEAD
+v : Int32 = 1
+! <stdin>:2:11: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:3:11: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+w4 : [A: Show, B: Neg] ((A) => String, (B) => B) = <fn>
+_ : [A: Show, B: Neg] ((A) => String, (B) => B) = <fn>
+! <stdin>:6:11: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+[rc=0]
+--- PROTO
+v : Int32 = 1
+! <stdin>:2:11: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:3:11: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+w4 : [A: Show, B: Neg] ((A) => String, (B) => B) = (<fn>, <fn>)
+_ : [A: Show, B: Neg] ((A) => String, (B) => B) = (<fn>, <fn>)
+! <stdin>:6:11: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+[rc=0]
+### ex/e18.txt
+--- HEAD
+! <stdin>:2:1: 型エラー: インスタンス頭 W は型引数を 1 個取りますが、_ が 0 個書かれています
+x : [A: Show] W[(A) => String] = <fn>
+_ : [A: Show] W[(A) => String] = <fn>
+[rc=0]
+--- PROTO
+! <stdin>:2:1: 型エラー: インスタンス頭 W は型引数を 1 個取りますが、_ が 0 個書かれています
+x : [A: Show] W[(A) => String] = W(<fn>)
+_ : [A: Show] W[(A) => String] = W(<fn>)
+[rc=0]
+### ex/e19.txt
+--- HEAD
+<stdin>:2:21: パースエラー(付近のトークンを確認してください)
+! <stdin>:3:1: 型エラー: インスタンス頭 W のカインドがクラス Show のパラメータと一致しません
+w1 : W[Int32] = W(1)
+_ : W[Int32] = W(1)
+x : [A: Show] W[(A) => String] = <fn>
+_ : [A: Show] W[(A) => String] = <fn>
+[rc=0]
+--- PROTO
+<stdin>:2:21: パースエラー(付近のトークンを確認してください)
+! <stdin>:3:1: 型エラー: インスタンス頭 W のカインドがクラス Show のパラメータと一致しません
+w1 : W[Int32] = W(1)
+_ : W[Int32] = W(1)
+x : [A: Show] W[(A) => String] = W(<fn>)
+_ : [A: Show] W[(A) => String] = W(<fn>)
+[rc=0]
+### ex/e1.txt
+--- HEAD
+! <stdin>:1:19: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:2:15: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+<stdin>:3:6: パースエラー(付近のトークンを確認してください)
+! <stdin>:4:26: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+[rc=0]
+--- PROTO
+! <stdin>:1:19: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:2:15: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+<stdin>:3:6: パースエラー(付近のトークンを確認してください)
+! <stdin>:4:26: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+[rc=0]
+### ex/e20.txt
+--- HEAD
+_ : W[Int32] = W!
+実行時エラー: match のどの節にも一致しません: <fn>
+! <stdin>:5:1: 型エラー: 未束縛の変数: x
+y : [A: Show] U[(A) => String] = U!
+z : [A: Show] U[((A) => String, B)] = U!
+[rc=0]
+--- PROTO
+_ : W[Int32] = W!
+x : [A: Show] W[(A) => String] = W!
+_ : [A: Show] W[(A) => String] = W!
+y : [A: Show] U[(A) => String] = U!
+z : [A: Show] U[((A) => String, B)] = <unevaluated>
+[rc=0]
+### ex/e2.txt
+--- HEAD
+! <stdin>:2:1: 型エラー: インスタンス頭の型引数は _ だけです(List[_] の形)
+b : [A: Show] Box[(A) => String] = <fn>
+_ : [A: Show] Box[(A) => String] = <fn>
+b2 : Box[Int32] = Box(1)
+_ : Box[Int32] = Box(1)
+[rc=0]
+--- PROTO
+! <stdin>:2:1: 型エラー: インスタンス頭の型引数は _ だけです(List[_] の形)
+b : [A: Show] Box[(A) => String] = Box(<fn>)
+_ : [A: Show] Box[(A) => String] = Box(<fn>)
+b2 : Box[Int32] = Box(1)
+_ : Box[Int32] = Box(1)
+[rc=0]
+### ex/e3.txt
+--- HEAD
+! <stdin>:1:20: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+! <stdin>:2:1: 型エラー: 未束縛の変数: M.p
+! <stdin>:3:10: 型エラー: 未束縛の変数: M.p
+<stdin>:5:8: パースエラー(付近のトークンを確認してください)
+! <stdin>:6:1: 型エラー: 未束縛の変数: w
+[rc=0]
+--- PROTO
+! <stdin>:1:20: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+! <stdin>:2:1: 型エラー: 未束縛の変数: M.p
+! <stdin>:3:10: 型エラー: 未束縛の変数: M.p
+<stdin>:5:8: パースエラー(付近のトークンを確認してください)
+! <stdin>:6:1: 型エラー: 未束縛の変数: w
+[rc=0]
+### ex/e4.txt
+--- HEAD
+! <stdin>:2:1: 型エラー: インスタンス頭 W のカインドがクラス Show のパラメータと一致しません
+x : [A: Show] W[(A) => String] = <fn>
+_ : [A: Show] W[(A) => String] = <fn>
+y : W[Int32] = W(1)
+_ : W[Int32] = W(1)
+! <stdin>:7:1: 型エラー: インスタンス頭 W のカインドがクラス Show のパラメータと一致しません
+! <stdin>:9:1: 型エラー: インスタンス頭 V のカインドがクラス Show のパラメータと一致しません
+z : [A: Show] V[(A) => String] = <fn>
+[rc=0]
+--- PROTO
+! <stdin>:2:1: 型エラー: インスタンス頭 W のカインドがクラス Show のパラメータと一致しません
+x : [A: Show] W[(A) => String] = W(<fn>)
+_ : [A: Show] W[(A) => String] = W(<fn>)
+y : W[Int32] = W(1)
+_ : W[Int32] = W(1)
+! <stdin>:7:1: 型エラー: インスタンス頭 W のカインドがクラス Show のパラメータと一致しません
+! <stdin>:9:1: 型エラー: インスタンス頭 V のカインドがクラス Show のパラメータと一致しません
+z : [A: Show] V[(A) => String] = V(<fn>)
+[rc=0]
+### ex/e5.txt
+--- HEAD
+! <stdin>:1:15: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+p : [A: Show] ((A) => String, Int32) = <fn>
+p2 : [A: Show] ((A) => String, Int32) = <fn>
+_ : [A: Show] ((A) => String, Int32) = <fn>
+<stdin>:4:8: パースエラー(付近のトークンを確認してください)
+<stdin>:5:8: パースエラー(付近のトークンを確認してください)
+! <stdin>:6:1: 型エラー: 未束縛の変数: s
+r : ((String) => {} @ {Print extends R1}, Int32) = (<fn>, 1)
+_ : ((String) => {} @ {Print extends _R1}, Int32) = (<fn>, 1)
+_ : (String) => {} @ {Print extends _R1} = <fn>
+_ : [A: Show] (A) => String = <fn>
+[rc=0]
+--- PROTO
+! <stdin>:1:15: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+p2 : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+<stdin>:4:8: パースエラー(付近のトークンを確認してください)
+<stdin>:5:8: パースエラー(付近のトークンを確認してください)
+! <stdin>:6:1: 型エラー: 未束縛の変数: s
+r : ((String) => {} @ {Print extends R1}, Int32) = (<fn>, 1)
+_ : ((String) => {} @ {Print extends _R1}, Int32) = (<fn>, 1)
+_ : (String) => {} @ {Print extends _R1} = <fn>
+_ : [A: Show] (A) => String = <fn>
+[rc=0]
+### ex/e6.txt
+--- HEAD
+p : [A: Show] ((A) => String, Int32) = <fn>
+p2 : [A: Show] (((A) => String, Int32), B) = <fn>
+_ : [A: Show] (((A) => String, Int32), B) = <fn>
+p3 : [A: Show] (((A) => String, Int32), Int32) = <fn>
+_ : [A: Show] (((A) => String, Int32), Int32) = <fn>
+<stdin>:6:19: パースエラー(付近のトークンを確認してください)
+! <stdin>:7:1: 型エラー: 未束縛の変数: pe
+<stdin>:8:13: パースエラー(付近のトークンを確認してください)
+! <stdin>:9:1: 型エラー: 未束縛の変数: n
+[rc=0]
+--- PROTO
+p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+p2 : [A: Show] (((A) => String, Int32), B) = <unevaluated>
+_ : [A: Show] (((A) => String, Int32), B) = <unevaluated>
+p3 : [A: Show] (((A) => String, Int32), Int32) = ((<fn>, 1), 2)
+_ : [A: Show] (((A) => String, Int32), Int32) = ((<fn>, 1), 2)
+<stdin>:6:19: パースエラー(付近のトークンを確認してください)
+! <stdin>:7:1: 型エラー: 未束縛の変数: pe
+<stdin>:8:13: パースエラー(付近のトークンを確認してください)
+! <stdin>:9:1: 型エラー: 未束縛の変数: n
+[rc=0]
+### ex/e7.txt
+--- HEAD
+pe : [A: Eq, B: Eq] ((A, A) => Boolean, (B) => Boolean, Int32) = <fn>
+_ : [A: Eq, B: Eq] ((A, A) => Boolean, (B) => Boolean, Int32) = <fn>
+n : [A: Show] (A) => String = <fn>
+_ : [A: Show] (A) => String = <fn>
+_ : [A: Show, B: Eq] ((A) => String, (B) => Boolean) = <fn>
+rc : [A: Show] {g: (A) => String, h: B} = <fn>
+_ : [A: Show] {g: (A) => String, h: B} = <fn>
+ok : Int32 = 5
+_ : Int32 = 5
+[rc=0]
+--- PROTO
+pe : [A: Eq, B: Eq] ((A, A) => Boolean, (B) => Boolean, Int32) = (<fn>, <fn>, 1)
+_ : [A: Eq, B: Eq] ((A, A) => Boolean, (B) => Boolean, Int32) = (<fn>, <fn>, 1)
+n : [A: Show] (A) => String = <fn>
+_ : [A: Show] (A) => String = <fn>
+_ : [A: Show, B: Eq] ((A) => String, (B) => Boolean) = (<fn>, <fn>)
+rc : [A: Show] {g: (A) => String, h: B} = <unevaluated>
+_ : [A: Show] {g: (A) => String, h: B} = <unevaluated>
+ok : Int32 = 5
+_ : Int32 = 5
+[rc=0]
+### ex/e8.txt
+--- HEAD
+M.f : [A: Show] (A) => String @ {} = <fn>
+_ : [A: Show] (A) => String = <fn>
+_ : [A: Show] ((A) => String, Int32) = <fn>
+mf : [A: Show] (A) => String = <fn>
+mt : [A: Show, B: Show] ((A) => String, (B) => String) = <fn>
+_ : [A: Show, B: Show] ((A) => String, (B) => String) = <fn>
+[rc=0]
+--- PROTO
+M.f : [A: Show] (A) => String @ {} = <fn>
+_ : [A: Show] (A) => String = <fn>
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+mf : [A: Show] (A) => String = <fn>
+mt : [A: Show, B: Show] ((A) => String, (B) => String) = (<fn>, <fn>)
+_ : [A: Show, B: Show] ((A) => String, (B) => String) = (<fn>, <fn>)
+[rc=0]
+### ex/e9.txt
+--- HEAD
+p : [A: Show] ((A) => String, Int32) = <fn>
+_ : String = "1"
+g : [A: Show] (A) => String = <fn>
+_ : String = "true"
+_ : [A: Show] ((A) => String, Int32) = <fn>
+idf : (A) => A = <fn>
+! <stdin>:7:13: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+[rc=0]
+--- PROTO
+p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+_ : String = "1"
+g : [A: Show] (A) => String = <fn>
+_ : String = "true"
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+idf : (A) => A = <fn>
+! <stdin>:7:13: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+[rc=0]

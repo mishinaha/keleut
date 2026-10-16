@@ -1,0 +1,15 @@
+--- diktor/lib/elab.ml	2026-10-17 06:17:54.867858828 +0900
++++ b/lib/elab.ml	2026-10-17 06:22:18.084862161 +0900
+@@ -2050,9 +2050,10 @@
+             衝突する形は perform よりよく起きるのに、一般的な文言「行型ではありません: ς1」では
+             原因にたどり着けない。そこで perform の側(§11.15)と同じ言い換えをここにも置く *)
+          let pub_pure = is_pub_pure_row eff in
+-         if pub_pure && row_failure msg && not (escape_failure msg) then
++         let callee_arrow = match repr tf with TArrow _ -> true | _ -> false in
++         if pub_pure && callee_arrow && row_failure msg && not (escape_failure msg) then
+            type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")")
+-         else if row_failure msg && repr eff = TRowEmpty then
++         else if callee_arrow && row_failure msg && repr eff = TRowEmpty then
+            type_error
+              (msg
+             ^ "(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)")

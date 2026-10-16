@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+type W: EffectRow = {Ask}
+let run_ask[A, E](body: () => A @ {Ask extends E}): A @ E = body() handle { case ask() => resume(7) case return(x) => x }
+let main(): Unit @ {Console} = echoln(show(run_ask(fn() => perform ask() + 1)))
+main()

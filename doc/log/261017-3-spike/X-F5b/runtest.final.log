@@ -1,0 +1,14 @@
+File "test/tokens.t", line 1, characters 0-0:
+diff --git a/_build/default/test/tokens.t b/_build/default/test/tokens.t.corrected
+index f79b1ed..238f463 100644
+--- a/_build/default/test/tokens.t
++++ b/_build/default/test/tokens.t.corrected
+@@ -624,7 +624,7 @@ Uchar.of_int 0xD800 は Invalid_argument を投げるので、is_valid で先に
+   [2]
+   $ printf 'let a = 1.2.3\n' > glued4.kel
+   $ diktor --type-check glued4.kel
+-  glued4.kel:1:9: パースエラー: 数値リテラル 1.2 の直後に . が続いています(数値リテラルの綴りを確認してください)
++  glued4.kel:1:9: パースエラー: 数値リテラル 1.2 の直後に .3 が続いています(数値リテラルの綴りを確認してください)
+   [2]
+   $ diktor --type-check projnum.kel
+   projnum.kel:1:9: パースエラー: 数値リテラル 1. の直後に _0 が続いています(数値リテラルの綴りを確認してください)

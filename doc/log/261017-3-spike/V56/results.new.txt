@@ -1,0 +1,48 @@
+## a10.kel
+HEAD: ! a10.kel:2:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+NEW : ! a10.kel:2:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+## a11.kel
+HEAD: ! a11.kel:4:8: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+NEW : ! a11.kel:4:8: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+## a12.kel
+HEAD: ! a12.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+NEW : ! a12.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+## a1.kel
+HEAD: ! a1.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+NEW : ! a1.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+## a2.kel
+HEAD: ! a2.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+NEW : ! a2.kel:4:18: 型エラー: エフェクト位置に Type エイリアス P は使えません(: EffectRow を付けてください)
+## a3.kel
+HEAD: ! a3.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+NEW : ! a3.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+## a4.kel
+HEAD: ! a4.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+NEW : ! a4.kel:4:18: 型エラー: エフェクト行に Type エイリアス P は置けません(: EffectRow を付けてください)
+## a5.kel
+HEAD: ! a5.kel:4:18: 型エラー: 未知のエフェクト: P
+NEW : ! a5.kel:4:18: 型エラー: 未知のエフェクト: P
+## a6.kel
+HEAD: ! a6.kel:4:18: 型エラー: 型 P はエフェクトではありません(ここにはエフェクト行が要ります)
+NEW : ! a6.kel:4:18: 型エラー: 型 P はエフェクトではありません(ここにはエフェクト行が要ります)
+## a7.kel
+HEAD: ! a7.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+NEW : ! a7.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+## a8.kel
+HEAD: ! a8.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+NEW : ! a8.kel:4:18: 型エラー: 型 P.P は module P の外からは参照できません(pub を付けてください)
+## a9.kel
+HEAD: f : () => {} @ {Print}
+! a9.kel:5:1: 型エラー: ラベル Print がありません(行は閉じています)
+NEW : f : () => {} @ {Print}
+! a9.kel:5:1: 型エラー: ラベル Print がありません(行は閉じています)
+## b1.kel
+HEAD: ! b1.kel:4:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+NEW : ! b1.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+## b2.kel
+HEAD: ! b2.kel:3:28: 型エラー: エフェクト行に Type エイリアス T は置けません(: EffectRow を付けてください)
+NEW : ! b2.kel:3:28: 型エラー: エフェクト行に Type エイリアス T は置けません(: EffectRow を付けてください)
+! a13.kel:4:18: 型エラー: エフェクト位置の型のカインドが Row ではありません: Int32 :: Type
+! a14.kel:4:18: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
+## b3 NEW
+! b3.kel:5:28: 型エラー: 未知のエフェクト: T

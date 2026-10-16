@@ -1,0 +1,4 @@
+type R[H] = Ref[H, Int32]
+let f[H](r: R[H]): Int32 @ Heap[H] = Ref.get(r)
+let g(): Int32 = run h { let r: R[h] = Ref.new(5); f(r) }
+echoln(show(g()))

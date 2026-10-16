@@ -1,0 +1,2 @@
+effect E = { op: () => Int32 }
+let r = (1) handle { case op() => resume(1) case cancel(e) => () }

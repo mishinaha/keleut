@@ -1,0 +1,11 @@
+let idf[A](x: A): A = x
+let bad1: Int32 = "s"
+let g = idf(fn(y) => y)
+let bad2 = { let w = g(true); 1 / 0 }
+newtype N = N(Int32)
+let bad3 = { newtype M = M(Int32); 1 }
+type instance Show[N] { let show(x) = "n" }; let bad4 = 1 / 0
+g(N(1))
+echoln("half"); let bad5 = 1 / 0
+N(2)
+let h = g

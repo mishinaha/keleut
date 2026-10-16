@@ -1,0 +1,4 @@
+module M {
+  type E = Int32
+  newtype N[E](() => Unit @ {E})
+}

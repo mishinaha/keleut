@@ -1,0 +1,7 @@
+effect Reg = { reg: (() => Unit @ Print) => Unit }
+let main(): Unit @ Console = {
+  { perform reg(fn() => perform print("p")) } handle {
+    case reg(f) => { { f() } handle { case print(s) => { echoln(s); resume() } }; resume() }
+  }
+}
+main()

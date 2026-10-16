@@ -1,0 +1,3 @@
+newtype Box = Box(Int32)
+type class R4[T] { val r4[E]: (T, () => Unit @ E) => Unit }
+type instance R4[Box] { let r4[F](b: Box, f: () => Unit @ F): Unit = f() }

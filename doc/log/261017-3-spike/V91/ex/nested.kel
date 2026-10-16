@@ -1,0 +1,5 @@
+let g(n: Int32): Int32 = {
+  let t = 1
+  let u = 1.5 % 2.0
+  n
+}

@@ -1,0 +1,6 @@
+let each(xs: List[Int64], k: (Int64) => Int32): Int32 = xs match { case Cons(h, _) => k(h)  case Nil => 0 }
+let main(): Int32 = {
+  with n = each(Cons(4294967295i64, Nil))
+  n match { case 4294967295 => 7  case _ => 8 }
+}
+echoln(show(main()))

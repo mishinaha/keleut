@@ -1,0 +1,13 @@
+module M {
+  pub let sum(xs: Array[Int32]): Int32 = run h {
+    let acc = Ref.new(0)
+    Array.each(xs, fn(x) => Ref.set(acc, Ref.get(acc) + x))
+    Ref.get(acc)
+  }
+  pub let sumv: (Int32) => Int32 = fn(n) => run h {
+    let acc = Ref.new(n)
+    Ref.set(acc, Ref.get(acc) * 2)
+    Ref.get(acc)
+  }
+}
+with_stdout(fn() => echoln(show(M.sumv(4))))

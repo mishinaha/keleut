@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32 }
+type AA: EffectRow = {Ask}
+let g(): Int32 = (perform Ask.ask()) handle { case AA.ask() => resume(5) }
+echoln(show(g()))

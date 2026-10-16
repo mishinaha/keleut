@@ -1,0 +1,2 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let rec describe(n) = n match {} }

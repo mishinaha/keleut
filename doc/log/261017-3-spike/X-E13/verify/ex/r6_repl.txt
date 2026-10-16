@@ -1,0 +1,6 @@
+let y = 1
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+f(1000000)
+echoln(show(y))
+:type fn(x) => x
+echoln(show(f(10)))

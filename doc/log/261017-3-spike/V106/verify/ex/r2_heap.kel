@@ -1,0 +1,2 @@
+type class Pp[A] { val pp[B: Show]: (A) => Int32 @ Heap[B] }
+echoln("ok")

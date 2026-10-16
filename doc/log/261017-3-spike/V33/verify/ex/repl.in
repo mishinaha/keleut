@@ -1,0 +1,5 @@
+newtype Box = Box(Int32)
+type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 @ Print = 1 }
+type instance Sizer[Box] { let size(b: Box): Int32 = 2 }
+size(Box(0))

@@ -1,0 +1,39 @@
+numeric の合成後の dune runtest の分類(V91 → V114 → V8 の順で当てた直後、昇格の前)
+
+新しく落ちるブロック: 無い。
+
+期待値が変わるブロック(昇格の前に落ちたもの。どちらも V91 の final.md の (5) の主張どおり):
+- test/neg_rem.t remf: `! remf.kel:1:1:` → `! remf.kel:1:13:`(文面は同じ)。V91。
+- test/dictionary_passing.t negremf: `! negremf.kel:2:1:` → `! negremf.kel:2:13:`(文面は同じ)。V91。
+
+期待値が変わるブロック(各差分が昇格済みで、合成後もそのまま通るもの):
+- V114: test/numeric.t の u8、w9999、lead0 / lead0f、test/typecheck.t の numbad2、test/verify_fixes.t の hugesuf(終了状態 4 → 1、未実装 → 型エラー)。
+- V114: 入力の差し替え test/smoke.t の「未実装は exit 4」、test/typecheck.t の mix(1u8 → cancel(reason))。
+- V8: test/numeric.t の mask.kel(実行 2、終了 0 → --type-check で 2:8 の型エラー、[1])。
+
+新しいブロック(合成後も通る):
+- V114: test/smoke.t 1 ブロック、test/numeric.t 3 ブロック(lead0f の後ろ)。
+- V8: test/numeric.t の mask64、litpat、litok の 3 ブロック。
+- V91: test/literal_default.t(新規、10 ブロック)。
+
+変わらないブロック: 上以外のすべて(test/tokens.t、test/sample を含む)。
+
+昇格の後: dune runtest は差分なし(終了 0)。
+
+項目の例の突き合わせ(cmp.sh): 各項目の試作の処理系と合成の処理系で、items/<id>/ex と items/<id>/verify/ex の全 .kel を
+実行と --type-check で走らせ、出力と終了状態の差は 0 件だった(V114、V8、V91 とも)。
+
+交差の例(ex/x*.kel、結果は cross.txt):
+- x1 `case 4294967295i8`: V114 の接尾辞の型エラー(2:8、1)。V8 の検査より先に number_ty で止まる。
+- x2 と x3: 範囲外のパターンの宣言が前にあれば、V8 の型エラーがその宣言で出る(後の宣言の既定化の失敗は報告されない)。
+- x4 同じ宣言に範囲外のパターンと既定化の失敗: 既定化の失敗(V91 の位置 1:48)が先。step で default_numerics が check_pattern_numbers より先に走るため。
+- x5 Int64 の列に `case 1u64`: V114 の型エラー(3:8、1)。
+
+ほかの分野との試し合わせ(xp/):
+- X-premise(diagtext)を合成の上に当てると、lib/unify.ml の reset のハンク 1 つが V91 と衝突(手直し: reset に `Hashtbl.reset premise_origins;` を足すだけ)。
+  runtest の差分は X-premise 自身の期待値(classes.t の pshowop、premise.t の 5 か所)だけで通る。
+  ただし V91 の default_to が bind より先に add_class を via なしで呼ぶので、既定化を通る前提の伝播では X-premise の補足が消える
+  (premlit.kel: X-premise 単独は 5:1 に補足つき、合成 + X-premise は 5:9 に補足なし。xp/premlit.txt)。
+  default_to で bind と同じく premise_origins から via を引くと(xp/default_to-via.patch)、5:9 に補足つきになり、
+  literal_default.t の premlit と weaklit の期待値に補足が付く(ほかは X-premise 自身の期待値だけ)。
+- V127(effects)の s2.kel: HEAD は 2:20 の未実装で 4、合成(V114)は 2:20 の接尾辞の型エラーで 1、V127 単独は 2:18 の個数の型エラーで 1。

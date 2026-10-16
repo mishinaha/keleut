@@ -1,0 +1,6 @@
+let f() = {
+  with x = 1
+  x
+}
+
+let b = 2

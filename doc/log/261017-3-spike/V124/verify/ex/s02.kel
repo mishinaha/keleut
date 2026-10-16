@@ -1,0 +1,4 @@
+type U[X] = () => Int32 @ {Id[X]}
+type Id[E]: EffectRow = E
+let f[X](g: U[X]): Int32 @ X = g()
+echoln(show(f(fn() => 3)))

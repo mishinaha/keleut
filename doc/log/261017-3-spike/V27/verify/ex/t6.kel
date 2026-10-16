@@ -1,0 +1,2 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype H[G] = MkH({x: Int32 extends G[Int32]}, Callback[G[Int32]])

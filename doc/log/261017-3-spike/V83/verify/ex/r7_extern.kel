@@ -1,0 +1,2 @@
+extern "prim" let __int32_add(x: String, y: Int32): Int32
+echoln("x")

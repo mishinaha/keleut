@@ -1,0 +1,9 @@
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => perform Ask.ask() handle {
+    case ask() if resume(true) => false
+    case ask() => true
+  }
+}
+echoln(show(r))

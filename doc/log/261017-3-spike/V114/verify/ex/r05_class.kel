@@ -1,0 +1,7 @@
+type class Wide[Int16] {
+  val widen: (Int16) => Int64
+}
+type instance Wide[Int32] {
+  let widen(x) = 0i64
+}
+echoln(show(widen(1)))

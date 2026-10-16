@@ -1,0 +1,4 @@
+from "./a" import { Empt, Absurd, Opt2 }
+let f(Absurd.MkA(n)) = 1
+let g(Opt2.Sm(x): Opt2[Empt]) = 2
+echo("ok")

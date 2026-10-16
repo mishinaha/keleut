@@ -1,0 +1,7 @@
+effect U = { u: (Unit) => Int32, v: ((Int32, Int32)) => Int32 }
+let r = (perform u(()) + perform v((1, 2))) handle {
+  case u(()) => resume(1)
+  case v((a, b)) => resume(a + b)
+  case return(x) => x
+}
+echoln(show(r))

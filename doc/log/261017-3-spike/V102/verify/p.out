@@ -1,0 +1,3 @@
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! tworow.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)

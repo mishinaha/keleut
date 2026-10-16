@@ -1,0 +1,7 @@
+module M {
+  pub let f(x: Int32): Int32 = x
+  let g(x: Int32): Int32 = x
+  pub let h[E](k: () => Int32 @ E): Int32 @ E = k()
+}
+let u = M.f
+let v(): Int32 = M.h(fn() => 3)

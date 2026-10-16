@@ -1,0 +1,99 @@
+=== a1.kel
+type C = A[{}]
+type A[E] = (Int32) => Unit @ E
+--- diktor --type-check a1.kel
+[exit 0]
+=== a2.kel
+type A[E] = (Int32) => Unit @ E
+type C = A[{}]
+--- diktor --type-check a2.kel
+[exit 0]
+=== a4.kel
+newtype N = MkN(A[{}])
+type A[E] = (Int32) => Unit @ E
+--- diktor --type-check a4.kel
+[exit 0]
+=== a6.kel
+type C[R] = A[{extends R}]
+type A[E] = (Int32) => Unit @ E
+--- diktor --type-check a6.kel
+[exit 0]
+=== a8.kel
+type C = B[{}]
+type B[E] = A[E]
+type A[E] = (Int32) => Unit @ E
+--- diktor --type-check a8.kel
+[exit 0]
+=== v29a.kel
+newtype Callback[E] = MkCb(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype N = MkN(Cb[{Print}])
+--- diktor --type-check v29a.kel
+[exit 0]
+=== v29c.kel
+newtype Callback[E] = MkCb(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype N = MkN(Cb[{}])
+--- diktor --type-check v29c.kel
+[exit 0]
+=== f3.kel
+effect Log = { log: (String) => Unit }
+type Cb[E] = (() => Unit @ E, () => Unit @ {Log})
+newtype N = MkN(Cb[{}])
+--- diktor --type-check f3.kel
+[exit 0]
+=== f4.kel
+effect Log = { log: (String) => Unit }
+newtype N = MkN((() => Unit @ {}, () => Unit @ {Log}))
+--- diktor --type-check f4.kel
+[exit 0]
+=== e4.kel
+type W: EffectRow = Wr[{}]
+type Wr[E]: EffectRow = {Console extends E}
+let f(): Int32 @ W = 0
+--- diktor --type-check e4.kel
+f : () => Int32 @ {Console}
+[exit 0]
+=== h1.kel
+effect Log = { log: (String) => Unit }
+module M {
+  pub newtype N = MkN(C[{}])
+  type C[E] = Inner[E]
+  newtype Inner[E] = MkI((() => Unit @ E, () => Unit @ {Log}))
+}
+let f(n: M.N): Int32 = 0
+--- diktor --type-check h1.kel
+f : (M.N) => Int32
+[exit 0]
+=== d5.kel
+type C = A[{}]
+type A[E] = (E, () => Unit @ E)
+--- diktor --type-check d5.kel
+! d5.kel:2:14: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row
+[exit 1]
+=== k3.kel
+type C[R] = A[{extends R}]
+type A[E] = Int32
+let v: C[{}] = 1
+--- diktor --type-check k3.kel
+v : Int32
+[exit 0]
+=== g2.kel
+type C = A[{}]
+type A[E] = (Int32) => Unit @ {Nope extends E}
+--- diktor --type-check g2.kel
+! g2.kel:2:31: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== inv_b.kel
+newtype Box = Box(Th[{}])
+type Use = A[{}]
+type Th[E] = () => Unit @ E
+type A[E] = (Int32) => Unit @ E
+let u: Use = fn(x) => ()
+Box(fn() => u(1)) match { case Box(g) => g() }
+echoln("ok")
+--- diktor --type-check inv_b.kel
+u : (Int32) => {} @ {}
+_ : {}
+_ : {}
+[exit 0]

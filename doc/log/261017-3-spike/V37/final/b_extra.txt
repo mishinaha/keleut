@@ -1,0 +1,16 @@
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = {
+    let rec count(ys, k) = ys match {
+      case Nil => k
+      case Cons(head = _, tail = t) => count(t, k + 1)
+    }
+    let rec go(ys) = ys match {
+      case Nil => ""
+      case Cons(head = h, tail = t) => t match {
+        case Nil => Show.show(h)
+        case _   => Show.show(h) + ", " + go(t)
+      }
+    }
+    "[" + go(xs) + "]"
+  }
+}

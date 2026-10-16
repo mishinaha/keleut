@@ -1,0 +1,42 @@
+## top
+42
+exit=0
+## nested
+! nested.kel:2:3: 未実装: module の入れ子(M10)
+exit=4
+## m1
+10
+exit=0
+## m2
+m2.kel:2:40: パースエラー(付近のトークンを確認してください)
+exit=2
+## m3
+m3.kel:1:12: パースエラー(付近のトークンを確認してください)
+exit=2
+## m4
+! m4.kel:3:25: 型エラー: 未知の型: Bool
+exit=1
+## m5
+13
+exit=0
+## imp
+7
+exit=0
+## prel
+42
+exit=0
+## repl
+R.r : (Int32) => Int32 @ {} = <fn>
+_ : Int32 = 5
+exit=0
+## repl2
+Q.q : (Int32) => Int32 @ {} = <fn>
+_ : Int32 = 3
+! <stdin>:3:13: 未実装: module の入れ子(M10)
+_ : Int32 = 5
+exit=0
+## tc m1
+A.f : (Int32) => Int32 @ {}
+B.g : (Int32) => Int32 @ {}
+_ : {}
+exit=0

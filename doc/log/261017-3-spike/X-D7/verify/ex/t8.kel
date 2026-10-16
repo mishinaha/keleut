@@ -1,0 +1,2 @@
+echoln("a")
+type class Show[A] { val show: (A) => String }

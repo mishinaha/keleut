@@ -1,0 +1,389 @@
+# HEAD = scratchpad/bin/diktor-head (diktor 39d4091), all = scratchpad/all/diktor (合成差分を当てた木)
+==== leak1.kel
+let escaped[E](): (Int32) => Int32 @ {Console extends E} = run h {
+  let slot = Ref.new(fn(x) => x)
+  let g: (Int32) => Int32 @ {Console} = Ref.get(slot)
+  let cell = Ref.new(41)
+  let _ = Ref.set(slot, fn(x) => Ref.get(cell) + x)
+  Ref.get(slot)
+}
+echoln(show(escaped()(1)))
+---- HEAD
+! leak1.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+---- all
+! leak1.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+==== leak2.kel
+effect Ask = { ask: () => Int32 }
+let bad(): Int32 @ {Console} = run h {
+  let slot = Ref.new(fn(x) => x)
+  let g: (Int32) => Int32 @ {Console} = Ref.get(slot)
+  let _ = Ref.set(slot, fn(x) => perform ask() + x)
+  Ref.get(slot)(1)
+}
+echoln(show(bad()))
+---- HEAD
+! leak2.kel:5:34: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+---- all
+! leak2.kel:5:34: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+==== e_d.kel
+let escaped[E](): (Int32) => Int32 @ {Console extends E} = run h {
+  let slot = Ref.new(fn(x) => x)
+  let _: (Int32) => Int32 @ {Console} = Ref.get(slot)
+  let cell = Ref.new(41)
+  let _ = Ref.set(slot, fn(x) => Ref.get(cell) + x)
+  Ref.get(slot)
+}
+echoln(show(escaped()(1)))
+---- HEAD
+! e_d.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+---- all
+! e_d.kel:5:34: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+==== t17.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let f(z) = {
+  let g: (Int32) => Int32 @ {Console} = idf(fn(x) => z(x))
+  g(1)
+}
+let main(): Unit @ {Console} = echoln(show(f(fn(x) => perform ask() + x)))
+main()
+---- HEAD
+! t17.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+---- all
+! t17.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+==== t18.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let f(z) = {
+  let _: (Int32) => Int32 @ {Console} = idf(z)
+  z(1)
+}
+let main(): Unit @ {Console} = echoln(show(f(fn(x) => perform ask() + x)))
+main()
+---- HEAD
+! t18.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+---- all
+! t18.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+==== t25.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let f(z) = {
+  let (h): (Int32) => Int32 @ {Console} = idf(z)
+  z(1)
+}
+let main(): Unit @ {Console} = echoln(show(f(fn(x) => perform ask() + x)))
+main()
+---- HEAD
+! t25.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+---- all
+! t25.kel:7:55: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+[exit 1]
+==== t01.kel
+let idf[A](x: A): A = x
+let k = idf(fn(x) => { echoln("k"); x })
+let g: (Int32) => Int32 @ {Console} = idf(k)
+with_stdout(fn() => echoln(show(g(1))))
+---- HEAD
+k
+1
+[exit 0]
+---- all
+k
+1
+[exit 0]
+==== t02.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => { echoln("k"); x })
+  pub let g: (Int32) => Int32 @ {Console} = idf(k)
+}
+with_stdout(fn() => echoln(show(M.g(1))))
+---- HEAD
+k
+1
+[exit 0]
+---- all
+k
+1
+[exit 0]
+==== t16.kel
+let idf[A](x: A): A = x
+let f(z) = {
+  let g: (Int32) => Int32 @ {Console} = idf(fn(x) => z(x))
+  g(1)
+}
+with_stdout(fn() => echoln(show(f(fn(x) => { echoln("z"); x + 1 }))))
+---- HEAD
+z
+2
+[exit 0]
+---- all
+z
+2
+[exit 0]
+==== t16v.kel
+let idf[A](x: A): A = x
+let f(z) = {
+  let g: (Int32) => Int32 @ {Console} = fn(x) => z(x)
+  g(1)
+}
+with_stdout(fn() => echoln(show(f(fn(x) => { echoln("z"); x + 1 }))))
+---- HEAD
+z
+2
+[exit 0]
+---- all
+z
+2
+[exit 0]
+==== e_f.kel
+let idf[A](x: A): A = x
+let f(): Int32 @ {Console} = {
+  let k = idf(fn(x) => { echoln("k"); x })
+  let g: (Int32) => Int32 @ {Console} = idf(k)
+  g(1) + k(2)
+}
+echoln(show(f()))
+---- HEAD
+k
+k
+3
+[exit 0]
+---- all
+k
+k
+3
+[exit 0]
+==== e_f2.kel
+let idf[A](x: A): A = x
+let f(): Int32 @ {Console} = {
+  let k = idf(fn(x) => { echoln("k"); x })
+  let g: (Int32) => Int32 @ {Console} = k
+  g(1) + k(2)
+}
+echoln(show(f()))
+---- HEAD
+k
+k
+3
+[exit 0]
+---- all
+k
+k
+3
+[exit 0]
+==== p01.kel
+let idf[A](x: A): A = x
+let f() = {
+  let h = idf(fn() => echoln("x"))
+  h()
+  let g: () => Unit @ {Console} = idf(h)
+  g()
+}
+f()
+---- HEAD
+x
+x
+[exit 0]
+---- all
+x
+x
+[exit 0]
+==== p02.kel
+let idf[A](x: A): A = x
+let f() = {
+  let h = idf(fn() => echoln("x"))
+  h()
+  let g: () => Unit @ {Console} = idf(h)
+  1
+}
+echoln(show(f()))
+---- HEAD
+x
+1
+[exit 0]
+---- all
+x
+1
+[exit 0]
+==== p03.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let f() = {
+  let h = idf(fn() => echoln("x"))
+  let g: () => Unit @ {Console} = idf(h)
+  let q = fn() => { h(); perform ask() }
+  g()
+  q
+}
+let r = (f()() + 0) handle { case ask() => resume(1)  case return(x) => x }
+echoln(show(r))
+---- HEAD
+x
+x
+1
+[exit 0]
+---- all
+x
+x
+1
+[exit 0]
+==== t19.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g: (Int32) => Int32 = idf(k)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- HEAD
+2
+[exit 0]
+---- all
+2
+[exit 0]
+==== t19b.kel
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x + 1)
+module M {
+  pub let g: (Int32) => Int32 = idf(k)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- HEAD
+2
+[exit 0]
+---- all
+2
+[exit 0]
+==== t19v.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g: (Int32) => Int32 = k
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- HEAD
+2
+[exit 0]
+---- all
+2
+[exit 0]
+==== t19f.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g(x: Int32): Int32 = k(x)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- HEAD
+2
+[exit 0]
+---- all
+2
+[exit 0]
+==== v49_ml5c.kel
+let bad = fn(y) => {
+  let f[A](x: A): A = y
+  f
+}
+---- HEAD
+! v49_ml5c.kel:2:7: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+---- all
+! v49_ml5c.kel:2:7: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+==== v49_valann.kel
+let bad = fn(y) => {
+  let f[A](x: A): A = {
+    let z: A = y
+    x
+  }
+  f
+}
+---- HEAD
+! v49_valann.kel:3:9: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+---- all
+! v49_valann.kel:3:9: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+==== v49_valann2.kel
+let idf[A](x: A): A = x
+let bad = fn(y) => {
+  let f[A](x: A): A = {
+    let z: (A) => A = idf(y)
+    x
+  }
+  f
+}
+---- HEAD
+! v49_valann2.kel:4:9: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+---- all
+! v49_valann2.kel:4:9: 型エラー: 注釈された型を満たしません(スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+==== v49_rowtp.kel
+let idf[A](x: A): A = x
+let f[E](k: () => Unit @ {Console extends E}): Unit @ {Console extends E} = {
+  let g: () => Unit @ {Console} = idf(k)
+  g()
+}
+---- HEAD
+! v49_rowtp.kel:3:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+---- all
+! v49_rowtp.kel:3:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
+[exit 1]
+==== v49_pubmod.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => { echoln("k"); x })
+  pub let g: (Int32) => Int32 @ {Console} = idf(k)
+}
+let use(): Int32 @ {Console} = M.g(1) + 0
+with_stdout(fn() => echoln(show(use())))
+---- HEAD
+k
+1
+[exit 0]
+---- all
+k
+1
+[exit 0]
+==== v49_t01ask.kel
+effect Ask = { ask: () => Int32 }
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x)
+let g: (Int32) => Int32 @ {Console} = idf(k)
+let r = (k(1) + perform ask()) handle { case ask() => resume(1)  case return(x) => x }
+echoln(show(r))
+---- HEAD
+2
+[exit 0]
+---- all
+2
+[exit 0]
+==== v49_rowvar_mono.kel
+let bad = fn(y) => {
+  let f[E](go: () => Unit @ E): Unit @ E = { y(go); go() }
+  f
+}
+---- HEAD
+! v49_rowvar_mono.kel:2:46: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+---- all
+! v49_rowvar_mono.kel:2:46: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]

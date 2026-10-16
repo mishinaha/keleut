@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }; newtype N = N(() => Unit @ {Nope})
+effect Log = { log: (String) => Unit }
+newtype P = P(() => Unit @ {Later})
+effect Later = { later: () => Unit }
+newtype P = P(() => Unit @ {Later}); newtype Q = Q(() => Unit @ {Later2}); effect Later2 = { l2: () => Unit }

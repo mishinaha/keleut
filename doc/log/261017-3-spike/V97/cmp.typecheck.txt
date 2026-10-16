@@ -1,0 +1,61 @@
+### keleut/doc/log/261009-3-spike/examples/o3_vrgen_rev.kel
+2,3c2,4
+< ! keleut/doc/log/261009-3-spike/examples/o3_vrgen_rev.kel:9:11: 型エラー: ラベル Ask がありません(行は閉じています)
+< x1
+---
+> main : () => {} @ {Console}
+> _ : {}
+> x0
+### keleut/doc/log/261010-1-spike/dict/ex/e2_inst_eff.kel
+1c1
+< ! keleut/doc/log/261010-1-spike/dict/ex/e2_inst_eff.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+---
+> ! keleut/doc/log/261010-1-spike/dict/ex/e2_inst_eff.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+### keleut/doc/log/261010-1-spike/dict/ex/e3_weak.kel
+2c2
+< s : [_A: Show] (_A) => String
+---
+> s : [_A: Show] (_A) => String @ {}
+### keleut/doc/log/261010-1-spike/dict/ex/e4_weak_late.kel
+2c2
+< s : [_A: Show] (_A) => String
+---
+> s : [_A: Show] (_A) => String @ {}
+### keleut/doc/log/261010-1-spike/dict/ex/e8_inst_init_console.kel
+1c1
+< ! keleut/doc/log/261010-1-spike/dict/ex/e8_inst_init_console.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+---
+> ! keleut/doc/log/261010-1-spike/dict/ex/e8_inst_init_console.kel:3:33: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+### keleut/doc/log/261010-1-spike/dict/verify/ex/v9_inst_init_err_noprem.kel
+1,2c1,2
+< ! keleut/doc/log/261010-1-spike/dict/verify/ex/v9_inst_init_err_noprem.kel:2:31: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+< x1
+---
+> _ : {}
+> x0
+### keleut/doc/log/261010-1-spike/doc/verify/t/inst_a.kel
+3,4c3
+< ! keleut/doc/log/261010-1-spike/doc/verify/t/inst_a.kel:4:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+< x1
+---
+> x0
+### keleut/doc/log/261010-1-spike/doc/verify/t/inst_b.kel
+2,3c2,3
+< ! keleut/doc/log/261010-1-spike/doc/verify/t/inst_b.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+< x1
+---
+> _ : {}
+> x0
+### keleut/doc/log/261010-1-spike/if/cases/lam.kel
+2c2
+< g : (Int32) => Int32
+---
+> g : (Int32) => Int32 @ {}
+### keleut/doc/log/261010-1-spike/u/examples/o3_vrgen_rev.kel
+2,3c2,4
+< ! keleut/doc/log/261010-1-spike/u/examples/o3_vrgen_rev.kel:9:11: 型エラー: ラベル Ask がありません(行は閉じています)
+< x1
+---
+> main : () => {} @ {Console}
+> _ : {}
+> x0

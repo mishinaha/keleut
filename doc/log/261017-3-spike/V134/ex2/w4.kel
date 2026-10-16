@@ -1,0 +1,4 @@
+let id(x) = x
+let p = id(fn(y) => y)
+let q(u: Int32): Int32 = { let g = fn(v) => p(v) match {}; u }
+echoln(show(p(3)))

@@ -1,0 +1,7 @@
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => resume(true)
+  case return(b) => (perform Ask.ask() handle { case ask() => resume(2) }) > 1 && b
+}
+echoln(show(r))

@@ -1,0 +1,6 @@
+type class Pp[A] { val pp[B: Show]: (A, B) => String }
+newtype N = N
+echoln("a")
+type instance Pp[N] { let pp = { let q = 1 / 0; fn(n, b) => show(b) } }
+echoln("b")
+echoln(pp(N, 1))

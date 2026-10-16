@@ -1,0 +1,7 @@
+effect Log = { log: (String) => Unit }
+effect Two = { two: () => Int32 }
+type W: EffectRow = {Log, Two}
+newtype N = N(() => Int32 @ W)
+let go(n: N): Int32 @ W = n match { case N(g) => g() }
+let v: Int32 = (go(N(fn() => { perform log("a"); perform two() + 1 })) handle { case log(s) => { echoln(s); resume(()) } }) handle { case two() => resume(41) }
+echoln(show(v))

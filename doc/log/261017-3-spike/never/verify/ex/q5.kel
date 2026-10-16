@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let f() = { let r = perform throw("x"); let q = r match {}; r }
+echoln("ok")

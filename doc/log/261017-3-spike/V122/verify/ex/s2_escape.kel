@@ -1,0 +1,6 @@
+let g(k: (Int32) => Int32): Int32 = 0
+let h2() = {
+  let ks = Nil
+  let f = fn(x: Int32) => x
+  run h { let r = Ref.new(0); let t = fn(u: Int32) => Ref.get(r); g(t) }
+}

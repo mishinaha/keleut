@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+effect Reg = { reg: (() => Int32) => Int32 }
+let main(): Unit @ Console = {
+  let r = { { perform ask() } handle { case ask() => perform reg(fn() => 3i32) } } handle {
+    case reg(f) => resume(f() * 2i32)
+  }
+  echoln(show(r))
+}
+main()

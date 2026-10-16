@@ -1,0 +1,92 @@
+== p1.kel
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg(mk())
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+! p1.kel:4:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== p2.kel
+effect File = { write: (String) => Unit }
+effect Reg = { reg: (() => Unit @ File) => Unit }
+let use(): Unit @ {Reg, Console} = perform reg(fn() => perform write("x"))
+-- --type-check
+! p2.kel:3:56: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+== p3.kel
+effect Reg = { reg: (() => Unit @ {}) => Unit }
+let use(): Unit @ {Reg, Console} = perform reg(fn() => echoln("x"))
+-- --type-check
+! p3.kel:2:36: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== p4.kel
+effect Reg = { reg: ((() => Unit @ Console, Int32)) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg((mk(), 1))
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+! p4.kel:4:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== p5.kel
+effect Reg = { reg: (() => Unit @ Console, Int32) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg(mk(), 1)
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+! p5.kel:4:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== p6.kel
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let use(r: {go: () => Unit @ {}}): Unit @ Reg = perform reg(r.go)
+-- --type-check
+! p6.kel:2:49: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== p7.kel
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ {Console} = {
+  perform reg(mk())
+  echoln("after")
+} handle {
+  case reg(f) => { f(); resume() }
+}
+use()
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+! p7.kel:5:3: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== r1.kel
+effect Get = { get: () => () => Unit @ Console }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Console = {
+  let g = perform get()
+  g()
+} handle {
+  case get() => resume(mk())
+}
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+! r1.kel:8:17: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+== r2.kel
+effect File = { write: (String) => Unit }
+effect Get = { get: () => () => Unit @ File }
+let use(): Unit @ {File, Console} = {
+  let g = perform get()
+  g()
+} handle {
+  case get() => resume(fn() => perform write("x"))
+}
+-- --type-check
+! r2.kel:7:32: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1

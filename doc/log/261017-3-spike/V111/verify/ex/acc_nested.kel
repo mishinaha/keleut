@@ -1,0 +1,6 @@
+let outer[A](x: A): Int32 = {
+  let rec even(n: Int32): Boolean = n == 0i32 || odd(n - 1i32)
+  and odd(n: Int32): Boolean = n != 0i32 && even(n - 1i32)
+  if even(4i32) then 1i32 else 0i32
+}
+echoln(show(outer("s")))

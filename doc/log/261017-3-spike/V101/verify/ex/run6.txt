@@ -1,0 +1,55 @@
+== y1aliaslam.kel
+[diktor-head]
+! y1aliaslam.kel:4:56: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+use : () => {} @ {Reg, Console}
+exit=0
+== y2aliascall.kel
+[diktor-head]
+reg : (() => {} @ {File}) => {}
+use : () => {} @ {Console}
+exit=0
+[main.exe]
+reg : (() => {} @ {File}) => {}
+use : () => {} @ {Console}
+exit=0
+== y3tuplelam.kel
+[diktor-head]
+! y3tuplelam.kel:3:57: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+use : () => {} @ {Reg, Console}
+exit=0
+== y4nestlam.kel
+[diktor-head]
+! y4nestlam.kel:3:64: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+use : () => {} @ {Reg, Console}
+exit=0
+== y5aliasnn.kel
+[diktor-head]
+a : () => {} @ {}
+mk : () => () => {} @ {}
+! y5aliasnn.kel:5:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+[main.exe]
+a : () => {} @ {}
+mk : () => () => {} @ {}
+use : () => {} @ {Reg}
+exit=0
+== y6aliasres.kel
+[diktor-head]
+! y6aliasres.kel:8:32: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+use : () => {} @ {File, Console}
+exit=0
+== y7rowalias.kel
+[diktor-head]
+! y7rowalias.kel:4:56: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+use : () => {} @ {Reg, Console}
+exit=0

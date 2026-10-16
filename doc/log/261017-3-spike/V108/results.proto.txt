@@ -1,0 +1,150 @@
+### block.txt (--repl)
+> let p = (show, 1)
+> (show, eq, 3)
+> let k = {f = show, n = 1}
+> let m = Some(show)
+> let v = #Tag(show)
+> let idf[A](x: A): A = x
+> let t = idf(show); t(2i32)
+> let h: (Int32) => String = show
+> let rec ev[A: Eq](x: A): Boolean = eq(x, x)
+> (ev, 2)
+> extern "prim" let ex1[A: Show](x: A): String
+> (ex1, 1)
+> let q = (show, ???)
+> q
+---
+p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+_ : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = (<fn>, <fn>, 3)
+k : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
+m : [A: Show] Option[(A) => String] = Some(<fn>)
+v : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
+idf : (A) => A = <fn>
+t : (Int32) => String @ {Console, Blocking, Print} = <fn>
+_ : String = "2"
+h : (Int32) => String = <fn>
+ev : [A: Eq] (A) => Boolean = <fn>
+_ : [A: Eq] ((A) => Boolean, Int32) = (<fn>, 2)
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+q : [A: Show] ((A) => String, B) = <unevaluated>
+_ : [A: Show] ((A) => String, B) = <unevaluated>
+### r1.txt (--repl)
+> let p = (show, 1)
+> p
+> let sh = show
+> sh
+> show
+> (show, 1)
+> let r = { f: show, n: 1 }
+> r
+> let idf[A](x: A): A = x
+> let t = idf(show); t(2i32)
+> t
+> let q = (1, 2)
+> q
+---
+p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+sh : [A: Show] (A) => String = <fn>
+_ : [A: Show] (A) => String = <fn>
+_ : [A: Show] (A) => String = <fn>
+_ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+<stdin>:7:9: パースエラー(付近のトークンを確認してください)
+! <stdin>:8:1: 型エラー: 未束縛の変数: r
+idf : (A) => A = <fn>
+t : (Int32) => String @ {Console, Blocking, Print} = <fn>
+_ : String = "2"
+_ : (Int32) => String @ {Console, Blocking, Print extends _R1} = <fn>
+q : (Int32, Int32) = (1, 2)
+_ : (Int32, Int32) = (1, 2)
+### r2.txt (--repl)
+> let k = { f = show, n = 1 }
+> k
+> let m = Some(show)
+> m
+> let c = { n = 1, e = (x: Int32) => x }
+> c
+> k.n
+---
+k : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
+_ : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
+m : [A: Show] Option[(A) => String] = Some(<fn>)
+_ : [A: Show] Option[(A) => String] = Some(<fn>)
+<stdin>:5:24: パースエラー(付近のトークンを確認してください)
+! <stdin>:6:1: 型エラー: 未束縛の変数: c
+! <stdin>:7:1: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+### r3.txt (--repl)
+> println
+> let h: (Int32) => String = show
+> h
+> let g = (x: Int32) => show(x)
+> let f[A: Show](x: A): String = show(x)
+> f
+> let p2 = (show, ???)
+> let e = (eq, 1)
+> let n = None
+> let w = (h, 1)
+> let v = (1, show(2))
+---
+_ : (String) => {} @ {Print extends _R1} = <fn>
+h : (Int32) => String = <fn>
+_ : (Int32) => String = <fn>
+<stdin>:4:11: パースエラー(付近のトークンを確認してください)
+f : [A: Show] (A) => String = <fn>
+_ : [A: Show] (A) => String = <fn>
+p2 : [A: Show] ((A) => String, B) = <unevaluated>
+e : [A: Eq] ((A, A) => Boolean, Int32) = (<fn>, 1)
+n : Option[A] = None
+w : ((Int32) => String, Int32) = (<fn>, 1)
+v : (Int32, String) = (1, "2")
+### r4.txt (--repl)
+> newtype Box2[A] = Box2(A)
+> type instance Show[Box2[_]] { let show(b) = "box" }
+> let z = Box2(show)
+> z
+> let pp = (show, eq, 3)
+> let ff = { g = fn(x) => show(x), n = ??? }
+> let rr = #Tag(show)
+> let ok = (show(1), 2)
+---
+! <stdin>:2:1: 型エラー: インスタンス頭 Box2 のカインドがクラス Show のパラメータと一致しません
+z : [A: Show] Box2[(A) => String] = Box2(<fn>)
+_ : [A: Show] Box2[(A) => String] = Box2(<fn>)
+pp : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = (<fn>, <fn>, 3)
+ff : [A: Show] {g: (A) => String, n: B} = <unevaluated>
+rr : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
+ok : (String, Int32) = ("1", 2)
+### r5.txt (--repl)
+> extern "prim" let ex1[A: Show](x: A): String
+> let pe = (ex1, 1)
+> let rec ev[A: Eq](x: A): Boolean = eq(x, x)
+> let pv = (ev, 2)
+> let nn = 1
+> let z = (fn(x) => show(x), 0)
+---
+pe : [A: Show] ((A) => String, Int32) = (<fn>, 1)
+ev : [A: Eq] (A) => Boolean = <fn>
+pv : [A: Eq] ((A) => Boolean, Int32) = (<fn>, 2)
+nn : Int32 = 1
+z : [A: Show] ((A) => String, Int32) = (<fn>, 0)
+### f1.kel (--type-check)
+let p = (show, 1)
+let sh = show
+let idf[A](x: A): A = x
+let t = idf(show)
+let u = t(2i32)
+let k = { f = show, n = 1 }
+let m = Some(show)
+let q = (1, 2)
+(show, 1)
+---
+p : [A: Show] ((A) => String, Int32)
+sh : [A: Show] (A) => String
+idf : (A) => A
+t : [_A: Show] (_A) => String
+u : String
+k : [A: Show] {f: (A) => String, n: Int32}
+m : [A: Show] Option[(A) => String]
+q : (Int32, Int32)
+_ : [A: Show] ((A) => String, Int32)
+exit=0

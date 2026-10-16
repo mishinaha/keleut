@@ -1,0 +1,23 @@
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/_build/default/test/never_ops.t b/_build/default/test/never_ops.t.corrected
+index c69849f..a342df5 100644
+--- a/_build/default/test/never_ops.t
++++ b/_build/default/test/never_ops.t.corrected
+@@ -128,8 +128,6 @@ Never にインスタンスを持つクラスの制約を要求する位置に p
+   > let f(): String @ Fail = describe(perform throw("x"))
+   > EOF
+   $ diktor neverclass.kel
+-  ! neverclass.kel:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+-  [1]
+   $ cat > neverclasshelper.kel <<'EOF'
+   > effect Fail = { throw: (String) => Never }
+   > type class Describe[A] { val describe: (A) => String }
+@@ -138,8 +136,6 @@ Never にインスタンスを持つクラスの制約を要求する位置に p
+   > let f(): String @ Fail = describe(fail("x"))
+   > EOF
+   $ diktor neverclasshelper.kel
+-  ! neverclasshelper.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+-  [1]
+ 
+ 補助関数の返り値か値束縛を Never と注釈すると型が決まり、Never のインスタンスが選ばれる:
+ 

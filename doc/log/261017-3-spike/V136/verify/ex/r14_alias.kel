@@ -1,0 +1,4 @@
+type Level = #Lo | #Hi
+type class Lv[A] { val lv: (A, Level) => String }
+type instance Lv[Int32] { let lv(n, l) = l match { case #Lo => "lo" case other => "nonlo" } }
+echo(lv(1, #Hi))

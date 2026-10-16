@@ -1,0 +1,1 @@
+let ng[A](xs: List[List[A]]): Boolean = xs == xs

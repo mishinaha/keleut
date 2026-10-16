@@ -1,0 +1,7 @@
+[diktor-head]
+! imp/main.kel:4:3: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+[main.exe]
+i
+done
+exit=0

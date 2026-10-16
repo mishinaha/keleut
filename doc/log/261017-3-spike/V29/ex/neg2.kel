@@ -1,0 +1,3 @@
+newtype H = MkH(Cb[Int32])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)

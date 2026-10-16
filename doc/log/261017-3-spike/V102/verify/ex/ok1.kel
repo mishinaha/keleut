@@ -1,0 +1,12 @@
+module M {
+  pub newtype Box = Box(() => Int32 @ {})
+  pub let run1(b: Box): Int32 @ {} = b match { case Box(f) => f() }
+}
+type F = () => Int32
+newtype B2 = B2(F)
+newtype P[A] = P(A, A)
+let mkp(): () => Int32 = fn() => 1
+let p = P(mkp(), fn() => 2)
+echoln(show(M.run1(M.Box(fn() => 41))))
+echoln(show(p match { case P(f, g) => f() + g() }))
+echoln(show(B2(mkp()) match { case B2(f) => f() }))

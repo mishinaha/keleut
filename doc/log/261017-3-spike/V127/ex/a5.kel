@@ -1,0 +1,5 @@
+let zero[A, E](body: () => A @ E): A @ E = body()
+let b(): Int32 = {
+  with x = zero()
+  2
+}

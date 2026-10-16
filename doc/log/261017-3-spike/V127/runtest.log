@@ -1,0 +1,26 @@
+File "test/trailing_block.t", line 1, characters 0-0:
+diff --git a/_build/default/test/trailing_block.t b/_build/default/test/trailing_block.t.corrected
+index eca4f6c..089d801 100644
+--- a/_build/default/test/trailing_block.t
++++ b/_build/default/test/trailing_block.t.corrected
+@@ -101,7 +101,7 @@ g(1)(2) { k } では、末尾ブロックは 2 つ目の呼び出しに加わる
+   > EOF
+   $ diktor --type-check tuple2.kel
+   apply2 : (Int32, Int32, (Int32, Int32) => Int32 @ {}) => Int32
+-  ! tuple2.kel:2:22: 型エラー: 型が一致しません: (_A, _A) と Int32
++  ! tuple2.kel:2:22: 型エラー: 引数の個数が一致しません: ((_A, _A)) => _A と (Int32, Int32) => Int32 @ {}(引数は 1 個と 2 個です)
+   [1]
+ 
+ { case ... } の照合は match と同じ規則で、残りを受ける節が無ければ照合対象の
+File "test/eval.t", line 1, characters 0-0:
+diff --git a/_build/default/test/eval.t b/_build/default/test/eval.t.corrected
+index 25f6950..a1015d8 100644
+--- a/_build/default/test/eval.t
++++ b/_build/default/test/eval.t.corrected
+@@ -789,5 +789,5 @@ with _ と with (_) は引数のない無名関数を、with _x は 1 引数の
+   > KEL
+   $ diktor --type-check with2.kel
+   one : ((Int32) => A) => A
+-  ! with2.kel:3:3: 型エラー: ラベル _item がありません(行は閉じています)
++  ! with2.kel:3:3: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
+   [1]

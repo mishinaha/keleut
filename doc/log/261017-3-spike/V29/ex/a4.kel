@@ -1,0 +1,4 @@
+type Unit = {}
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype H = MkH(Cb[{}])

@@ -1,0 +1,5 @@
+module M {
+  pub type Show = Int32
+  pub let v: Show = 4
+}
+echoln(show(M.v))

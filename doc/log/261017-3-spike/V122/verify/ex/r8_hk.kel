@@ -1,0 +1,2 @@
+let f[F[_, _]](x: F[Int32, Int32]): Int32 = 0
+let g(): Int32 = run h { let r = Ref.new(0); f(r) }

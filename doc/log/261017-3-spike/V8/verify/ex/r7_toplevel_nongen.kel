@@ -1,0 +1,4 @@
+let id[A](y: A): A = y
+let r = id(fn(x) => x match { case 4294967295 => 1  case _ => 2 })
+let b: Int32 = r(4294967295i64)
+echoln(show(b))

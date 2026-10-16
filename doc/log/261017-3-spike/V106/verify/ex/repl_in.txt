@@ -1,0 +1,4 @@
+type class Pp[A] { val pp[B: Show]: (A) => String }
+type instance Pp[Int32] { let pp(x) = "r" + show(x) }
+pp(3i32)
+1 + 1

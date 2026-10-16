@@ -1,0 +1,2 @@
+let rec f(n: Int32): Float64 = if n == 0 then 1.5 % 2.0 else g(n - 1)
+and g(n: Int32): Float64 = f(n)

@@ -1,0 +1,145 @@
+== a1.kel
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let b(): Int32 = {
+  with _ = one()
+  2
+}
+-- out
+one : ((Int32) => A) => A
+! a1.kel:3:3: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
+[exit 1]
+== a2.kel
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let b(): Int32 = one(fn() => 2)
+-- out
+one : ((Int32) => A) => A
+! a2.kel:2:22: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
+[exit 1]
+== a3.kel
+let f(x: Int32): Int32 = x
+let b(): Int32 = f()
+-- out
+f : (Int32) => Int32
+! a3.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 1 個の引数を取りますが、0 個を渡しています
+[exit 1]
+== a4.kel
+let f(x: Int32): Int32 = x
+let b(): Int32 = f(1, 2)
+-- out
+f : (Int32) => Int32
+! a4.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 1 個の引数を取りますが、2 個を渡しています
+[exit 1]
+== a5.kel
+let zero[A, E](body: () => A @ E): A @ E = body()
+let b(): Int32 = {
+  with x = zero()
+  2
+}
+-- out
+zero : (() => A) => A
+! a5.kel:3:3: 型エラー: 引数の個数が一致しません: (_A) => _B と () => _C(引数は 1 個と 0 個です)
+[exit 1]
+== a6.kel
+let two[A, E](body: (Int32, Int32) => A @ E): A @ E = body(5, 6)
+let b(): Int32 = {
+  with x = two()
+  2
+}
+-- out
+two : ((Int32, Int32) => A) => A
+! a6.kel:3:3: 型エラー: 引数の個数が一致しません: (_A) => _B と (Int32, Int32) => _C(引数は 1 個と 2 個です)
+[exit 1]
+== a7.kel
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let b(): Int32 = one { 2 }
+-- out
+one : ((Int32) => A) => A
+! a7.kel:2:22: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
+[exit 1]
+== a8.kel
+let g: (Int32) => Int32 = fn() => 2
+-- out
+! a8.kel:1:5: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 と () => _A(引数は 1 個と 0 個です))
+[exit 1]
+== a9.kel
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let h = fn() => 2
+let b(): Int32 = one(h)
+-- out
+one : ((Int32) => A) => A
+h : () => Int32
+! a9.kel:3:22: 型エラー: 引数の個数が一致しません: () => Int32 と (Int32) => _A(引数は 0 個と 1 個です)
+[exit 1]
+== b1.kel
+let f(x: Int32, y: String): Int32 = x
+let b(): Int32 = f("a")
+-- out
+f : (Int32, String) => Int32
+! b1.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 2 個の引数を取りますが、1 個を渡しています
+[exit 1]
+== b2.kel
+let fst[A, R](t: {_item: A extends R}): A = t._0
+let a = fst((1, 2))
+let b = fst(1, 2)
+-- out
+fst : ({_item: A extends R1}) => A
+a : Int32
+! b2.kel:3:9: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 1 個の引数を取りますが、2 個を渡しています
+[exit 1]
+== b3.kel
+pub let f(x: Int32): Int32 = x
+pub let g(): Int32 = f()
+-- out
+f : (Int32) => Int32 @ {}
+! b3.kel:2:22: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 1 個の引数を取りますが、0 個を渡しています
+[exit 1]
+== b4.kel
+let h(g: (Int32) => Int32): Int32 = g(1, 2)
+-- out
+! b4.kel:1:37: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 1 個の引数を取りますが、2 個を渡しています
+[exit 1]
+== b5.kel
+let f(x: Int32): Int32 = x
+let r = { go = f }
+let b = r.go()
+-- out
+f : (Int32) => Int32
+r : {go: (Int32) => Int32}
+! b5.kel:3:9: 型エラー: 引数の個数が一致しません: 呼び出す関数 は 1 個の引数を取りますが、0 個を渡しています
+[exit 1]
+== b6.kel
+let apply[A, B](f: (A) => B, x: A): B = f(x)
+let n = apply(fn(a, b) => a, 1)
+-- out
+apply : ((A) => B @ {}, A) => B
+! b6.kel:2:15: 型エラー: 引数の個数が一致しません: (_A, _B) => _A と (_C) => _D @ {}(引数は 2 個と 1 個です)
+[exit 1]
+== c1.kel
+effect Ask = { ask: (Int32) => Int32 }
+let f(): Int32 @ Ask = perform ask()
+-- out
+! c1.kel:2:24: 型エラー: 引数の個数が一致しません: 操作 ask は 1 個の引数を取りますが、0 個を渡しています
+[exit 1]
+== c2.kel
+effect Ask = { ask: (Int32) => Int32 }
+let g(): Int32 = { perform ask(1) } handle {
+  case ask(x) => resume(1, 2)
+}
+-- out
+c2.kel:4:1: 構文エラー: resume の引数は高々1個です
+[exit 2]
+== c3.kel
+effect Ask = { ask: (Int32) => Int32 }
+let g(): Int32 = { perform ask(1) } handle {
+  case ask() => resume(1)
+}
+-- out
+! c3.kel:2:18: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+== c4.kel
+let f(x: Int32): Int32 = x
+let b(): Int32 = f(x = 1)
+-- out
+f : (Int32) => Int32
+! c4.kel:2:18: 型エラー: ラベル x がありません(行は閉じています)
+[exit 1]

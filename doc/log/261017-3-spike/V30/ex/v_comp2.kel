@@ -1,0 +1,2 @@
+module Foo { pub type Foo = Int32 }
+effect Foo = { foo: () => Int32 }

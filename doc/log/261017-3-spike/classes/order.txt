@@ -1,0 +1,20 @@
+分野 classes の合成の順(snap/diktor = diktor 39d4091 に対して)
+
+1. V97/V103 の cram の前段: test/spec_gaps.t の ordervr と test/verify_fixes.t の vrgen の本体を fn(x) => x にする(HEAD でも通る)
+   - spec_gaps.t の前書きは V103 の文面を採り、参照先を test/std_rows.t の stdopbody から test/builtin_rows.t の bopweak に直した(手直し 1)
+2. V110.patch(lib/elab.ml。check_instance_bodies に eff0、rho、check_init_row、subsume の未束縛の行を空に決める 1 行)。そのまま当たる
+   - この時点で test/instance_init.t(合成で新設、10 ブロック)が通る(中間状態で実測。runtest 差分 0)
+3. V97/V103 のコード: V103.patch から inst_init_pure.t、std_rows.t と、check_instance_bodies の 4573 行の hunk(D[V97-4] の TRowEmpty)を除いたもの(p/V97-103.sel.patch)。elab.ml の hunk 7、8 は 19 行ずれて当たる
+   - test/builtin_rows.t は V97 の 6 ブロックに V103 の stdprim、stdop、stdinst を足し、前書きは V103 の std_rows.t のものにした 9 ブロック(手直し 2)
+   - classes.t の ml9e、ml9e2 と annot_rows.t の instmonorow の前書きは V97 と V103 で同一
+   - この時点で runtest 差分 0(中間状態で実測)
+4. V136.patch: hunk 8(check_instance_bodies の 2 つの呼び出し)が V110 の rho と衝突して当たらない。手で elab_binding ?expected_params:(expected_params_of mname) env 0 rho bnode と elab_rec_bindings ~expected_params:expected_params_of env 0 rho bs にした(手直し 3)。ほかの 7 hunk は 7 行と 28 行ずれて当たる
+   - premise.t の pr7 の期待値が変わる(V136 の主張どおり)。test/instance_param_types.t(合成で新設、8 ブロック)
+5. V106.patch: 6 hunk とも 7 行または 70 行ずれて当たる
+6. V126.patch: そのまま当たる
+7. V132.patch: そのまま当たる(never_ops.t の末尾)
+8. X-D7.patch: そのまま当たる(std_names.t の末尾)
+9. 新設の cram 2 本を合成の処理系の出力で起こした(V110 と V136 の試作の差分には cram が無かったため): test/instance_init.t、test/instance_param_types.t
+10. tools/litwrap.py を lib/elab.ml、lib/decls.ml、lib/parser.mly に掛けた(変更なし)。litcheck --old は 3 ファイルとも code の不一致だけで marker 0 件
+
+V97 の試作の test/inst_init_pure.t と V103 の test/std_rows.t は合成に入れない(前者は instance_init.t に、後者は builtin_rows.t に統合)。

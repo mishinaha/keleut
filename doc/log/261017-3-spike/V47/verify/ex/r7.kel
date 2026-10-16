@@ -1,0 +1,8 @@
+type W[E]: EffectRow = {Print extends E}
+type class Speak[A] {
+  val speak: (A) => Unit @ W[{}]
+}
+type instance Speak[Int32] {
+  let speak(x) = perform print(show(x) + "\n")
+}
+with_stdout(fn() => speak(7))

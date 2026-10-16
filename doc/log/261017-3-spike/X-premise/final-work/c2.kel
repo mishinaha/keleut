@@ -1,0 +1,2 @@
+newtype P2[A, B] = MkP2(A, B)
+let f[A: Ord, B: Show](x: P2[A, B], y: P2[A, B]): Boolean = x == y

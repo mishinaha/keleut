@@ -1,0 +1,3 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[F, E] = Callback[F[E]]
+let f(c: Cb[List, Int32]): Int32 = 0

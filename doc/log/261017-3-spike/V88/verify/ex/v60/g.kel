@@ -1,0 +1,2 @@
+let f(g: (Int32, Int32) => Int32): Int32 = g(1, 2)
+let y = f { x, y => x }

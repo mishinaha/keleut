@@ -1,0 +1,3 @@
+pub module BM {
+  pub let k(x: Int32): Int32 = x * 3
+}

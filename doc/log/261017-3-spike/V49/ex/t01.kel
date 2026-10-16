@@ -1,0 +1,4 @@
+let idf[A](x: A): A = x
+let k = idf(fn(x) => { echoln("k"); x })
+let g: (Int32) => Int32 @ {Console} = idf(k)
+with_stdout(fn() => echoln(show(g(1))))

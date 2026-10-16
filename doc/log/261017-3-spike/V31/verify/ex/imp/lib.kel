@@ -1,0 +1,4 @@
+effect Log = { log: (String) => Unit }
+pub type P[E]: EffectRow = {Log extends E}
+pub type Q[E] = P[E]
+pub type Id[A] = A

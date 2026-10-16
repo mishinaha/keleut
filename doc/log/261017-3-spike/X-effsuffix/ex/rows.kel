@@ -1,0 +1,8 @@
+effect Out = { say: (String) => Unit }
+let closed_empty(x: Int32): Int32 @ {} = x + 1
+let bare_var[E](f: () => Int32 @ E): Int32 @ E = f()
+let open_tail[E](f: () => Unit @ {Out extends E}): Unit @ {Out extends E} = f()
+let closed_label(): Unit @ Out = perform say("a")
+let nested_closed(f: () => Int32): Int32 @ {} = f()
+let inferred(x: Int32) = x
+pub let pub_omitted(x: Int32): Int32 = x

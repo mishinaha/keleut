@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32 }
+let g: (Int32) => Int32 = fn(x) => x + 1
+let p(): Int32 = g(1)
+let q(): Int32 = perform ask() + g(2)

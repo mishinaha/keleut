@@ -1,0 +1,4 @@
+type W: EffectRow = {Console extends E2}
+type E2: EffectRow = {}
+let f(): Unit @ W = println("hi")
+f()

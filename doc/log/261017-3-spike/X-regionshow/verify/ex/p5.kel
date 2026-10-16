@@ -1,0 +1,6 @@
+type R[k] = Ref[k, Int32]
+let f[k](r: R[k]): Int32 @ Heap[k] = Ref.get(r)
+module M {
+  pub let g[k](r: Ref[k, Int32]): Int32 @ Heap[k] = Ref.get(r)
+}
+let h = M.g

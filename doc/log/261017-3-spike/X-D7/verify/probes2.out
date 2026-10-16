@@ -1,0 +1,22 @@
+##### <一時領域>/bin/diktor-head
+== t7
+head 1
+head true
+exit 0
+== t6 --type-check
+s : String
+exit 0
+== t10
+4
+exit 0
+##### <一時領域>/items/X-D7/verify/diktor/_build/install/default/bin/diktor
+== t7
+head 1
+head true
+exit 0
+== t6 --type-check
+s : String
+exit 0
+== t10
+4
+exit 0

@@ -1,0 +1,18 @@
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index a233360..13c85e2 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -390,8 +390,12 @@ pub を付けてもエフェクト位置では使えないからである。Effe
+ 
+   $ printf 'module M { type T = Int32 }\nlet f(x: Int32): Int32 @ {M.T} = x\n' > visrow20.kel
+   $ diktor --type-check visrow20.kel
++  ! visrow20.kel:2:26: 型エラー: エフェクト行に Type エイリアス M.T は置けません(: EffectRow を付けてください)
++  [1]
+   $ printf 'module M { type T = Int32 }\nlet f(x: Int32): Int32 @ M.T = x\n' > visrow21.kel
+   $ diktor --type-check visrow21.kel
++  ! visrow21.kel:2:26: 型エラー: 型 M.T は module M の外からは参照できません(pub を付けてください)
++  [1]
+ 
+ 同名クラスによる可視性の迂回は宣言時に拒否(M16 検証。修飾名 M.f が
+ クラス M のメソッド f と値環境で区別できないため):

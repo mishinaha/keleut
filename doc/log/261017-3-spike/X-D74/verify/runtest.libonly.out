@@ -1,0 +1,95 @@
+File "test/trailing_block.t", line 1, characters 0-0:
+diff --git a/_build/default/test/trailing_block.t b/_build/default/test/trailing_block.t.corrected
+index eca4f6c..74bd953 100644
+--- a/_build/default/test/trailing_block.t
++++ b/_build/default/test/trailing_block.t.corrected
+@@ -290,7 +290,7 @@ g(1, fn() => k) にもならず、パースエラーになる:
+   > EOF
+   $ diktor --type-check run2.kel
+   call0 : (() => A) => A
+-  ! run2.kel:4:27: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! run2.kel:4:27: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ with の右辺に末尾ブロック付きの呼び出しを書くと、継続は末尾ブロックの
+File "test/region.t", line 1, characters 0-0:
+diff --git a/_build/default/test/region.t b/_build/default/test/region.t.corrected
+index be70cf0..d1130c4 100644
+--- a/_build/default/test/region.t
++++ b/_build/default/test/region.t.corrected
+@@ -24,7 +24,7 @@
+   > let bump[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+   > KEL
+   $ diktor --type-check bump.kel
+-  ! bump.kel:1:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! bump.kel:1:74: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ 書くと宣言したなら通る。行に Heap[h] が出る:
+@@ -192,7 +192,7 @@ run で包めば書けた — M20 の動機 (a)):
+   > KEL
+   $ diktor --type-check pardet.kel
+   pmap : (Array[A], (A) => B @ {}) => Array[B]
+-  ! pardet.kel:3:47: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! pardet.kel:3:47: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ 不変配列は @ {} のコールバックから読める:
+@@ -215,7 +215,7 @@ pub の「@ を省略した宣言は純粋」も同じ経路で守られる(M20
+   > pub let wipe[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 7) }
+   > KEL
+   $ diktor --type-check pubpure.kel
+-  ! pubpure.kel:1:78: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! pubpure.kel:1:78: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ 最外の矢印に @ {} と書いた関数 g は、名前で参照するときに行の尾部を開くので、run の
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index 3e1e396..7a475eb 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -345,7 +345,7 @@ MiniLang §16-7(run と脱出検査、全6例。§9.3 の期待どおり):
+   > let bad = run h { let r = Ref.new(0); run h2 { Ref.get(r) } }
+   > EOF
+   $ diktor --type-check --no-prelude stbad3.kel
+-  ! stbad3.kel:1:56: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! stbad3.kel:1:56: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ MiniLang §16-8 の runST 2例(値制限):
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 1898e94..3bc7194 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -854,7 +854,7 @@ Ref[Int32, Int32] や MutableArray[String, Int32] も拒否しない(LangSpec §
+   > KEL
+   $ diktor --type-check refkind3.kel
+   f : () => Int32 @ {Heap[Int32]}
+-  ! refkind3.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
++  ! refkind3.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+   [1]
+   $ cat > refkind4.kel <<'KEL'
+   > let f(): Int32 @ Heap[Int32] = 0
+@@ -872,5 +872,5 @@ Ref[Int32, Int32] の注釈とは一致しない:
+   > let v: Int32 = run h { let r: Ref[Int32, Int32] = Ref.new(0); 0 }
+   > KEL
+   $ diktor --type-check refkind5.kel
+-  ! refkind5.kel:1:28: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
++  ! refkind5.kel:1:28: 型エラー: 注釈された型を満たしません(Ref の第 1 引数 Int32 はリージョンではありません。Ref の第 1 引数には run のリージョン変数か型パラメータを書きます)
+   [1]
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index 2ecf87b..4895f8a 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -389,7 +389,7 @@ Float64 は最短往復可能表現で表示する:
+   > }
+   > EOF
+   $ diktor --type-check nestrun.kel
+-  ! nestrun.kel:3:48: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! nestrun.kel:3:48: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+ 
+ ブロックの Seq は文のノードを借りない(260829-3 課題 7)。借りていた頃は

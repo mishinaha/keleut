@@ -1,0 +1,3 @@
+type V = #A | #B
+let f(x) = { let a = x match {}; let v: V = #A; v match { case #A => 1 case #B => 2 } }
+echoln("ok")

@@ -1,0 +1,3 @@
+let a = 0
+let s = (fn(x) => x)(1.5)
+let t = s % s

@@ -1,0 +1,499 @@
+M6(エフェクト行 / perform / handle / run / Rigid)のゴールデン。
+変更時は dune promote で更新し、必ず目視レビューすること。
+
+sample.kel §9 の核心(println / capture / try_ / with_file / copy)。ファイル操作は、
+自前で宣言した effect Fs と、@ Fs を付けた prim で書く(sample.kel は extern "C" と
+@ Blocking で書く)。
+with_file の handle は write が Console と File の両方に宣言されていても
+「全節が属し全操作が網羅される」File に解決される(D22)。
+copy の 2 つ目の perform は、行に Console と File の両方が現れるので
+File.write と修飾する(下の ambigrow.kel):
+
+  $ cat > eff9.kel <<'EOF'
+  > type Unit = {}
+  > effect Print   = { print: (String) => Unit }
+  > effect Console = { write: (String) => Unit }
+  > let println(message: String): Unit @ Print = perform print(message + "\n")
+  > let capture[A, E](body: () => A @ {Print extends E}): {value: A, output: String} @ E =
+  >   body() handle {
+  >     case print(message) => {
+  >       let {value, output} = resume()
+  >       {value, output = message + output}
+  >     }
+  >     case return(x) => {value = x, output = ""}
+  >   }
+  > effect Fail = { throw: (String) => Never }
+  > let try_[A, E](body: () => A @ {Fail extends E}): #Ok(A) | #Err(String) @ E =
+  >   body() handle {
+  >     case throw(e)  => #Err(e)
+  >     case return(x) => #Ok(x)
+  >   }
+  > effect File = {
+  >   read:  () => String,
+  >   write: (String) => Unit,
+  > }
+  > effect Fs = {}
+  > extern "prim" let __open(path: String): Int32 @ Fs
+  > extern "prim" let __read(h: Int32): String @ Fs
+  > extern "prim" let __write(h: Int32, s: String): Unit @ Fs
+  > extern "prim" let __close(h: Int32): Unit @ Fs
+  > let with_file[A, E](path: String, body: () => A @ {File, Fs extends E}): A @ {Fs extends E} = {
+  >   let h = __open(path)
+  >   body() handle {
+  >     case read()    => resume(__read(h))
+  >     case write(s)  => resume(__write(h, s))
+  >     case return(x) => { __close(h); x }
+  >     case cancel    => __close(h)
+  >   }
+  > }
+  > let copy(src: String, dst: String): Unit @ {Console, Fs} = {
+  >   with _ = with_file(src)
+  >   let text = perform read()
+  >   with _ = with_file(dst)
+  >   perform File.write(text)
+  > }
+  > let echo_test[E](): Unit @ {Console extends E} =
+  >   println("test") handle {
+  >     case print(message) => resume(perform Console.write(message))
+  >     case return(x) => x
+  >   }
+  > let captured = capture(fn() => println("test"))
+  > EOF
+  $ diktor --type-check --no-prelude eff9.kel
+  println : (String) => {} @ {Print}
+  capture : (() => A @ {Print extends R1}) => {value: A, output: String}
+  try_ : (() => A @ {Fail extends R1}) => #Ok(A) | #Err(String)
+  __open : (String) => Int32 @ {Fs}
+  __read : (Int32) => String @ {Fs}
+  __write : (Int32, String) => {} @ {Fs}
+  __close : (Int32) => {} @ {Fs}
+  with_file : (String, () => A @ {File, Fs extends R1}) => A @ {Fs extends R1}
+  copy : (String, String) => {} @ {Console, Fs}
+  echo_test : () => {} @ {Console extends R1}
+  captured : {value: {}, output: String}
+
+EffectRow エイリアスの splice(sample.kel:652):
+
+  $ cat > effrow.kel <<'EOF'
+  > type Unit = {}
+  > effect ReqId  = { req_id: () => String }
+  > effect Logger = { log: (String) => Unit }
+  > type Request: EffectRow = {ReqId, Logger}
+  > let logged(): Unit @ Request = perform log(perform req_id())
+  > EOF
+  $ diktor --type-check --no-prelude effrow.kel
+  logged : () => {} @ {ReqId, Logger}
+
+D22 のエラー経路(修飾要求)と修飾解決:
+
+  $ cat > ambig.kel <<'EOF'
+  > type Unit = {}
+  > effect A1 = { op1: (String) => Unit }
+  > effect A2 = { op1: (String) => Unit }
+  > let bad(): Unit = perform op1("x")
+  > EOF
+  $ diktor --type-check --no-prelude ambig.kel
+  ! ambig.kel:4:19: 型エラー: 操作 op1 は複数のエフェクト(A1, A2)に属します。A1.op1 のように修飾してください
+  [1]
+
+  $ cat > qual.kel <<'EOF'
+  > type Unit = {}
+  > effect A1 = { op1: (String) => Unit }
+  > effect A2 = { op1: (String) => Unit }
+  > let ok(): Unit @ A2 = perform A2.op1("x")
+  > EOF
+  $ diktor --type-check --no-prelude qual.kel
+  ok : () => {} @ {A2}
+
+候補が 1 個なら行を見ずに解決する(§9 の規則は 2 段 — 曖昧なときだけ行を
+見る。ここで行を要求すると、注釈の無い let の perform が全部修飾を
+要求されることになる。D99):
+
+  $ cat > onecand.kel <<'EOF'
+  > type Unit = {}
+  > effect A1 = { op1: (String) => Unit }
+  > let f() = perform op1("x")
+  > EOF
+  $ diktor --type-check --no-prelude onecand.kel
+  f : () => {} @ {A1 extends R1}
+
+候補が 2 個以上で、行にその候補が 1 つも現れないときも、修飾を要求する(2 つ以上現れるときは下の ambigrow.kel):
+
+  $ cat > twocand.kel <<'EOF'
+  > type Unit = {}
+  > effect A1 = { op1: (String) => Unit }
+  > effect A2 = { op1: (String) => Unit }
+  > let f() = perform op1("x")
+  > EOF
+  $ diktor --type-check --no-prelude twocand.kel
+  ! twocand.kel:4:11: 型エラー: 操作 op1 は複数のエフェクト(A1, A2)に属します。A1.op1 のように修飾してください
+  [1]
+
+handle の節の修飾(仕様 §9、sample.kel:530-531。D119)。操作節は修飾しても
+非修飾でもよく、混ざっていても受理される。非修飾の case write(s) が対象
+エフェクトの操作として読まれたことは、網羅の検査(File は read と write の
+2 つを宣言している)が通ったことで分かる:
+
+  $ cat > qual1.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > effect Sink = { write: (String) => Unit, flush: () => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case File.read() => resume("x")
+  >   case write(s) => resume(())
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qual1.kel
+  prog : () => String @ {File}
+  h : () => String
+
+修飾が後ろの節にあっても同じ。Sink は write と flush を宣言していて、先に
+書いた非修飾の write もその網羅に数えられている:
+
+  $ cat > qual2.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > effect Sink = { write: (String) => Unit, flush: () => Unit }
+  > let prog(): Unit @ Sink = { perform write("a"); perform flush() }
+  > let h(): Unit = prog() handle {
+  >   case write(s) => resume(())
+  >   case Sink.flush() => resume(())
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qual2.kel
+  prog : () => {} @ {Sink}
+  h : () => {}
+
+修飾先が 2 つ以上に割れたらエラー:
+
+  $ cat > qual3.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > effect Sink = { write: (String) => Unit, flush: () => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case File.read() => resume("x")
+  >   case Sink.write(s) => resume(())
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qual3.kel
+  prog : () => String @ {File}
+  ! qual3.kel:5:19: 型エラー: handle の節の修飾エフェクトが一致しません
+  [1]
+
+非修飾の節が修飾先に属さなければエラー。File.read の修飾が対象を File に
+決めるので、Sink の操作である flush の節が行き場を失う。同じ handle から
+File. の修飾だけを外すと対象が決まらなくなり、診断が変わる — この対で、
+修飾が対象の決定に効いていることが見える:
+
+  $ cat > qual4.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > effect Sink = { write: (String) => Unit, flush: () => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case File.read() => resume("x")
+  >   case write(s) => resume(())
+  >   case flush() => resume(())
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qual4.kel
+  prog : () => String @ {File}
+  ! qual4.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
+  [1]
+
+  $ cat > qual4b.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > effect Sink = { write: (String) => Unit, flush: () => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case read() => resume("x")
+  >   case write(s) => resume(())
+  >   case flush() => resume(())
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qual4b.kel
+  prog : () => String @ {File}
+  ! qual4b.kel:5:19: 型エラー: この操作の組を宣言するエフェクトがありません: read, write, flush
+  [1]
+
+qual4 から case write(s) を落とすと、File の write の網羅漏れと flush の
+所属違反が同時に成り立つ。対象確定後の検査は網羅を先に見るので、網羅漏れが
+報告される:
+
+  $ cat > qual5.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > effect Sink = { write: (String) => Unit, flush: () => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case File.read() => resume("x")
+  >   case flush() => resume(())
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qual5.kel
+  prog : () => String @ {File}
+  ! qual5.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+  [1]
+
+修飾できるのは操作節だけで、return 節と cancel 節は修飾できない
+(仕様 §9、sample.kel:518-519。D119)。
+節の名前を修飾しても対象エフェクトの決定には効かないので、受理すると書いた
+修飾が黙って捨てられる:
+
+  $ cat > qualret.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case File.read() => resume("x")
+  >   case write(s) => resume(())
+  >   case File.return(x) => x
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qualret.kel
+  prog : () => String @ {File}
+  ! qualret.kel:4:19: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
+  [1]
+
+  $ cat > qualcancel.kel <<'EOF'
+  > type Unit = {}
+  > effect File = { read: () => String, write: (String) => Unit }
+  > let prog(): String @ File = perform read()
+  > let h(): String = prog() handle {
+  >   case File.read() => resume("x")
+  >   case write(s) => resume(())
+  >   case File.cancel => ()
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude qualcancel.kel
+  prog : () => String @ {File}
+  ! qualcancel.kel:4:19: 型エラー: cancel 節は修飾できません(cancel は操作名ではなく handle の節の名前です。修飾を外してください)
+  [1]
+
+未処理エフェクト・網羅性・resume の誤用のエラー:
+
+  $ cat > efferr.kel <<'EOF'
+  > type Unit = {}
+  > effect Print = { print: (String) => Unit }
+  > let bad(): Unit @ {} = perform print("x")
+  > EOF
+  $ diktor --type-check --no-prelude efferr.kel
+  ! efferr.kel:3:24: 型エラー: エフェクト Print をここでは実行できません(ラベル Print がありません(行は閉じています))
+  [1]
+
+  $ cat > efferr2.kel <<'EOF'
+  > type Unit = {}
+  > effect File2 = { read2: () => String, write2: (String) => Unit }
+  > let bad = fn(body) => body() handle {
+  >   case read2() => resume("")
+  >   case return(x) => x
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude efferr2.kel
+  ! efferr2.kel:3:23: 型エラー: ハンドラが操作を網羅していません: File2 の write2 が漏れています
+  [1]
+
+  $ cat > efferr3.kel <<'EOF'
+  > let bad = resume(1)
+  > EOF
+  $ diktor --type-check --no-prelude efferr3.kel
+  ! efferr3.kel:1:11: 型エラー: resume は操作節の中でのみ使えます
+  [1]
+
+  $ cat > efferr4.kel <<'EOF'
+  > type Unit = {}
+  > effect Print = { print: (String) => Unit }
+  > let bad = fn(body) => body() handle {
+  >   case print(m) => fn() => resume(())
+  >   case return(x) => x
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude efferr4.kel
+  ! efferr4.kel:4:28: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+  [1]
+
+MiniLang §16-7(run と脱出検査、全6例。§9.3 の期待どおり):
+
+  $ cat > st.kel <<'EOF'
+  > let ok1 = run h { let r = Ref.new(0); Ref.set(r, 42); Ref.get(r) }
+  > let ok2 = run h { let x = run h2 { Ref.get(Ref.new(1)) }; x + 1 }
+  > let poly = fn(u) => Ref.new(0)
+  > EOF
+  $ diktor --type-check --no-prelude st.kel
+  ok1 : Int32
+  ok2 : Int32
+  poly : (A) => Ref[B, Int32] @ {Heap[B] extends R1}
+
+  $ cat > stbad1.kel <<'EOF'
+  > let bad = run h { Ref.new(0) }
+  > EOF
+  $ diktor --type-check --no-prelude stbad1.kel
+  ! stbad1.kel:1:11: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+  [1]
+
+  $ cat > stbad2.kel <<'EOF'
+  > let bad = run h { let r = Ref.new(0); fn(u) => Ref.get(r) }
+  > EOF
+  $ diktor --type-check --no-prelude stbad2.kel
+  ! stbad2.kel:1:11: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+  [1]
+
+  $ cat > stbad3.kel <<'EOF'
+  > let bad = run h { let r = Ref.new(0); run h2 { Ref.get(r) } }
+  > EOF
+  $ diktor --type-check --no-prelude stbad3.kel
+  ! stbad3.kel:1:56: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+  [1]
+
+MiniLang §16-8 の runST 2例(値制限):
+
+  $ cat > stvr.kel <<'EOF'
+  > type Unit = {}
+  > let bad = run h {
+  >   let r = Ref.new(fn(x) => x)
+  >   Ref.set(r, fn(n) => n + 1)
+  >   Ref.get(r)(true)
+  > }
+  > EOF
+  $ diktor --type-check --no-prelude stvr.kel
+  ! stvr.kel:5:14: 型エラー: Boolean は Add のインスタンスではありません
+  [1]
+
+剛な行変数へのラベル追加は原因を語る(M20 / I9。かつては
+「行型ではありません: ς1」で、高階のエフェクト注釈の書き間違いに
+最初に出る診断が原因に辿れなかった):
+
+  $ cat > rigidrow.kel <<'KEL'
+  > type Unit = {}
+  > effect E1 = { op: (String) => Unit }
+  > effect C = { wr: (String) => Unit }
+  > let h1[A, E](b: () => A @ {E1 extends E}): A @ {C extends E} =
+  >   b() handle {
+  >     case op(s) => resume(perform wr(s))
+  >     case return(x) => x
+  >   }
+  > KEL
+  $ diktor --type-check --no-prelude rigidrow.kel
+  ! rigidrow.kel:5:3: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル C を足せません(注釈側に C を(必要なら引数つきで)書き足してください)
+  [1]
+
+非修飾の操作名は、行の中の位置では選ばない。行に候補が 2 つ現れると、
+ラベルの順序によらず修飾を求める(LangSpec §13.3):
+
+  $ cat > ambigrow.kel <<'KEL'
+  > type Unit = {}
+  > effect E1 = { op: (String) => Unit }
+  > effect E2 = { op: (String) => Unit }
+  > let f(): Unit @ {E1, E2} = perform op("f")
+  > KEL
+  $ diktor --type-check --no-prelude ambigrow.kel
+  ! ambigrow.kel:4:28: 型エラー: 操作 op は、この位置の行に現れる複数のエフェクト(E1, E2)に属します。E1.op、E2.op のどれかに修飾してください
+  [1]
+  $ cat > ambigrow2.kel <<'KEL'
+  > type Unit = {}
+  > effect E1 = { op: (String) => Unit }
+  > effect E2 = { op: (String) => Unit }
+  > let g(): Unit @ {E2, E1} = perform op("g")
+  > KEL
+  $ diktor --type-check --no-prelude ambigrow2.kel
+  ! ambigrow2.kel:4:28: 型エラー: 操作 op は、この位置の行に現れる複数のエフェクト(E1, E2)に属します。E1.op、E2.op のどれかに修飾してください
+  [1]
+
+行に現れる候補が宣言の一部のときは、行に現れる候補だけを宣言の順に示す:
+
+  $ cat > ambigrow3.kel <<'KEL'
+  > type Unit = {}
+  > effect E1 = { op: (String) => Unit }
+  > effect E2 = { op: (String) => Unit }
+  > effect E3 = { op: (String) => Unit }
+  > let f(): Unit @ {E3, E1} = perform op("f")
+  > KEL
+  $ diktor --type-check --no-prelude ambigrow3.kel
+  ! ambigrow3.kel:5:28: 型エラー: 操作 op は、この位置の行に現れる複数のエフェクト(E1, E3)に属します。E1.op、E3.op のどれかに修飾してください
+  [1]
+
+行に現れる候補が 1 つなら、それに解決する。同じエフェクトが 2 回現れても 1 つと数える:
+
+  $ cat > onerow.kel <<'KEL'
+  > type Unit = {}
+  > effect E1 = { op: (String) => Unit }
+  > effect E2 = { op: (String) => Unit }
+  > let f(): Unit @ {E1, E1, E2} = perform E2.op("x")
+  > let g(): Unit @ {E1, E1} = perform op("g")
+  > let h[E](): Unit @ {E2 extends E} = perform op("h")
+  > KEL
+  $ diktor --type-check --no-prelude onerow.kel
+  f : () => {} @ {E1, E1, E2}
+  g : () => {} @ {E1, E1}
+  h : () => {} @ {E2 extends R1}
+
+サブエフェクティングは無い(計画 §12 の意図した挙動の明示的な固定。H4 / D23-a)が、
+最外の矢印の @ {} は呼ぶときに尾部を開くので、エフェクトのある文脈から呼べる(LangSpec §13.2):
+
+  $ cat > noSub.kel <<'KEL'
+  > effect Logger = { log: (String) => Unit }
+  > let pure_f(x: Int32): Int32 @ {} = x + 1
+  > let impure(x: Int32): Int32 @ {Logger} = { perform log("hi"); pure_f(x) }
+  > KEL
+  $ diktor --type-check noSub.kel
+  pure_f : (Int32) => Int32 @ {}
+  impure : (Int32) => Int32 @ {Logger}
+
+行の並びは型の等価性に使わない(§9 / §3 の Scoped Labels と同じ。操作名の解決に
+使わないことは上の ambigrow.kel、同じラベルどうしの順序を区別することは下の
+doublestack.kel)。開いた行でも閉じた行でも順序違いは単一化する:
+
+  $ cat > roworder.kel <<'EOF'
+  > type Unit = {}
+  > effect E1 = { op1: () => Unit }
+  > effect E2 = { op2: () => Unit }
+  > let a[E](k: () => Unit @ {E1, E2 extends E}): Unit @ {E1, E2 extends E} = k()
+  > let b[E](k: () => Unit @ {E2, E1 extends E}): Unit @ {E1, E2 extends E} = a(k)
+  > newtype Cb = Cb(() => Unit @ {E1, E2})
+  > let mk(k: () => Unit @ {E2, E1}): Cb = Cb(k)
+  > EOF
+  $ diktor --type-check --no-prelude roworder.kel
+  a : (() => {} @ {E1, E2 extends R1}) => {} @ {E1, E2 extends R1}
+  b : (() => {} @ {E2, E1 extends R1}) => {} @ {E1, E2 extends R1}
+  mk : (() => {} @ {E2, E1}) => Cb
+
+同じエフェクトを二重に積むと、非修飾でも修飾でも内側にしか届かない(§9。
+仕様の copy が src を読んでから dst を開くのはこのため):
+
+  $ cat > doublestack.kel <<'KEL'
+  > effect Tag = { tag: (String) => {} }
+  > let with_tag[A, E](name: String, body: () => A @ {Tag, Console extends E}): A @ {Console extends E} =
+  >   body() handle {
+  >     case tag(s) => resume(echo(name + ":" + s + "\n"))
+  >     case return(x) => x
+  >   }
+  > let go(): {} @ {Console} = {
+  >   with _ = with_tag("outer")
+  >   with _ = with_tag("inner")
+  >   perform tag("hi")
+  > }
+  > go()
+  > KEL
+  $ diktor doublestack.kel
+  inner:hi
+
+修飾しても同じ(仕様 §9):
+
+  $ sed 's/perform tag/perform Tag.tag/' doublestack.kel > doublestack2.kel
+  $ diktor doublestack2.kel
+  inner:hi
+
+前方参照シグネチャは「注釈の頭の矢印に @ があること」で足りる(§9 改訂 / M26 の B7。
+入れ子の省略 @ は @ {} に確定したので、宣言順に依存させる理由が消えた。
+M26 より前は g の @ 省略だけで「未束縛の変数: helper」だった):
+
+  $ cat > fwdsig.kel <<'KEL'
+  > let user(): Int32 @ Console = helper(fn() => (), fn(n) => n)
+  > let helper[E](f: () => Unit @ E, g: (Int32) => Int32): Int32 @ {Console extends E} = ???
+  > KEL
+  $ diktor --type-check fwdsig.kel
+  user : () => Int32 @ {Console}
+  helper : (() => {}, (Int32) => Int32 @ {}) => Int32 @ {Console extends R1}

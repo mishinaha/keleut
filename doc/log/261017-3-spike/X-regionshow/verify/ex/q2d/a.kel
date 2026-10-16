@@ -1,0 +1,2 @@
+pub newtype Ref[A, B] = MkR(A, B)
+pub let mk[A](x: A): Ref[A, Int32] = MkR(x, 1)

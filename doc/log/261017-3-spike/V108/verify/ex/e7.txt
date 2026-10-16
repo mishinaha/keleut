@@ -1,0 +1,9 @@
+let pe = (eq, fn(x) => x == x, 1)
+pe
+let n = fn(x) => show(x)
+n
+(fn(x) => show(x), fn(y) => y == y)
+let rc = {g = fn(x) => show(x), h = ???}
+rc
+let ok = 5
+ok

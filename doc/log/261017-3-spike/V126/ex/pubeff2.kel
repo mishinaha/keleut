@@ -1,0 +1,7 @@
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  pub let say(n: Int32): Unit @ Print = println("int")
+}
+with_stdout(fn() => say(1i32))

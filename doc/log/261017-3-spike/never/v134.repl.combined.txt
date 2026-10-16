@@ -1,0 +1,24 @@
+=== repl repl.in
+(A) => B
+(String) => A @ {Fail extends R1}
+[exit 0]
+=== repl r10.repl
+id : (A) => A = <fn>
+k : (_A) => _A = <fn>
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : (_A) => _B = <fn>
+_ : Int32 = 3
+[exit 0]
+=== repl r14.repl
+id : (A) => A = <fn>
+k : (_A) => _A = <fn>
+(_A) => B
+_ : Int32 = 3
+[exit 0]
+=== repl w1.repl
+id : (A) => A = <fn>
+p : (_A) => _A = <fn>
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : (Int32) => Int32 = <fn>
+_ : Int32 = 3
+[exit 0]

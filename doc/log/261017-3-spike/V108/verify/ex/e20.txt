@@ -1,0 +1,9 @@
+newtype W[A] = W(A)
+type instance[A] Show[W[_]] { let show(w) = w match { case W(_) => "W!" } }
+W(1)
+let x = W(show)
+x
+newtype U[A] = U(A)
+type instance[A] Show[U[_]] { let show(u) = "U!" }
+let y = U(show)
+let z = U((show, ???))

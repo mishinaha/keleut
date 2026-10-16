@@ -1,0 +1,8 @@
+module M {
+  type T = Int32
+  type R: EffectRow = {Console}
+  let inner(x: T): T @ R = { echoln("in"); x }
+  pub let outer(x: Int32): Int32 @ {Console} = inner(x) + 1
+}
+let n = M.outer(3)
+echoln(show(n))

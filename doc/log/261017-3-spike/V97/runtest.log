@@ -1,0 +1,76 @@
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index a8875bd..9922562 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -49,7 +49,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  weak : [_A: Show] (_A) => String @ {}
+   _ : String
+ 
+ ファイルの終わりまでに型が決まらなければ、曖昧性エラーになる。辞書はファイルごとに
+@@ -61,7 +61,7 @@ test/dictionary_passing.t の read と pureamb):
+   > KEL
+   $ diktor --type-check --no-prelude ml9e2.kel
+   idf : (A) => A
+-  weak : [_A: Show] (_A) => String
++  weak : [_A: Show] (_A) => String @ {}
+   ! ml9e2.kel:2:16: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+   [1]
+ 
+File "test/inst_init_pure.t", line 1, characters 0-0:
+diff --git a/_build/default/test/inst_init_pure.t b/_build/default/test/inst_init_pure.t.corrected
+index f296241..ef3b8e1 100644
+--- a/_build/default/test/inst_init_pure.t
++++ b/_build/default/test/inst_init_pure.t.corrected
+@@ -16,6 +16,8 @@
+   > echoln(sh(Foo))
+   > KEL
+   $ diktor iniask.kel
++  ! iniask.kel:5:39: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  [1]
+ 
+ 組み込みのクラス Show のインスタンスでも同じである:
+ 
+@@ -28,6 +30,8 @@
+   > echoln(show(Foo))
+   > KEL
+   $ diktor iniaskb.kel
++  ! iniaskb.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
++  [1]
+ 
+ トップレベルで許される Console も、初期化式では起こせない:
+ 
+@@ -40,6 +44,8 @@
+   > echoln(sh(Foo))
+   > KEL
+   $ diktor inicon.kel
++  ! inicon.kel:4:31: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
+ 
+ ゼロ除算は行に現れないので、初期化式に書いても型検査を通り、インスタンス宣言を
+ 実行する時点で実行時エラーになる(LangSpec §15.5):
+@@ -52,3 +58,6 @@
+   > echoln("b")
+   > KEL
+   $ diktor inidiv.kel
++  a
++  実行時エラー: ゼロ除算です
++  [3]
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index c97e0f5..205c8f7 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -57,7 +57,7 @@ spec_gaps.t の ordervr で見張る:
+   > main()
+   > EOF
+   $ diktor vrgen.kel
+-  15
++  13
+ 
+ g の本体を無名関数(値)に替えると、g は一般化され、同じく 2 つの文脈から呼べる:
+ 

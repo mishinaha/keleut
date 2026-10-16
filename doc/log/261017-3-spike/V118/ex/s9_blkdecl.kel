@@ -1,0 +1,7 @@
+let f() = {
+  type U = Int32
+  1
+}
+
+// c
+let b = 2

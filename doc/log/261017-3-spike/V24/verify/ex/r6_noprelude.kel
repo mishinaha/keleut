@@ -1,0 +1,3 @@
+effect Print = { print_s: (Int32) => {} }
+pub newtype P = P((Int32) => Int32 @ {Print})
+let x: Int32 = 1

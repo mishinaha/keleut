@@ -1,0 +1,5 @@
+:type "ab
+cd"
+:type 1 /* q
+*/
+let t = "x\Q"

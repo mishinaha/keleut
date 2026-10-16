@@ -1,0 +1,5 @@
+effect Ask = { ask: (Int32) => Int32 }
+pub let v: Int32 =
+  perform ask(1) handle {
+    case ask() => resume(1)
+  }

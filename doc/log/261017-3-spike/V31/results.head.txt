@@ -1,0 +1,162 @@
+== a1.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+-- out
+exit=0
+== a2.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+let f(x: Int32): Int32 @ Q = x
+-- out
+! a2.kel:4:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+exit=1
+== a3.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+let f(x: Q): Int32 = 0
+-- out
+! a3.kel:4:10: 型エラー: 型注釈のカインドが Type ではありません: {Log} :: Row
+exit=1
+== a4.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+let f(x: Int32): Int32 @ {Q} = x
+-- out
+! a4.kel:4:26: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+exit=1
+== a5.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+newtype Callback[E] = Callback(() => Unit @ E)
+let f(c: Callback[Q]): Int32 = 0
+-- out
+! a5.kel:5:19: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+exit=1
+== a6.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+let f[E](x: Int32): Int32 @ {Log extends Q} = x
+-- out
+! a6.kel:4:42: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+exit=1
+== b1.kel
+type R: EffectRow = Int32
+-- out
+! b1.kel:1:21: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+exit=1
+== b2.kel
+effect Log = { log: (String) => Unit }
+type Q = {Log}
+-- out
+! b2.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+exit=1
+== b3.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q: Type = P
+-- out
+exit=0
+== b4.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+-- out
+exit=0
+== b5.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+let f[E](x: Int32): Int32 @ Q[E] = x
+-- out
+f : (Int32) => Int32 @ {Log extends R1}
+exit=0
+== b6.kel
+effect Log = { log: (String) => Unit }
+module M { pub type P: EffectRow = {Log} }
+type Q = M.P
+-- out
+exit=0
+== b7.kel
+type Q = {}
+let f(x: Q): Int32 = 0
+-- out
+f : ({}) => Int32
+exit=0
+== b8.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = (P, Int32)
+-- out
+! b8.kel:3:11: 型エラー: タプルの要素の型のカインドが Type ではありません: {Log} :: Row
+exit=1
+== b9.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = {a: P}
+-- out
+! b9.kel:3:14: 型エラー: レコードのフィールド a の型のカインドが Type ではありません: {Log} :: Row
+exit=1
+== c1.kel
+type Q = Q2
+type Q2 = Int32
+let f(x: Q): Int32 = x
+-- out
+f : (Int32) => Int32
+exit=0
+== c2.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+type Z: EffectRow = Q
+-- out
+! c2.kel:4:21: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+exit=1
+== c3.kel
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+type Z: EffectRow = {Q}
+-- out
+! c3.kel:4:21: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+exit=1
+== c4.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+let f[E](x: Int32): Int32 @ {Q[E]} = x
+-- out
+! c4.kel:4:29: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+exit=1
+== c5.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+let f[E](x: Q[E]): Int32 = 0
+-- out
+! c5.kel:4:13: 型エラー: 型注釈のカインドが Type ではありません: {Log extends ς1} :: Row
+exit=1
+== c6.kel
+effect Log = { log: (String) => Unit }
+type P[E]: EffectRow = {Log extends E}
+type Q[E] = P[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[E](c: Callback[Q[E]]): Int32 = 0
+-- out
+f : (Callback[{Log extends R1}]) => Int32
+exit=0
+== c8.kel
+type Q[E] = {extends E}
+-- out
+exit=0
+== c9.kel
+type Q[E] = {extends E}
+let f[E](x: Int32): Int32 @ Q[E] = x
+-- out
+! c9.kel:2:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: {extends ς1} :: Type
+exit=1

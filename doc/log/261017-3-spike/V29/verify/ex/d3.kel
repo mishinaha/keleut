@@ -1,0 +1,2 @@
+type P[A] = (A, Int32)
+newtype H = MkH(P[{Print}])

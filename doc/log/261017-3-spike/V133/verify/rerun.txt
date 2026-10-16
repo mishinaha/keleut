@@ -1,0 +1,113 @@
+== m_guard.kel
+effect Ask = { ask: () => Int32 }
+let r = perform ask() handle { case ask() => 1 match { case n if n > 0 => resume(n)  case _ => resume(0) } }
+-- head
+r : Int32
+[0]
+-- spike
+r : Int32
+[0]
+== n_cancel.kel
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = { perform throw("x"); 1 } handle { case throw(e) => 2 handle { case ask() => resume(1) case cancel => { resume(???); () } } }
+-- head
+! n_cancel.kel:3:113: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! n_cancel.kel:3:113: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
+[1]
+== n_cancellam.kel
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = perform ask() handle { case ask() => 2 handle { case ask2() => resume(1)  case cancel => { let f = fn() => resume(1); () } } }
+-- head
+! n_cancellam.kel:3:116: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! n_cancellam.kel:3:116: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
+[1]
+== n_guard.kel
+effect Fail = { throw: (String) => Never }
+let r = { perform throw("x"); 1 } handle { case throw(e) if resume(???) => 0  case throw(e) => 1 }
+-- head
+! n_guard.kel:2:61: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! n_guard.kel:2:61: 型エラー: 操作節のガードには resume を書けません(ガードは節を選ぶために評価されます)
+[1]
+== n_innerlam.kel
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = { perform throw("x"); 1 } handle { case throw(e) => 2 handle { case ask() => { let f = fn() => resume(???); f() } } }
+-- head
+! n_innerlam.kel:3:104: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[1]
+-- spike
+! n_innerlam.kel:3:104: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[1]
+== n_qual.kel
+effect Fail = { throw: (String) => Never }
+let r = { perform Fail.throw("x"); 1 } handle { case Fail.throw(e) => resume(???) }
+-- head
+! n_qual.kel:2:71: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[1]
+-- spike
+! n_qual.kel:2:71: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[1]
+== n_ret.kel
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let r = { perform throw("x"); 1 } handle { case throw(e) => 2 handle { case ask() => resume(1) case return(x) => resume(???) } }
+-- head
+! n_ret.kel:3:114: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! n_ret.kel:3:114: 型エラー: return 節には resume を書けません(再開する継続がありません)
+[1]
+== r_cancel.kel
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = perform ask() handle { case ask() => 2 handle { case ask2() => resume(1) case cancel => { resume(1); () } } }
+-- head
+! r_cancel.kel:3:99: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! r_cancel.kel:3:99: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
+[1]
+== r_guard.kel
+effect Ask = { ask: () => Int32 }
+let r = perform ask() handle { case ask() if resume(1) > 0 => resume(1)  case ask() => resume(2) }
+-- head
+! r_guard.kel:2:46: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! r_guard.kel:2:46: 型エラー: 操作節のガードには resume を書けません(ガードは節を選ぶために評価されます)
+[1]
+== r_ownret.kel
+effect Ask = { ask: () => Int32 }
+let r = perform ask() handle { case ask() => resume(1) case return(x) => resume(x) }
+-- head
+! r_ownret.kel:2:74: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! r_ownret.kel:2:74: 型エラー: return 節には resume を書けません(再開する継続がありません)
+[1]
+== r_ret.kel
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = perform ask() handle { case ask() => 2 handle { case ask2() => resume(1) case return(x) => resume(x) } }
+-- head
+! r_ret.kel:3:100: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! r_ret.kel:3:100: 型エラー: return 節には resume を書けません(再開する継続がありません)
+[1]
+== top.kel
+let bad = resume(1)
+-- head
+! top.kel:1:11: 型エラー: resume は操作節の中でのみ使えます
+[1]
+-- spike
+! top.kel:1:11: 型エラー: resume は操作節の中でのみ使えます
+[1]

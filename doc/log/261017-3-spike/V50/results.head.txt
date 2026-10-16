@@ -1,0 +1,186 @@
+== a01.kel
+| type W: EffectRow = {Print}
+| let f[W](u: Unit): Unit @ {W} = println("a")
+-- run
+[exit 0]
+-- --type-check
+f : ({}) => {} @ {Print}
+[exit 0]
+== a02.kel
+| type W: EffectRow = {Print}
+| let f[W](u: Unit): Unit @ W = println("a")
+-- run
+! a02.kel:2:31: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+[exit 1]
+-- --type-check
+! a02.kel:2:31: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+[exit 1]
+== a03.kel
+| type W: EffectRow = {Print}
+| let f[W](x: Int32): Int32 @ W = x
+| let g[W](x: Int32): Int32 @ {W} = x
+| let h[W](x: Int32): Int32 @ {Console, W} = x
+| let k[W, E](x: Int32): Int32 @ {W extends E} = x
+-- run
+[exit 0]
+-- --type-check
+f : (Int32) => Int32
+g : (Int32) => Int32 @ {Print}
+h : (Int32) => Int32 @ {Console, Print}
+k : (Int32) => Int32 @ {Print extends R1}
+[exit 0]
+== a04.kel
+| module M {
+|   type W: EffectRow = {Print}
+|   pub let f[W](u: Unit): Unit @ {W} = println("a")
+|   pub let g[W](x: Int32): Int32 @ W = x
+| }
+-- run
+[exit 0]
+-- --type-check
+M.f : ({}) => {} @ {Print}
+M.g : (Int32) => Int32
+[exit 0]
+== a05.kel
+| type W[E]: EffectRow = {Print extends E}
+| let f[W, E](x: Int32): Int32 @ {W[E]} = x
+-- run
+[exit 0]
+-- --type-check
+f : (Int32) => Int32 @ {Print extends R1}
+[exit 0]
+== a06.kel
+| type W[E]: EffectRow = {Print extends E}
+| let f[W, E](x: Int32): Int32 @ W[E] = x
+-- run
+! a06.kel:2:32: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2]
+[exit 1]
+-- --type-check
+! a06.kel:2:32: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2]
+[exit 1]
+== a07.kel
+| let f[Print](x: Int32): Int32 @ {Print} = x
+-- run
+! a07.kel:1:33: 型エラー: 行変数 Print は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! a07.kel:1:33: 型エラー: 行変数 Print は extends の位置にのみ書けます
+[exit 1]
+== a08.kel
+| let f[Print](x: Int32): Int32 @ Print = x
+-- run
+[exit 0]
+-- --type-check
+f : (Int32) => Int32
+[exit 0]
+== a09.kel
+| let f[W](x: Int32): Int32 @ {W} = x
+-- run
+! a09.kel:1:29: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! a09.kel:1:29: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== a10.kel
+| let f[F, E](x: Int32): Int32 @ {F[E]} = x
+-- run
+! a10.kel:1:32: 型エラー: 未知のエフェクト: F
+[exit 1]
+-- --type-check
+! a10.kel:1:32: 型エラー: 未知のエフェクト: F
+[exit 1]
+== a11.kel
+| type W: EffectRow = {Print}
+| newtype N[W] = N(() => Unit @ {W})
+| let n: N[{Console}] = N(fn() => println("a"))
+-- run
+! a11.kel:3:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+-- --type-check
+! a11.kel:3:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+== a12.kel
+| type W: EffectRow = {Print}
+| type V[W]: EffectRow = {W}
+| let f(x: Int32): Int32 @ V[{Console}] = x
+-- run
+! a12.kel:3:28: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+-- --type-check
+! a12.kel:3:28: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+== a13.kel
+| type W: EffectRow = {Print}
+| let run_it[W](g: () => Unit @ {W}): Unit @ {W} = g()
+-- run
+[exit 0]
+-- --type-check
+run_it : (() => {} @ {Print}) => {} @ {Print}
+[exit 0]
+== a14.kel
+| type W: EffectRow = {Print}
+| let f[W](x: Int32): Int32 @ {} = x
+| let g(u: Unit): Unit @ {W} = println("c")
+-- run
+[exit 0]
+-- --type-check
+f : (Int32) => Int32 @ {}
+g : ({}) => {} @ {Print}
+[exit 0]
+== a15.kel
+| let f[Heap, h](x: Int32): Int32 @ Heap[h] = x
+| let g[Heap, h](x: Int32): Int32 @ {Heap[h]} = x
+-- run
+[exit 0]
+-- --type-check
+f : (Int32) => Int32 @ {Heap[A]}
+g : (Int32) => Int32 @ {Heap[A]}
+[exit 0]
+== a16.kel
+| type W: EffectRow = {Print}
+| let f[W, E](g: () => Unit @ W): Unit @ {W extends W} = ()
+-- run
+[exit 0]
+-- --type-check
+f : (() => {}) => {} @ {Print extends R1}
+[exit 0]
+== a17.kel
+| module M {
+|   pub type W: EffectRow = {Print}
+| }
+| let f[W](x: Int32): Int32 @ {M.W} = x
+| let g[W](x: Int32): Int32 @ M.W = x
+-- run
+[exit 0]
+-- --type-check
+f : (Int32) => Int32 @ {Print}
+g : (Int32) => Int32 @ {Print}
+[exit 0]
+== a18.kel
+| type W: EffectRow = {Print}
+| let f[W](x: Int32): Int32 @ {Console} = {
+|   let g(y: Int32): Int32 @ {W} = y
+|   g(x)
+| }
+-- run
+! a18.kel:4:3: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+-- --type-check
+! a18.kel:4:3: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+== a19.kel
+| type W: EffectRow = {Print}
+| type class C[A] { val m[W]: (A) => A @ {W} }
+-- run
+[exit 0]
+-- --type-check
+[exit 0]
+== a20.kel
+| type W: EffectRow = {Print}
+| let f[W, E](x: Int32): Int32 @ {E extends W} = x
+-- run
+! a20.kel:2:32: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! a20.kel:2:32: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]

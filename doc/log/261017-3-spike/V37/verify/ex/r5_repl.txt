@@ -1,0 +1,5 @@
+let xs = Cons(1, Cons(2, Cons(3, Nil)))
+show(xs)
+show(Cons(xs, Cons(Nil, Nil)))
+let s = show
+s(Cons("a", Nil))

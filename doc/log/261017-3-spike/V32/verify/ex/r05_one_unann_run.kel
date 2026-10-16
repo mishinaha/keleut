@@ -1,0 +1,3 @@
+let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }
+and b(n: Int32) = { echo("b"); a(n) }
+echoln(show(a(3)))

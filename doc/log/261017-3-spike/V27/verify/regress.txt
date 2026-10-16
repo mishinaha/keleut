@@ -1,0 +1,63 @@
+== r1.kel
+-- HEAD
+42
+[exit 0]
+-- P
+! r1.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r2.kel
+-- HEAD
+ok
+[exit 0]
+-- P
+! r2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+== r3.kel
+-- HEAD
+7
+[exit 0]
+-- P
+! r3.kel:3:22: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r4.kel
+-- HEAD
+! r4.kel:3:63: 型エラー: 行型ではありません: _F[_A]
+[exit 1]
+-- P
+! r4.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r5.kel
+-- HEAD
+unused alias
+[exit 0]
+-- P
+! r5.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== r6.kel
+-- HEAD
+unused newtype
+[exit 0]
+-- P
+! r6.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+== r7.kel
+-- HEAD
+x
+[exit 0]
+-- P
+! r7.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r8.kel
+-- HEAD
+1
+[exit 0]
+-- P
+! r8.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r9.kel
+-- HEAD
+3
+[exit 0]
+-- P
+! r9.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]

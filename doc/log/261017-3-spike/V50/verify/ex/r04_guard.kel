@@ -1,0 +1,6 @@
+type W: EffectRow = {Print}
+let pick[W](n: Int32): Unit @ {W} = n match {
+  case k if k > 0 => println("pos")
+  case _ => println("nonpos")
+}
+with_stdout(fn() => { pick(3); pick(0) })

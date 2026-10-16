@@ -1,0 +1,10 @@
+effect Tick = { tick: () => Unit }
+type Tick2 = Int32
+let rec tl[Tick2](n: Int32, k: () => Unit @ {Tick extends Tick2}): Unit @ {Tick extends Tick2} =
+  (n == 0) match { case true => () case false => { k(); tl(n - 1, k) } }
+let c = run h {
+  let r = Ref.new(0)
+  tl(3, fn() => perform tick()) handle { case tick() => { Ref.set(r, Ref.get(r) + 1); resume() } }
+  Ref.get(r)
+}
+echoln(show(c))

@@ -1,0 +1,5 @@
+newtype Foo = Foo
+type instance Show[Foo] {
+  let show = { echoln("init"); fn(x: Foo) => { echoln("call"); "foo" } }
+}
+echoln(show(Foo))

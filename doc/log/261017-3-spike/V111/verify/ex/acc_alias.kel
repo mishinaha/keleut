@@ -1,0 +1,5 @@
+type P[A] = (A, A)
+let rec swap[A](p: P[A]): P[A] = p match { case (a, b) => back((b, a)) }
+and back(q) = q
+let r = swap((1i32, 2i32))
+r match { case (a, b) => echoln(show(a)) }

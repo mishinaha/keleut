@@ -1,0 +1,3 @@
+effect Log = { log: (String) => Unit }
+type W[E]: EffectRow = {Log extends E}
+newtype H = MkH(() => Unit @ W[{Print}])

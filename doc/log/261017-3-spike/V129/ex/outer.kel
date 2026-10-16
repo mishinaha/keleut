@@ -1,0 +1,3 @@
+let f(x) = { let a = 1; let g = fn() => x match {}; g() }
+let k(): Int32 = 1.5 match {}
+echoln("ok")

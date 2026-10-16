@@ -1,0 +1,8 @@
+let id[T](x: T): T = x
+let r = { f = id(Show.show) }
+let fs: List[(Int32) => String @ Print] = Cons(r.f, Nil)
+let go(): Unit @ Print = fs match {
+  case Cons(f, _) => println(f(3))
+  case Nil => ()
+}
+with_stdout(fn() => go())

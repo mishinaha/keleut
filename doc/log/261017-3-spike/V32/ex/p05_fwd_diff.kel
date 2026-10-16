@@ -1,0 +1,2 @@
+let rec b(n: Int32): Int32 @ {Console, Print} = a(n)
+and a(n: Int32): Int32 @ Console = { echo("a "); n }

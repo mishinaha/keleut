@@ -1,0 +1,3 @@
+pub effect Fail = { throw: (String) => Never }
+pub type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }

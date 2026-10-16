@@ -1,0 +1,4 @@
+type Unit = {}
+type C20 = A20[{}]
+type A20[E] = (E, Int32)
+let v: C20 = ({}, 2)

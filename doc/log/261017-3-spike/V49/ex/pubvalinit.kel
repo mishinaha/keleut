@@ -1,0 +1,5 @@
+module M {
+  pub let g: () => Int32 = { echoln("init"); fn() => 1 }
+}
+let use(): Int32 @ Console = M.g()
+with_stdout(fn() => use())

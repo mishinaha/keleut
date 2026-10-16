@@ -1,0 +1,7 @@
+from "./lib/eff" import Ask
+let r = perform Ask.ask(1, false) handle {
+  case Ask.ask(n, true) => resume(n)
+  case ask(n, false) => resume(n)
+  case return(x) => x
+}
+echoln(show(r))

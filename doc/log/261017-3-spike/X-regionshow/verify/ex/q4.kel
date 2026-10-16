@@ -1,0 +1,6 @@
+effect St[S] = { get: () => S }
+let f[S](): S @ St[S] = St.get()
+module M {
+  pub effect Heap[S] = { get: () => S }
+  pub let g[S](): S @ Heap[S] = Heap.get()
+}

@@ -1,0 +1,5 @@
+type C = A[{}]
+type A[E] = (Int32) => Int32 @ {Log extends E}
+effect Log = { log: (String) => Unit }
+let go(g: C): Int32 = g(2) handle { case log(s) => { echoln(s); resume(()) } }
+echoln(show(go(fn(x) => { perform log("b"); x })))

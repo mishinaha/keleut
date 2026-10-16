@@ -1,0 +1,17 @@
+module M {
+  pub let bump[h](a: MutableArray[h, Int32], i: Int32): Unit @ Heap[h] = MutableArray.set(a, i, MutableArray.get(a, i) + 1)
+  pub let total(): Int32 = run h {
+    let a = MutableArray.new(3, 5)
+    bump(a, 0)
+    bump(a, 2)
+    MutableArray.get(a, 0) + MutableArray.get(a, 1) + MutableArray.get(a, 2)
+  }
+}
+echoln(show(M.total()))
+let outer(): Int32 = run h {
+  let r = Ref.new(0)
+  let inner = run k { let s = Ref.new(7); Ref.get(s) }
+  Ref.set(r, inner)
+  Ref.get(r)
+}
+echoln(show(outer()))

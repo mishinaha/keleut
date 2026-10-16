@@ -1,0 +1,5 @@
+newtype N = N(Int32)
+type class R[A] { val r: (A) => String }
+let idf[A](x: A): A = x
+type instance R[N] { let r = { echoln("init"); idf(fn(x: N) => "n") } }
+echoln(r(N(1)))

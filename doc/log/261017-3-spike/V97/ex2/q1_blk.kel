@@ -1,0 +1,3 @@
+newtype N = N(Int32)
+type instance Show[N] { let show: (N) => String = { let k = 1; fn(v) => "n" } }
+echoln(show(N(0)))

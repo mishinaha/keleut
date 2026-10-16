@@ -1,0 +1,15 @@
+module M {
+  pub newtype P = P(x: Int32, y: Int32)
+  type instance Show[P] {
+    let show(p) = p match { case P(x = x, y = y) => "(" + show(x) + "; " + show(y) + ")" }
+  }
+  pub let ps(): List[P] = Cons(P(1, 2), Cons(P(3, 4), Cons(P(5, 6), Nil)))
+}
+type Alias = List[Option[List[Int32]]]
+let v(): Alias = Cons(Some(Cons(1, Cons(2, Nil))), Cons(None, Cons(Some(Nil), Nil)))
+echoln(show(M.ps()))
+echoln(show(v()))
+let generic[A: Show](xs: List[A]): String = "<" + show(xs) + ">"
+echoln(generic(Cons(true, Cons(false, Nil))))
+echoln(generic(Cons(1.5, Cons(2.0, Nil))))
+echoln(show(Cons(", ", Cons("", Cons("]", Nil)))))

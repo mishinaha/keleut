@@ -1,0 +1,64 @@
+==== b12.kel
+---- diktor(試作) --type-check b12.kel
+! b12.kel:4:8: 型エラー: 操作 ask は 1 引数です(節には 2 個書かれています)
+[exit 1]
+==== arity0.kel
+---- diktor(試作) --type-check arity0.kel
+! arity0.kel:5:10: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+==== arity2nd.kel
+---- diktor(試作) --type-check arity2nd.kel
+! arity2nd.kel:5:10: 型エラー: 操作 ask は 1 引数です(節には 2 個書かれています)
+[exit 1]
+==== label2.kel
+---- diktor(試作) --type-check label2.kel
+! label2.kel:5:10: 型エラー: 操作節の引数にラベルは書けません
+[exit 1]
+==== inner.kel
+---- diktor(試作) --type-check inner.kel
+! inner.kel:6:14: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+==== retguard.kel
+---- diktor(試作) --type-check retguard.kel
+! retguard.kel:5:23: 型エラー: return 節にガードは書けません
+[exit 1]
+==== cancelguard.kel
+---- diktor(試作) --type-check cancelguard.kel
+! cancelguard.kel:5:20: 型エラー: cancel 節にガードは書けません
+[exit 1]
+==== retshape.kel
+---- diktor(試作) --type-check retshape.kel
+! retshape.kel:5:10: 型エラー: return 節は case return(x) の形で書いてください
+[exit 1]
+==== qualret.kel
+---- diktor(試作) --type-check qualret.kel
+! qualret.kel:5:10: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
+[exit 1]
+==== badhead.kel
+---- diktor(試作) --type-check badhead.kel
+! badhead.kel:5:10: 型エラー: handle の節は操作名 / return / cancel で始めてください: Foo
+[exit 1]
+==== badhead2.kel
+---- diktor(試作) --type-check badhead2.kel
+! badhead2.kel:5:10: 型エラー: handle の節は操作名 / return / cancel で始めてください
+[exit 1]
+==== cancelarg.kel
+---- diktor(試作) --type-check cancelarg.kel
+! cancelarg.kel:5:10: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+==== notbelong.kel
+---- diktor(試作) --type-check notbelong.kel
+! notbelong.kel:6:10: 型エラー: 操作 tell はエフェクト Ask に属しません
+[exit 1]
+==== tworet.kel
+---- diktor(試作) --type-check tworet.kel
+! tworet.kel:6:10: 型エラー: return 節は1つまでです
+[exit 1]
+==== unknownqual.kel
+---- diktor(試作) --type-check unknownqual.kel
+! unknownqual.kel:3:3: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+==== label1.kel
+---- diktor(試作) --type-check label1.kel
+label1.kel:1:23: パースエラー(付近のトークンを確認してください)
+[exit 2]

@@ -1,0 +1,2 @@
+type C = A[{}]
+type A[E] = (E, () => Unit @ E)

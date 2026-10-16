@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+newtype Secret(Int32)
+type instance Eq[Secret] {
+  let eq(x, y) = perform throw("no eq")
+}

@@ -1,0 +1,8 @@
+type Th = () => Unit @ {Console}
+effect Spawn = { spawn: (Th) => Unit }
+let go[E](): Unit @ {Console extends E} =
+  { perform spawn(fn() => echoln("a")); perform spawn(fn() => echoln("b")) } handle {
+    case spawn(t) => { t(); resume() }
+    case return(x) => x
+  }
+go()

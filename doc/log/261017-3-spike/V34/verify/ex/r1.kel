@@ -1,0 +1,6 @@
+type Th[E] = () => Int32 @ E
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: () => Int32 @ E = g
+  k() + 1
+}
+echoln(show(f(fn() => 41)))

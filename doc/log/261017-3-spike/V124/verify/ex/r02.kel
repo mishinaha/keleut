@@ -1,0 +1,5 @@
+type C = A[{}]
+type A[E] = B[E]
+newtype B[X] = MkB(Int32)
+let v: C = MkB(1)
+echoln("ok")

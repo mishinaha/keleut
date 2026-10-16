@@ -1,0 +1,3 @@
+pub type Cb[E] = Callback[E]
+pub newtype Callback[E] = Callback(() => Unit @ E)
+pub type P[A] = (A, Int32)

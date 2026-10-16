@@ -1,0 +1,9 @@
+effect Get = { get: () => Int32 }
+effect Reg = { reg: (() => Int32 @ Get) => Int32 }
+let main(): Unit @ Console = {
+  let r = { perform reg(fn() => perform get() + 1i32) } handle {
+    case reg(f) => resume({ f() } handle { case get() => resume(41i32) })
+  }
+  echoln(show(r))
+}
+main()

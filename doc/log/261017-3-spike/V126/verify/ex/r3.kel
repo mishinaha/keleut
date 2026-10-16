@@ -1,0 +1,8 @@
+pub newtype Box(Int32)
+pub module M {
+  pub let k: Int32 = 3i32
+  type instance Show[Box] {
+    let rec show(b: Box): String = b match { case Box(n) => "Box(" + Show.show(n + k) + ")" }
+  }
+}
+with_stdout(fn() => println(show(Box(1i32))))

@@ -1,0 +1,24 @@
+newtype Pt(Int32, Int32)
+let id[T](x: T): T = x
+let main(): Unit @ Console = {
+  let ops = (id(Sub.sub), id(Mul.mul), id(Div.div), id(Rem.rem), id(Eq.eq), id(Ord.lt))
+  ops match {
+    case (s, m, d, r, e, l) => {
+      let p(): Unit @ Print = println(show(s(9, 2)) + show(m(3, 4)) + show(d(9, 2)) + show(r(9, 2)) + show(e("a", "a")) + show(l(1, 2)))
+      echoln(with_stdout(fn() => { p(); "" }))
+      echoln(show(s(9, 2)) + show(m(3, 4)) + show(d(9, 2)) + show(r(9, 2)) + show(e("a", "b")) + show(l(2, 1)))
+    }
+  }
+  let n = run h {
+    let mg = id(MutableArray.get)
+    let ms = id(MutableArray.set)
+    let ml = id(MutableArray.length)
+    let a = MutableArray.new(3, 1)
+    let k(): Int32 @ {Heap[h], Console} = { ms(a, 0, 5); echoln("k"); mg(a, 0) + ml(a) }
+    let q(): Int32 @ {Heap[h], Print} = { println("q"); mg(a, 0) }
+    k() + with_stdout(fn() => q())
+  }
+  echoln(show(n))
+  echoln(show(Some(1) == Some(1)) + show(Cons(1, Nil) != Nil))
+}
+main()

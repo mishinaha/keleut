@@ -1,0 +1,4 @@
+effect Log = { log: (String) => Unit }
+type P: EffectRow = {Log}
+type Q = P
+let f(x: Q): Int32 = 0

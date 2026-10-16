@@ -1,0 +1,142 @@
+=== absurd.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+-1
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+-1
+[exit 0]
+=== asc.kel
+[HEAD]
+asc.kel:2:44: パースエラー(付近のトークンを確認してください)
+[exit 2]
+[NEW]
+asc.kel:2:44: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== emptyrec.kel
+[HEAD]
+⚠ match が非網羅的です。例えば () が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。例えば () が漏れています
+ok
+[exit 0]
+=== fnlit.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+ok
+[exit 0]
+=== guard.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== helper.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+-1
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+-1
+[exit 0]
+=== int.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== late.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+ok
+[exit 0]
+=== lit.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== never.kel
+[HEAD]
+ok
+[exit 0]
+[NEW]
+ok
+[exit 0]
+=== openvar.kel
+[HEAD]
+⚠ match が非網羅的です。例えば 0 が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。例えば 0 が漏れています
+ok
+[exit 0]
+=== outer.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== param.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+ok
+[exit 0]
+=== rigid.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== showvar.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+ok
+[exit 0]
+=== strict.kel
+[HEAD]
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+[NEW]
+⚠ match が非網羅的です。照合対象の型が決まっていません(節のない match {} が網羅的なのは、照合対象の型が Never のようにコンストラクタを持たないときだけです)
+ok
+[exit 0]

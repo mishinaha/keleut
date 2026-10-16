@@ -1,0 +1,87 @@
+== x03with.kel
+[H]
+x03with.kel:5:1: 構文エラー: with の右辺は関数呼び出しでなければなりません
+exit=2
+[N]
+x03with.kel:5:1: 構文エラー: with の右辺は関数呼び出しでなければなりません
+exit=2
+== x05guard.kel
+[H]
+1
+exit=0
+[N]
+1
+exit=0
+== x07module.kel
+[H]
+m
+k
+exit=0
+[N]
+m
+k
+exit=0
+== x09opt.kel
+[H]
+5
+exit=0
+[N]
+5
+exit=0
+== x11rowvar.kel
+[H]
+! x11rowvar.kel:2:60: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Reg を足せません(注釈側に Reg を(必要なら引数つきで)書き足してください)
+exit=1
+[N]
+! x11rowvar.kel:2:60: 型エラー: 行 ς1 は注釈で固定された行変数なので、ラベル Reg を足せません(注釈側に Reg を(必要なら引数つきで)書き足してください)
+exit=1
+== x12capture.kel
+[H]
+x12capture.kel:3:7: パースエラー(付近のトークンを確認してください)
+exit=2
+[N]
+x12capture.kel:3:7: パースエラー(付近のトークンを確認してください)
+exit=2
+== x13prelude.kel
+[H]
+p
+exit=0
+[N]
+p
+exit=0
+== x15strict.kel
+[H]
+⚠ match が非網羅的です。例えば None が漏れています
+5
+exit=0
+⚠ match が非網羅的です。例えば None が漏れています
+strict exit=1
+[N]
+⚠ match が非網羅的です。例えば None が漏れています
+5
+exit=0
+⚠ match が非網羅的です。例えば None が漏れています
+strict exit=1
+== x16resumeann.kel
+[H]
+in
+21
+exit=0
+[N]
+in
+21
+exit=0
+== x17pubann.kel
+[H]
+ok
+exit=0
+[N]
+ok
+exit=0
+== x18ambig.kel
+[H]
+! x18ambig.kel:3:47: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[N]
+! x18ambig.kel:3:47: 型エラー: 操作 write は、この位置の行に現れる複数のエフェクト(Console, File)に属します。Console.write、File.write のどれかに修飾してください
+exit=1

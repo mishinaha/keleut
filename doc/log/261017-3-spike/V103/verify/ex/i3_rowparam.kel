@@ -1,0 +1,3 @@
+newtype N = N(Int32)
+type instance Show[N] { let show[E](x: N): String @ E = "n" }
+echoln(show(N(1)))

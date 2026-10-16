@@ -1,0 +1,2 @@
+let rec a[E](f: () => Int32 @ E): Int32 @ E = b(f)
+and b[F](f: () => Int32 @ F): Int32 @ F = f()

@@ -1,0 +1,15 @@
+effect Res = { use: () => Unit }
+effect Ask = { ask: () => Int32 }
+effect Out = { out: () => Unit }
+effect In = { inn: () => Unit }
+let r = (({ perform use(); perform ask() + 1 }) handle {
+  case use() => resume()
+  case cancel => echoln("cancel res")
+} handle {
+  case ask() => { let x = (({ 1 / 0 }) handle { case inn() => resume() case cancel => echoln("cancel inclause") }); x }
+  case cancel => echoln("cancel ask")
+}) handle {
+  case out() => resume()
+  case cancel => echoln("cancel outermost")
+}
+echoln(show(r))

@@ -1,0 +1,5 @@
+let f(x) = {
+  let r: Int32 = x match {}
+  x + 1i32
+}
+echoln("ok")

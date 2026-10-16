@@ -1,0 +1,140 @@
+== r1_tail_arg_err.kel
+ask clause
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== r2_nontail_arg_err.kel
+ask clause
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== r3_branch_arg_err.kel
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== s1_order_outer.kel
+cancel inclause
+cancel res
+cancel ask
+cancel outermost
+実行時エラー: ゼロ除算です
+[exit 3]
+== s2_during_resume.kel
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== s3_guard_then_body.kel
+guarded clause
+cancel ask
+実行時エラー: ??? に到達しました
+[exit 3]
+== s4_cancel_aborts.kel
+ask clause
+cancel ask start
+stop: no resume
+cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+実行時エラー: ゼロ除算です
+[exit 3]
+== t1_module_pub.kel
+cancel R.ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== t2_typeparam_guard.kel
+4
+refuse
+cancel get
+実行時エラー: ??? に到達しました
+[exit 3]
+== t3_with_nested.kel
+inner uses ok
+cancel inner
+cancel outer
+caught bad inner
+1
+[exit 0]
+== t4_alias_row.kel
+5
+[exit 0]
+== t5_never_vs_resumable.kel
+1
+quit
+9
+abandon
+cancel E2
+42
+[exit 0]
+== imp/main.kel
+lib clause
+cancel lib
+実行時エラー: ??? に到達しました
+[exit 3]
+== t6 repl
+c
+cancel repl
+実行時エラー: ゼロ除算です
+after
+[exit 0]
+== t7 prelude
+hi
+cancel inner
+cancel stdout
+実行時エラー: ??? に到達しました
+[exit 3]
+== drafter a_noresume_error.kel
+ask clause
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== drafter b_resumed_error.kel
+close res
+resumed 2
+実行時エラー: ゼロ除算です
+[exit 3]
+== drafter c_resume_arg_error.kel
+cancel res
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== drafter d_outer_never.kel
+ask clause throws
+cancel ask
+caught from clause
+0
+[exit 0]
+== drafter e_outer_resumable_discard.kel
+ask clause
+stop: no resume
+cancel ask
+7
+[exit 0]
+== drafter f_guard_error.kel
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]
+== drafter g_never_body_error.kel
+実行時エラー: ゼロ除算です
+[exit 3]
+== drafter h_value_noresume.kel
+ask clause
+cancel res
+5
+[exit 0]
+== drafter i_panic_noresume.kel
+cancel ask
+実行時エラー: ??? に到達しました
+[exit 3]
+== drafter j_resumed_outer_never.kel
+resumed 2
+caught after resume
+0
+[exit 0]
+== drafter k_nested_second.kel
+ask 1
+ask 2
+cancel ask
+実行時エラー: ゼロ除算です
+[exit 3]

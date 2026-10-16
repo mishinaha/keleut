@@ -1,0 +1,10 @@
+effect Fail = { throw: (String) => Never }
+effect Ask2 = { ask2: () => Int32 }
+effect Res = { use: () => Unit }
+let r = ({ perform use(); perform throw("x") }) handle {
+  case use() => resume()
+  case cancel => echoln(show(perform ask2() handle { case ask2() => resume(7) }))
+} handle {
+  case throw(e) => { echoln("caught " + e); 0 }
+}
+echoln(show(r))

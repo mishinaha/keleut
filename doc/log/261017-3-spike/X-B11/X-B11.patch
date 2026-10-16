@@ -1,0 +1,14 @@
+diff a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/interp.ml	2026-10-17 04:14:08.021342238 +0900
+@@ -1413,7 +1413,9 @@
+       in
+       bind_globals env [ (Tree.GDecl (Tree.oid_of node, ex.T.ex_name), v) ]
+   | T.DType _ | T.DNewtype _ | T.DEffect _ | T.DClass _ -> env
+-  | T.DModule _ -> runtime_error "module の評価は未実装です(M10)"
++  | T.DModule _ ->
++      (* 平坦化を通っていれば到達しない。来たら不変条件の違反で、処理系の欠陥である *)
++      bug "module が平坦化されていません(flatten_modules を先に呼んでください)"
+ 
+ (* ## 14.13 run
+ 

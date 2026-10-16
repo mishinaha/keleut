@@ -1,0 +1,4 @@
+newtype T = Foo
+let k = 1
+let a = (Foo
+  { k })

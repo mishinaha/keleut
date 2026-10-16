@@ -1,0 +1,1 @@
+pub type W: EffectRow = {Print}

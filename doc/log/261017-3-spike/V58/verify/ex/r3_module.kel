@@ -1,0 +1,16 @@
+effect Ask = { ask: (Int32) => Int32 }
+module M {
+  pub let go(): Int32 =
+    perform ask(2) handle {
+      case ask(n) if n > 5 => resume(0)
+      case Ask.ask(n) => resume(n * 3)
+      case return(v) => v
+    }
+}
+echoln(show(M.go()))
+type Q = Int32
+let s = perform Ask.ask(4) handle {
+  case Ask.ask(n) => resume(n + 1)
+  case return(v) => v * 2
+}
+echoln(show(s))

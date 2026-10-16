@@ -1,0 +1,1 @@
+let g(x: Int32): Int32 @ Nope[Console] = x

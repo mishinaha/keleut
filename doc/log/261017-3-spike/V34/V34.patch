@@ -1,0 +1,116 @@
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:25:09.161882599 +0900
+@@ -532,7 +532,12 @@
+ 
+    空の行と剛な行変数が衝突したときは、その手前の分岐で、
+    行が注釈で固定されていることを述べるメッセージを出す。
+-   「{} と ς1」が一致しないとだけ伝えても、利用者は原因を読み取りにくいからである。 *)
++   「{} と ς1」が一致しないとだけ伝えても、利用者は原因を読み取りにくいからである。
++   このメッセージは原因だけを述べ、直し方を書かない。
++   直し方は、衝突した束縛の種類と、空の行がどちらの側にあるかで変わり、
++   単一化はそのどちらも知らない。
++   値束縛は型パラメータを取れないので、行変数を新しく導入する直し方は使えない。
++   空の行が初期化式や呼び出した関数の側にあるときは、注釈ではなくその関数の側を直す。 *)
+ 
+ let rec unify a b =
+   let t1 = repr a in
+@@ -573,7 +578,7 @@
+            伝えても、原因を読み取りにくいからである *)
+         | ((TVar _ as rv), TRowEmpty) | (TRowEmpty, (TVar _ as rv)) ->
+             type_error
+-              ("行 " ^ show rv ^ " は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)")
++              ("行 " ^ show rv ^ " は注釈で固定された行変数なので、空の行と一致させられません")
+         | (TVar _, _ | _, TVar _) -> type_error ("スコープ付きの型が一致しません: " ^ show2 t1 t2)
+         | _ -> type_error ("型が一致しません: " ^ show2 t1 t2))
+ 
+diff a/test/rigid_empty_row.t b/test/rigid_empty_row.t
+--- a/test/rigid_empty_row.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/rigid_empty_row.t	2026-10-17 04:25:26.011736348 +0900
+@@ -0,0 +1,86 @@
++型パラメータの行変数と空の行の衝突(LangSpec §13.2)。行変数は何が入るか決まって
++いないので、@ {} や入れ子の矢印で省略した @(どちらも空の行)とは一致しない。
++単一化の報告は原因だけを述べ、直し方を書かない。直し方は束縛の種類と、
++空の行がどちらの側にあるかで変わる。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++関数束縛の返り値の注釈が空の行の矢印だと、原因だけを報告する。返り値の
++矢印に @ E と書けば通る:
++
++  $ cat > fnrigid.kel <<'KEL'
++  > let h[E](g: () => Int32 @ E): () => Int32 @ {} = g
++  > KEL
++  $ diktor --type-check fnrigid.kel
++  ! fnrigid.kel:1:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++  $ cat > fnrigidok.kel <<'KEL'
++  > let h[E](g: () => Int32 @ E): () => Int32 @ E = g
++  > KEL
++  $ diktor --type-check fnrigidok.kel
++  h : (() => Int32) => () => Int32
++
++局所の値束縛は型パラメータを取れない。注釈の空の行が外側の型パラメータの
++行変数とぶつかっても、行変数を新しく導入するよう促す助言は出さない:
++
++  $ cat > valrigid.kel <<'KEL'
++  > let f[E](g: () => Int32 @ E): Int32 @ E = {
++  >   let k: () => Int32 @ {} = g
++  >   k()
++  > }
++  > KEL
++  $ diktor --type-check valrigid.kel
++  ! valrigid.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++
++空の行が初期化式の側(呼ぶ関数の仮引数)にあるときも、同じ文言になる。
++注釈には行変数が既に書かれており、直すのは初期化式の関数の側である:
++
++  $ cat > valinitrigid.kel <<'KEL'
++  > let ap(h: () => Int32 @ {}): Int32 = h()
++  > let f[E](g: () => Int32 @ E): Int32 @ E = {
++  >   let k: (() => Int32 @ E) => Int32 = ap
++  >   k(g)
++  > }
++  > KEL
++  $ diktor --type-check valinitrigid.kel
++  ap : (() => Int32 @ {}) => Int32
++  ! valinitrigid.kel:3:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++
++インスタンスの実装は、値束縛、let rec の値束縛、関数束縛のどれでも原因だけを
++報告する。宣言の行変数 E は実装の側から名指しできない:
++
++  $ cat > clsrigid.kel <<'KEL'
++  > type class Run[A] {
++  >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
++  > }
++  > type instance Run[Int32] {
++  >   let run1: (Int32, () => Int32) => Int32 = fn(a, g) => g()
++  > }
++  > KEL
++  $ diktor --type-check clsrigid.kel
++  ! clsrigid.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++  $ cat > clsrecrigid.kel <<'KEL'
++  > type class Run[A] {
++  >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
++  > }
++  > type instance Run[Int32] {
++  >   let rec run1: (Int32, () => Int32) => Int32 = fn(a, g) => g()
++  > }
++  > KEL
++  $ diktor --type-check clsrecrigid.kel
++  ! clsrecrigid.kel:5:11: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++  $ cat > clsfnrigid.kel <<'KEL'
++  > type class Run[A] {
++  >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
++  > }
++  > type instance Run[Int32] {
++  >   let run1(a: Int32, g: () => Int32): Int32 = g()
++  > }
++  > KEL
++  $ diktor --type-check clsfnrigid.kel
++  ! clsfnrigid.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]

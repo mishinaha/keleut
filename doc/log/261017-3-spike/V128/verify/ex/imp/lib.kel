@@ -1,0 +1,6 @@
+pub effect Ask = { ask: () => Int32 }
+pub let with_ask[A, E](body: () => A @ {Ask, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case ask() => { echoln("lib clause"); ??? }
+    case cancel => echoln("cancel lib")
+  }

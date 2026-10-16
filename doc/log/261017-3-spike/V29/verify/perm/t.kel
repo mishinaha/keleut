@@ -1,0 +1,4 @@
+effect Log = { log: (String) => Unit }
+newtype N1[E] = MkN1((() => Unit @ E, () => Unit @ {Log}))
+type A1[E] = N1[E]
+effect Ev = { on: (A1[{}]) => Unit }

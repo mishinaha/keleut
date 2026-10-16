@@ -1,0 +1,34 @@
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index 4e485e7..60f844d 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -424,15 +424,13 @@ Type エイリアスのコンパニオンが pub でも pub でなくても、
+ 
+   $ printf 'module M {\n  type E: EffectRow = {Print}\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow26.kel
+   $ diktor --type-check visrow26.kel
+-  ! visrow26.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+-  [1]
++  M.f : (Int32) => Int32 @ {Print}
+   $ printf 'type E: EffectRow = {Print}\nlet f[E](x: Int32): Int32 @ {Console, E} = x\n' > visrow27.kel
+   $ diktor --type-check visrow27.kel
+-  ! visrow27.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+-  [1]
++  f : (Int32) => Int32 @ {Console, Print}
+   $ printf 'module E { type E: EffectRow = {Print} }\nlet f[E](x: Int32): Int32 @ {E} = x\n' > visrow28.kel
+   $ diktor --type-check visrow28.kel
+-  ! visrow28.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
++  ! visrow28.kel:2:29: 型エラー: 型 E.E は module E の外からは参照できません(pub を付けてください)
+   [1]
+ 
+ @ E も型パラメータを指すので、@ E と @ {E} は同じものを指す。
+@@ -448,8 +446,7 @@ Type エイリアスのコンパニオンが pub でも pub でなくても、
+ 
+   $ printf 'type E[R]: EffectRow = {Print extends R}\nlet f[E, R](x: Int32): Int32 @ {E[R]} = x\n' > visrow30.kel
+   $ diktor --type-check visrow30.kel
+-  ! visrow30.kel:2:32: 型エラー: 未知のエフェクト: E
+-  [1]
++  f : (Int32) => Int32 @ {Print extends R1}
+ 
+ 同名クラスによる可視性の迂回は宣言時に拒否(M16 検証。修飾名 M.f が
+ クラス M のメソッド f と値環境で区別できないため):

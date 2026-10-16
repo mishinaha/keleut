@@ -1,0 +1,2 @@
+type instance Show[Never] { let show(n: Never) = n match {} }
+echoln(show(None))

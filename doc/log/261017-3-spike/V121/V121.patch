@@ -1,0 +1,230 @@
+diff a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:07:18.590186794 +0900
+@@ -238,35 +238,25 @@
+   (* from_filename はファイルを一括で読む。open と読み出しの両方の段で起きる
+      Sys_error を入力エラーにするため、この段を with_input で包む。印字は包まない。
+      印字の失敗を入力エラーと取り違えないためである *)
+-  let tokens =
+-    try with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file))
+-    with Sedlexing.MalFormed ->
+-      (* parse_with(§16.3)と同じく、ファイル名を付けて報告する *)
+-      raise (Parse_error (file ^ ": 字句エラー: 不正な UTF-8 バイト列です"))
+-  in
++  let tokens = with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file)) in
+   List.iter (fun e -> Printf.printf "%4d  %s\n" e.Lexer'.sp.Lexing.pos_lnum (Lexer'.show_token e.Lexer'.tok)) tokens
+ 
+ (* `parse_with` は、パースの入口を 1 つにまとめる関数である。
+-   上流から来る失敗のうち、この関数が受けるのは次の 4 種類である。
++   上流から来る失敗のうち、この関数が受けるのは次の 3 種類である。
+ 
+    - `Parser'.Error`：menhir が次に進む節を選べなかった(文法に合わない)
+    - `Syntax.Syntax_error`：文法は通ったが、脱糖(第3章)が形を拒否した
+    - `Syntax.Syntax_error_at`：同じく脱糖が形を拒否し、誤りの位置を指定した
+-   - `Sedlexing.MalFormed`：入力が不正な UTF-8 バイト列である
+ 
+    利用者から見ると、どれも入力を読めなかったという誤りなので、1 行にそろえて `Parse_error` にする。
+-   前の 3 つには位置を付ける。
++   どれにも位置を付ける。
+    `Syntax_error_at` には指定された位置を、ほかの 2 つには最後に読んだトークンの位置を使う。
+-   `MalFormed` では位置が失われているので、ファイル名だけを付ける。
+    字句解析器の `Lexer.Lex_error` はここでは受けず、§16.8 の受け皿がそのまま受ける。
++   不正な UTF-8 バイト列も、第2章が位置つきの `Lex_error` に変えてから投げるので、同じ受け皿に届く。
+    種類ごとに区別して報告したくなったときは、この関数で分ければよい。
+    分岐点を 1 か所に集めてあるのはそのためである。 *)
+ let parse_unit_with lexer =
+   try Lexer'.parse Parser'.program lexer with
+-  | Sedlexing.MalFormed ->
+-      (* 位置は失われているが、ファイル名は分かる。複数のファイルを渡したときに
+-         どれが壊れているかが分かるよう、ファイル名を付ける *)
+-      raise (Parse_error (Printf.sprintf "%s: 字句エラー: 不正な UTF-8 バイト列です" lexer.Lexer'.last_sp.Lexing.pos_fname))
+   | Parser'.Error ->
+       raise (Parse_error (Printf.sprintf "%s: パースエラー(付近のトークンを確認してください)" (show_pos lexer.Lexer'.last_sp)))
+   | Syntax.Syntax_error msg ->
+@@ -771,7 +761,6 @@
+   | exception Lexer.Lex_error (msg, pos) -> Failed (Printf.sprintf "%s: 字句エラー: %s" (show_pos pos) msg)
+   | exception Syntax.Syntax_error msg -> Failed (Printf.sprintf "%s: 構文エラー: %s" (show_pos lx.Lexer'.last_sp) msg)
+   | exception Syntax.Syntax_error_at (pos, msg) -> Failed (Printf.sprintf "%s: 構文エラー: %s" (show_pos pos) msg)
+-  | exception Sedlexing.MalFormed -> Failed "<stdin>: 字句エラー: 不正な UTF-8 バイト列です"
+ 
+ (* 実行時エラーの文言。§16.8 の受け皿と同じ文言にそろえる *)
+ let runtime_message = function
+@@ -1047,7 +1036,7 @@
+    |---|---|---|
+    | 0 | 正常終了 | `run_with` が最後まで走った |
+    | 1 | 型エラー、import エラー | 第11章の診断、`Aux.Type_error`、`--strict-exhaustive`、§16.3b の `Import_error` |
+-   | 2 | 構文エラー、字句エラー | `Parse_error`、`Lex_error`、不正な UTF-8 |
++   | 2 | 構文エラー、字句エラー | `Parse_error`、`Lex_error`(不正な UTF-8 を含む) |
+    | 3 | 実行時エラー | `Runtime_error`、未処理のエフェクト、再帰過多、メモリ不足、内部異常 |
+    | 4 | 未実装(Diktor が実装していない機能) | `Aux.NotImplemented`(1u8、Int8、module の入れ子など) |
+    | 64 | 使い方の誤り | 引数解析の失敗、入力ファイルや import 先を開けない |
+@@ -1160,9 +1149,6 @@
+       | Sys_error msg ->
+           (* 入力側の誤りは Input_error に閉じ込めてあるので、ここへ来るのは出力側の誤りである *)
+           die_output msg
+-      | Sedlexing.MalFormed ->
+-          Printf.eprintf "字句エラー: 不正な UTF-8 バイト列です\n";
+-          safe_exit 2
+       | Aux.Type_error_at (loc, msg) ->
+           (* type_check の外で投げられた型エラー(位置つき)。
+              CLI では、平坦化の型エラーを type_check_files が先に受ける *)
+diff a/lib/lexer.ml b/lib/lexer.ml
+--- a/lib/lexer.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/lexer.ml	2026-10-17 04:07:47.257965292 +0900
+@@ -51,12 +51,11 @@
+    ASI と `{` の分類を固定する手段は、このゴールデンだけである。
+    このゴールデンは、sample.kel 全文をトークン化したときのトークンの数と末尾も固定している。
+ 
+-   字句解析の途中で本章のコードが投げる例外は `Lex_error` だけで、メッセージと位置を持つ。
++   字句解析の途中で本章が外へ出す例外は `Lex_error` だけで、メッセージと位置を持つ。
+    第16章(driver.ml)がこれを終了コード 2 のエラーとして報告する。
+-   ほかに、driver の別の分岐が受ける例外が 2 つある。
+-   1 つは、不正な UTF-8 バイト列に対して sedlex のデコーダが投げる `Sedlexing.MalFormed` で、
+-   これも終了コード 2 になる(§2.6)。
+-   もう 1 つは `Sys_error` である。
++   不正な UTF-8 バイト列に対して sedlex のデコーダが投げる `Sedlexing.MalFormed` も、
++   §2.7 の終わりで位置を付けて `Lex_error` に変えるので、外へは出ない。
++   ほかに driver が受ける例外は `Sys_error` である。
+    `from_filename` は、`In_channel.with_open_bin` が投げる `Sys_error` を捕まえ、
+    ファイル名を付けて投げ直す。
+    ファイルを開けない、または読めないときは、この例外によって終了コード 64 になる。 *)
+@@ -354,7 +353,8 @@
+    検査を省くと、`\uD800` と書いただけで `Invalid_argument` が字句層から漏れる。
+    `is_valid` は範囲外とサロゲートの域の両方を拒否するので、`\uD800` は普通の字句エラーになる。
+ 
+-   字句エラーも、不正な UTF-8 バイト列(`Sedlexing.MalFormed`)も、終了コードは 2 である。
++   字句エラーも、不正な UTF-8 バイト列(§2.7 の終わりで `Lex_error` に変える)も、
++   終了コードは 2 である。
+    どちらもソースを読めなかったという同じ種類の失敗なので、同じ番号にしている
+    (型エラーは 1、ファイルを開けないときは 64)。
+ 
+@@ -552,6 +552,19 @@
+         raise (Lex_error ("unexpected character: " ^ shown, cur_pos lexbuf))
+     | _ -> raise (Lex_error ("unexpected input", cur_pos lexbuf))
+ 
++(* 不正な UTF-8 バイト列は、sedlex のデコーダが `Sedlexing.MalFormed` として投げる。
++   この例外は位置を持たないので、ここで受けて位置つきの `Lex_error` に変える。
++   デコーダは正しい前置部分を先にバッファへ入れ、
++   不正なバイトに読み進もうとした時点で例外を投げる。
++   そのため、この時点の現在位置(`lexing_position_curr`)は、不正なバイトそのものの位置である。
++   トークンの開始位置(`cur_pos`)を使わないのは、
++   `ab` の後ろに不正なバイトが続く識別子では、開始位置が `a` を指すからである。
++   ファイル名も lexbuf から取るので、最初のトークンで失敗してもファイル名は失われない。
++   層 2 と層 3 は、この関数を通してだけ生トークンを読む。 *)
++  let read_raw_token lexbuf =
++    try read_raw_token lexbuf
++    with Sedlexing.MalFormed -> raise (Lex_error ("不正な UTF-8 バイト列です", Sedlexing.lexing_position_curr lexbuf))
++
+ (* ## 2.8 字句解析器の状態と先読みキュー
+ 
+    `lexbuf` のほかに、層 2 と層 3 が共有する状態が 5 つある。
+diff a/test/run_exit.t b/test/run_exit.t
+--- a/test/run_exit.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/run_exit.t	2026-10-17 04:08:34.135717237 +0900
+@@ -60,7 +60,7 @@
+   $ diktor exitutf8.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitutf8.kel > /dev/null; echo "exit: $?"
+-  exitutf8.kel: 字句エラー: 不正な UTF-8 バイト列です
++  exitutf8.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+   exit: 2
+ 
+ 実行時エラーは 3。止まるまでに標準出力へ書いた内容は残り、診断は標準エラーに出る:
+diff a/test/utf8_position.t b/test/utf8_position.t
+--- a/test/utf8_position.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/utf8_position.t	2026-10-17 04:08:27.981146057 +0900
+@@ -0,0 +1,82 @@
++不正な UTF-8 のバイト列の字句エラーは、不正なバイトの位置を ファイル:行:桁 で示す。
++桁は行頭からのコードポイントの数に 1 を足したもので、終了状態は 2 である。
++
++文字列の中、識別子の途中、行コメントの中のどこでも、不正なバイトそのものを指す:
++
++  $ printf 'echoln("before")\nlet x = "\377"\n' > instr.kel
++  $ diktor instr.kel; echo "exit: $?"
++  instr.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf 'let ab\377c = 1\n' > inident.kel
++  $ diktor inident.kel; echo "exit: $?"
++  inident.kel:1:7: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf 'let x = 1 // \377\n' > incomment.kel
++  $ diktor incomment.kel; echo "exit: $?"
++  incomment.kel:1:14: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++最初のトークンを読み終える前に不正なバイトに当たっても、ファイル名を示す:
++
++  $ printf '/* \377 */\nlet x = 1\n' > firstblock.kel
++  $ diktor firstblock.kel; echo "exit: $?"
++  firstblock.kel:1:4: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf '\377\n' > firstbyte.kel
++  $ printf 'let x = 1\n' > fine.kel
++  $ diktor fine.kel firstbyte.kel; echo "exit: $?"
++  firstbyte.kel:1:1: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++途中で切れた多バイト列と、サロゲートを符号化した 3 バイトは、その先頭のバイトを指す:
++
++  $ printf 'let x = 1\n\343\201' > trunc.kel
++  $ diktor trunc.kel; echo "exit: $?"
++  trunc.kel:2:1: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ printf 'let s = "\355\240\200"\n' > surrogate.kel
++  $ diktor surrogate.kel; echo "exit: $?"
++  surrogate.kel:1:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++前に多バイト文字があっても、桁はコードポイントで数える。
++3 バイトの文字 2 つの後ろの不正なバイトは 12 桁目である:
++
++  $ printf 'let s = "\343\201\202\343\201\204\377"\n' > aftermb.kel
++  $ diktor aftermb.kel; echo "exit: $?"
++  aftermb.kel:1:12: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++字句解析器は入力を 512 コードポイントずつ読み進める。
++その境界をまたいだ先の不正なバイトも、正しい桁を指す:
++
++  $ printf '//%0510d\377\n' 0 > chunk.kel
++  $ diktor chunk.kel; echo "exit: $?"
++  chunk.kel:1:513: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++import 先のファイルの誤りは、そのファイルの名前と位置で示す:
++
++  $ printf 'let y = "\377"\n' > badlib.kel
++  $ printf 'from "./badlib" import y\necholn("a")\n' > useslib.kel
++  $ diktor useslib.kel; echo "exit: $?"
++  badlib.kel:1:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++--type-check と --dump-tokens も同じ診断を出す:
++
++  $ diktor --type-check instr.kel; echo "exit: $?"
++  instr.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++  $ diktor --dump-tokens instr.kel; echo "exit: $?"
++  instr.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  exit: 2
++
++対話的な実行では、入力の行と桁で示し、セッションは続く。
++:type の後ろの式でも、行の中の桁で示す:
++
++  $ printf 'let a = 1\nlet x = "\377"\nlet b = 2\n:type "\377"\n' | diktor --repl
++  a : Int32 = 1
++  <stdin>:2:10: 字句エラー: 不正な UTF-8 バイト列です
++  b : Int32 = 2
++  <stdin>:4:8: 字句エラー: 不正な UTF-8 バイト列です
+diff a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:08:34.135717237 +0900
+@@ -342,7 +342,7 @@
+ 
+   $ printf 'let x = 1\n// \xff\xfe\n' > badutf8.kel
+   $ diktor badutf8.kel
+-  badutf8.kel: 字句エラー: 不正な UTF-8 バイト列です
++  badutf8.kel:2:4: 字句エラー: 不正な UTF-8 バイト列です
+   [2]
+ 
+   $ printf 'echoln(show(1i999999999999999999999))\n' > hugesuf.kel

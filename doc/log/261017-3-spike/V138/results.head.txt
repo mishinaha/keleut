@@ -1,0 +1,15 @@
+# HEAD (diktor-head) での実測。OCAMLRUNPARAM=l=100k
+## 入れ子の深さの上限(二分探索。depth.sh)
+nontail_resume.tmpl: 5404
+retryresumepath.tmpl: 6431
+(参考: 66a6de2 の親 8dca88a のビルド nontail_resume.tmpl: 7110)
+## 境界の実行
+$ OCAMLRUNPARAM=l=100k diktor-head nontail5405.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[exit 3]
+$ OCAMLRUNPARAM=l=100k diktor-head nontail7946.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[exit 3]
+$ OCAMLRUNPARAM=l=100k diktor-head retrypath6432.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[exit 3]

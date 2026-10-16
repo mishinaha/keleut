@@ -1,0 +1,10 @@
+effect Res = { use: () => Unit }
+effect Ask = { ask: () => Int32 }
+let r = ({ perform use(); perform ask() + 1 }) handle {
+  case use() => resume()
+  case cancel => echoln("cancel res")
+} handle {
+  case ask() => resume(1 / 0)
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))

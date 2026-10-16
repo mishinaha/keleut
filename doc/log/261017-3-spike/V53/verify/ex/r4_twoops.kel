@@ -1,0 +1,7 @@
+effect St = { get: () => Int32, put: (Int32) => Unit }
+let r = (perform get()) handle {
+  case get() => resume(1)
+  case put(0) => resume(())
+  case return(x) => x
+}
+echoln(show(r))

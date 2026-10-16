@@ -1,0 +1,7 @@
+type HE[E]: EffectRow = {Heap[E]}
+let f[k](r: Ref[k, Int32]): Int32 @ HE[k] = Ref.get(r)
+newtype Box[k] = Box(Ref[k, Int32])
+let unbox[k](b: Box[k]): Ref[k, Int32] = b match { case Box(r) => r }
+let size[k](b: Box[k]): Int32 = 0
+let both[k](b: Box[k]): (Box[k], Int32) @ Heap[k] = (b, Ref.get(unbox(b)))
+let bad[k](b: Box[k]): Int32 = size(b, 1)

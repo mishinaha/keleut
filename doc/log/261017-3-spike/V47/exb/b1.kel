@@ -1,0 +1,2 @@
+module M { newtype V[A] = V(A) }
+let g(x: V[Int32]): Int32 = 0

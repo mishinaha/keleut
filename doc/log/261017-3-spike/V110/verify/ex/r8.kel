@@ -1,0 +1,6 @@
+newtype Foo = Foo
+let memo[E](f: (Foo) => String @ E): (Foo) => String @ E = { let v = f(Foo); fn(x) => v }
+type instance Show[Foo] {
+  let show = memo(fn(x) => "m")
+}
+echoln(show(Foo))

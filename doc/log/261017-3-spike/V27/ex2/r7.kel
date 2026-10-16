@@ -1,0 +1,4 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+let go[F, E](c: Callback[F[E]]): Unit @ F[E] = c match { case Callback(g) => g() }
+let main(): Unit @ Console = with_stdout(fn() => println("x"))
+main()

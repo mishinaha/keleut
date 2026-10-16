@@ -1,0 +1,4 @@
+module M {
+  pub let f(): Int32 @ Heap[Int32] = 0
+}
+let g(): Int32 = run h { M.f() }

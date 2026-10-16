@@ -1,0 +1,6 @@
+effect E = { a: () => Int32, a: () => Int32 }
+effect E = { a: () => Int32, b: Int32 }
+pub newtype Q = Q((Int32) => Int32)
+effect E = { a: () => Int32 }
+pub newtype Q = Q((Int32) => Int32 @ {})
+let r = (perform a()) handle { case a() => resume(5) }

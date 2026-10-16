@@ -1,0 +1,8 @@
+menhir 20260209、lib/dune の --explain --strict で dune build したときの conflict の数(HEAD の文法は 0)。
+reserved_word は予約語 26 個のトークンと BOOL(true/false)を並べた非終端。
+
+b1           lower_id に reserved_word を足す(全位置)        s/r 67、r/r 38(18 状態)。atom -> BOOL と pat -> BOOL が還元されなくなる
+b2all        束縛の位置 15 か所だけ binder_id にする          s/r 3、r/r 7。pat -> BOOL が還元されなくなる
+b2allnobool  b2all から BOOL を除く                          s/r 3(EXTENDS 2、LPAREN 1)
+b2 の位置ごと(単独)                                         pat に reserved_word を足すときだけ r/r 7(BOOL)、ほかの 14 か所は 0
+c_all        14 か所を lower_id | error にする(error トークン) conflict 0。ただし let = 1 のような予約語でない誤りも拾う(runtest の差分 15 行)

@@ -1,0 +1,6 @@
+let idf[A](x: A): A = x
+let f(): Int32 @ {Console} = {
+  let g: (Int32) => Int32 @ {Console} = { let r = idf(fn(x) => { echoln("r"); x }); r }
+  g(1) + g(2)
+}
+echoln(show(f()))

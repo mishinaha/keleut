@@ -1,0 +1,12 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let pv(n: Empt) = 1
+let pn(n: Never) = 2
+let pw(_: Never) = 3
+let pr({x}: {x: Empt}) = 4
+let pt((a, b): (Int32, Never)) = 5
+let pc(MkA(n)) = 6
+let pc2(MkA(_)) = 7
+let pa(a: Absurd) = 8
+let pnest({x = MkA(n)}: {x: Absurd}) = 9
+let pvar(#V(n): #V(Never)) = 10

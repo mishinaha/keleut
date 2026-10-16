@@ -1,0 +1,115 @@
+--- r1_alias.kel H
+! r1_alias.kel:4:1: 型エラー: 未知の型構成子: Bot
+[exit 1]
+--- r1_alias.kel T
+! r1_alias.kel:4:1: 型エラー: 未知の型構成子: Bot
+[exit 1]
+--- r1_alias.kel P
+! r1_alias.kel:4:1: 型エラー: 未知の型構成子: Bot
+[exit 1]
+--- r1_alias.kel A
+! r1_alias.kel:4:1: 型エラー: 未知の型構成子: Bot
+[exit 1]
+--- r2_tparam.kel H
+r2_tparam.kel:5:40: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r2_tparam.kel T
+r2_tparam.kel:5:40: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r2_tparam.kel P
+r2_tparam.kel:5:40: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r2_tparam.kel A
+r2_tparam.kel:5:40: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r3_pred.kel H
+-1
+false
+[exit 0]
+--- r3_pred.kel T
+-1
+false
+[exit 0]
+--- r3_pred.kel P
+! r3_pred.kel:2:25: 型エラー: Never は Add のインスタンスではありません
+[exit 1]
+--- r3_pred.kel A
+-1
+false
+[exit 0]
+--- r4_option.kel H
+! r4_option.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r4_option.kel T
+! r4_option.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r4_option.kel P
+! r4_option.kel:2:31: 型エラー: Never は Show のインスタンスではありません
+[exit 1]
+--- r4_option.kel A
+! r4_option.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r5_module.kel H
+r5_module.kel:5:1: 構文エラー: type instance に pub は付けられません
+[exit 2]
+--- r5_module.kel T
+r5_module.kel:5:1: 構文エラー: type instance に pub は付けられません
+[exit 2]
+--- r5_module.kel P
+r5_module.kel:5:1: 構文エラー: type instance に pub は付けられません
+[exit 2]
+--- r5_module.kel A
+r5_module.kel:5:1: 構文エラー: type instance に pub は付けられません
+[exit 2]
+--- r6_guard.kel H
+caught neg
+int
+[exit 0]
+--- r6_guard.kel T
+caught neg
+int
+[exit 0]
+--- r6_guard.kel P
+caught neg
+int
+[exit 0]
+--- r6_guard.kel A
+caught neg
+int
+[exit 0]
+--- r7_nested.kel H
+r7_nested.kel:6:24: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r7_nested.kel T
+r7_nested.kel:6:24: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r7_nested.kel P
+r7_nested.kel:6:24: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r7_nested.kel A
+r7_nested.kel:6:24: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r8_shownone.kel H
+! r8_shownone.kel:1:1: 型エラー: Show[Never] のインスタンスは、Show か Never を宣言したファイルにだけ書けます
+[exit 1]
+--- r8_shownone.kel T
+! r8_shownone.kel:1:1: 型エラー: Show[Never] のインスタンスは、Show か Never を宣言したファイルにだけ書けます
+[exit 1]
+--- r8_shownone.kel P
+! r8_shownone.kel:1:1: 型エラー: Show[Never] のインスタンスは、Show か Never を宣言したファイルにだけ書けます
+[exit 1]
+--- r8_shownone.kel A
+! r8_shownone.kel:1:1: 型エラー: Show[Never] のインスタンスは、Show か Never を宣言したファイルにだけ書けます
+[exit 1]
+--- r9_list_noconstraint.kel H
+r9_list_noconstraint.kel:4:30: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r9_list_noconstraint.kel T
+r9_list_noconstraint.kel:4:30: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r9_list_noconstraint.kel P
+r9_list_noconstraint.kel:4:30: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r9_list_noconstraint.kel A
+r9_list_noconstraint.kel:4:30: パースエラー(付近のトークンを確認してください)
+[exit 2]

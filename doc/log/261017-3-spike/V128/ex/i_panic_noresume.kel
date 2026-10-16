@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => ???
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))

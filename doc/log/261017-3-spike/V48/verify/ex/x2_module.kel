@@ -1,0 +1,10 @@
+module M {
+  pub newtype Empt
+  pub newtype A = MkA(Empt) | MkB(Int32)
+  pub newtype Z = MkZ(Empt)
+  pub let inner(MkZ(n): Z): Int32 = 0
+  pub let inner2(MkA(n): A): Int32 = 0
+}
+let f(M.MkA(n)) = 1
+let g(M.MkZ(n)) = 2
+echo("ok")

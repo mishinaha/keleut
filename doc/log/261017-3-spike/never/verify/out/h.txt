@@ -1,0 +1,511 @@
+abort.kel	===  abort.kel
+abort.kel	⚠ match が非網羅的です。例えば _ が漏れています
+abort.kel	-1
+abort.kel	[exit 0]
+abort.kel	=== --strict-exhaustive abort.kel
+abort.kel	⚠ match が非網羅的です。例えば _ が漏れています
+abort.kel	[exit 1]
+abort.kel	=== --type-check abort.kel
+abort.kel	abort : (String) => A @ {Fail}
+abort.kel	get : (Option[Int32]) => Int32 @ {Fail}
+abort.kel	⚠ match が非網羅的です。例えば _ が漏れています
+abort.kel	_ : {}
+abort.kel	[exit 0]
+annotated.kel	===  annotated.kel
+annotated.kel	-1
+annotated.kel	[exit 0]
+annotated.kel	=== --strict-exhaustive annotated.kel
+annotated.kel	-1
+annotated.kel	[exit 0]
+annotated.kel	=== --type-check annotated.kel
+annotated.kel	fail : (String) => Never @ {Fail}
+annotated.kel	get : (Option[Int32]) => Int32 @ {Fail}
+annotated.kel	_ : {}
+annotated.kel	[exit 0]
+dexp.kel	===  dexp.kel
+dexp.kel	⚠ match が非網羅的です。例えば _ が漏れています
+dexp.kel	x
+dexp.kel	[exit 0]
+dexp.kel	=== --strict-exhaustive dexp.kel
+dexp.kel	⚠ match が非網羅的です。例えば _ が漏れています
+dexp.kel	[exit 1]
+dexp.kel	=== --type-check dexp.kel
+dexp.kel	_ : {}
+dexp.kel	⚠ match が非網羅的です。例えば _ が漏れています
+dexp.kel	[exit 0]
+direct.kel	===  direct.kel
+direct.kel	⚠ match が非網羅的です。例えば _ が漏れています
+direct.kel	-1
+direct.kel	[exit 0]
+direct.kel	=== --strict-exhaustive direct.kel
+direct.kel	⚠ match が非網羅的です。例えば _ が漏れています
+direct.kel	[exit 1]
+direct.kel	=== --type-check direct.kel
+direct.kel	get : (Option[Int32]) => Int32 @ {Fail}
+direct.kel	⚠ match が非網羅的です。例えば _ が漏れています
+direct.kel	_ : {}
+direct.kel	[exit 0]
+handlerclause.kel	===  handlerclause.kel
+handlerclause.kel	⚠ match が非網羅的です。例えば _ が漏れています
+handlerclause.kel	5
+handlerclause.kel	[exit 0]
+handlerclause.kel	=== --strict-exhaustive handlerclause.kel
+handlerclause.kel	⚠ match が非網羅的です。例えば _ が漏れています
+handlerclause.kel	[exit 1]
+handlerclause.kel	=== --type-check handlerclause.kel
+handlerclause.kel	go : () => Int32 @ {Fail}
+handlerclause.kel	⚠ match が非網羅的です。例えば _ が漏れています
+handlerclause.kel	_ : {}
+handlerclause.kel	[exit 0]
+helper.kel	===  helper.kel
+helper.kel	⚠ match が非網羅的です。例えば _ が漏れています
+helper.kel	-1
+helper.kel	[exit 0]
+helper.kel	=== --strict-exhaustive helper.kel
+helper.kel	⚠ match が非網羅的です。例えば _ が漏れています
+helper.kel	[exit 1]
+helper.kel	=== --type-check helper.kel
+helper.kel	fail : (String) => A @ {Fail extends R1}
+helper.kel	get : (Option[Int32]) => Int32 @ {Fail}
+helper.kel	⚠ match が非網羅的です。例えば _ が漏れています
+helper.kel	_ : {}
+helper.kel	[exit 0]
+lamdefer.kel	===  lamdefer.kel
+lamdefer.kel	⚠ match が非網羅的です。例えば _ が漏れています
+lamdefer.kel	ok
+lamdefer.kel	[exit 0]
+lamdefer.kel	=== --strict-exhaustive lamdefer.kel
+lamdefer.kel	⚠ match が非網羅的です。例えば _ が漏れています
+lamdefer.kel	[exit 1]
+lamdefer.kel	=== --type-check lamdefer.kel
+lamdefer.kel	h : (A) => Int32
+lamdefer.kel	⚠ match が非網羅的です。例えば _ が漏れています
+lamdefer.kel	_ : {}
+lamdefer.kel	[exit 0]
+laterint.kel	===  laterint.kel
+laterint.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterint.kel	ok
+laterint.kel	[exit 0]
+laterint.kel	=== --strict-exhaustive laterint.kel
+laterint.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterint.kel	[exit 1]
+laterint.kel	=== --type-check laterint.kel
+laterint.kel	g : (Int32) => Int32
+laterint.kel	f : (Int32) => Int32
+laterint.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterint.kel	_ : {}
+laterint.kel	[exit 0]
+laterlet2.kel	===  laterlet2.kel
+laterlet2.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterlet2.kel	-1
+laterlet2.kel	[exit 0]
+laterlet2.kel	=== --strict-exhaustive laterlet2.kel
+laterlet2.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterlet2.kel	[exit 1]
+laterlet2.kel	=== --type-check laterlet2.kel
+laterlet2.kel	get : (Option[Int32]) => Int32 @ {Fail}
+laterlet2.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterlet2.kel	_ : {}
+laterlet2.kel	[exit 0]
+laterlet.kel	===  laterlet.kel
+laterlet.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterlet.kel	-1
+laterlet.kel	[exit 0]
+laterlet.kel	=== --strict-exhaustive laterlet.kel
+laterlet.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterlet.kel	[exit 1]
+laterlet.kel	=== --type-check laterlet.kel
+laterlet.kel	get : (Option[Int32]) => Int32 @ {Fail}
+laterlet.kel	⚠ match が非網羅的です。例えば _ が漏れています
+laterlet.kel	_ : {}
+laterlet.kel	[exit 0]
+mutual.kel	===  mutual.kel
+mutual.kel	⚠ match が非網羅的です。例えば _ が漏れています
+mutual.kel	-1
+mutual.kel	[exit 0]
+mutual.kel	=== --strict-exhaustive mutual.kel
+mutual.kel	⚠ match が非網羅的です。例えば _ が漏れています
+mutual.kel	[exit 1]
+mutual.kel	=== --type-check mutual.kel
+mutual.kel	f : (Int32) => Int32 @ {Fail}
+mutual.kel	g : (Int32) => Int32 @ {Fail}
+mutual.kel	⚠ match が非網羅的です。例えば _ が漏れています
+mutual.kel	_ : {}
+mutual.kel	[exit 0]
+numvar.kel	===  numvar.kel
+numvar.kel	⚠ match が非網羅的です。例えば _ が漏れています
+numvar.kel	ok
+numvar.kel	[exit 0]
+numvar.kel	=== --strict-exhaustive numvar.kel
+numvar.kel	⚠ match が非網羅的です。例えば _ が漏れています
+numvar.kel	[exit 1]
+numvar.kel	=== --type-check numvar.kel
+numvar.kel	f : (Int32) => Int32
+numvar.kel	⚠ match が非網羅的です。例えば _ が漏れています
+numvar.kel	_ : {}
+numvar.kel	[exit 0]
+okarmann.kel	===  okarmann.kel
+okarmann.kel	⚠ 第 1 節は到達不能です(冗長)
+okarmann.kel	3
+okarmann.kel	[exit 0]
+okarmann.kel	=== --strict-exhaustive okarmann.kel
+okarmann.kel	⚠ 第 1 節は到達不能です(冗長)
+okarmann.kel	[exit 1]
+okarmann.kel	=== --type-check okarmann.kel
+okarmann.kel	mk : (Boolean) => #Ok(Never) | #Err(Int32) @ {Fail}
+okarmann.kel	go : (Boolean) => Int32 @ {Fail}
+okarmann.kel	⚠ 第 1 節は到達不能です(冗長)
+okarmann.kel	_ : {}
+okarmann.kel	[exit 0]
+okarm.kel	===  okarm.kel
+okarm.kel	⚠ match が非網羅的です。例えば _ が漏れています
+okarm.kel	3
+okarm.kel	-1
+okarm.kel	[exit 0]
+okarm.kel	=== --strict-exhaustive okarm.kel
+okarm.kel	⚠ match が非網羅的です。例えば _ が漏れています
+okarm.kel	[exit 1]
+okarm.kel	=== --type-check okarm.kel
+okarm.kel	mk : (Boolean) => #Ok(A) | #Err(Int32) | R1 @ {Fail extends R2}
+okarm.kel	go : (Boolean) => Int32 @ {Fail}
+okarm.kel	⚠ match が非網羅的です。例えば _ が漏れています
+okarm.kel	_ : {}
+okarm.kel	_ : {}
+okarm.kel	[exit 0]
+optnever.kel	===  optnever.kel
+optnever.kel	⚠ 第 1 節は到達不能です(冗長)
+optnever.kel	0
+optnever.kel	[exit 0]
+optnever.kel	=== --strict-exhaustive optnever.kel
+optnever.kel	⚠ 第 1 節は到達不能です(冗長)
+optnever.kel	[exit 1]
+optnever.kel	=== --type-check optnever.kel
+optnever.kel	f : (Option[Never]) => Int32
+optnever.kel	⚠ 第 1 節は到達不能です(冗長)
+optnever.kel	_ : {}
+optnever.kel	[exit 0]
+r11_void_helper.kel	===  r11_void_helper.kel
+r11_void_helper.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r11_void_helper.kel	ok
+r11_void_helper.kel	[exit 0]
+r11_void_helper.kel	=== --strict-exhaustive r11_void_helper.kel
+r11_void_helper.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r11_void_helper.kel	[exit 1]
+r11_void_helper.kel	=== --type-check r11_void_helper.kel
+r11_void_helper.kel	elim : (A) => B
+r11_void_helper.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r11_void_helper.kel	use : (Void) => Int32
+r11_void_helper.kel	_ : {}
+r11_void_helper.kel	[exit 0]
+r12_void_inst.kel	===  r12_void_inst.kel
+r12_void_inst.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r12_void_inst.kel	ok
+r12_void_inst.kel	[exit 0]
+r12_void_inst.kel	=== --strict-exhaustive r12_void_inst.kel
+r12_void_inst.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r12_void_inst.kel	[exit 1]
+r12_void_inst.kel	=== --type-check r12_void_inst.kel
+r12_void_inst.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r12_void_inst.kel	_ : {}
+r12_void_inst.kel	[exit 0]
+r13_void_lambda.kel	===  r13_void_lambda.kel
+r13_void_lambda.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r13_void_lambda.kel	ok
+r13_void_lambda.kel	[exit 0]
+r13_void_lambda.kel	=== --strict-exhaustive r13_void_lambda.kel
+r13_void_lambda.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r13_void_lambda.kel	[exit 1]
+r13_void_lambda.kel	=== --type-check r13_void_lambda.kel
+r13_void_lambda.kel	id : (A) => A
+r13_void_lambda.kel	h : (_A) => _B
+r13_void_lambda.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r13_void_lambda.kel	k : (Void) => Int32
+r13_void_lambda.kel	_ : {}
+r13_void_lambda.kel	[exit 0]
+r1_nongen_top.kel	===  r1_nongen_top.kel
+r1_nongen_top.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r1_nongen_top.kel	0
+r1_nongen_top.kel	[exit 0]
+r1_nongen_top.kel	=== --strict-exhaustive r1_nongen_top.kel
+r1_nongen_top.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r1_nongen_top.kel	[exit 1]
+r1_nongen_top.kel	=== --type-check r1_nongen_top.kel
+r1_nongen_top.kel	id : (A) => A
+r1_nongen_top.kel	h : (_A) => _B
+r1_nongen_top.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r1_nongen_top.kel	k : (Boolean) => Int32
+r1_nongen_top.kel	_ : {}
+r1_nongen_top.kel	[exit 0]
+r2_weak_dexp.kel	===  r2_weak_dexp.kel
+r2_weak_dexp.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r2_weak_dexp.kel	3
+r2_weak_dexp.kel	[exit 0]
+r2_weak_dexp.kel	=== --strict-exhaustive r2_weak_dexp.kel
+r2_weak_dexp.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r2_weak_dexp.kel	[exit 1]
+r2_weak_dexp.kel	=== --type-check r2_weak_dexp.kel
+r2_weak_dexp.kel	id : (A) => A
+r2_weak_dexp.kel	k : (_A) => _A
+r2_weak_dexp.kel	_ : (_A) => _B
+r2_weak_dexp.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r2_weak_dexp.kel	_ : {}
+r2_weak_dexp.kel	[exit 0]
+r3_inst_int.kel	===  r3_inst_int.kel
+r3_inst_int.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r3_inst_int.kel	ok
+r3_inst_int.kel	[exit 0]
+r3_inst_int.kel	=== --strict-exhaustive r3_inst_int.kel
+r3_inst_int.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r3_inst_int.kel	[exit 1]
+r3_inst_int.kel	=== --type-check r3_inst_int.kel
+r3_inst_int.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r3_inst_int.kel	_ : {}
+r3_inst_int.kel	[exit 0]
+r4_order.kel	===  r4_order.kel
+r4_order.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r4_order.kel	⚠ match が非網羅的です。例えば 0 が漏れています
+r4_order.kel	ok
+r4_order.kel	[exit 0]
+r4_order.kel	=== --strict-exhaustive r4_order.kel
+r4_order.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r4_order.kel	⚠ match が非網羅的です。例えば 0 が漏れています
+r4_order.kel	[exit 1]
+r4_order.kel	=== --type-check r4_order.kel
+r4_order.kel	f : (Int32) => Int32
+r4_order.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r4_order.kel	⚠ match が非網羅的です。例えば 0 が漏れています
+r4_order.kel	_ : {}
+r4_order.kel	[exit 0]
+r5_local_nongen.kel	===  r5_local_nongen.kel
+r5_local_nongen.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r5_local_nongen.kel	0
+r5_local_nongen.kel	[exit 0]
+r5_local_nongen.kel	=== --strict-exhaustive r5_local_nongen.kel
+r5_local_nongen.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r5_local_nongen.kel	[exit 1]
+r5_local_nongen.kel	=== --type-check r5_local_nongen.kel
+r5_local_nongen.kel	id : (A) => A
+r5_local_nongen.kel	g : (Boolean) => Int32
+r5_local_nongen.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r5_local_nongen.kel	_ : {}
+r5_local_nongen.kel	[exit 0]
+r6_module.kel	===  r6_module.kel
+r6_module.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r6_module.kel	1
+r6_module.kel	[exit 0]
+r6_module.kel	=== --strict-exhaustive r6_module.kel
+r6_module.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r6_module.kel	[exit 1]
+r6_module.kel	=== --type-check r6_module.kel
+r6_module.kel	M.f : (Int32) => Int32 @ {}
+r6_module.kel	M.g : (A) => B
+r6_module.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r6_module.kel	M.h : (Boolean) => Int32 @ {}
+r6_module.kel	_ : {}
+r6_module.kel	[exit 0]
+r7_alias.kel	===  r7_alias.kel
+r7_alias.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r7_alias.kel	ok
+r7_alias.kel	[exit 0]
+r7_alias.kel	=== --strict-exhaustive r7_alias.kel
+r7_alias.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r7_alias.kel	[exit 1]
+r7_alias.kel	=== --type-check r7_alias.kel
+r7_alias.kel	f : (A) => Int32
+r7_alias.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r7_alias.kel	_ : {}
+r7_alias.kel	[exit 0]
+r8_ref.kel	===  r8_ref.kel
+r8_ref.kel	! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+r8_ref.kel	[exit 1]
+r8_ref.kel	=== --strict-exhaustive r8_ref.kel
+r8_ref.kel	! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+r8_ref.kel	[exit 1]
+r8_ref.kel	=== --type-check r8_ref.kel
+r8_ref.kel	! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+r8_ref.kel	[exit 1]
+r9_inst_generic.kel	===  r9_inst_generic.kel
+r9_inst_generic.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r9_inst_generic.kel	ok
+r9_inst_generic.kel	[exit 0]
+r9_inst_generic.kel	=== --strict-exhaustive r9_inst_generic.kel
+r9_inst_generic.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r9_inst_generic.kel	[exit 1]
+r9_inst_generic.kel	=== --type-check r9_inst_generic.kel
+r9_inst_generic.kel	⚠ match が非網羅的です。例えば _ が漏れています
+r9_inst_generic.kel	_ : {}
+r9_inst_generic.kel	[exit 0]
+rigid.kel	===  rigid.kel
+rigid.kel	⚠ match が非網羅的です。例えば _ が漏れています
+rigid.kel	ok
+rigid.kel	[exit 0]
+rigid.kel	=== --strict-exhaustive rigid.kel
+rigid.kel	⚠ match が非網羅的です。例えば _ が漏れています
+rigid.kel	[exit 1]
+rigid.kel	=== --type-check rigid.kel
+rigid.kel	f : (A) => B
+rigid.kel	⚠ match が非網羅的です。例えば _ が漏れています
+rigid.kel	_ : {}
+rigid.kel	[exit 0]
+rowkind.kel	===  rowkind.kel
+rowkind.kel	⚠ match が非網羅的です。例えば _ が漏れています
+rowkind.kel	1
+rowkind.kel	[exit 0]
+rowkind.kel	=== --strict-exhaustive rowkind.kel
+rowkind.kel	⚠ match が非網羅的です。例えば _ が漏れています
+rowkind.kel	[exit 1]
+rowkind.kel	=== --type-check rowkind.kel
+rowkind.kel	f : (A) => Int32
+rowkind.kel	⚠ match が非網羅的です。例えば _ が漏れています
+rowkind.kel	_ : {}
+rowkind.kel	[exit 0]
+showlist.kel	===  showlist.kel
+showlist.kel	! showlist.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+showlist.kel	[exit 1]
+showlist.kel	=== --strict-exhaustive showlist.kel
+showlist.kel	! showlist.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+showlist.kel	[exit 1]
+showlist.kel	=== --type-check showlist.kel
+showlist.kel	! showlist.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+showlist.kel	[exit 1]
+toplevelstmt.kel	===  toplevelstmt.kel
+toplevelstmt.kel	⚠ match が非網羅的です。例えば _ が漏れています
+toplevelstmt.kel	x
+toplevelstmt.kel	[exit 0]
+toplevelstmt.kel	=== --strict-exhaustive toplevelstmt.kel
+toplevelstmt.kel	⚠ match が非網羅的です。例えば _ が漏れています
+toplevelstmt.kel	[exit 1]
+toplevelstmt.kel	=== --type-check toplevelstmt.kel
+toplevelstmt.kel	_ : {}
+toplevelstmt.kel	⚠ match が非網羅的です。例えば _ が漏れています
+toplevelstmt.kel	[exit 0]
+unannparam_call.kel	===  unannparam_call.kel
+unannparam_call.kel	⚠ match が非網羅的です。例えば _ が漏れています
+unannparam_call.kel	before
+unannparam_call.kel	実行時エラー: match のどの節にも一致しません: 3
+unannparam_call.kel	[exit 3]
+unannparam_call.kel	=== --strict-exhaustive unannparam_call.kel
+unannparam_call.kel	⚠ match が非網羅的です。例えば _ が漏れています
+unannparam_call.kel	[exit 1]
+unannparam_call.kel	=== --type-check unannparam_call.kel
+unannparam_call.kel	f : (A) => B
+unannparam_call.kel	⚠ match が非網羅的です。例えば _ が漏れています
+unannparam_call.kel	_ : {}
+unannparam_call.kel	y : Int32
+unannparam_call.kel	_ : {}
+unannparam_call.kel	[exit 0]
+unannparam.kel	===  unannparam.kel
+unannparam.kel	⚠ match が非網羅的です。例えば _ が漏れています
+unannparam.kel	ok
+unannparam.kel	[exit 0]
+unannparam.kel	=== --strict-exhaustive unannparam.kel
+unannparam.kel	⚠ match が非網羅的です。例えば _ が漏れています
+unannparam.kel	[exit 1]
+unannparam.kel	=== --type-check unannparam.kel
+unannparam.kel	f : (A) => B
+unannparam.kel	⚠ match が非網羅的です。例えば _ が漏れています
+unannparam.kel	_ : {}
+unannparam.kel	[exit 0]
+v136.kel	===  v136.kel
+v136.kel	⚠ match が非網羅的です。例えば _ が漏れています
+v136.kel	ok
+v136.kel	[exit 0]
+v136.kel	=== --strict-exhaustive v136.kel
+v136.kel	⚠ match が非網羅的です。例えば _ が漏れています
+v136.kel	[exit 1]
+v136.kel	=== --type-check v136.kel
+v136.kel	⚠ match が非網羅的です。例えば _ が漏れています
+v136.kel	_ : {}
+v136.kel	[exit 0]
+valbind.kel	===  valbind.kel
+valbind.kel	⚠ match が非網羅的です。例えば _ が漏れています
+valbind.kel	-1
+valbind.kel	[exit 0]
+valbind.kel	=== --strict-exhaustive valbind.kel
+valbind.kel	⚠ match が非網羅的です。例えば _ が漏れています
+valbind.kel	[exit 1]
+valbind.kel	=== --type-check valbind.kel
+valbind.kel	get : (Option[Int32]) => Int32 @ {Fail}
+valbind.kel	⚠ match が非網羅的です。例えば _ が漏れています
+valbind.kel	_ : {}
+valbind.kel	[exit 0]
+w1.kel	===  w1.kel
+w1.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w1.kel	3
+w1.kel	[exit 0]
+w1.kel	=== --strict-exhaustive w1.kel
+w1.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w1.kel	[exit 1]
+w1.kel	=== --type-check w1.kel
+w1.kel	id : (A) => A
+w1.kel	p : (_A) => _A
+w1.kel	_ : (Int32) => Int32
+w1.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w1.kel	_ : {}
+w1.kel	[exit 0]
+w2.kel	===  w2.kel
+w2.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w2.kel	3
+w2.kel	[exit 0]
+w2.kel	=== --strict-exhaustive w2.kel
+w2.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w2.kel	[exit 1]
+w2.kel	=== --type-check w2.kel
+w2.kel	id : (A) => A
+w2.kel	p : (_A) => _A
+w2.kel	_ : Int32
+w2.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w2.kel	_ : {}
+w2.kel	[exit 0]
+w3.kel	===  w3.kel
+w3.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w3.kel	3
+w3.kel	[exit 0]
+w3.kel	=== --strict-exhaustive w3.kel
+w3.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w3.kel	[exit 1]
+w3.kel	=== --type-check w3.kel
+w3.kel	id : (A) => A
+w3.kel	p : (_A) => _A
+w3.kel	q : Int32
+w3.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w3.kel	_ : {}
+w3.kel	[exit 0]
+w4.kel	===  w4.kel
+w4.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w4.kel	3
+w4.kel	[exit 0]
+w4.kel	=== --strict-exhaustive w4.kel
+w4.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w4.kel	[exit 1]
+w4.kel	=== --type-check w4.kel
+w4.kel	id : (A) => A
+w4.kel	p : (_A) => _A
+w4.kel	q : (Int32) => Int32
+w4.kel	⚠ match が非網羅的です。例えば _ が漏れています
+w4.kel	_ : {}
+w4.kel	[exit 0]
+repl.in	=== repl repl.in
+repl.in	(A) => B
+repl.in	(String) => A @ {Fail extends R1}
+repl.in	[exit 0]
+r10.repl	=== repl r10.repl
+r10.repl	id : (A) => A = <fn>
+r10.repl	k : (_A) => _A = <fn>
+r10.repl	⚠ match が非網羅的です。例えば _ が漏れています
+r10.repl	_ : (_A) => _B = <fn>
+r10.repl	_ : Int32 = 3
+r10.repl	[exit 0]
+r14.repl	=== repl r14.repl
+r14.repl	id : (A) => A = <fn>
+r14.repl	k : (_A) => _A = <fn>
+r14.repl	(_A) => B
+r14.repl	_ : Int32 = 3
+r14.repl	[exit 0]
+w1.repl	=== repl w1.repl
+w1.repl	id : (A) => A = <fn>
+w1.repl	p : (_A) => _A = <fn>
+w1.repl	⚠ match が非網羅的です。例えば _ が漏れています
+w1.repl	_ : (Int32) => Int32 = <fn>
+w1.repl	_ : Int32 = 3
+w1.repl	[exit 0]

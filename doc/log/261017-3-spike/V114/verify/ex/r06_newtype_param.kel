@@ -1,0 +1,3 @@
+newtype Int16[A] = Int16(A)
+let f(x: Int16[Int32]): Int32 = x match { case Int16(n) => n }
+echoln(show(f(Int16(3))))

@@ -1,0 +1,7 @@
+type Unit = {}
+effect Async2 = { yield2: () => Unit }
+effect Mk = { mk: () => (() => Unit) }
+let g(f: () => Unit @ Async2): Unit = (perform mk())() handle {
+  case mk() => resume(f)
+  case return(x) => x
+}

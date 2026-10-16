@@ -1,0 +1,1 @@
+let bad2[E](f: () => Int32 @ E): Int32 = f

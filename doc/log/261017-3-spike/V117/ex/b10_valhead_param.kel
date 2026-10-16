@@ -1,0 +1,2 @@
+type G[A] = A
+pub let k: G[(Int32) => Int32] = fn(x) => { echoln("x"); x }

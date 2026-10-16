@@ -1,0 +1,2 @@
+let rec k: () => Int32 @ {} = fn() => j()
+and j: () => Int32 @ Console = fn() => { echo("x"); 1 }

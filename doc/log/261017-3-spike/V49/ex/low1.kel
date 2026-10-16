@@ -1,0 +1,10 @@
+let f(): Unit @ {Console} = run h {
+  let r = Ref.new(None)
+  let put = fn(v) => Ref.set(r, Some(v))
+  put(1)
+  Ref.get(r) match {
+    case Some(s) => echoln(s)
+    case None => echoln("none")
+  }
+}
+f()

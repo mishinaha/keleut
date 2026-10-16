@@ -1,0 +1,4 @@
+pub type Cb[E] = () => Unit @ E
+pub newtype H = MkH(Cb[{Print}])
+pub let mk(): H @ {} = MkH(fn() => println("pub"))
+with_stdout(fn() => mk() match { case MkH(f) => f() })

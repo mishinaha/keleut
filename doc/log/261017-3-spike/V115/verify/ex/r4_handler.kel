@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let h[A, E](b: () => A @ {Ask extends E}, v: Int32): A @ E =
+  b() handle {
+    case ask() => resume(v)
+  }
+echoln(show(h(fn() => perform ask() + h(fn() => perform ask(), 10), 1)))

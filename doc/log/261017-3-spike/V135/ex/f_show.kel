@@ -1,0 +1,2 @@
+effect Fail = { throw: (String) => Never }
+let f(): String @ Fail = show(perform throw("x"))

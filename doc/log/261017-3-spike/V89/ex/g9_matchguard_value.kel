@@ -1,0 +1,3 @@
+effect Test = { test: () => Int32 }
+let r = { let a = perform test(); a + 1 } handle { case test() => 0 match { case _ if resume(10) > 5 => 100 case _ => 0 } }
+echoln(show(r))

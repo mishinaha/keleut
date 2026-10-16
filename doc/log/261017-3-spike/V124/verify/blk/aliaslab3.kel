@@ -1,0 +1,3 @@
+type Unit = {}
+type C25 = A25[{}]
+type A25[E] = (Int32) => Unit @ {Nope extends E}

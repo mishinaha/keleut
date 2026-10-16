@@ -1,0 +1,12 @@
+pub type class Describe[A] {
+  val describe: (A) => String
+}
+pub newtype Box[A](A)
+type instance[A: Show] Describe[Box[_]] {
+  let describe(b: Box[A]): String = b match {
+    case Box(x) if show(x) == "1" => "one"
+    case Box(x) => show(x)
+  }
+}
+pub let top: String = describe(Box(1i32))
+with_stdout(fn() => { println(top); println(describe(Box(2i32))) })

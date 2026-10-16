@@ -1,0 +1,7 @@
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub type T = Int32
+  let describe(n: Int32): String = "int"
+}

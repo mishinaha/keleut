@@ -1,0 +1,6 @@
+effect Q = { q: ({a: Int32, b: Option[Int32]}, (Int32, Int32)) => Int32 }
+let r = perform q({a = 1, b = None}, (1, 2)) handle {
+  case q({a, b = Some(_)}, p) => resume(a)
+  case return(x) => x
+}
+echoln(show(r))

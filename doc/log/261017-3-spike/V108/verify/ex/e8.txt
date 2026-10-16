@@ -1,0 +1,6 @@
+module M { pub let f[A: Show](x: A): String = show(x) }
+M.f
+(M.f, 1)
+let mf = M.f
+let mt = (M.f, M.f)
+mt

@@ -1,0 +1,9 @@
+type E = Int32
+effect Ask = { ask: (Int32) => Int32 }
+let g[E](h: () => Int32 @ {Ask extends E}): Int32 @ E = h() handle {
+  case ask(n) if n > 0 => resume(n * 2)
+  case ask(n) => resume(0)
+  case return(x) => x
+}
+let v: E = g(fn() => perform ask(3) + perform ask(-1))
+echoln(show(v))

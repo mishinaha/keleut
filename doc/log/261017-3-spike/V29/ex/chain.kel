@@ -1,0 +1,5 @@
+type C = A[{}]
+type A[E] = B[E]
+type B[E] = (Int32) => Unit @ E
+newtype H = MkH(A[{Print}])
+let f(x: C): Int32 = 0

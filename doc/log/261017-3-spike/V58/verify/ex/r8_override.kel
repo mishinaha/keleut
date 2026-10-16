@@ -1,0 +1,5 @@
+effect Print = { print: (String) => {} }
+let r = { perform print("a"); 1 } handle {
+  case print(s) => resume(())
+  case cancel => ()
+}

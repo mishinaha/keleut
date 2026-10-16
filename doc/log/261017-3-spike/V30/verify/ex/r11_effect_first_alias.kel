@@ -1,0 +1,2 @@
+effect Log = { log: (String) => Unit }
+type Log = Int32

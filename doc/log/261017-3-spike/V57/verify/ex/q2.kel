@@ -1,0 +1,3 @@
+module W { pub type W: EffectRow = {Print} }
+let f[W](x: Int32): Int32 @ {W} = x
+let g[W](x: Int32): Int32 @ W = x

@@ -1,0 +1,3 @@
+# コードの変更だけ(cram 追加前): dune runtest の出力は空、rc=0
+# cram 追加後:
+rc=0

@@ -1,0 +1,3 @@
+let g[E](x: Int32): Int32 @ E = x
+let k: (Int32) => Int32 @ {} = g
+let k2: (Int32) => Int32 = g

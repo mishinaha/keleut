@@ -1,0 +1,10 @@
+from "./lib/m" import { twice, Box }
+module M {
+  pub let inc(x: Int32): Int32 = x + 1
+}
+let b = Box(3)
+let v = b match {
+  case Box(n) if n > 2 => twice(M.inc(n))
+  case _ => 0
+}
+echoln(show(v))

@@ -1,0 +1,14 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 1898e94..42d13bd 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -743,7 +743,7 @@ module 修飾の型名と EffectRow エイリアスの本体も同じ枝を通
+ 
+   $ printf 'module M { pub type T = Int32 }\nlet f(x: Int32): Int32 @ M.T = x\n' > effkind3.kel
+   $ diktor --type-check effkind3.kel
+-  ! effkind3.kel:2:26: 型エラー: エフェクト位置の型のカインドが Row ではありません: Int32 :: Type
++  ! effkind3.kel:2:26: 型エラー: エフェクト位置に Type エイリアス M.T は使えません(: EffectRow を付けてください)
+   [1]
+   $ printf 'type W: EffectRow = MutableArray[Int32, Int32]\nlet f(x: Int32): Int32 @ W = x\n' > effkind4.kel
+   $ diktor --type-check effkind4.kel

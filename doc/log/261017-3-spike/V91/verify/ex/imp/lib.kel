@@ -1,0 +1,2 @@
+pub let scale(x: Float64): Float64 = x * 1.5
+pub let modn(x: Int32): Int32 = x % 7

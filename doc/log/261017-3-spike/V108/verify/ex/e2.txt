@@ -1,0 +1,6 @@
+newtype Box[A] = Box(A)
+type instance Show[Box[A]] { let show(b) = "box" }
+let b = Box(show)
+b
+let b2 = Box(1)
+b2

@@ -1,0 +1,12 @@
+let rec build(i: Int32, acc: List[Int32]): List[Int32] = if i == 0 then acc else build(i - 1, Cons(i, acc))
+let empty(): List[Int32] = Nil
+let none(): Option[Int32] = None
+echoln(show(empty()))
+echoln(show(Cons(7, Nil)))
+echoln(show(Cons(1, Cons(2, Nil))))
+echoln(show(build(5, Nil)))
+echoln(show(build(8, Nil)))
+echoln(show(Cons(build(3, Nil), Cons(empty(), Cons(build(1, Nil), Nil)))))
+echoln(show(Cons(Some(1), Cons(None, Nil))))
+echoln(show(Cons("a", Cons("", Cons("c", Nil)))))
+echoln(show(Some(build(4, Nil))))

@@ -1,0 +1,8 @@
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let wrap[E](g: () => Unit @ E): Unit @ {Reg extends E} = { g(); perform reg(fn() => echoln("w")) }
+let main(): Unit @ Console = {
+  wrap(fn() => echoln("g"))
+} handle {
+  case reg(f) => { f(); resume() }
+}
+main()

@@ -1,0 +1,215 @@
+=== a10_alias_written.kel
+type F = (Int32) => Int32 @ {}
+pub let h(f: F): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))
+--- $ diktor(proto) a10_alias_written.kel
+2
+[exit 0]
+=== a11_param_written.kel
+type G[A] = (A) => Int32 @ {}
+pub let h(f: G[(Int32) => Int32]): Int32 = f(fn(x) => x)
+--- $ diktor(proto) a11_param_written.kel
+! a11_param_written.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== a12_module.kel
+module M {
+  type F = (Int32) => Int32
+  pub let h(f: F): Int32 = f(1)
+}
+echoln(show(M.h(fn(x) => x)))
+--- $ diktor(proto) a12_module.kel
+! a12_module.kel:3:11: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス M.F の本体の矢印に @ がありません)
+[exit 1]
+=== a13b_extern_direct.kel
+pub extern "C" let cb(f: (Int32) => Int32): Int32
+--- $ diktor(proto) a13b_extern_direct.kel
+! a13b_extern_direct.kel:1:1: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== a13_extern.kel
+type F = (Int32) => Int32
+pub extern "C" let cb(f: F): Int32
+--- $ diktor(proto) a13_extern.kel
+! a13_extern.kel:2:1: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a15_tparam_shadow.kel
+type F = (Int32) => Int32
+pub let h[F](x: F): F = x
+echoln(show(h(1)))
+--- $ diktor(proto) a15_tparam_shadow.kel
+1
+[exit 0]
+=== a16_chain.kel
+type F = (Int32) => Int32
+type G = F
+pub let k: G = fn(x) => x + 1
+pub let h(g: G): Int32 = g(1)
+echoln(show(h(k)))
+--- $ diktor(proto) a16_chain.kel
+! a16_chain.kel:4:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a1_direct.kel
+pub let h(f: (Int32) => Int32): Int32 = f(1)
+--- $ diktor(proto) a1_direct.kel
+! a1_direct.kel:1:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== a2_pubalias.kel
+pub type F = (Int32) => Int32
+pub let h(f: F): Int32 = f(1)
+--- $ diktor(proto) a2_pubalias.kel
+! a2_pubalias.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a3_privalias.kel
+type F = (Int32) => Int32
+pub let h(f: F): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))
+--- $ diktor(proto) a3_privalias.kel
+! a3_privalias.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a4_ret.kel
+type F = (Int32) => Int32
+pub let mk(): F = fn(x) => x
+--- $ diktor(proto) a4_ret.kel
+! a4_ret.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a5b_nt_direct.kel
+pub newtype Box = Box((Int32) => Int32)
+--- $ diktor(proto) a5b_nt_direct.kel
+! a5b_nt_direct.kel:1:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== a5_nt.kel
+type F = (Int32) => Int32
+pub newtype Box = Box(F)
+--- $ diktor(proto) a5_nt.kel
+! a5_nt.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a6_valhead_alias.kel
+type F = (Int32) => Int32
+pub let k: F = fn(x) => x + 1
+echoln(show(k(1)))
+--- $ diktor(proto) a6_valhead_alias.kel
+2
+[exit 0]
+=== a7_valhead_direct.kel
+pub let k: (Int32) => Int32 = fn(x) => x + 1
+echoln(show(k(1)))
+--- $ diktor(proto) a7_valhead_direct.kel
+2
+[exit 0]
+=== a8_valnest_alias.kel
+type F = (Int32) => Int32
+pub let k: (F) => Int32 = fn(f) => f(1)
+--- $ diktor(proto) a8_valnest_alias.kel
+! a8_valnest_alias.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== a9_param_arg.kel
+type Id[A] = A
+pub let k: Id[(Int32) => Int32] = fn(x) => x
+echoln(show(k(1)))
+--- $ diktor(proto) a9_param_arg.kel
+1
+[exit 0]
+=== b10_valhead_param.kel
+type G[A] = A
+pub let k: G[(Int32) => Int32] = fn(x) => { echoln("x"); x }
+--- $ diktor(proto) b10_valhead_param.kel
+! b10_valhead_param.kel:2:9: 型エラー: 注釈された型を満たしません(ラベル Console がありません(行は閉じています))
+[exit 1]
+=== b1_nt_param.kel
+type F[A] = (A) => Int32
+pub newtype Box[A] = Box(F[A])
+--- $ diktor(proto) b1_nt_param.kel
+! b1_nt_param.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== b2_hk.kel
+type App[G[_]] = G[(Int32) => Int32]
+pub let h(x: App[List]): Int32 = 0
+--- $ diktor(proto) b2_hk.kel
+! b2_hk.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス App の本体の矢印に @ がありません)
+[exit 1]
+=== b3_modscope.kel
+type F = (Int32) => Int32 @ {}
+module M {
+  type F = (Int32) => Int32
+  pub let h(f: F): Int32 = f(1)
+}
+--- $ diktor(proto) b3_modscope.kel
+! b3_modscope.kel:4:11: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス M.F の本体の矢印に @ がありません)
+[exit 1]
+=== b4_modscope2.kel
+type F = (Int32) => Int32
+module M {
+  type F = (Int32) => Int32 @ {}
+  pub let h(f: F): Int32 = f(1)
+}
+echoln(show(M.h(fn(x) => x)))
+--- $ diktor(proto) b4_modscope2.kel
+1
+[exit 0]
+=== b5_qualified.kel
+module M {
+  pub type F = (Int32) => Int32
+}
+pub let h(f: M.F): Int32 = f(1)
+--- $ diktor(proto) b5_qualified.kel
+! b5_qualified.kel:4:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス M.F の本体の矢印に @ がありません)
+[exit 1]
+=== b6_alias_arg_scope.kel
+type G = (Int32) => Int32
+module M {
+  pub type Wrap[A] = (A) => Int32 @ {}
+}
+pub let h(f: M.Wrap[G]): Int32 = 0
+--- $ diktor(proto) b6_alias_arg_scope.kel
+! b6_alias_arg_scope.kel:5:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス G の本体の矢印に @ がありません)
+[exit 1]
+=== b7_letrec.kel
+type F = (Int32) => Int32
+pub let rec h(f: F): Int32 = f(1)
+--- $ diktor(proto) b7_letrec.kel
+! b7_letrec.kel:2:13: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== b8_recursive_alias.kel
+type F = (F) => Int32
+pub let h(f: F): Int32 = 0
+--- $ diktor(proto) b8_recursive_alias.kel
+! b8_recursive_alias.kel:1:11: 型エラー: 型エイリアス F が再帰しています(エイリアスは非再帰)
+[exit 1]
+=== b9_rowalias.kel
+type W: EffectRow = {Console}
+pub let h(f: () => Unit @ W): Unit @ Console = f()
+h(fn() => echoln("ok"))
+--- $ diktor(proto) b9_rowalias.kel
+ok
+[exit 0]
+=== c1_invisible.kel
+module M {
+  type F = (Int32) => Int32
+}
+pub let h(f: M.F): Int32 = f(1)
+--- $ diktor(proto) c1_invisible.kel
+! c1_invisible.kel:4:14: 型エラー: 型 M.F は module M の外からは参照できません(pub を付けてください)
+[exit 1]
+=== c2_arity.kel
+type F[A] = (A) => Int32
+pub let h(f: F): Int32 = 0
+--- $ diktor(proto) c2_arity.kel
+! c2_arity.kel:2:14: 型エラー: 型エイリアス F の引数は 1 個必要です(0 個与えられました。部分適用は禁止)
+[exit 1]
+=== imp/main.kel
+from "./lib" import F
+pub let h(f: F): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))
+--- $ diktor(proto) imp/main.kel
+! imp/main.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== c3_unknown.kel
+type F = (Foo) => Int32
+pub let h(f: F): Int32 = 0
+--- $ diktor(proto) c3_unknown.kel
+! c3_unknown.kel:1:11: 型エラー: 未知の型: Foo
+[exit 1]
+=== c4_unknown_direct.kel
+pub let h(f: (Foo) => Int32): Int32 = 0
+--- $ diktor(proto) c4_unknown_direct.kel
+! c4_unknown_direct.kel:1:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]

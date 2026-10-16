@@ -1,0 +1,11 @@
+println
+let h: (Int32) => String = show
+h
+let g = (x: Int32) => show(x)
+let f[A: Show](x: A): String = show(x)
+f
+let p2 = (show, ???)
+let e = (eq, 1)
+let n = None
+let w = (h, 1)
+let v = (1, show(2))

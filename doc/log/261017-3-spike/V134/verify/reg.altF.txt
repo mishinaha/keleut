@@ -1,0 +1,36 @@
+=== r11_void_helper.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+=== r12_void_inst.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+=== r13_void_lambda.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+=== r1_nongen_top.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+0
+=== r2_weak_dexp.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+3
+=== r3_inst_int.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+=== r4_order.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+=== r5_local_nongen.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+0
+=== r6_module.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+1
+=== r7_alias.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+=== r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+=== r9_inst_generic.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok

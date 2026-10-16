@@ -1,0 +1,8 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+let memo[E](f: (Foo) => Int32 @ E): (Foo) => Int32 @ E = { let v = f(Foo); fn(x) => v }
+type instance Sz[Foo] {
+  let sz = memo(fn(x) => 5i32)
+}
+let total(xs: List[Foo]): Int32 = xs match { case [] => 0i32 case _ => 1i32 }
+echoln(show(sz(Foo)))

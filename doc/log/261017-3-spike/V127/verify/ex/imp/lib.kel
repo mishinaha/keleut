@@ -1,0 +1,2 @@
+pub let add3(a: Int32, b: Int32, c: Int32): Int32 @ {} = a + b + c
+pub let thunk(): Int32 @ {} = 4

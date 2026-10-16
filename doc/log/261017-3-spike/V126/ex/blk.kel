@@ -1,0 +1,5 @@
+let f() = {
+  pub let x = 1
+  x
+}
+println(f())

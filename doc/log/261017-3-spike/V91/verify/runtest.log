@@ -1,0 +1,26 @@
+File "test/neg_rem.t", line 1, characters 0-0:
+diff --git a/_build/default/test/neg_rem.t b/_build/default/test/neg_rem.t.corrected
+index 413a7e5..a5c424b 100644
+--- a/_build/default/test/neg_rem.t
++++ b/_build/default/test/neg_rem.t.corrected
+@@ -81,7 +81,7 @@ Neg は Int32、Int64、Float64 に、Rem は Int32 と Int64 にインスタン
+ 
+   $ echo 'echoln(show(1.5 % 2.0))' > remf.kel
+   $ diktor remf.kel
+-  ! remf.kel:1:1: 型エラー: Float64 は Rem のインスタンスではありません
++  ! remf.kel:1:13: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
+   $ echo 'echoln(-"abc")' > negs.kel
+   $ diktor negs.kel
+File "test/dictionary_passing.t", line 1, characters 0-0:
+diff --git a/_build/default/test/dictionary_passing.t b/_build/default/test/dictionary_passing.t.corrected
+index 79d7714..b80d3c6 100644
+--- a/_build/default/test/dictionary_passing.t
++++ b/_build/default/test/dictionary_passing.t.corrected
+@@ -417,5 +417,5 @@ s より後ろで宣言されていても、辞書はファイル全体を見て
+   > echoln(show(modulo(1.5, 1.0)))
+   > KEL
+   $ diktor negremf.kel
+-  ! negremf.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
++  ! negremf.kel:2:13: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]

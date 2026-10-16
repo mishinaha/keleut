@@ -1,0 +1,18 @@
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = {
+    let rec strs(ys) = ys match {
+      case Nil => Nil
+      case Cons(head = h, tail = t) => Cons(Show.show(h), strs(t))
+    }
+    let rec pairs(ss) = ss match {
+      case Cons(head = a, tail = Cons(head = b, tail = t)) => Cons(a + ", " + b, pairs(t))
+      case _ => ss
+    }
+    let rec join(ss) = ss match {
+      case Nil => ""
+      case Cons(head = s, tail = Nil) => s
+      case _ => join(pairs(ss))
+    }
+    "[" + join(strs(xs)) + "]"
+  }
+}

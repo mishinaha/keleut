@@ -1,0 +1,147 @@
+== r01_import.kel
+| from "./lib/effs" import W
+| let f[W](u: Unit): Unit @ {W} = println("import")
+| with_stdout(fn() => f(()))
+-- run
+! r01_import.kel:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r01_import.kel:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r02_pub.kel
+| type W: EffectRow = {Print}
+| pub let f[W](u: Unit): Unit @ {W} = println("pub")
+| with_stdout(fn() => f(()))
+-- run
+! r02_pub.kel:2:31: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r02_pub.kel:2:31: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r03_handle.kel
+| type W: EffectRow = {Print}
+| let f[W](u: Unit): Unit @ {Console, W} = { println("a"); println("b") }
+| let main(u: Unit): Unit @ {Console} = f(()) handle {
+|   case print(m) => resume(echo("[" + m + "]"))
+| }
+| main(())
+-- run
+! r03_handle.kel:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r03_handle.kel:2:27: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r04_guard.kel
+| type W: EffectRow = {Print}
+| let pick[W](n: Int32): Unit @ {W} = n match {
+|   case k if k > 0 => println("pos")
+|   case _ => println("nonpos")
+| }
+| with_stdout(fn() => { pick(3); pick(0) })
+-- run
+! r04_guard.kel:2:31: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r04_guard.kel:2:31: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r05_class.kel
+| type W: EffectRow = {Print}
+| type class Say[A] { val say: (A) => Unit @ {W} }
+| type instance Say[Int32] { let say(x) = println("int") }
+| let go[W](x: Int32): Unit @ {W} = say(x)
+| with_stdout(fn() => go(1))
+-- run
+! r05_class.kel:4:29: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r05_class.kel:4:29: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r06_lambda.kel
+| type W: EffectRow = {Print}
+| let twice[W](g: () => Unit @ {W}): Unit @ {W} = { g(); g() }
+| with_stdout(fn() => twice(fn() => println("tw")))
+-- run
+! r06_lambda.kel:2:30: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r06_lambda.kel:2:30: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r07_module_pub.kel
+| module M {
+|   pub type W: EffectRow = {Print}
+|   pub let f[W](u: Unit): Unit @ {W} = println("mod")
+| }
+| with_stdout(fn() => M.f(()))
+-- run
+! r07_module_pub.kel:3:33: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r07_module_pub.kel:3:33: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r08_alias_param.kel
+| type W: EffectRow = {Print}
+| type K[W]: EffectRow = {Console, W}
+| let f(u: Unit): Unit @ K[Unit] = { println("p"); echoln("c") }
+| with_stdout(fn() => f(()))
+-- run
+! r08_alias_param.kel:2:24: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r08_alias_param.kel:2:24: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r09_newtype.kel
+| type W: EffectRow = {Print}
+| newtype Box[W] = Box(() => Unit @ {W}, W)
+| let b = Box(fn() => println("box"), 1)
+| with_stdout(fn() => b match { case Box(g, _) => g() })
+-- run
+! r09_newtype.kel:2:35: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r09_newtype.kel:2:35: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r10_with_args.kel
+| type W[E]: EffectRow = {Print extends E}
+| let f[W, E](u: Unit): Unit @ {W[E]} = println("args")
+| with_stdout(fn() => f(()))
+-- run
+! r10_with_args.kel:2:30: 型エラー: 未知のエフェクト: W
+[exit 1]
+-- --type-check
+! r10_with_args.kel:2:30: 型エラー: 未知のエフェクト: W
+[exit 1]
+== r12_ext.kel
+| type W: EffectRow = {Print}
+| let f[W, E](g: () => Unit @ {W extends E}): Unit @ {W extends E} = g()
+| with_stdout(fn() => f(fn() => println("ext")))
+-- run
+! r12_ext.kel:2:29: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r12_ext.kel:2:29: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r13_local_fn.kel
+| type W: EffectRow = {Print}
+| let outer[W](x: W): W = {
+|   let inner(u: Unit): Unit @ {W} = println("local")
+|   x
+| }
+| with_stdout(fn() => { outer(1); println("done") })
+-- run
+! r13_local_fn.kel:3:30: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+-- --type-check
+! r13_local_fn.kel:3:30: 型エラー: 行変数 W は extends の位置にのみ書けます
+[exit 1]
+== r14_instance_param.kel
+| type W: EffectRow = {Print}
+| newtype Bx[A] = Bx(A)
+| type class Run[F] { val go: (F, () => Unit @ {W}) => Unit @ {W} }
+| type instance [W] Run[Bx[_]] { let go(a, k) = k() }
+| with_stdout(fn() => go(Bx(0), fn() => println("inst")))
+-- run
+inst
+[exit 0]
+-- --type-check
+_ : {}
+[exit 0]

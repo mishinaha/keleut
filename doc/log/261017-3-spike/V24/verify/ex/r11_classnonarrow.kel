@@ -1,0 +1,4 @@
+type class C6[A] {
+  val g: (A) => Int32
+  val h: A
+}

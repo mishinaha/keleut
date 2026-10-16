@@ -1,0 +1,3 @@
+type Unit = {}
+effect Out = { out: (String) => Unit }
+let f[E](): Unit @ E = perform out("x")

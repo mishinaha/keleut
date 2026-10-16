@@ -1,0 +1,2 @@
+let pp[B](x: Int32): String = "i" + show(x)
+echoln(pp(3i32))

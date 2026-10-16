@@ -1,0 +1,4 @@
+let s = "\u0041\U0001F600\t\\\"ok"
+echoln(s)
+/* a /* b */ c */
+echoln("end") // 末尾 "

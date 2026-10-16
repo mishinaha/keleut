@@ -1,0 +1,2 @@
+type R = Ref[Int32, Int32]
+let g(): Int32 = run h { let r: R = Ref.new(5); 0 }

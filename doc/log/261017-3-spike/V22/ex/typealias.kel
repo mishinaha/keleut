@@ -1,0 +1,4 @@
+type Unit = {}
+type Log = Int32
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))

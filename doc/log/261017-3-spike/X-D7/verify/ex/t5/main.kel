@@ -1,0 +1,2 @@
+from "./lib/f" import k
+echoln(show(k))

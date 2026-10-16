@@ -1,0 +1,8 @@
+newtype Box2[A] = Box2(A)
+type instance Show[Box2[_]] { let show(b) = "box" }
+let z = Box2(show)
+z
+let pp = (show, eq, 3)
+let ff = { g = fn(x) => show(x), n = ??? }
+let rr = #Tag(show)
+let ok = (show(1), 2)

@@ -1,0 +1,2 @@
+let f(x: Int32): Int32 = x
+let b(): Int32 = f({ let q = (1, 2) match { case (1, _) => 0 }; q }, 2)

@@ -1,0 +1,4 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int64] { let describe(n) = if n == 0 then "zero" else show(n + 1) }
+echo(describe(0i64))
+echo(describe(4i64))

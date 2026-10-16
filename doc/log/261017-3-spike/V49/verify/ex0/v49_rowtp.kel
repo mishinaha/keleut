@@ -1,0 +1,5 @@
+let idf[A](x: A): A = x
+let f[E](k: () => Unit @ {Console extends E}): Unit @ {Console extends E} = {
+  let g: () => Unit @ {Console} = idf(k)
+  g()
+}

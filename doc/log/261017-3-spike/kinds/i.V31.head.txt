@@ -1,0 +1,148 @@
+=== V31/ex/a1.kel
+
+[exit 0]
+=== V31/ex/a2.kel
+! a2.kel:4:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/a3.kel
+! a3.kel:4:10: 型エラー: 型注釈のカインドが Type ではありません: {Log} :: Row
+[exit 1]
+=== V31/ex/a4.kel
+! a4.kel:4:26: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/a5.kel
+! a5.kel:5:19: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/a6.kel
+! a6.kel:4:42: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/b1.kel
+! b1.kel:1:21: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V31/ex/b2.kel
+! b2.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+=== V31/ex/b3.kel
+
+[exit 0]
+=== V31/ex/b4.kel
+
+[exit 0]
+=== V31/ex/b5.kel
+f : (Int32) => Int32 @ {Log extends R1}
+[exit 0]
+=== V31/ex/b6.kel
+
+[exit 0]
+=== V31/ex/b7.kel
+f : ({}) => Int32
+[exit 0]
+=== V31/ex/b8.kel
+! b8.kel:3:11: 型エラー: タプルの要素の型のカインドが Type ではありません: {Log} :: Row
+[exit 1]
+=== V31/ex/b9.kel
+! b9.kel:3:14: 型エラー: レコードのフィールド a の型のカインドが Type ではありません: {Log} :: Row
+[exit 1]
+=== V31/ex/c1.kel
+f : (Int32) => Int32
+[exit 0]
+=== V31/ex/c2.kel
+! c2.kel:4:21: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/c3.kel
+! c3.kel:4:21: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/c4.kel
+! c4.kel:4:29: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/c5.kel
+! c5.kel:4:13: 型エラー: 型注釈のカインドが Type ではありません: {Log extends ς1} :: Row
+[exit 1]
+=== V31/ex/c6.kel
+f : (Callback[{Log extends R1}]) => Int32
+[exit 0]
+=== V31/ex/c7.kel
+! c7.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+=== V31/ex/c8.kel
+
+[exit 0]
+=== V31/ex/c9.kel
+! c9.kel:2:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: {extends ς1} :: Type
+[exit 1]
+=== V31/ex/d1.kel
+
+[exit 0]
+=== V31/ex/d2.kel
+
+[exit 0]
+=== V31/ex/d3.kel
+
+[exit 0]
+=== V31/ex/d4.kel
+! d4.kel:2:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[exit 1]
+=== V31/ex/d5.kel
+
+[exit 0]
+=== V31/ex/d6.kel
+! d6.kel:3:10: 型エラー: 型構成子 Callback には型引数が必要です
+[exit 1]
+=== V31/verify/ex/h3.kel
+
+[exit 0]
+=== V31/verify/ex/h4.kel
+h4.kel:3:16: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V31/verify/ex/h5.kel
+
+[exit 0]
+=== V31/verify/ex/h6.kel
+_ : {}
+[exit 0]
+=== V31/verify/ex/h7.kel
+get : (F[Int32], (F[Int32]) => Int32 @ {}) => Int32
+_ : {}
+[exit 0]
+=== V31/verify/ex/r10.kel
+f : (Int32) => Int32 @ {Log}
+_ : {}
+[exit 0]
+=== V31/verify/ex/r11.kel
+x : Int32
+! r11.kel:4:12: 型エラー: 型構成子 Option には型引数が必要です
+[exit 1]
+=== V31/verify/ex/r12.kel
+f : (Int32) => Int32 @ {Log extends R1}
+outer : (Int32) => Int32 @ {Log extends R1}
+_ : {}
+[exit 0]
+=== V31/verify/ex/r1.kel
+f : (Int32) => Int32 @ {Log extends R1}
+r : Int32
+_ : {}
+[exit 0]
+=== V31/verify/ex/r3.kel
+call : (Callback[{Log extends R1}]) => {} @ {Log extends R1}
+_ : {}
+[exit 0]
+=== V31/verify/ex/r4.kel
+run_cb : (Callback[{}]) => {}
+_ : {}
+_ : {}
+[exit 0]
+=== V31/verify/ex/r5.kel
+app : ((Int32) => Int32, Int32) => Int32
+_ : {}
+[exit 0]
+=== V31/verify/ex/r6.kel
+g : ({a: Int32 extends R1}) => Int32
+_ : {}
+[exit 0]
+=== V31/verify/ex/r8.kel
+n : Int32
+_ : {}
+[exit 0]
+=== V31/verify/ex/r9.kel
+! r9.kel:4:29: 型エラー: エフェクト行に Type エイリアス Wrap は置けません(: EffectRow を付けてください)
+[exit 1]

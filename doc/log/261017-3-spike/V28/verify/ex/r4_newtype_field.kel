@@ -1,0 +1,12 @@
+module M {
+  type WE[E]: EffectRow = {Print extends E}
+  type W: EffectRow = {Print}
+  newtype Cb = Cb(() => Unit @ {WE[{}]})
+  newtype Cc = Cc(() => Unit @ W)
+  pub let go(u: Unit): Unit @ {Print} = {
+    let Cb(f) = Cb(fn() => perform print("cb\n"))
+    let Cc(g) = Cc(fn() => perform print("cc\n"))
+    f(); g()
+  }
+}
+with_stdout(fn() => M.go(()))

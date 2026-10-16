@@ -1,0 +1,6 @@
+from "./imp/lib" import {
+  k,
+  T
+}
+let z: T = k
+echoln(show(z))

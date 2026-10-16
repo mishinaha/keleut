@@ -1,0 +1,6 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+type Cb23[E] = (() => Unit @ E, () => Unit @ {Log})
+newtype N23 = MkN23(Cb23[{}])
+newtype M23 = MkM23(Cb23[{Log}])
+let f(n: N23, m: M23): Int32 = 0

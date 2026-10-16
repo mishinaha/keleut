@@ -1,0 +1,3 @@
+let h(x: Float64): Float64 = x
+let a = 0
+let t = h(1.5 % 2.0)

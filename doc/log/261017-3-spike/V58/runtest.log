@@ -1,0 +1,69 @@
+File "test/blocking_top.t", line 1, characters 0-0:
+diff --git a/_build/default/test/blocking_top.t b/_build/default/test/blocking_top.t.corrected
+index 3372575..cd4e6b3 100644
+--- a/_build/default/test/blocking_top.t
++++ b/_build/default/test/blocking_top.t.corrected
+@@ -46,7 +46,7 @@ Blocking は操作を持たないので handle の対象にできない(禁止
+   >   }
+   > KEL
+   $ diktor --type-check bh.kel
+-  ! bh.kel:2:3: 型エラー: 操作 nope はエフェクト Blocking に属しません
++  ! bh.kel:3:10: 型エラー: 操作 nope はエフェクト Blocking に属しません
+   [1]
+ 
+ Blocking に操作を足す宣言は拒否する(標準環境の名前なので再宣言できない):
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m6.t b/_build/default/test/typecheck_m6.t.corrected
+index 3e1e396..582d528 100644
+--- a/_build/default/test/typecheck_m6.t
++++ b/_build/default/test/typecheck_m6.t.corrected
+@@ -200,7 +200,7 @@ File. の修飾だけを外すと対象が決まらなくなり、診断が変
+   > EOF
+   $ diktor --type-check --no-prelude qual4.kel
+   prog : () => String @ {File}
+-  ! qual4.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
++  ! qual4.kel:8:8: 型エラー: 操作 flush はエフェクト File に属しません
+   [1]
+ 
+   $ cat > qual4b.kel <<'EOF'
+@@ -255,7 +255,7 @@ qual4 から case write(s) を落とすと、File の write の網羅漏れと f
+   > EOF
+   $ diktor --type-check --no-prelude qualret.kel
+   prog : () => String @ {File}
+-  ! qualret.kel:4:19: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
++  ! qualret.kel:7:8: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
+   [1]
+ 
+   $ cat > qualcancel.kel <<'EOF'
+@@ -270,7 +270,7 @@ qual4 から case write(s) を落とすと、File の write の網羅漏れと f
+   > EOF
+   $ diktor --type-check --no-prelude qualcancel.kel
+   prog : () => String @ {File}
+-  ! qualcancel.kel:4:19: 型エラー: cancel 節は修飾できません(cancel は操作名ではなく handle の節の名前です。修飾を外してください)
++  ! qualcancel.kel:7:8: 型エラー: cancel 節は修飾できません(cancel は操作名ではなく handle の節の名前です。修飾を外してください)
+   [1]
+ 
+ 未処理エフェクト・網羅性・resume の誤用のエラー:
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index 2ecf87b..f5ade4a 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -429,7 +429,7 @@ return / cancel 節にガードは書けない(型検査を通ったガードが
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check retguard.kel
+-  ! retguard.kel:2:9: 型エラー: return 節にガードは書けません
++  ! retguard.kel:4:21: 型エラー: return 節にガードは書けません
+   [1]
+ 
+   $ cat > cancelguard.kel <<'KEL'
+@@ -442,7 +442,7 @@ return / cancel 節にガードは書けない(型検査を通ったガードが
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check cancelguard.kel
+-  ! cancelguard.kel:2:9: 型エラー: cancel 節にガードは書けません
++  ! cancelguard.kel:5:18: 型エラー: cancel 節にガードは書けません
+   [1]
+ 
+ 同名メソッドを持つ型クラスの重複宣言を拒否(非修飾名の勝者が elab

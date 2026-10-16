@@ -1,0 +1,9 @@
+type class Pp[A] {
+  val pp: (A) => String @ {}
+}
+newtype V = Vv(Int32)
+type instance Pp[V] { let pp = fn(v) => v match { case Vv(n) => show(n) } }
+let w = Vv(3)
+echoln(Pp.pp(w))
+let h[A: Pp](a: A, f: (String) => String): String = f(Pp.pp(a))
+echoln(h(w) { s => s + "!" })

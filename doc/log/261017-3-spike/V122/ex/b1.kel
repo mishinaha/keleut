@@ -1,0 +1,1 @@
+let f[A](x: A): Int32 = x

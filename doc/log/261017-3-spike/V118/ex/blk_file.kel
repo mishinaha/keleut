@@ -1,0 +1,5 @@
+let a = 1
+let bad3 = { newtype M = M(Int32); 1 }
+
+
+let b = 2

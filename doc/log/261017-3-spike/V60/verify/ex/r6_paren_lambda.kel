@@ -1,0 +1,6 @@
+let apply(f: (Int32) => Int32): Int32 = f(2)
+let a = apply { x => (x) }
+let b = apply { x => (x, x) match { case (y, _) => y } }
+let c = apply { case (n) => n + 1 }
+let d = { let z = (1); z }
+echoln(show(a + b + c + d))

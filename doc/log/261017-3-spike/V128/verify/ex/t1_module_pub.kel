@@ -1,0 +1,10 @@
+effect Ask = { ask: () => Int32 }
+module R {
+  pub let with_ask[A, E](body: () => A @ {Ask, Console extends E}): A @ {Console extends E} =
+    body() handle {
+      case ask() => { let z = 0; resume(10 / z) }
+      case cancel => echoln("cancel R.ask")
+    }
+}
+let r = R.with_ask(fn() => perform ask() + 1)
+echoln(show(r))

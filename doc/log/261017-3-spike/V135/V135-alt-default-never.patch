@@ -1,0 +1,23 @@
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:12:02.779544831 +0900
+@@ -781,12 +781,17 @@
+     (fun ((_, v) as e) ->
+       match !v with
+       | Unbound i ->
+-          kept := e :: !kept;
+-          if
++          let ambiguous =
+             (all || i.vlevel > level)
+             && i.vcls <> []
+             && (not (List.exists is_predicate i.vcls))
+             && not (Hashtbl.mem reach i.vid)
++          in
++          let never = Type.intern "Never" in
++          if ambiguous && List.for_all (fun c -> Decls.find_instance ~cls:c ~con:never <> None) i.vcls then
++            bind v (TCon (never, []))
++          else kept := e :: !kept;
++          if ambiguous && (match !v with Unbound _ -> true | _ -> false)
+           then
+             type_error
+               ("曖昧な制約: "

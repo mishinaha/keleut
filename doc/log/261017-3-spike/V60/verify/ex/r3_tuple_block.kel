@@ -1,0 +1,7 @@
+let p = { (1, 2) }
+let q = { (3) }
+let s = { () }
+let f(h: () => (Int32, Int32)): (Int32, Int32) = h()
+let t = f { (4, 5) }
+let u = (p, t) match { case ((a, _), (_, b)) => a + b + q }
+echoln(show(u))

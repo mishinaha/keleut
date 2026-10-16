@@ -1,0 +1,8 @@
+newtype Empt
+type E = Empt
+newtype Opt2[A] = Sm(A) | Nn
+let f(Sm(x): Opt2[E]) = 1
+type P = (Int32, E)
+let g((1, y): P) = 2
+let h(p: P): Int32 = p match { case (0, y) => 3 }
+echo("ok")

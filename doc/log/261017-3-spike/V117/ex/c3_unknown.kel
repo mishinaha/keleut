@@ -1,0 +1,2 @@
+type F = (Foo) => Int32
+pub let h(f: F): Int32 = 0

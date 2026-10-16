@@ -1,0 +1,10 @@
+effect Ask = { ask: (Int32) => Int32 }
+perform ask(1) handle {
+  case ask(1) => resume(2)
+  case return(x) => x
+}
+perform ask(1) handle {
+  case ask(1) => resume(2)
+  case ask(n) => resume(n)
+}
+1 + 1

@@ -1,0 +1,13 @@
+type class Pretty[A] {
+  val pretty: (A) => String
+}
+newtype N = N(Int32)
+type instance Pretty[N] {
+  let pretty(n) = n match { case N(x) => show(x) }
+}
+pub let p: String = pretty(N(3))
+echoln(p)
+let xs = (1,
+  2,
+  3)
+echoln(show(xs._2))

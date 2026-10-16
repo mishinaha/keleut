@@ -1,0 +1,4 @@
+module M {
+  pub let f(x: Int64): Int32 = x match { case 4294967295 => 1  case 0xFFFFFFFFFFFFFFFF => 3  case _ => 2 }
+}
+echoln(show(M.f(4294967295i64)) + show(M.f(-1i64)) + show(M.f(5i64)))

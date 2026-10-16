@@ -1,0 +1,8 @@
+type Cb = () => Unit @ Console
+effect Reg = { reg: (Cb) => Unit }
+let main(): Unit @ Console = {
+  perform reg(fn() => echoln("x"))
+} handle {
+  case reg(f) => { f(); resume() }
+}
+main()

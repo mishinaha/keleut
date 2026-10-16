@@ -1,0 +1,7 @@
+type Unit = {}
+type C21[R] = B21[{extends R}]
+type D21 = B21[{}]
+type B21[E] = A21[E]
+type A21[E] = (Int32) => Unit @ E
+let f[R](g: C21[R]): Unit @ R = g(1)
+let h(g: D21): Unit = g(2)

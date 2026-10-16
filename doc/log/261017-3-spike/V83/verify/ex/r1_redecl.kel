@@ -1,0 +1,2 @@
+newtype Option[A] = None | Some(A)
+echoln("x")

@@ -1,0 +1,1 @@
+type class Eq[A] { val eq: (A, A) => Boolean }

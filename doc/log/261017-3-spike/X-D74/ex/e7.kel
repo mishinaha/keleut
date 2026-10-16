@@ -1,0 +1,8 @@
+let g(): Int32 = run h {
+  let r = Ref.new(0)
+  run k {
+    let s = Ref.new(1)
+    let t: Ref[h, Int32] = s
+    0
+  }
+}

@@ -1,0 +1,10 @@
+[../../../../bin/diktor-head]
+a : () => {} @ {} = <fn>
+mk : () => () => {} @ {} = <fn>
+! <stdin>:4:3: 型エラー: ラベル Console がありません(行は閉じています)
+L
+[../diktor/_build/default/bin/main.exe]
+a : () => {} @ {} = <fn>
+mk : () => () => {} @ {} = <fn>
+repl
+L

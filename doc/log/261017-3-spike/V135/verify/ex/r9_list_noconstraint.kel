@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+type class Size[A] { val size: (A) => Int32 }
+type instance Size[List[_]] { let size(xs) = 0 }
+let f(): Int32 @ Fail = size([perform throw("x")])
+echoln(show(f() handle { case throw(m) => 0 - 1 }))

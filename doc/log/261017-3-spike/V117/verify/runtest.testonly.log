@@ -1,0 +1,52 @@
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub.t b/_build/default/test/pub.t.corrected
+index c624d89..0c59e08 100644
+--- a/_build/default/test/pub.t
++++ b/_build/default/test/pub.t.corrected
+@@ -144,12 +144,9 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   > pub let h(g: G): Int32 = g(1)
+   > KEL
+   $ diktor --type-check pubalias.kel
+-  ! pubalias.kel:3:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+-  [1]
++  h : ((Int32) => Int32 @ {}) => Int32 @ {}
+   $ printf 'type F = (Int32) => Int32\npub newtype Box = Box(F)\n' > pubaliasnt.kel
+   $ diktor --type-check pubaliasnt.kel
+-  ! pubaliasnt.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+-  [1]
+ 
+ エイリアスの型引数に書いた矢印は、注釈に直接書いた矢印として扱う。本体の矢印が @ を
+ 持っていれば通る:
+@@ -182,8 +179,7 @@ import したエイリアスにも、同じ要求が働く:
+   $ printf 'pub type F = (Int32) => Int32\n' > pubaliasimp/lib.kel
+   $ printf 'from "./lib" import F\npub let h(f: F): Int32 = f(1)\n' > pubaliasimp/main.kel
+   $ diktor --type-check pubaliasimp/main.kel
+-  ! pubaliasimp/main.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+-  [1]
++  h : ((Int32) => Int32 @ {}) => Int32 @ {}
+ 
+ 使う位置から見えないエイリアスの本体は見ない。可視性の診断を先に出す:
+ 
+File "test/invariants.t", line 1, characters 0-0:
+diff --git a/_build/default/test/invariants.t b/_build/default/test/invariants.t.corrected
+index 53a6454..dbc6769 100644
+--- a/_build/default/test/invariants.t
++++ b/_build/default/test/invariants.t.corrected
+@@ -368,7 +368,7 @@ r(1) を先に書くと、宣言の終わりの既定化で r が (Int32) => Int
+   > pub let h(f: F): Int32 = f(1)
+   > KEL
+   $ inv aliaspub_a.kel aliaspub_b.kel
+-  same: exit 1
++  differ: exit 1 / 0
+ 
+ pub の値束縛の注釈の先頭の矢印は、エイリアスの展開で先頭に現れても @ を省略できる。
+ どちらも @ {} と読むので、型は変わらない:
+@@ -383,7 +383,7 @@ pub の値束縛の注釈の先頭の矢印は、エイリアスの展開で先
+   > echoln(show(k(1)))
+   > KEL
+   $ inv aliaspubhead_a.kel aliaspubhead_b.kel
+-  same: exit 0
++  differ: exit 0 / 1
+ 
+ §18.4 のインスタンスの対象の除外。対象は型構成子に限る(§12.2)ので、エイリアスに
+ 置き換えられない:

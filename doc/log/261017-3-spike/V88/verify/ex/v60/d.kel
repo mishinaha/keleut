@@ -1,0 +1,2 @@
+let g(x: Int32): (() => Int32) => Int32 = fn(h) => h()
+let y = (g(1)) { 1 }

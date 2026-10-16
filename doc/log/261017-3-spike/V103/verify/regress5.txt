@@ -1,0 +1,45 @@
+===== imp/main.kel
+-- HEAD tc
+! imp/main.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib
+exit=1
+-- proto tc
+! imp/main.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib
+exit=1
+-- HEAD run
+! imp/main.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib
+exit=1
+-- proto run
+! imp/main.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib
+exit=1
+===== --no-prelude np.kel
+-- HEAD tc
+f : () => Int32 @ {Tick}
+v : Boolean
+id : (A) => A
+s : [_A: Show] (_A) => String
+t : String
+exit=0
+-- proto tc
+f : () => Int32 @ {Tick}
+v : Boolean
+id : (A) => A
+s : [_A: Show] (_A) => String @ {}
+t : String
+exit=0
+-- HEAD run
+exit=0
+-- proto run
+exit=0
+===== --prelude myprelude.kel usep.kel
+-- HEAD tc
+! myprelude.kel:1:39: 型エラー: 未知の型: Unit
+exit=1
+-- proto tc
+! myprelude.kel:1:39: 型エラー: 未知の型: Unit
+exit=1
+-- HEAD run
+! myprelude.kel:1:39: 型エラー: 未知の型: Unit
+exit=1
+-- proto run
+! myprelude.kel:1:39: 型エラー: 未知の型: Unit
+exit=1

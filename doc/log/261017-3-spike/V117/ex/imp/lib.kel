@@ -1,0 +1,1 @@
+pub type F = (Int32) => Int32

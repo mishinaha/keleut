@@ -1,0 +1,2 @@
+from "./lib/c" import { Pretty, Box }
+echoln(Pretty.pretty(Box(3)))

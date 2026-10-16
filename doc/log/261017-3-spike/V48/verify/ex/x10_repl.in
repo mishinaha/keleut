@@ -1,0 +1,5 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let f(MkA(n)) = 1
+let g((0, n): (Int32, Never)) = 2
+let h(o: Option[Never]): Int32 = o match { case Some(x) => 1 }

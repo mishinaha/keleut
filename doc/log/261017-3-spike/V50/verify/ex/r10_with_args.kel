@@ -1,0 +1,3 @@
+type W[E]: EffectRow = {Print extends E}
+let f[W, E](u: Unit): Unit @ {W[E]} = println("args")
+with_stdout(fn() => f(()))

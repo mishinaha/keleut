@@ -1,0 +1,4 @@
+type Unit = {}
+effect Out = { out: (String) => Unit }
+let rec a(): Unit @ {} = perform out("x")
+and b(): Unit = a()

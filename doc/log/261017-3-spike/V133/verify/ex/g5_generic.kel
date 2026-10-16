@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32 }
+type Th[A] = () => A @ {Ask}
+let run1[A](f: Th[A]): A = f() handle { case ask() if true => resume(3)  case ask() => resume(4)  case return(x) => x  case cancel => () }
+echoln(show(run1(fn() => perform ask() + 1)))

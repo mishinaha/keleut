@@ -1,0 +1,4 @@
+module M {
+  type E = Int32
+  type W[E]: EffectRow = {Print, E}
+}

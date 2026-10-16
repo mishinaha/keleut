@@ -1,0 +1,4 @@
+from "./lib/boxes" import { P, Box }
+let p = P(fn() => 1, fn() => 2)
+echoln(show(p match { case P(f, g) => f() + g() }))
+echoln(show(Box(fn() => 5) match { case Box(f) => f() }))

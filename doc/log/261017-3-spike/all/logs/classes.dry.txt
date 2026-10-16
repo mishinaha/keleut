@@ -1,0 +1,48 @@
+checking file lib/decls.ml
+checking file lib/elab.ml
+Hunk #1 succeeded at 1840 (offset 98 lines).
+Hunk #2 succeeded at 1874 (offset 98 lines).
+Hunk #3 succeeded at 1886 (offset 98 lines).
+Hunk #4 succeeded at 3020 (offset 182 lines).
+Hunk #5 succeeded at 3037 with fuzz 2 (offset 184 lines).
+Hunk #6 succeeded at 3262 (offset 183 lines).
+Hunk #7 succeeded at 3281 (offset 183 lines).
+Hunk #8 succeeded at 3312 (offset 183 lines).
+Hunk #9 succeeded at 3376 (offset 183 lines).
+Hunk #10 succeeded at 3510 (offset 183 lines).
+Hunk #11 succeeded at 3589 (offset 183 lines).
+Hunk #12 succeeded at 4136 (offset 183 lines).
+Hunk #13 succeeded at 4225 (offset 183 lines).
+Hunk #14 succeeded at 4288 (offset 183 lines).
+Hunk #15 succeeded at 4641 (offset 183 lines).
+Hunk #16 succeeded at 4658 (offset 183 lines).
+Hunk #17 succeeded at 4719 (offset 183 lines).
+Hunk #18 succeeded at 4746 (offset 183 lines).
+Hunk #19 succeeded at 4772 (offset 183 lines).
+Hunk #20 succeeded at 4812 (offset 183 lines).
+Hunk #21 succeeded at 4825 (offset 185 lines).
+Hunk #22 succeeded at 4851 (offset 185 lines).
+Hunk #23 succeeded at 5112 (offset 185 lines).
+Hunk #24 succeeded at 5128 (offset 185 lines).
+Hunk #25 succeeded at 5145 (offset 185 lines).
+Hunk #26 succeeded at 5397 (offset 185 lines).
+checking file lib/parser.mly
+Hunk #1 succeeded at 459 (offset 24 lines).
+Hunk #2 succeeded at 489 with fuzz 2 (offset 24 lines).
+Hunk #3 succeeded at 633 (offset 25 lines).
+Hunk #4 succeeded at 721 (offset 25 lines).
+checking file test/annot_rows.t
+Hunk #1 succeeded at 1137 (offset 63 lines).
+checking file test/builtin_rows.t
+checking file test/classes.t
+checking file test/dictionary_passing.t
+checking file test/import.t
+Hunk #1 succeeded at 93 with fuzz 1.
+checking file test/instance_init.t
+checking file test/instance_param_types.t
+checking file test/never_ops.t
+Hunk #1 succeeded at 688 (offset 73 lines).
+checking file test/premise.t
+checking file test/spec_gaps.t
+checking file test/std_names.t
+checking file test/verify_fixes.t

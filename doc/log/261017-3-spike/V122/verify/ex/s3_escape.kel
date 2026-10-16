@@ -1,0 +1,5 @@
+let h2[E](k: () => Int32 @ E): Int32 @ E = k()
+let g(): Int32 = {
+  let mono = fn(c) => c()
+  run h { let r = Ref.new(0); mono(fn() => Ref.get(r)) }
+}

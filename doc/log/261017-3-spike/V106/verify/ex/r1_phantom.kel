@@ -1,0 +1,4 @@
+type Const[X] = Int32
+type class Pp[A] { val pp[B: Show]: (A, Const[B]) => String }
+type instance Pp[Int32] { let pp(x, n) = show(x) + show(n) }
+echoln(pp(3i32, 4i32))

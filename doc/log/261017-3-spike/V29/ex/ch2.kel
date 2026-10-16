@@ -1,0 +1,3 @@
+type B[E] = (Int32) => Unit @ E
+type A[E] = B[E]
+newtype H = MkH(A[{Print}])

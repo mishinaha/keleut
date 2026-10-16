@@ -1,0 +1,9 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let r = (({ perform use(); perform throw("a"); 1 }) handle {
+    case use() => resume()
+    case cancel => perform throw("b")
+  }) handle {
+    case throw(e) => { echoln("clause " + e); 3 }
+  }
+echoln(show(r))

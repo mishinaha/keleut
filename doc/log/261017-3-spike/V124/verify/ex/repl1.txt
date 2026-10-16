@@ -1,0 +1,6 @@
+type C = A[{}]; type A[E] = (Int32) => Unit @ E; let bad = 1 + "a"
+type A[E] = (E, Int32)
+let v: A[{}] = ({}, 1)
+type C2 = B[{}]; type B[E] = (Int32) => Unit @ {Console extends E}
+let k(g: C2): Unit = g(1)
+k(fn(x) => echoln(show(x)))

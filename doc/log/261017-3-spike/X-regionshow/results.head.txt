@@ -1,0 +1,69 @@
+== r1.kel
+let get[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let first[h, A](a: MutableArray[h, A]): A @ Heap[h] = MutableArray.get(a, 0)
+let both[h, A, B](r: Ref[h, B], a: MutableArray[h, A]): B @ Heap[h] = Ref.get(r)
+let poly = fn(u) => Ref.new(0)
+let two[h, k](r: Ref[h, Int32], s: Ref[k, Int32]): Int32 @ {Heap[h], Heap[k]} = 0
+let pair[h](r: Ref[h, Int32]): (Ref[h, Int32], Int32) = (r, 0)
+-- diktor-head --type-check r1.kel
+get : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+first : (MutableArray[A, B]) => B @ {Heap[A]}
+both : (Ref[A, B], MutableArray[A, C]) => B @ {Heap[A]}
+poly : (A) => Ref[B, Int32] @ {Heap[B] extends R1}
+two : (Ref[A, Int32], Ref[B, Int32]) => Int32 @ {Heap[A], Heap[B]}
+pair : (Ref[A, Int32]) => (Ref[A, Int32], Int32)
+[exit 0]
+== r2.kel
+let f[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let g[h](r: Ref[h, String]): Int32 @ Heap[h] = f(r)
+-- diktor-head --type-check r2.kel
+f : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+! r2.kel:2:50: 型エラー: 型が一致しません: String と Int32
+[exit 1]
+== r3.kel
+let f[A](x: A, r: Ref[A, Int32]): Int32 = 0
+let g[h](x: h): Int32 = 0
+-- diktor-head --type-check r3.kel
+f : (A, Ref[A, Int32]) => Int32
+g : (A) => Int32
+[exit 0]
+== r4.kel
+let main(): Int32 = run h { let r = Ref.new(1); r }
+-- diktor-head --type-check r4.kel
+! r4.kel:1:21: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+== r5.kel
+let r = Ref.new
+-- diktor-head --type-check r5.kel
+r : (A) => Ref[B, A] @ {Heap[B] extends R1}
+[exit 0]
+== r6.kel
+let f(r: Ref[Int32, Int32]): Int32 = 0
+let g(): Int32 @ Heap[Int32] = 0
+-- diktor-head --type-check r6.kel
+f : (Ref[Int32, Int32]) => Int32
+g : () => Int32 @ {Heap[Int32]}
+[exit 0]
+== r7.kel
+let first[h, A](a: MutableArray[h, A]): A @ Heap[h] = MutableArray.get(a, 0)
+let g[h](r: Ref[h, Int32]): Int32 @ Heap[h] = first(r)
+-- diktor-head --type-check r7.kel
+first : (MutableArray[A, B]) => B @ {Heap[A]}
+! r7.kel:2:53: 型エラー: 型が一致しません: Ref[ς1, Int32] と MutableArray[ς1, _A]
+[exit 1]
+== r8.kel
+let id[A](x: A): A = x
+let w = id(Ref.new)
+let k: Int32 = w
+-- diktor-head --type-check r8.kel
+id : (A) => A
+w : (_A) => Ref[_B, _A] @ {Heap[_B] extends _R1}
+! r8.kel:3:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と (_A) => Ref[_B, _A] @ {Heap[_B] extends _R1})
+[exit 1]
+== r9.kel
+let h1[h, E](r: Ref[h, Int32]): Int32 @ {Heap[h] extends E} = Ref.get(r)
+let k[h](r: Ref[h, Int32]): Int32 = h1(r)
+-- diktor-head --type-check r9.kel
+h1 : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+k : (Ref[A, Int32]) => Int32 @ {Heap[A] extends R1}
+[exit 0]

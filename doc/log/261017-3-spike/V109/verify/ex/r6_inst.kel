@@ -1,0 +1,11 @@
+type class Sz[A] { val sz: (A) => Int32 }
+let rec tot[A: Sz](xss: List[A]): Int32 = xss match { case Nil => 0 case Cons(h, t) => sz(h) + tot(t) }
+type instance Sz[Int32] { let sz(x) = x }
+type instance[A: Sz] Sz[List[_]] { let sz(xs) = tot(xs) }
+effect Log = { log: (Int32) => Unit }
+let run_[A: Sz](x: A): Int32 =
+  { perform log(sz(x)); perform log(tot(Cons(x, Cons(x, Nil)))); 0 } handle {
+    case log(n) => n + resume({})
+  }
+echoln(show(run_(Cons(Cons(1, Cons(2, Nil)), Nil))))
+echoln(show(run_(5)))

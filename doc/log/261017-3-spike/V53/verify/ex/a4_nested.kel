@@ -1,0 +1,12 @@
+effect Ask = { ask: () => Int32 }
+let inner(): Int32 @ {Ask} =
+  (perform ask() + perform ask()) handle {
+    case ask() if false => resume(99)
+    case ask() => resume(perform ask() + 1)
+    case return(x) => x
+  }
+let r = inner() handle {
+  case ask() => resume(20)
+  case return(x) => x
+}
+echoln(show(r))

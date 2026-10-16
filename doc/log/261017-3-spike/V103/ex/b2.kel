@@ -1,0 +1,11 @@
+type class Render[A] {
+  val render: (A) => String
+}
+type instance Render[Int32] {
+  let render(x) = show(x)
+}
+let id[T](x: T): T = x
+let g = id(Render.render)
+let p(): Unit @ Print = println(g(1))
+let c(): Unit @ Console = echoln(g(2))
+c()

@@ -1,0 +1,4 @@
+type W: EffectRow = {Print}
+type Cb = () => Unit @ {W}
+let f[W](g: Cb): Unit @ {Print} = g()
+with_stdout(fn() => f(fn() => println("alias-body")))

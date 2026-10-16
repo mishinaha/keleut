@@ -1,0 +1,11 @@
+effect Nop = { nop: () => Unit }
+effect Ask = { ask: () => Int32, done: () => Int32 }
+let r = ({ ({ perform nop(); perform done() }) handle {
+    case nop() => resume()
+    case cancel => { echoln("cancel nop start"); let a = perform ask(); echoln("cancel nop end " + show(a)) }
+  } } handle {
+  case ask() => { echoln("ask clause"); 1 / 0 }
+  case done() => 5
+  case cancel => echoln("cancel ask")
+})
+echoln(show(r))

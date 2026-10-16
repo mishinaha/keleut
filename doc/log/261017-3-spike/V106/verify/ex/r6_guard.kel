@@ -1,0 +1,3 @@
+type class Pp[A] { val pp[B: Ord]: (A) => String }
+type instance Pp[Int32] { let pp(x) = x match { case n if n > 0 => "pos" case _ => "neg" } }
+echoln(pp(3i32))

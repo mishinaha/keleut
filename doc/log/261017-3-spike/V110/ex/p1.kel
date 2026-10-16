@@ -1,0 +1,6 @@
+newtype Foo = Foo
+let mk(n: Int32): (Foo) => String = fn(x) => "foo"
+type instance Show[Foo] {
+  let show: (Foo) => String = mk(0)
+}
+echoln(show(Foo))

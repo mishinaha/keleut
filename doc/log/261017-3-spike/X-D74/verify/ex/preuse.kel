@@ -1,0 +1,1 @@
+let v: Int32 = run h { let r = Ref.new(5); cell_get(r) }

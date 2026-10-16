@@ -1,0 +1,4 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n) = n match { case _ => "never" } }
+type instance Describe[Int32] { let describe(n) = show(n) }
+echo(describe(3i32))

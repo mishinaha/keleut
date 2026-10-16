@@ -1,0 +1,3 @@
+module W { pub type W: EffectRow = {Print} }
+let f[W](u: Unit): Unit @ {W} = println("comp")
+with_stdout(fn() => f(()))

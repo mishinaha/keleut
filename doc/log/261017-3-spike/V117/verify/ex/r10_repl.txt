@@ -1,0 +1,6 @@
+type F = (Int32) => Int32 @ {}
+pub let h(f: F): Int32 = f(1)
+h(fn(x) => x + 1)
+type G = (Int32) => Int32
+pub let k(g: G): Int32 = g(2)
+k(fn(x) => x)

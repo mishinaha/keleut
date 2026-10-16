@@ -1,0 +1,2 @@
+from "./r7_import_lib" import f
+let g(): Int32 = run h { f() }

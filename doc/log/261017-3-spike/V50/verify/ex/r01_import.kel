@@ -1,0 +1,3 @@
+from "./lib/effs" import W
+let f[W](u: Unit): Unit @ {W} = println("import")
+with_stdout(fn() => f(()))

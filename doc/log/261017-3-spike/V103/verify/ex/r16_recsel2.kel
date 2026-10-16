@@ -1,0 +1,11 @@
+let idf2[T](x: T): T = x
+let r = idf2({ f = Array.length })
+let xs: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(4, 0)) }
+let main(): Unit @ Console = {
+  let k: Option[(Array[Int32]) => Int32 @ Console] = Some(r.f)
+  k match {
+    case Some(g) => echoln(show(g(xs)))
+    case None => ()
+  }
+}
+main()

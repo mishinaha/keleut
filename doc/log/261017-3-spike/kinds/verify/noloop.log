@@ -1,0 +1,42 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 5efbed2..9011913 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -359,7 +359,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > let f(x: A): A = x
+   > EOF
+   $ diktor --type-check --no-prelude specfix.kel
+-  f : (A) => A
++  ! specfix.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 同じ繰り返しは、型エイリアスのパラメータのカインドが決まったことも数える。
+ ここでは Al1 のカインドが Al2 から決まった後の周で、B の E に届く:
+@@ -374,7 +375,8 @@ C[{Log}] を読む時点で C のパラメータのカインドを知らずに
+   > let f(x: A): A = x
+   > EOF
+   $ diktor --type-check --no-prelude specalias.kel
+-  f : (A) => A
++  ! specalias.kel:4:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ 宣言の無いラベル(綴りの誤り)は、投機の中でも読めないので、1b が未知の
+ エフェクトとして報告する:
+@@ -689,12 +691,16 @@ newtype の投機がエイリアスを読んでパラメータに届く形(fwdal
+   > type Th[E] = () => Unit @ E
+   > EOF
+   $ diktor --type-check fwdalias3.kel
++  ! fwdalias3.kel:2:34: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+   $ cat > fwdalias4.kel <<'EOF'
+   > newtype H = MkH(K[{}])
+   > type K[E] = (() => Unit @ E, Callback[{Print}])
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check fwdalias4.kel
++  ! fwdalias4.kel:2:27: 型エラー: 行カインドではない型パラメータです: E
++  [1]
+ 
+ エイリアスの先の newtype の本体で、行のパラメータより右に同じ宣言群のエフェクト
+ ラベルがある形も、エイリアスを挟んで通る:

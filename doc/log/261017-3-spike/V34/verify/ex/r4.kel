@@ -1,0 +1,10 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let twice[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: () => Int32 @ E = g
+  k() + k()
+}
+let r: Int32 = (twice(fn() => perform ask()) handle { case ask() => resume(3) }) handle { case throw(e) => 0 }
+echoln(show(r))
+let s: Int32 = twice(fn() => { let v = perform ask(); if v > 1 then perform throw("big") else v }) handle { case ask() => resume(2) } handle { case throw(e) => 99 }
+echoln(show(s))

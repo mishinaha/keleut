@@ -1,0 +1,2 @@
+pub let rec f[A](x: A): Int32 = g(x)
+and g[B](y: B): Int32 = 0i32

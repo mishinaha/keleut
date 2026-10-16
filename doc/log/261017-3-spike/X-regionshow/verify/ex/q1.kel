@@ -1,0 +1,3 @@
+newtype Ref[A, B] = MkR(A, B)
+let f[A](r: Ref[A, Int32]): Int32 = 0
+let mk = fn(x) => MkR(x, 1)

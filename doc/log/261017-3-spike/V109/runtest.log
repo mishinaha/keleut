@@ -1,0 +1,1 @@
+(dune runtest: 差分なし。dictionary_passing.t に capdict のブロックを 1 つ足し、promote 済み)

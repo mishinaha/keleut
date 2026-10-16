@@ -1,0 +1,4 @@
+let f(): Unit = {
+  let k = fn(z) => { run h { let t = Ref.new(0); let u: () => Int32 @ Heap[h] = z; () } }
+  ()
+}

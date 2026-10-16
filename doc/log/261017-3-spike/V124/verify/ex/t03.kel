@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ Log))
+newtype A = MkA(B[{}])
+let f(a: A): Int32 = 0
+echoln("ok")

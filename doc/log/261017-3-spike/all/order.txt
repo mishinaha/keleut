@@ -1,0 +1,76 @@
+全分野の合成の順と手直し(基点 snap/diktor = diktor 39d4091、作業木 all/diktor、各段 patch -p1)
+ビルドの注意: /tmp(tmpfs 16G)が満杯で all/diktor/_build のリンクが失敗したため、
+DUNE_BUILD_DIR=/dev/shm/claude-0c9c47ee-all-build でビルドした。木の内容には影響しない。
+
+1. spec      clusters/spec/spec.patch        2 ファイル。fuzz 0、offset 0、失敗 0。手直し 0。runtest 差分 0。
+2. syntax    clusters/syntax/syntax.patch    25 ファイル。fuzz 0、offset 0、失敗 0。手直し 0。runtest 差分 0。
+3. numeric   clusters/numeric/numeric.patch  14 ファイル。失敗 1(lib/driver.ml の唯一の hunk、§16.8 の終了コードの表)。
+             offset: elab.ml #9 #10 (+16)、lexer.ml #1-#3 (+7)、syntax.ml #1 #2 (-2)。fuzz 0。
+             原因: syntax の V121 が同じ表の 2 の行(「Lex_error(不正な UTF-8 を含む)」)を変えたので文脈が合わない。
+             手直し 1: lib/driver.ml の表(1170 行と 1173 行)で、V114 の 2 行の置き換えだけを手で入れた。
+               1 の行: 「第11章の診断、」→「第11章の診断(言語に無い数値の接尾辞を含む)、」
+               4 の行: 「`Aux.NotImplemented`(1u8、Int8、module の入れ子など)」→「`Aux.NotImplemented`(module の入れ子、cancel(reason) など)」
+               2 の行は V121 の形のまま残した。
+             runtest 差分 0。
+4. eval      clusters/eval/eval.patch        8 ファイル。失敗 0。
+             fuzz 2: test/dictionary_passing.t #1(419 行。numeric の V91 が negremf の文脈の行を 2:1 → 2:13 に変えたため。末尾に正しく入った)。
+             offset: driver.ml #1-#3 (+122)、prelude.kel #1 #2 (+3。spec の V83 の折り返しの分)。
+             手直し 0。runtest 差分 0。
+5. effects   clusters/effects/effects.patch  12 ファイル。fuzz 0、失敗 0(offset のみ: elab.ml +56/+59、interp.ml -1 など)。手直し 0。
+             runtest: 7 ファイル 9 ブロックの期待値が変わる(新しく落ちるブロック 0)。promote した。
+               effects 自身の予告どおり(5 ファイル 7 ブロック): typecheck_m6.t qual5、efferr / annot_rows.t nested2、opsig2 /
+                 eval.t with2 / trailing_block.t tuple2 / resume_guard.t innerguard。
+               前の分野の cram が effects で変わる(2 ブロック): smoke.t の cr(numeric の V114 が入力を差し替えたブロック、2:9 → 2:50)、
+                 typecheck.t の mix(同、3:11 → 3:52)。V58 が未実装の cancel(reason) の位置を cancel 節に寄せるため。
+                 effects 単独の処理系でも cr.kel は 2:50 になる(実測)ので、矛盾ではない。
+6. never     clusters/never/never.patch      4 ファイル。fuzz 0、失敗 0(offset のみ)。手直し 0。runtest 差分 0。
+7. classes   clusters/classes/classes.patch  15 ファイル。失敗 0。
+             fuzz 2: lib/elab.ml #5(§11.26 の記事。effects の V101 が文脈の「`perform` の引数のように、」の行を変えたため。
+               変える行「そのため、残りの 2 つの場面が効くのは…」は正しく置き換わり、V101 の行は残る)。
+             fuzz 2: lib/parser.mly #2(check_instance_body の追加。syntax の V118 が直前の DExp の行を syntax_error_at に変えたため。挿入位置は正しい)。
+             fuzz 1: test/import.t #1(V126 の節の追加。syntax の V115 / V118 が pb2 の行を変えたため。挿入位置は正しい)。
+             V126 の check_instance_body は Syntax_error_at を使っており、V118 の後もビルドが通る。
+             手直し 0。runtest: test/repl.t の 1 ブロック(V108 の t の行が @ {Console, Blocking, Print} → @ {})。promote した。
+8. region    clusters/region/region.patch    13 ファイル。失敗 0。
+             fuzz 1: test/nonfeatures.t #2(case7c。syntax の V115 が case8 の文面を変えたため。対象行は正しい)。
+             手直し 0。runtest: test/region.t の regionshow の 1 行(w : … @ {Heap[_h] extends _R1} → @ {Heap[_h]})。
+               classes の V97 が組み込みの Ref.new の最外の行を閉じたため(region の要望「V97/V103 の後で region.t を走らせ直す」の対象)。promote した。
+9. diagtext  clusters/diagtext/diagtext.patch 14 ファイル(見出しは +++ diktor/… の形で -p1 で当たる)。
+             失敗 3: lib/elab.ml #1、#12、lib/unify.ml #9。
+             fuzz 2: unify.ml #7(§8.7 の記事。region の X-D74 の記事の文脈)。fuzz 1: unify.ml #8(剛定数の分岐)、test/dictionary_passing.t #1(nooccur)。
+             手直し 3:
+               (a) lib/elab.ml #1: row_failure の局所の has を最上位の has_sub に出し(V111)、closed_row_arg と has_closed_arrow(V102)を
+                   row_failure の直後に置いた。effects(V127、X-perform)の args_arity、check_call_arity、op_row_note はその後ろに残る。
+                   失敗の原因は row_failure の直後に effects の関数が入っていたこと。内容は diagtext の差分のまま。
+               (b) lib/elab.ml #12(V24、register_class のメソッドの検査): classes の V106 がクラスパラメータの検査と dup の間に
+                   check_tparams を足し、methods を 3 つ組にしたため文脈が合わない。
+                   クラスパラメータの match を at_node v.T.cv_ty で包む形と、dup を c.T.cls_vals の上で 2 度目の宣言の型を指す形を、
+                   V106 の check_tparams、checks、methods の行を残したまま入れた。V106 の check_tparams の型エラーは at_node で包んでいない。
+               (c) lib/unify.ml #9(X-premise): reset に Hashtbl.reset premise_origins; を足す。numeric の V91 が reset を変えたため。
+                   decl_hole_floor の行と holes の行の間に入れた。
+             runtest: 4 ファイル 5 ブロックの期待値が変わる(新しく落ちるブロック 0)。promote した。
+               annot_rows.t recrowclosed、recrowclosedmutrev(spec の V32 のブロックが V34 の文面に。spec の予告どおり)
+               ctor_field_row.t ctorarity(V102 のブロックが effects の V127 の個数の文面に。diagtext の予告どおり)
+               rec_tparam_note.t region.kel(V111 のブロックが region の X-D74 の文面に。region の予告どおり。注記は付かないブロック)
+               never_ops.t clsfailpure(classes の V132 のブロックが diagtext の V33 の「注釈に @ {} 以外の行を書いています」に。どの分野も予告していない)
+9b. via      numeric の要望(X-premise を後に当てる側が default_to を via 付きにする)を実施した。
+             clusters/numeric/clean/default_to-via.patch を当てた(offset +85、fuzz 0)。手直し 1 として数える。
+             runtest: test/literal_default.t の premlit、weaklit に「。Box[Float64] が C であるための前提として要求されました」が付く
+             (numeric の予告どおり)。promote した。
+10. kinds    clusters/kinds/kinds.patch      7 ファイル。失敗 3: lib/elab.ml #29、#31、#37。fuzz 0。
+             手直し 3:
+               (a) #29(V117、pub な newtype のフィールド): diagtext の V24 がフィールドの検査を at_node f.T.fd_ty で包んでいたので、
+                   V117 の pub_effect_error … (unwritten_effect …) をその at_node の中に入れた。
+               (b) #31(V30、register_effect): diagtext の V24 が dup の引数を e.T.ef_ops に変えていたので、
+                   Decls.add_effect → Decls.set_effect_ops の置き換えだけを手で入れた。
+               (c) #37(V30 / V22、パス 1a): classes の V106 がパス 1b の見出しのコメントを 2 行に伸ばし class_checks を足したので、
+                   DEffect の枝(declare_effect)と speculate_until_stable の塊を手で入れ、1b の見出しは V106 の形のまま残した。
+             runtest(1 回目): test/pub.t の 3 ブロック。
+               pubaliasnt、pubaliasarg4(V117 の新しいブロック): 2:1 → 2:23。diagtext の V24 のフィールドの位置による。promote した。
+               pubaliastp(V117 の新しいブロック): インスタンスの本体の pub let が classes の V126 で構文エラー(終了状態 2)になり、
+                 期待値 [1, 2] / 3 と矛盾する(kinds の要望が予告していた形)。
+             手直し 4(test/pub.t): pubaliastp のインスタンスの let から pub を外し、前書きの「インスタンスの型パラメータも同じである」を消した。
+             promote と手直しの後、runtest 差分 0。
+
+最終: dune build 成功(警告は parser.mly:88 の Warning 60 のみ)、dune runtest 0 行。
+手直しの合計: numeric 1、diagtext 3、via 1、kinds 4(コード 3、cram 1)。

@@ -1,0 +1,73 @@
+### g10_cancelguard.kel 
+! g10_cancelguard.kel:4:38: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g10_cancelguard.kel --type-check
+! g10_cancelguard.kel:4:38: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g11_neverguard.kel 
+! g11_neverguard.kel:2:54: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g11_neverguard.kel --type-check
+! g11_neverguard.kel:2:54: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g1_opguard.kel 
+! g1_opguard.kel:2:48: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g1_opguard.kel --type-check
+! g1_opguard.kel:2:48: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g2_matchguard.kel 
+true
+[exit 0]
+### g2_matchguard.kel --type-check
+r : Boolean
+_ : {}
+[exit 0]
+### g3_ifcond.kel 
+true
+[exit 0]
+### g3_ifcond.kel --type-check
+r : Boolean
+_ : {}
+[exit 0]
+### g4_returnguard.kel 
+! g4_returnguard.kel:4:41: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g4_returnguard.kel --type-check
+! g4_returnguard.kel:4:41: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g5_innerguard.kel 
+! g5_innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g5_innerguard.kel --type-check
+! g5_innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g6_matchguard_twice.kel 
+実行時エラー: resume は高々1回しか呼べません(アフィン)
+[exit 3]
+### g6_matchguard_twice.kel --type-check
+r : Boolean
+_ : {}
+[exit 0]
+### g7_neverbody_matchguard.kel 
+! g7_neverbody_matchguard.kel:2:74: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[exit 1]
+### g7_neverbody_matchguard.kel --type-check
+! g7_neverbody_matchguard.kel:2:74: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[exit 1]
+### g9_matchguard_value.kel 
+100
+[exit 0]
+### g9_matchguard_value.kel --type-check
+r : Int32
+_ : {}
+[exit 0]
+### g8_lambda_matchguard.kel
+! g8_lambda_matchguard.kel:2:88: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[exit 1]
+### g12_innerreturn.kel
+! g12_innerreturn.kel:6:23: 型エラー: resume は操作節の中でのみ使えます
+[exit 1]
+### g13_innerbody.kel
+true
+[exit 0]

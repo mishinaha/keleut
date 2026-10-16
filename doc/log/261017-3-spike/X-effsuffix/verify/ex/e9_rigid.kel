@@ -1,0 +1,3 @@
+let bad[E](f: () => Int32 @ E): Int32 @ E = f() + "a"
+let bad2[E](f: () => Int32 @ E): Bool = f
+let bad3(f: () => Int32 @ {}): Bool = f

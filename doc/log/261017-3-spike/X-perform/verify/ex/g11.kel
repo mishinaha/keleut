@@ -1,0 +1,8 @@
+type Act = {go: () => Unit}
+effect Q = { q: (Act, Int32) => Int32 }
+let h[E](): Int32 @ {Console extends E} = { perform q({go = fn() => {}}, 1) + perform q({go = fn() => {}}, 2) } handle {
+  case q(a, n) if n > 1 => { a.go(); resume(n * 10) }
+  case q(a, n) => { a.go(); resume(n) }
+  case return(x) => { echoln("sum"); x }
+}
+echoln(show(h()))

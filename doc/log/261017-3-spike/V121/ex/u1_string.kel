@@ -1,0 +1,2 @@
+echoln("before")
+let x = "ÿ"

@@ -1,0 +1,3 @@
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = perform ask() handle { case ask() => 2 handle { case ask2() => resume(1) case cancel => { resume(1); () } } }

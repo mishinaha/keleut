@@ -1,0 +1,2 @@
+effect Out = { out: (String) => Unit }
+pub let f(): Unit = perform out("x")

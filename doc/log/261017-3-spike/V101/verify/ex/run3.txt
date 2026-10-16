@@ -1,0 +1,44 @@
+== x11tparam.kel
+[H]
+5!s!
+exit=0
+[N]
+5!s!
+exit=0
+== x12never.kel
+[H]
+e
+7
+exit=0
+[N]
+e
+7
+exit=0
+== x19resumein.kel
+[H]
+6
+exit=0
+[N]
+6
+exit=0
+== x20lit.kel
+[H]
+42
+exit=0
+[N]
+42
+exit=0
+== x21noprelude.kel
+[H]
+! x21noprelude.kel:1:33: 型エラー: 未知の型: Unit
+exit=1
+[N]
+! x21noprelude.kel:1:33: 型エラー: 未知の型: Unit
+exit=1
+== x22rec.kel
+[H]
+x22rec.kel:3:15: パースエラー(付近のトークンを確認してください)
+exit=2
+[N]
+x22rec.kel:3:15: パースエラー(付近のトークンを確認してください)
+exit=2

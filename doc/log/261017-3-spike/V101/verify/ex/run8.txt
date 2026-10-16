@@ -1,0 +1,20 @@
+== z1warnorder.kel
+[diktor-head]
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ match が非網羅的です。例えば None が漏れています
+1
+exit=0
+[main.exe]
+⚠ match が非網羅的です。例えば None が漏れています
+⚠ match が非網羅的です。例えば None が漏れています
+1
+exit=0
+== z2warnorder.kel
+[diktor-head]
+⚠ match が非網羅的です。例えば None が漏れています
+2
+exit=0
+[main.exe]
+⚠ match が非網羅的です。例えば None が漏れています
+2
+exit=0

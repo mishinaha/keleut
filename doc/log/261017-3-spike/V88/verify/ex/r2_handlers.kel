@@ -1,0 +1,13 @@
+effect Ask = { ask: () => Int32 }
+effect Log = { log: (String) => Unit }
+let prog(): Int32 @ {Ask, Log} = {
+  perform Log.log("a")
+  perform Ask.ask() + perform Ask.ask()
+}
+let r = ({ prog() } handle {
+    case Ask.ask() => resume(20)
+  }) handle {
+    case Log.log(s) => { echoln(s); resume(()) }
+    case return(v) => v + 1
+  }
+echoln(show(r))

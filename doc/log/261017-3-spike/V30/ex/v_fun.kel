@@ -1,0 +1,2 @@
+let f(): Unit @ {Log} = perform log("a")
+effect Log = { log: (String) => Unit }

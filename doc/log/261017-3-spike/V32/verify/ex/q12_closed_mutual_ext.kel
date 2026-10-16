@@ -1,0 +1,2 @@
+let rec a(n: Int32): Int32 @ Console = n match { case 0 => 0 case m => b(m - 1) }
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); a(n) }

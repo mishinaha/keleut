@@ -1,0 +1,7 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+pub newtype B[E, T] = MkB((() => T @ E, (T) => Unit @ {Log}))
+pub newtype A[T] = MkA(B[{}, T])
+pub newtype P[T, R] = MkP(B[{Log extends R}, T])
+let f[T](x: A[T]): A[T] = x
+let g[T, R](x: P[T, R]): P[T, R] = x

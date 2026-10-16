@@ -1,0 +1,2 @@
+newtype N = N(() => Unit @ {M.Log})
+module M { pub effect Log = { log: (String) => Unit } }

@@ -1,0 +1,5 @@
+let r = {a = 1}
+let x = r.Foo
+
+// c
+let b = 2

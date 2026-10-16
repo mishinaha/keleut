@@ -1,0 +1,52 @@
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 1413192..24d8864 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -953,7 +953,7 @@ pub で @ を省略した関数は @ {} と読み、宣言より前から参照
+   $ diktor --type-check nonnamelist.kel
+   mkp : () => () => Int32 @ {}
+   b : () => Int32 @ {Console}
+-  ! nonnamelist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! nonnamelist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)
+   [1]
+ 
+ 無名関数で包めば通る(制限の 1 つ目の回避)。mkp()() は呼び出しなので尾部を開き、
+File "test/ctor_field_row.t", line 1, characters 0-0:
+diff --git a/_build/default/test/ctor_field_row.t b/_build/default/test/ctor_field_row.t.corrected
+index 23c438c..315ff5c 100644
+--- a/_build/default/test/ctor_field_row.t
++++ b/_build/default/test/ctor_field_row.t.corrected
+@@ -40,6 +40,9 @@
+   > let w = W(Cb(b))
+   > KEL
+   $ diktor --type-check ctorrowarg.kel
++  b : () => Int32 @ {Console}
++  ! ctorrowarg.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ W のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
+ 
+ フィールドの型が型パラメータのときは、閉じた行は別の実引数から型パラメータに流れ込んだもので、
+ フィールドの矢印の読み方は原因でない。この読み方を添えず、型変数の仮引数を持つ関数の呼び出し
+@@ -90,6 +93,8 @@
+   > let x = R({f = 1})
+   > KEL
+   $ diktor --type-check ctorrecnoarrow.kel
++  ! ctorrecnoarrow.kel:2:9: 型エラー: ラベル g がありません(行は閉じています)
++  [1]
+ 
+ 判定はフィールドの型に閉じた行を書いた位置があるかどうかだけを見て、失敗した位置も、
+ 欠けたラベルがエフェクトかどうかも見ない。行の閉じた矢印と型パラメータを両方含むフィールドで
+@@ -113,8 +118,13 @@
+   > let x = Box(k)
+   > KEL
+   $ diktor --type-check ctorarity.kel
++  k : () => Int32
++  ! ctorarity.kel:3:9: 型エラー: ラベル _item がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
+   $ cat > ctorrecmiss.kel <<'KEL'
+   > newtype R = R({f: () => Int32, g: Int32})
+   > let x = R({f = fn() => 1})
+   > KEL
+   $ diktor --type-check ctorrecmiss.kel
++  ! ctorrecmiss.kel:2:9: 型エラー: ラベル g がありません(行は閉じています)(コンストラクタ R のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]

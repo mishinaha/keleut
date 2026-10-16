@@ -1,0 +1,4 @@
+let g(): Int32 = {
+  let cell = Ref
+  0
+}

@@ -1,0 +1,4 @@
+type C = A[{}]
+type A[E] = () => Unit @ {Console extends E}
+let k(g: C): Unit = g()
+k(fn() => echoln("hi"))

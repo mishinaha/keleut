@@ -1,0 +1,12 @@
+-- bin/diktor-head
+! premlit.kel:5:1: 型エラー: Float64 は C のインスタンスではありません
+[exit 1]
+-- items/X-premise/diktor/_build/default/bin/main.exe
+! premlit.kel:5:1: 型エラー: Float64 は C のインスタンスではありません。Box[Float64] が C であるための前提として要求されました
+[exit 1]
+-- clusters/numeric/diktor/_build/default/bin/main.exe
+! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません
+[exit 1]
+-- clusters/numeric/xp/diktor/_build/default/bin/main.exe
+! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません
+[exit 1]

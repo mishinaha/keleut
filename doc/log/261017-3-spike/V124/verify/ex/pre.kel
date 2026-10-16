@@ -1,0 +1,4 @@
+type Unit = {}
+effect Console = { echoln_: (String) => Unit }
+type P = Q[{}]
+type Q[E] = () => Unit @ {Console extends E}

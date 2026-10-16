@@ -1,0 +1,11 @@
+effect Ask = { ask: (Int32) => Int32 }
+effect Tell = { tell: (Int32) => {} }
+let r =
+  (perform Ask.ask(1) + { perform Tell.tell(7); 2 }) handle {
+    case Tell.tell(x) => { echoln(show(x)); resume(()) }
+  } handle {
+    case Ask.ask(n) => resume(n + 100)
+    case return(v) => v
+    case cancel => ()
+  }
+echoln(show(r))

@@ -1,0 +1,8 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub type Log = Int32
+  pub type C = A[{}]
+  pub type A[E] = (() => Unit @ E, Log)
+}
+let f(c: M.C): Int32 = 0
+echoln("ok")

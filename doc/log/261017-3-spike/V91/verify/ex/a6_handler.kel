@@ -1,0 +1,13 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let calc(): Int32 @ {Ask, Fail} = {
+  let a = perform ask()
+  if a % 2 == 0 then a * 3 else perform throw("odd")
+}
+let r = (calc() handle { case ask() => resume(4) }) handle { case throw(e) => 0 - 1 }
+echoln(show(r))
+let r2 = (calc() handle { case ask() => resume(5) }) handle { case throw(e) => 0 - 1 }
+echoln(show(r2))
+let w = { let q = 2.5
+  q * 2.0 }
+echoln(show(w))

@@ -1,0 +1,4 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype Wrap = MkWrap(Pair[{}])
+newtype Pair[E] = MkPair((() => Unit @ E, () => Unit @ {Log}))

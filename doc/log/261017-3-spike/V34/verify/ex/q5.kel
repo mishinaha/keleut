@@ -1,0 +1,5 @@
+type Th = () => Int32
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: Th = g
+  k()
+}

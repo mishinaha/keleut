@@ -1,0 +1,12 @@
+small1.kel HEAD=0.097 NEW=0.143 same
+small10.kel HEAD=0.544 NEW=0.624 same
+small30.kel HEAD=1.522 NEW=1.544 same
+mid100.kel HEAD=0.416 NEW=0.405 same
+mid1000.kel HEAD=0.523 NEW=0.397 same
+mid3000.kel HEAD=0.773 NEW=0.398 same
+show10000.kel HEAD=0.070 NEW=0.018 same
+show20000.kel HEAD=0.281 NEW=0.032 same
+show40000.kel HEAD=1.149 NEW=0.061 same
+show80000.kel HEAD=5.413 NEW=0.119 same
+show400000.kel NEW=0.624 same
+show1000000.kel NEW=1.487 same

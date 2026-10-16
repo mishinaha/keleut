@@ -1,0 +1,10 @@
+let use = fn(y) => {
+  let f[A](x: A): A = {
+    let r = fn(q) => q
+    let _ = y(r)
+    x
+  }
+  f
+}
+let main(): Unit @ {Console} = echoln(show(use(fn(g) => 0)(9)))
+main()

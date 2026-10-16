@@ -1,0 +1,109 @@
+== c2.kel
+[diktor-head]
+exit=
+[main.exe]
+exit=
+== c3.kel
+[diktor-head]
+! c3.kel:4:48: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=
+[main.exe]
+! c3.kel:4:48: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=
+== e1.kel
+[diktor-head]
+! e1.kel:2:25: 型エラー: 型が一致しません: String と Int32
+exit=
+[main.exe]
+! e1.kel:2:37: 型エラー: 型が一致しません: String と Int32
+exit=
+== e2.kel
+[diktor-head]
+! e2.kel:2:61: 型エラー: 型が一致しません: String と Int32
+exit=
+[main.exe]
+! e2.kel:2:68: 型エラー: 型が一致しません: String と Int32
+exit=
+== e4.kel
+[diktor-head]
+⚠ match が非網羅的です。例えば None が漏れています
+exit=
+[main.exe]
+⚠ match が非網羅的です。例えば None が漏れています
+exit=
+== e5.kel
+[diktor-head]
+! e5.kel:2:25: 型エラー: ラベル _item がありません(行は閉じています)
+exit=
+[main.exe]
+! e5.kel:2:37: 型エラー: ラベル _item がありません(行は閉じています)
+exit=
+== e6.kel
+[diktor-head]
+! e6.kel:2:36: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+! e6.kel:2:56: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+exit=
+== p1.kel
+[diktor-head]
+! p1.kel:4:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+exit=
+== p2.kel
+[diktor-head]
+! p2.kel:3:56: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=
+[main.exe]
+exit=
+== p3.kel
+[diktor-head]
+! p3.kel:2:36: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+! p3.kel:2:56: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+exit=
+== p4.kel
+[diktor-head]
+! p4.kel:4:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+exit=
+== p5.kel
+[diktor-head]
+! p5.kel:4:25: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+exit=
+== p6.kel
+[diktor-head]
+! p6.kel:2:49: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+exit=
+== p7.kel
+[diktor-head]
+! p7.kel:5:3: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+exit=
+== p8.kel
+[diktor-head]
+! p8.kel:4:23: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=
+[main.exe]
+x
+exit=
+== r1.kel
+[diktor-head]
+! r1.kel:8:17: 型エラー: ラベル Console がありません(行は閉じています)
+exit=
+[main.exe]
+exit=
+== r2.kel
+[diktor-head]
+! r2.kel:7:32: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=
+[main.exe]
+exit=

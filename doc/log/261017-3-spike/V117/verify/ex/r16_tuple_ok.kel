@@ -1,0 +1,3 @@
+type P[A] = (A, Int32)
+pub let h(x: P[(Int32) => Int32 @ {}]): Int32 = x.1
+echoln(show(h((fn(y) => y, 3))))

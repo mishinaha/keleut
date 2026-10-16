@@ -1,0 +1,6 @@
+type AliasT = Int32
+pub let pf(a: AliasT, b: AliasT): AliasT = a + b
+pub let call(): Int32 = pf(1, 2)
+let zs = (fn() => 1, fn() => 2)
+let zz = zs._0() + zs._1()
+echoln(show(call()))

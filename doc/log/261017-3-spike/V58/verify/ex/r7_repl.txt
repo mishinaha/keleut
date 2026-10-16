@@ -1,0 +1,4 @@
+effect Ask = { ask: (Int32) => Int32 }
+perform ask(2) handle { case ask(n) => resume(n * 2) }
+perform ask(2) handle { case ask(n, m) => resume(n) }
+perform ask(3) handle { case ask(n) => resume(n + 1); case return(v) => v * 10 }

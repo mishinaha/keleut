@@ -1,0 +1,7 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+effect Fail = { throw: (String) => Never }
+let bv(): Int32 @ Fail = { let n: Never = perform throw("x"); 1 }
+let bt(): Int32 @ Fail = { let (a, b): (Int32, Never) = (1, perform throw("y")); a }
+let bc(): Int32 @ Fail = { let MkA(n) = perform throw("z"); 2 }
+let br(): Int32 @ Fail = { let {x}: {x: Never} = {x = perform throw("w")}; 3 }

@@ -1,0 +1,3 @@
+type R = {a: R}
+type R = Int32
+let x: R = 1

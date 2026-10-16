@@ -1,0 +1,4 @@
+let id(x) = x
+let k = id(fn(y) => y)
+fn(z) => k(z) match {}
+echoln(show(k(3)))

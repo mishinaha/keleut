@@ -1,0 +1,13 @@
+let idf[A](x: A): A = x
+let rget[h, A](r: Ref[h, A]): A @ Heap[h] = Ref.get(r)
+let main(): Unit @ Console = {
+  let n = run h {
+    let r = Ref.new(1i32)
+    let g = idf(rget)
+    let k(): Int32 @ {Heap[h], Console} = { echoln("k"); g(r) }
+    let m(): Int32 @ {Heap[h], Print} = { println("m"); g(r) }
+    k() + with_stdout(m)
+  }
+  echoln(show(n))
+}
+main()

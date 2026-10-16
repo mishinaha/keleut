@@ -1,0 +1,8 @@
+newtype Opaque = MkOpaque(Int32)
+type instance Eq[Opaque] {
+  let eq(a, b) = (a, b) match { case (MkOpaque(x), MkOpaque(y)) => x == y }
+}
+let xs = Nil
+let t1 = xs == Cons(Cons(MkOpaque(1i32), Nil), Nil)
+let t2 = Cons(Nil, Nil) == Cons(Cons(MkOpaque(2i32), Nil), Nil)
+echoln(show(t1) + " " + show(t2))

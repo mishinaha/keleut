@@ -1,0 +1,12 @@
+diff -ruN -x _build <一時領域>/items/V91/verify/diktor/lib/unify.ml diktor2/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 04:15:09.582538461 +0900
++++ b/lib/unify.ml	2026-10-17 04:19:23.085146122 +0900
+@@ -796,7 +796,7 @@
+           if List.mem cls_integral vcls then default_to ~pred:cls_integral v t_int32
+           else if List.mem cls_fractional vcls then default_to ~pred:cls_fractional v t_float64
+       | _ -> ())
+-    !class_vars;
++    (List.rev !class_vars);
+   class_vars := [];
+   literal_origins := []
+ 

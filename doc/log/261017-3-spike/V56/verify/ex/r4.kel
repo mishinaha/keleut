@@ -1,0 +1,10 @@
+type W: EffectRow = {Console}
+module W {
+  type V = Int32
+}
+module M {
+  type W = Int32
+  pub let f(x: Int32): Int32 @ W = { echoln("m"); x }
+  pub let g(x: Int32): Int32 @ {W} = { echoln("mg"); x }
+}
+echoln(show(M.f(4) + M.g(1)))

@@ -1,0 +1,3 @@
+from "./lib" import { scale, modn }
+echoln(show(scale(2.0)))
+echoln(show(modn(20)))

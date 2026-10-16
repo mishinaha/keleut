@@ -1,0 +1,5 @@
+type W: EffectRow = {Print}
+let f[W](x: Int32): Int32 @ {Console} = {
+  let g(y: Int32): Int32 @ {W} = y
+  g(x)
+}

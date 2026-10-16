@@ -1,0 +1,2 @@
+module M { pub newtype V = V(Int32) }
+let g(x: V): Int32 = 0

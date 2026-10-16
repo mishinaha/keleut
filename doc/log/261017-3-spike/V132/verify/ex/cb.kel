@@ -1,0 +1,9 @@
+effect Fail = { throw: (String) => Never }
+type class Runner[A] {
+  val run1[E]: (A, (A) => Int32 @ E) => Int32 @ E
+}
+type instance Runner[Int32] {
+  let run1[E](x: Int32, f: (Int32) => Int32 @ E): Int32 @ E = f(x)
+}
+let r: Int32 = run1(3, fn(x: Int32) => perform throw("boom")) handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+echoln(show(r))

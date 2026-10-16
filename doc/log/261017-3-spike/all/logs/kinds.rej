@@ -1,0 +1,82 @@
+--- lib/elab.ml
++++ lib/elab.ml
+@@ -3936,8 +4126,11 @@ let register_newtype env (n : T.newtype') =
+                        意図したのか書き忘れたのかを読み手が区別できなければならない
+                        (sample.kel:825-831。フィールドへの適用は :828-829 に
+                        明記されている) *)
+-                    (if n.T.nt_pub && not (fully_effected f.T.fd_ty) then
+-                       type_error "pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)");
++                    (if n.T.nt_pub then
++                       pub_effect_error "pub な newtype のフィールド"
++                         (unwritten_effect ~expanding:[]
++                            (pub_scope (List.map (fun (tp : type_param) -> tp.tp_name) n.T.nt_params))
++                            f.T.fd_ty));
+                     let ty = elab_type env' 1 f.T.fd_ty in
+                     (* フィールドの型のカインドは Type。値の型の位置に対する一般の検査
+                        (§11.3)をフィールドに当てはめたものなので、照合そのものは
+@@ -4017,7 +4219,7 @@ let register_effect env (e : T.effect') =
+     | (op, _) :: rest -> if List.mem_assoc op rest then type_error ("操作 " ^ display_of op ^ " が二重に宣言されています") else dup rest
+   in
+   dup ops;
+-  Decls.add_effect { Decls.ef_name = intern e.T.ef_name; ef_ops = ops }
++  Decls.set_effect_ops { Decls.ef_name = intern e.T.ef_name; ef_ops = ops }
+ 
+ let binding_name (b : T.let_binding') = match snd b.T.lb_name with T.PVar x -> Some x | _ -> None
+ 
+@@ -4986,17 +5193,47 @@ let process_decls ?(toplevel_extra = []) env ~emit decls =
+             (List.fold_right
+                (fun (tp : type_param) acc -> KArrow ((if tp.tp_arity > 0 then k_arrow tp.tp_arity else new_kind_var ()), acc))
+                n.T.nt_params KStar)
+-      | T.DEffect e -> Decls.claim_type_name "effect" (intern e.T.ef_name)
++      | T.DEffect e ->
++          (* エフェクトの名前はここで表に置き、操作は 1b で書き込む。1b で読む型の本体が、
++             後ろで宣言されたエフェクトのラベルを読めるようにする *)
++          Decls.declare_effect (intern e.T.ef_name)
+       | _ -> ())
+     decls;
+-  (* パス 1a の後始末: newtype の本体の投機。宣言順に依存せずにパラメータのカインドを
+-     決めるため、登録の前に本体を一度読んで捨てる *)
+-  List.iter
+-    (fun ((_, d) as node : T.decl) ->
+-      at_node node @@ fun () ->
+-      with_decl_module node @@ fun () ->
+-      match d with T.DNewtype n -> speculate_newtype env n | _ -> ())
+-    decls;
++  (* パス 1a の後始末: newtype とエイリアスの本体の投機。宣言順に依存せずにパラメータの
++     カインドを決めるため、登録の前に本体を読んで捨てる。1 周で決まったカインドが、前の
++     周で落ちた本体を読めるようにすることがあるので、決まったパラメータの数が増えなく
++     なるまで繰り返す。数はパラメータの総数を超えないので、繰り返しは止まる *)
++  let speculate_all () =
++    List.iter
++      (fun ((_, d) as node : T.decl) ->
++        at_node node @@ fun () ->
++        with_decl_module node @@ fun () ->
++        match d with T.DNewtype n -> speculate_newtype env n | T.DType t -> speculate_alias env t | _ -> ())
++      decls
++  in
++  let settled () =
++    let known k = match kind_repr k with KVar _ -> 0 | _ -> 1 in
++    let rec count k = match kind_repr k with KArrow (a, r) -> known a + count r | _ -> 0 in
++    List.fold_left
++      (fun acc ((_, d) as node : T.decl) ->
++        match d with
++        | T.DNewtype n ->
++            with_decl_module node @@ fun () ->
++            acc + count (Decls.con_kind (intern n.T.nt_name) (List.length n.T.nt_params))
++        | T.DType t -> (
++            with_decl_module node @@ fun () ->
++            match Hashtbl.find_opt Decls.aliases (intern t.T.ta_name) with
++            | Some info -> List.fold_left (fun acc k -> acc + known k) acc info.Decls.al_kinds
++            | None -> acc)
++        | _ -> acc)
++      0 decls
++  in
++  let rec speculate_until_stable prev =
++    speculate_all ();
++    let now = settled () in
++    if now > prev then speculate_until_stable now
++  in
++  speculate_until_stable (settled ());
+   (* パス 1b: newtype のコンストラクタ、effect、type class の登録(相互再帰と前方参照を許す) *)
+   let env =
+     List.fold_left

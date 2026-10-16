@@ -1,0 +1,8 @@
+ov_id diktor-head: ! ov_id.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています) (rc=1)
+ov_id main.exe: ! ov_id.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています) (rc=1)
+ov_inc diktor-head: 15 (rc=0)
+ov_inc main.exe: 15 (rc=0)
+ov_plus diktor-head: ! ov_plus.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています) (rc=1)
+ov_plus main.exe: 15 (rc=0)
+ov_neg diktor-head: ! ov_neg.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています) (rc=1)
+ov_neg main.exe: 7 (rc=0)

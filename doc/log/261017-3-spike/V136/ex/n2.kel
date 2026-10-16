@@ -1,0 +1,3 @@
+newtype Box[A] = Box(A)
+type instance[A: Show] Show[Box[_]] { let show(b) = b match { case Box(x) => "Box(" + show(x) + ")" } }
+echo(show(Box(3i32)))

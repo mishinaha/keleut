@@ -1,0 +1,6 @@
+effect Fail = { fail: (Int32) => Never }
+let r = perform fail(1) handle {
+  case fail(0) => 0
+  case return(x) => x
+}
+echoln(show(r))

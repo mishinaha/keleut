@@ -1,0 +1,16 @@
+let h(n: Int32): Int32 = {
+  n * 2
+}
+:type h(then)
+:type h(1)
+let then = "a
+b"
+let z = 3
+let w = if
+true then 1 else 2
+let rec f(x: Int32): Int32 = x
+and g(x: Int32): Int32 = x
+let r = {a = 1,
+  then = 2}
+r
+let q = (1,

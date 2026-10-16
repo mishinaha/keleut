@@ -1,0 +1,2 @@
+effect Fail = { throw: (String) => Never }
+let f[E](s: String): Int32 @ E = perform throw("bad: " + s)

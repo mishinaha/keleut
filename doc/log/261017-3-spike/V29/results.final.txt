@@ -1,0 +1,320 @@
+### a10.kel --type-check
+H: ! a10.kel:3:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### a1.kel --no-prelude --type-check
+H: ! a1.kel:5:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### a2.kel --no-prelude --type-check
+H: ! a2.kel:3:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### a3b.kel --no-prelude --type-check
+H: g : (Callback[{Print}]) => Int32| [rc=0]
+P: g : (Callback[{Print}]) => Int32| [rc=0]
+X: g : (Callback[{Print}]) => Int32| [rc=0]
+### a3.kel --no-prelude --type-check
+H: | [rc=0]
+P: | [rc=0]
+X: | [rc=0]
+### a4.kel --no-prelude --type-check
+H: ! a4.kel:3:23: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### a5.kel --no-prelude --type-check
+H: g : (Callback[{Print}]) => Int32| [rc=0]
+P: g : (Callback[{Print}]) => Int32| [rc=0]
+X: g : (Callback[{Print}]) => Int32| [rc=0]
+### a6.kel --no-prelude --type-check
+H: ! a6.kel:5:23: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### a7.kel --no-prelude --type-check
+H: ! a7.kel:5:13: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: mk : () => H| [rc=0]
+X: mk : () => H| [rc=0]
+### a8.kel --no-prelude --type-check
+H: a8.kel:5:6: パースエラー(付近のトークンを確認してください)| [rc=2]
+P: a8.kel:5:6: パースエラー(付近のトークンを確認してください)| [rc=2]
+X: a8.kel:5:6: パースエラー(付近のトークンを確認してください)| [rc=2]
+### a9.kel --no-prelude --type-check
+H: ! a9.kel:5:24: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### ar3.kel --type-check
+H: ! ar3.kel:3:31: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+X: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+### ch1.kel --type-check
+H: ! ch1.kel:3:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### ch2.kel --type-check
+H: ! ch2.kel:3:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### ch3.kel --type-check
+H: ! ch3.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### ch4.kel --type-check
+H: ! ch4.kel:1:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### chain.kel --type-check
+H: ! chain.kel:4:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+X: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+### effop.kel --type-check
+H: ! effop.kel:1:23: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### id.kel --type-check
+H: ! id.kel:2:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: A| [rc=1]
+P: ! id.kel:2:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: A| [rc=1]
+X: ! id.kel:2:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: A| [rc=1]
+### lab1.kel --type-check
+H: ! lab1.kel:2:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! lab1.kel:2:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+X: | [rc=0]
+### lab2.kel --type-check
+H: f : ((() => {} @ {}, () => {} @ {Log})) => Int32| [rc=0]
+P: f : ((() => {} @ {}, () => {} @ {Log})) => Int32| [rc=0]
+X: f : ((() => {} @ {}, () => {} @ {Log})) => Int32| [rc=0]
+### lab3.kel --type-check
+H: ! lab3.kel:2:47: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### mix.kel --type-check
+H: ! mix.kel:4:45: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: h : H| [rc=0]
+X: h : H| [rc=0]
+### mod1.kel --type-check
+H: ! mod1.kel:1:22: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### neg1.kel --type-check
+H: ! neg1.kel:1:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: h : H|! neg1.kel:5:5: 型エラー: 注釈された型を満たしません(ラベル Print がありません(行は閉じています))| [rc=1]
+X: h : H|! neg1.kel:5:5: 型エラー: 注釈された型を満たしません(ラベル Print がありません(行は閉じています))| [rc=1]
+### neg2.kel --type-check
+H: ! neg2.kel:3:45: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! neg2.kel:3:45: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+X: ! neg2.kel:3:45: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+### neg3.kel --type-check
+H: ! neg3.kel:4:12: 型エラー: {} は Integral のインスタンスではありません| [rc=1]
+P: ! neg3.kel:4:12: 型エラー: {} は Integral のインスタンスではありません| [rc=1]
+X: ! neg3.kel:4:12: 型エラー: {} は Integral のインスタンスではありません| [rc=1]
+### ph.kel --type-check
+H: h : H| [rc=0]
+P: h : H| [rc=0]
+X: h : H| [rc=0]
+### pos3.kel --type-check
+H: h : H| [rc=0]
+P: h : H| [rc=0]
+X: h : H| [rc=0]
+### post1.kel --type-check
+H: ! post1.kel:2:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### pre1.kel --type-check
+H: ! pre1.kel:2:40: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### run1.kel 
+H: ! run1.kel:1:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: hello| [rc=0]
+X: hello| [rc=0]
+### run2.kel 
+H: ! run2.kel:2:40: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: wr| [rc=0]
+X: wr| [rc=0]
+### v124b.kel --type-check
+H: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+P: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+X: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+### v124c.kel --type-check
+H: ! v124c.kel:2:31: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### v124.kel --type-check
+H: ! v124.kel:2:31: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+X: f : ((Int32) => {} @ {}) => Int32| [rc=0]
+### v22a.kel --type-check
+H: ! v22a.kel:4:34: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! v22a.kel:4:34: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+X: | [rc=0]
+### v22b.kel --type-check
+H: ! v22b.kel:2:34: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### w1.kel --no-prelude --type-check
+H: ! w1.kel:3:40: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### w2.kel --no-prelude --type-check
+H: f : (Int32) => Int32 @ {Print}| [rc=0]
+P: f : (Int32) => Int32 @ {Print}| [rc=0]
+X: f : (Int32) => Int32 @ {Print}| [rc=0]
+### w3.kel --no-prelude --type-check
+H: | [rc=0]
+P: | [rc=0]
+X: | [rc=0]
+### d1.kel --type-check
+H: ! d1.kel:1:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! d1.kel:2:20: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)| [rc=1]
+X: ! d1.kel:2:20: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)| [rc=1]
+### d2.kel --type-check
+H: ! d2.kel:2:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! d2.kel:1:20: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)| [rc=1]
+X: ! d2.kel:1:20: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)| [rc=1]
+### d3.kel --type-check
+H: ! d3.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! d3.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: ! d3.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+### d4.kel --type-check
+H: ! d4.kel:1:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! d4.kel:1:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: ! d4.kel:1:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+### d5.kel --type-check
+H: ! d5.kel:2:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! d5.kel:2:20: 型エラー: 未知のエフェクト: Nope| [rc=1]
+X: ! d5.kel:2:20: 型エラー: 未知のエフェクト: Nope| [rc=1]
+### d6.kel --type-check
+H: ! d6.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: ς1 :: Row| [rc=1]
+P: ! d6.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: ς1 :: Row| [rc=1]
+X: ! d6.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: ς1 :: Row| [rc=1]
+### d7.kel --type-check
+H: ! d7.kel:3:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! d7.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row| [rc=1]
+X: ! d7.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row| [rc=1]
+### l1d.kel --type-check
+H: | [rc=0]
+P: | [rc=0]
+X: | [rc=0]
+### l1e.kel --type-check
+H: ! l1e.kel:3:22: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! l1e.kel:3:22: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: | [rc=0]
+### l1p2.kel --type-check
+H: ! l1p2.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! l1p2.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: | [rc=0]
+### l1p.kel --type-check
+H: ! l1p.kel:3:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! l1p.kel:3:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: | [rc=0]
+### l1r.kel --type-check
+H: ! l1r.kel:3:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! l1r.kel:3:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: | [rc=0]
+### l1w.kel --type-check
+H: ! l1w.kel:3:32: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### myprelude.kel --no-prelude --type-check
+H: ! myprelude.kel:3:22: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: | [rc=0]
+X: | [rc=0]
+### q1d.kel --type-check
+H: ! q1d.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+P: ! q1d.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+X: ! q1d.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+### q1.kel --type-check
+H: ! q1.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+P: ! q1.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+X: ! q1.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+### q2.kel --type-check
+H: ! q2.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+P: ! q2.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+X: ! q2.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+### q3.kel --type-check
+H: ! q3.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+P: ! q3.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+X: ! q3.kel:2:3: 未実装: module 内の effect 宣言(M10): module M| [rc=4]
+### q4.kel --type-check
+H: ! q4.kel:2:37: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: ! q4.kel:4:27: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+X: | [rc=0]
+### q5d.kel --type-check
+H: ! q5d.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)| [rc=1]
+P: ! q5d.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)| [rc=1]
+X: ! q5d.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)| [rc=1]
+### q5.kel --type-check
+H: ! q5.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)| [rc=1]
+P: ! q5.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)| [rc=1]
+X: ! q5.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)| [rc=1]
+### r10_v31.kel 
+H: ! r10_v31.kel:1:13: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: ! r10_v31.kel:1:13: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+X: ! r10_v31.kel:1:13: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+### r11_v28.kel 
+H: m| [rc=0]
+P: m| [rc=0]
+X: m| [rc=0]
+### r12_v56.kel 
+H: v56| [rc=0]
+P: v56| [rc=0]
+X: v56| [rc=0]
+### r13_rec.kel 
+H: 4| [rc=0]
+P: 4| [rc=0]
+X: 4| [rc=0]
+### r14_import.kel 
+H: imp| [rc=0]
+P: imp| [rc=0]
+X: imp| [rc=0]
+### r15_imp2.kel 
+H: 1| [rc=0]
+P: 1| [rc=0]
+X: 1| [rc=0]
+### r16_prel.kel --type-check
+H: ! r16_prel.kel:1:17: 型エラー: 未知の型: Cb| [rc=1]
+P: ! r16_prel.kel:1:17: 型エラー: 未知の型: Cb| [rc=1]
+X: ! r16_prel.kel:1:17: 型エラー: 未知の型: Cb| [rc=1]
+### r1_mod.kel 
+H: ! r1_mod.kel:4:26: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: mod| [rc=0]
+X: mod| [rc=0]
+### r2_hk.kel 
+H: ! r2_hk.kel:3:21: 型エラー: 型構成子 Box には型引数が必要です| [rc=1]
+P: ! r2_hk.kel:3:21: 型エラー: 型構成子 Box には型引数が必要です| [rc=1]
+X: ! r2_hk.kel:3:21: 型エラー: 型構成子 Box には型引数が必要です| [rc=1]
+### r3_handler.kel 
+H: ! r3_handler.kel:3:25: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: log a|p|log b| [rc=0]
+X: log a|p|log b| [rc=0]
+### r4_guard.kel 
+H: gt|le| [rc=0]
+P: gt|le| [rc=0]
+X: gt|le| [rc=0]
+### r5_effop.kel 
+H: ok| [rc=0]
+P: ok| [rc=0]
+X: ok| [rc=0]
+### r6_class.kel 
+H: ! r6_class.kel:1:28: 型エラー: 行カインドではない型パラメータです: E| [rc=1]
+P: 42| [rc=0]
+X: 42| [rc=0]
+### r7_phantom.kel 
+H: 5| [rc=0]
+P: 5| [rc=0]
+X: 5| [rc=0]
+### r8_pubann.kel 
+H: ! r8_pubann.kel:2:24: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: pub| [rc=0]
+X: pub| [rc=0]
+### r9_nested.kel 
+H: ! r9_nested.kel:4:24: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません| [rc=1]
+P: 11| [rc=0]
+X: 11| [rc=0]
+### v30b.kel --type-check
+H: ! v30b.kel:2:43: 型エラー: 未知のエフェクト: Log| [rc=1]
+P: ! v30b.kel:2:43: 型エラー: 未知のエフェクト: Log| [rc=1]
+X: ! v30b.kel:2:43: 型エラー: 未知のエフェクト: Log| [rc=1]
+### v30.kel --type-check
+H: ! v30.kel:1:30: 型エラー: 未知のエフェクト: Log| [rc=1]
+P: ! v30.kel:1:30: 型エラー: 未知のエフェクト: Log| [rc=1]
+X: ! v30.kel:1:30: 型エラー: 未知のエフェクト: Log| [rc=1]

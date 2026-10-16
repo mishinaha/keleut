@@ -1,0 +1,4 @@
+let id[T](x: T): T = x
+let g = id(Show.show)
+let p(): Unit @ Print = println(g(1))
+with_stdout(fn() => p())

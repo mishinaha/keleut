@@ -1,0 +1,6 @@
+let p: (Int64, Int32) = (4294967295i64, 1)
+let g(): Int32 = {
+  let (4294967295, y) = p
+  y
+}
+echoln(show(g()))

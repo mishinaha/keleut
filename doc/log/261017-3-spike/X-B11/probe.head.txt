@@ -1,0 +1,3 @@
+eval_string: Ok, out="42\n"
+type_check_string: M.f : (Int32) => Int32 @ {}; _ : {} / None
+Interp.run raw: 実行時エラー: module の評価は未実装です(M10)

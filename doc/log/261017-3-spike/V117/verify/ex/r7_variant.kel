@@ -1,0 +1,5 @@
+type F = (Int32) => Int32 @ {}
+type U = #A(F) | #B
+pub let h(u: U): Int32 = u match { case #A(f) => f(1)
+  case #B => 0 }
+echoln(show(h(#A(fn(x) => x + 1))))

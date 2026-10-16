@@ -1,0 +1,1 @@
+let f[W](x: Int32): Int32 @ {W} = x

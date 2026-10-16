@@ -1,0 +1,12 @@
+pub let sb(x: Int32, y: Int32): Int32 = x - y
+let id[T](x: T): T = x
+let main(): Unit @ Console = {
+  let ops = (id(sb), 0)
+  ops match {
+    case (s, _) => {
+      let p(): Unit @ Print = println(show(s(9, 2)))
+      echoln(show(s(9, 2)))
+    }
+  }
+}
+main()

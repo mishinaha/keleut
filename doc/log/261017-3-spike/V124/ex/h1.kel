@@ -1,0 +1,7 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub newtype N = MkN(C[{}])
+  type C[E] = Inner[E]
+  newtype Inner[E] = MkI((() => Unit @ E, () => Unit @ {Log}))
+}
+let f(n: M.N): Int32 = 0

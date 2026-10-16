@@ -1,0 +1,2 @@
+type class Pretty[A] { val pretty: (A) => String }
+type instance Pretty[Int32] { let pretty(x) = "#" + show(x) }

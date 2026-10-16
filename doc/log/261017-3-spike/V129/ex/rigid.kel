@@ -1,0 +1,2 @@
+let f[A](x: A): Int32 = x match {}
+echoln("ok")

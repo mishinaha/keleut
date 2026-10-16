@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+newtype Foo = Foo
+type instance Show[Foo] {
+  let show: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
+}
+echoln(show(Foo))

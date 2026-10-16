@@ -1,0 +1,8 @@
+effect Log = { log: (String) => Unit }
+newtype Cb = Cb((String) => Unit @ {Log})
+let call(c: Cb): Unit @ {Log} = c match { case Cb(g) => g("hi") }
+let n: Int32 = {
+  call(Cb(fn(s) => perform log(s))) handle { case log(s) => resume(()) }
+  42
+}
+echoln(show(n))

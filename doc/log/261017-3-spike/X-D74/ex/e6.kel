@@ -1,0 +1,5 @@
+let use[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let g(): Int32 = run h {
+  let r = Ref.new(0)
+  run k { use(r) }
+}

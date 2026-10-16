@@ -1,0 +1,31 @@
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = {
+    let rec strs(ys, acc) = ys match {
+      case Cons(head = a, tail = Cons(head = b, tail = Cons(head = c, tail = Cons(head = d, tail = t)))) =>
+        strs(t, Cons(Show.show(a) + ", " + Show.show(b) + ", " + Show.show(c) + ", " + Show.show(d), acc))
+      case Cons(head = a, tail = Cons(head = b, tail = Cons(head = c, tail = Nil))) =>
+        Cons(Show.show(a) + ", " + Show.show(b) + ", " + Show.show(c), acc)
+      case Cons(head = a, tail = Cons(head = b, tail = Nil)) => Cons(Show.show(a) + ", " + Show.show(b), acc)
+      case Cons(head = a, tail = Nil) => Cons(Show.show(a), acc)
+      case Nil => acc
+    }
+    let rec fwd(ss, acc) = ss match {
+      case Cons(head = a, tail = Cons(head = b, tail = t)) => fwd(t, Cons(a + ", " + b, acc))
+      case Cons(head = a, tail = Nil) => Cons(a, acc)
+      case Nil => acc
+    }
+    let rec bwd(ss, acc) = ss match {
+      case Cons(head = b, tail = Cons(head = a, tail = t)) => bwd(t, Cons(a + ", " + b, acc))
+      case Cons(head = a, tail = Nil) => Cons(a, acc)
+      case Nil => acc
+    }
+    let rec join(ss, rev) = ss match {
+      case Cons(head = s, tail = Nil) => s
+      case _ => if rev then join(bwd(ss, Nil), false) else join(fwd(ss, Nil), true)
+    }
+    xs match {
+      case Nil => "[]"
+      case _ => "[" + join(strs(xs, Nil), true) + "]"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+module M {
+  pub let rec f[A](x: A, n: Int32): Int32 @ Console = { echoln("f"); g(n) }
+  and g[B](n: Int32): Int32 = n
+}
+echoln(show(M.f("x", 3i32)))

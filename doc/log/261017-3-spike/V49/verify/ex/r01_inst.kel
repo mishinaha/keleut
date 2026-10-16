@@ -1,0 +1,7 @@
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x)
+newtype Box[A] = Box(A)
+type class Get[T] {
+  val get_v: (T) => T
+}
+type instance[A] Get[Box[_]] { let get_v(b) = k(b) }

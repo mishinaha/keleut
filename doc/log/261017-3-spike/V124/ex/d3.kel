@@ -1,0 +1,3 @@
+type C = A[{}]
+type A[E] = (Int32) => Unit @ E
+let bad(): C = fn(x) => println("x")

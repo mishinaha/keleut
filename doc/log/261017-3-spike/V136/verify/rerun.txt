@@ -1,0 +1,163 @@
+== a.kel
+-- diktor-head
+⚠ match が非網羅的です。例えば _ が漏れています
+ exit 1
+-- main.exe
+ exit 0
+== b.kel
+-- diktor-head
+ exit 0
+-- main.exe
+ exit 0
+== c.kel
+-- diktor-head
+ exit 0
+-- main.exe
+ exit 0
+== d.kel
+-- diktor-head
+⚠ match が非網羅的です。例えば Green が漏れています
+ exit 1
+-- main.exe
+⚠ match が非網羅的です。例えば Green が漏れています
+ exit 1
+== e.kel
+-- diktor-head
+ exit 0
+-- main.exe
+ exit 0
+== f.kel
+-- diktor-head
+⚠ match が非網羅的です。例えば _ が漏れています
+ exit 1
+-- main.exe
+ exit 0
+== g.kel
+-- diktor-head
+⚠ match が非網羅的です。例えば _ が漏れています
+ exit 1
+-- main.exe
+ exit 0
+== h.kel
+-- diktor-head
+h.kel:2:53: パースエラー(付近のトークンを確認してください)
+ exit 2
+-- main.exe
+h.kel:2:53: パースエラー(付近のトークンを確認してください)
+ exit 2
+== i.kel
+-- diktor-head
+! i.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と String)
+ exit 1
+-- main.exe
+! i.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と String)
+ exit 1
+== j.kel
+-- diktor-head
+! j.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(ラベル _item がありません(行は閉じています))
+ exit 1
+-- main.exe
+! j.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(ラベル _item がありません(行は閉じています))
+ exit 1
+== k.kel
+-- diktor-head
+k.kel:2:54: パースエラー(付近のトークンを確認してください)
+ exit 2
+-- main.exe
+k.kel:2:54: パースエラー(付近のトークンを確認してください)
+ exit 2
+== l.kel
+-- diktor-head
+! l.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+ exit 1
+-- main.exe
+zero5 exit 0
+== m.kel
+-- diktor-head
+! m.kel:2:37: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド describe の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+ exit 1
+-- main.exe
+! m.kel:2:37: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド describe の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+ exit 1
+== n.kel
+-- diktor-head
+n.kel:2:86: パースエラー(付近のトークンを確認してください)
+ exit 2
+-- main.exe
+n.kel:2:86: パースエラー(付近のトークンを確認してください)
+ exit 2
+== o.kel
+-- diktor-head
+o.kel:2:80: パースエラー(付近のトークンを確認してください)
+ exit 2
+-- main.exe
+o.kel:2:80: パースエラー(付近のトークンを確認してください)
+ exit 2
+== p.kel
+-- diktor-head
+p.kel:2:60: パースエラー(付近のトークンを確認してください)
+ exit 2
+-- main.exe
+p.kel:2:60: パースエラー(付近のトークンを確認してください)
+ exit 2
+== q.kel
+-- diktor-head
+3 exit 0
+-- main.exe
+3 exit 0
+== r.kel
+-- diktor-head
+in2 exit 0
+-- main.exe
+in2 exit 0
+== s.kel
+-- diktor-head
+! s.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: String と Int32)
+ exit 1
+-- main.exe
+! s.kel:2:67: 型エラー: 型が一致しません: Int32 と String
+ exit 1
+== t.kel
+-- diktor-head
+! t.kel:2:32: 型エラー: インスタンスメソッド size がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+ exit 1
+-- main.exe
+! t.kel:2:32: 型エラー: インスタンスメソッド size がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+ exit 1
+== u.kel
+-- diktor-head
+! u.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: String と Int32)
+ exit 1
+-- main.exe
+! u.kel:2:73: 型エラー: 型が一致しません: Int32 と String
+ exit 1
+== v.kel
+-- diktor-head
+xxx exit 0
+-- main.exe
+xxx exit 0
+== w.kel
+-- diktor-head
+! w.kel:2:33: 型エラー: インスタンスメソッド pick がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+ exit 1
+-- main.exe
+20 exit 0
+== x.kel
+-- diktor-head
+! x.kel:2:31: 型エラー: インスタンスメソッド lv がクラス宣言の型を満たしません(ラベル Hi がありません(行は閉じています))
+ exit 1
+-- main.exe
+⚠ match が非網羅的です。例えば #Hi(_) が漏れています
+ exit 1
+== y.kel
+-- diktor-head
+hi exit 0
+-- main.exe
+hi exit 0
+== z.kel
+-- diktor-head
+! z.kel:2:31: 型エラー: インスタンスメソッド lv がクラス宣言の型を満たしません(ラベル Mid がありません(行は閉じています))
+ exit 1
+-- main.exe
+! z.kel:2:91: 型エラー: ラベル Mid がありません(行は閉じています)
+ exit 1

@@ -1,0 +1,4 @@
+module M {
+  pub let b[F](n: Int32): Int32 @ F = n
+  pub let a(n: Int32): Int32 = b(n)
+}

@@ -1,0 +1,2 @@
+let f(x) = { echoln(show(x)); x match {} }
+echoln("ok")

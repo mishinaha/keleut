@@ -1,0 +1,202 @@
+diff a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:05:04.978142220 +0900
+@@ -729,6 +729,11 @@
+    値は、型の頭が newtype で、その型が `Show` を満たすときだけ `Show.show` で表示する。
+    満たすかどうかは、型検査器に `Show` の制約を足して確かめ、足した書き換えはすぐ戻す。
+    それ以外は `Value.show` で表示する。
++   関数の値は、組み込みの関数も含めて `<fn>` と表示する。
++   辞書を受け取る値(制約付きで一般化した値束縛と式文)は、型の決まっていない辞書を渡して評価し、
++   その値を表示する。
++   初期化式は構文上の値なので、この評価は停止し、エフェクトを起こさない。
++   初期化式が穴に到達したときだけ、値の代わりに `<unevaluated>` を出す。
+    組み込みの `Show[String]` は引用符を付けないので、
+    文字列を `Show.show` で出すと識別子と区別できない。
+ 
+@@ -801,7 +806,21 @@
+       undo ();
+       raise ex
+ 
++(* 辞書を受け取る値は、型の決まっていない辞書(DPending)を渡して評価してから表示する。
++   初期化式は構文上の値なので停止し、エフェクトを起こさない。
++   穴に到達して実行時エラーになったときは、評価しない印を出す *)
++let force_for_display v =
++  match v with
++  | Value.VDictAbs da -> (
++      match da.Value.da_fn (List.init da.Value.da_arity (fun _ -> Value.VDict Value.DPending)) with
++      | v -> Some v
++      | exception Value.Runtime_error _ -> None)
++  | v -> Some v
++
+ let show_value ty v =
++  match force_for_display v with
++  | None -> "<unevaluated>"
++  | Some v ->
+   let open Syntax.Type in
+   let shows =
+     match repr ty with
+@@ -815,8 +834,8 @@
+     let d = Interp.eval_ev env (Unify.display_evidence (intern "Show") ty) in
+     match Interp.apply (Interp.select_method ~cls:(intern "Show") d "show" []) (Value.VRecord [ (l_item, v) ]) with
+     | Value.VText s -> s
+-    | v -> Value.show v
+-  else Value.show v
++    | v -> Value.show ~fn_name:false v
++  else Value.show ~fn_name:false v
+ 
+ let repl options =
+   let print_owned () = Decls.prelude_owned "effect" (Syntax.Type.intern "Print") in
+diff a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/interp.ml	2026-10-17 04:05:24.758428475 +0900
+@@ -585,7 +585,7 @@
+ and eval_binding_value env bnode =
+   match dict_params_of bnode with
+   | [] -> eval_binding_value_plain env bnode
+-  | ks -> VDictAbs { da_last = None; da_name = "let"; da_fn = (fun ds -> eval_binding_value_plain (bind_dicts env ks ds) bnode) }
++  | ks -> VDictAbs { da_last = None; da_name = "let"; da_arity = List.length ks; da_fn = (fun ds -> eval_binding_value_plain (bind_dicts env ks ds) bnode) }
+ 
+ and eval_binding env ((_, b) as bnode : T.let_binding) =
+   let v = eval_binding_value env bnode in
+@@ -614,7 +614,7 @@
+         | ks ->
+             ( name,
+               VDictAbs
+-                { da_last = None; da_name = name; da_fn = (fun ds -> VClosure { c_env = bind_dicts !genv ks ds; c_params = ps; c_body = body }) },
++                { da_last = None; da_name = name; da_arity = List.length ks; da_fn = (fun ds -> VClosure { c_env = bind_dicts !genv ks ds; c_params = ps; c_body = body }) },
+               None ))
+       bs
+   in
+@@ -1255,6 +1255,7 @@
+     {
+       da_last = None;
+       da_name = cls_name ^ "." ^ m;
++      da_arity = List.length cs;
+       da_fn =
+         (fun ds ->
+           let d = List.nth ds idx in
+@@ -1408,7 +1409,7 @@
+       let prim = VPrim { p_name = ex.T.ex_name; p_fn = impl } in
+       let v =
+         match Tree.get_dict node with
+-        | Tree.DAbs (_ :: _) -> VDictAbs { da_last = None; da_name = ex.T.ex_name; da_fn = (fun _ -> prim) }
++        | Tree.DAbs (_ :: _ as ks) -> VDictAbs { da_last = None; da_name = ex.T.ex_name; da_arity = List.length ks; da_fn = (fun _ -> prim) }
+         | _ -> prim
+       in
+       bind_globals env [ (Tree.GDecl (Tree.oid_of node, ex.T.ex_name), v) ]
+@@ -1575,10 +1576,10 @@
+             bind_globals env (List.map (fun ((m, _) as ms) -> (Tree.GMethod (cls_name ^ "." ^ m), method_selector ci ms)) ci.Decls.ci_methods)
+         | None -> env)
+     | T.DExp e ->
+-        (* 辞書パラメータを持つ式文は評価せず、辞書を受け取る値として表示する(<fn>) *)
++        (* 辞書パラメータを持つ式文は宣言の位置で評価せず、辞書を受け取る値にする。表示は第16章 §16.6b が評価する *)
+         let v =
+           match Tree.get_dict node with
+-          | Tree.DAbs ks -> VDictAbs { da_last = None; da_name = "_"; da_fn = (fun ds -> eval (bind_dicts env ks ds) e) }
++          | Tree.DAbs ks -> VDictAbs { da_last = None; da_name = "_"; da_arity = List.length ks; da_fn = (fun ds -> eval (bind_dicts env ks ds) e) }
+           | _ -> eval env e
+         in
+         shown := ("_", `Exp e, v) :: !shown;
+diff a/lib/value.ml b/lib/value.ml
+--- a/lib/value.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/value.ml	2026-10-17 04:05:24.758622613 +0900
+@@ -97,8 +97,9 @@
+   | DVariant of (oid * t) list
+   | DPending
+ 
+-(* 辞書を受け取る値。直前に受け取った辞書の列(物理的に同じもの)と結果を覚える *)
+-and dict_abs = { da_name : string; da_fn : t list -> t; mutable da_last : (t list * t) option }
++(* 辞書を受け取る値。da_arity は受け取る辞書の個数。
++   直前に受け取った辞書の列(物理的に同じもの)と結果を覚える *)
++and dict_abs = { da_name : string; da_arity : int; da_fn : t list -> t; mutable da_last : (t list * t) option }
+ 
+ (* ## 12.2 クロージャの環境が可変である理由
+ 
+@@ -451,9 +452,11 @@
+     in
+     if String.exists (fun c -> c = '.' || c = 'e' || c = 'E') s then s else s ^ ".0"
+ 
+-  (* ---- 印字(実行時エラーの表示用) ---- *)
++  (* ---- 印字(実行時エラーと対話的な実行の表示用) ----
++     fn_name が偽なら、組み込みの関数も <fn> と印字する(対話的な実行の表示) *)
+ 
+-let rec show v =
++let rec show ?(fn_name = true) v =
++  let show v = show ~fn_name v in
+   match v with
+   | VBool b -> string_of_bool b
+   | VInt32 n -> Int32.to_string n
+@@ -472,7 +475,7 @@
+       if Array.length d_fields = 0 then Type.display_of d_ctor
+       else Type.display_of d_ctor ^ "(" ^ String.concat ", " (Array.to_list (Array.map show d_fields)) ^ ")"
+   | VClosure _ -> "<fn>"
+-  | VPrim p -> "<prim " ^ Type.display p.p_name ^ ">"
++  | VPrim p -> if fn_name then "<prim " ^ Type.display p.p_name ^ ">" else "<fn>"
+   | VRef _ -> "<ref>"
+   | VArray a -> "[" ^ String.concat ", " (Array.to_list (Array.map show a)) ^ "]"
+   | VMutArray a -> "<mutable [" ^ String.concat ", " (Array.to_list (Array.map show a)) ^ "]>"
+diff a/test/repl.t b/test/repl.t
+--- a/test/repl.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/repl.t	2026-10-17 04:25:58.067337687 +0900
+@@ -278,6 +278,61 @@
+   _ : ((Int32) => Int32, Int32) = (<fn>, 5)
+   _ : Option[(Int32) => Int32] = Some(<fn>)
+ 
++制約付きで一般化した値束縛と式文の値は、関数でなければ、
++型の決まっていない辞書を渡して評価した値を表示する。
++関数の値は、組み込みの関数を選んだものも含めて <fn> と表示する。
++初期化式が穴に到達するときは、値の代わりに <unevaluated> を出し、入力は受理する:
++
++  $ diktor --repl <<'EOF2'
++  > let p = (show, 1)
++  > (show, eq, 3)
++  > let k = {f = show, n = 1}
++  > let m = Some(show)
++  > let v = #Tag(show)
++  > let idf[A](x: A): A = x
++  > let t = idf(show); t(2i32)
++  > let h: (Int32) => String = show
++  > let rec ev[A: Eq](x: A): Boolean = eq(x, x)
++  > (ev, 2)
++  > extern "prim" let ex1[A: Show](x: A): String
++  > (ex1, 1)
++  > let q = (show, ???)
++  > q
++  > EOF2
++  p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
++  _ : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = (<fn>, <fn>, 3)
++  k : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
++  m : [A: Show] Option[(A) => String] = Some(<fn>)
++  v : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
++  idf : (A) => A = <fn>
++  t : (Int32) => String @ {Console, Blocking, Print} = <fn>
++  _ : String = "2"
++  h : (Int32) => String = <fn>
++  ev : [A: Eq] (A) => Boolean = <fn>
++  _ : [A: Eq] ((A) => Boolean, Int32) = (<fn>, 2)
++  _ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
++  q : [A: Show] ((A) => String, B) = <unevaluated>
++  _ : [A: Show] ((A) => String, B) = <unevaluated>
++
++型の頭が newtype で Show を満たす値は、評価した値を利用者の show に渡す。
++show が引数を照合しても、評価した値に照合する。
++初期化式が穴に到達するときは、show が引数を見なくても <unevaluated> を出す:
++
++  $ diktor --repl <<'EOF2'
++  > newtype W[A] = W(A)
++  > type instance[A] Show[W[_]] { let show(w) = w match { case W(_) => "W!" } }
++  > let x = W(show)
++  > x
++  > newtype U[A] = U(A)
++  > type instance[A] Show[U[_]] { let show(u) = "U!" }
++  > let y = U(show)
++  > let z = U((show, ???))
++  > EOF2
++  x : [A: Show] W[(A) => String] = W!
++  _ : [A: Show] W[(A) => String] = W!
++  y : [A: Show] U[(A) => String] = U!
++  z : [A: Show] U[((A) => String, B)] = <unevaluated>
++
+ 型エラーと曖昧性エラーで失敗した入力の中で宣言したインスタンスは、後の入力から見えない:
+ 
+   $ diktor --repl <<'EOF2'

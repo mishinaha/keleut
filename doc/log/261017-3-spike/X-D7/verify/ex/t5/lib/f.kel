@@ -1,0 +1,2 @@
+pub type class Fractional[A] { val q: (A) => A }
+pub let k: Int32 = 2

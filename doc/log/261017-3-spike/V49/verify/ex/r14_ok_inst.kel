@@ -1,0 +1,7 @@
+newtype Box[A] = Box(A)
+type class Size[T] {
+  val size: (T) => Int32
+}
+type instance[A] Size[Box[_]] { let size(b) = 1 }
+let main(): Unit @ {Console} = echoln(show(size(Box(3))))
+main()

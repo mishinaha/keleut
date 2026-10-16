@@ -1,0 +1,5 @@
+newtype P2[A, B] = MkP2(A, B)
+type instance[A: Eq, B: Eq] Eq[P2[_, _]] {
+  let eq(p, q) = (p, q) match { case (MkP2(a, b), MkP2(c, d)) => a == c && b == d }
+}
+let f[A, B: Eq](x: P2[A, B], y: P2[A, B]): Boolean = x == y

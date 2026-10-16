@@ -1,0 +1,10 @@
+effect Ask = { ask: () => Int32, tell: (Int32) => Unit }
+module M {
+  pub newtype Box[E] = Box(go: () => Int32 @ E)
+}
+let b: M.Box[{Ask}] = M.Box(fn() => perform Ask.ask() + 1)
+let v = (b match { case M.Box(f) => f() }) handle {
+  case Ask.ask() => resume(41)
+  case Ask.tell(x) => resume(())
+}
+echoln(show(v))

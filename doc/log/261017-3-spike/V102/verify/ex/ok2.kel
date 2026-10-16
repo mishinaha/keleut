@@ -1,0 +1,8 @@
+newtype Cb[R] = Cb(() => Int32 @ R)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let xs = Cons(Cb(b), Cons(Cb(fn() => 1), Nil))
+let total(ys: List[Cb[{Console}]]): Int32 @ Console = ys match {
+  case Nil => 0
+  case Cons(Cb(f), rest) => f() + total(rest)
+}
+echoln(show(total(xs)))

@@ -1,0 +1,11 @@
+newtype V = V(Int32)
+type instance Add[V] { let add(a: V, b: V): V = { let V(x) = a; let V(y) = b; V(x + y) } }
+type instance Show[V] { let show(v: V): String = { let V(x) = v; "V(" + show(x) + ")" } }
+let p(): Unit @ Console = echoln(show(V(1) + V(2)))
+let q(): Unit @ Print = println(show(V(3) + V(4)))
+p()
+with_stdout(q)
+let idf[A](x: A): A = x
+let g = idf(fn(a: V) => a + a)
+let m(): Unit @ Console = echoln(show(g(V(5))))
+m()

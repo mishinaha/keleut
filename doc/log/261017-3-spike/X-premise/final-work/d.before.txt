@@ -1,0 +1,56 @@
+== d1.kel
+HEAD:
+! d1.kel:5:54: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
+[1]
+spike1:
+! d1.kel:5:54: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。P2[ς1, ς2] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
+[1]
+== d2.kel
+HEAD:
+! d2.kel:5:5: 型エラー: Opaque は Eq のインスタンスではありません
+[1]
+spike1:
+! d2.kel:5:5: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+[1]
+== d3.kel
+HEAD:
+! d3.kel:2:30: 型エラー: Opaque は Eq のインスタンスではありません
+[1]
+spike1:
+! d3.kel:2:30: 型エラー: Opaque は Eq のインスタンスではありません。List[{a: Opaque, b: _A}] が Eq であるための前提として要求されました
+[1]
+== d4.kel
+HEAD:
+! d4.kel:8:5: 型エラー: Opaque は Show のインスタンスではありません
+[1]
+spike1:
+! d4.kel:8:5: 型エラー: Opaque は Show のインスタンスではありません
+[1]
+== d5.kel
+HEAD:
+! d5.kel:5:15: 型エラー: Opaque は Eq のインスタンスではありません
+[1]
+spike1:
+! d5.kel:5:15: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Same であるための前提として要求されました
+[1]
+== d6.kel
+HEAD:
+! d6.kel:4:5: 型エラー: Opaque は Show のインスタンスではありません
+[1]
+spike1:
+! d6.kel:4:5: 型エラー: Opaque は Show のインスタンスではありません
+[1]
+== d7.kel
+HEAD:
+! d7.kel:8:5: 型エラー: Opaque は Show のインスタンスではありません
+[1]
+spike1:
+! d7.kel:8:5: 型エラー: Opaque は Show のインスタンスではありません
+[1]
+== d8.kel
+HEAD:
+! d8.kel:4:5: 型エラー: Opaque は Eq のインスタンスではありません
+[1]
+spike1:
+! d8.kel:4:5: 型エラー: Opaque は Eq のインスタンスではありません
+[1]

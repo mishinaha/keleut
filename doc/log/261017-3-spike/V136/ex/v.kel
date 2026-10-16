@@ -1,0 +1,5 @@
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] {
+  let rec describe(n) = if n == 0 then "" else __string_concat("x", describe(n - 1))
+}
+echo(describe(3))

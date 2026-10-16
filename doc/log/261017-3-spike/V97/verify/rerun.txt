@@ -1,0 +1,162 @@
+## b1.kel
+[HEAD]
+! b1.kel:4:33: 型エラー: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+1
+2
+x0
+## b2.kel
+[HEAD]
+! b2.kel:4:33: 型エラー: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+1
+2
+x0
+## b3_array.kel
+[HEAD]
+! b3_array.kel:5:38: 型エラー: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+3
+3
+x0
+## b4_ref.kel
+[HEAD]
+! b4_ref.kel:7:57: 型エラー: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+k
+m
+2
+x0
+## disp.kel
+[HEAD]
+x0
+[NEW]
+x0
+## impureshow.kel
+[HEAD]
+! impureshow.kel:2:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Print を足せません(注釈側に Print を(必要なら引数つきで)書き足してください)
+x1
+[NEW]
+! impureshow.kel:2:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+x1
+## instdiv.kel
+[HEAD]
+! instdiv.kel:4:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+a
+実行時エラー: ゼロ除算です
+x3
+## instfn_user.kel
+[HEAD]
+! instfn_user.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド sh の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+x1
+[NEW]
+! instfn_user.kel:3:29: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド sh の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+x1
+## instinit_builtin.kel
+[HEAD]
+! instinit_builtin.kel:4:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています
+x1
+[NEW]
+! instinit_builtin.kel:4:41: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+x1
+## instinit_user2.kel
+[HEAD]
+init
+foo
+x0
+[NEW]
+! instinit_user2.kel:4:31: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+x1
+## instinit_user.kel
+[HEAD]
+未処理のエフェクト操作: Ask.ask
+x3
+[NEW]
+! instinit_user.kel:5:39: 型エラー: エフェクト Ask をここでは実行できません(ラベル Ask がありません(行は閉じています))
+x1
+## ordervr_callc.kel
+[HEAD]
+15
+x0
+[NEW]
+15
+x0
+## ordervr_call.kel
+[HEAD]
+! ordervr_call.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+x1
+[NEW]
+! ordervr_call.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+x1
+## ordervr_id.kel
+[HEAD]
+! ordervr_id.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+x1
+[NEW]
+! ordervr_id.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+x1
+## ordervr.kel
+[HEAD]
+! ordervr.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+x1
+[NEW]
+15
+x0
+## ordervr_neg.kel
+[HEAD]
+! ordervr_neg.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+x1
+[NEW]
+7
+x0
+## u1.kel
+[HEAD]
+1
+2
+x0
+[NEW]
+1
+2
+x0
+## u2.kel
+[HEAD]
+1
+2
+x0
+[NEW]
+1
+2
+x0
+## u3_array.kel
+[HEAD]
+3
+3
+x0
+[NEW]
+3
+3
+x0
+## u4_ref.kel
+[HEAD]
+k
+m
+2
+x0
+[NEW]
+k
+m
+2
+x0
+## vrgen_id.kel
+[HEAD]
+13
+x0
+[NEW]
+13
+x0

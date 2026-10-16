@@ -1,0 +1,5 @@
+newtype L = C(L)
+newtype M[A] = Z(A) | S(M[Int32])
+let r1(C(x)) = 1
+let r2(Z(x): M[Never]) = 2
+let r3(x: M[Never]): Int32 = x match { case Z(y) => 1  case S(m) => 2 }

@@ -1,0 +1,6 @@
+type class Sz[A] { val sz: (A) => Int32 }
+type C = A[{}]
+type A[E] = Option[(E, Int32)]
+type instance Sz[Option[_]] { let sz(o) = 1 }
+let v: C = Some(({}, 1))
+echoln(show(sz(v)))

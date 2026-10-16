@@ -1,0 +1,190 @@
+==== b12.kel
+     1	newtype Box = MkBox(Int32)
+     2	effect Ask = { ask: (Box) => Int32 }
+     3	let r = perform ask(MkBox(3)) handle {
+     4	  case ask(MkBox(n), m) => resume(n)
+     5	  case return(x) => x
+     6	}
+     7	echoln(show(r))
+---- diktor-head --type-check b12.kel
+! b12.kel:3:9: 型エラー: 操作 ask は 1 引数です(節には 2 個書かれています)
+[exit 1]
+==== arity0.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case return(x) => x
+     5	    case ask() => resume(0)
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check arity0.kel
+! arity0.kel:3:3: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+==== arity2nd.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(1) => resume(0)
+     5	    case ask(n, m) => resume(n)
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check arity2nd.kel
+! arity2nd.kel:3:3: 型エラー: 操作 ask は 1 引数です(節には 2 個書かれています)
+[exit 1]
+==== label2.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case return(v) => v
+     5	    case ask(x = a) => resume(a)
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check label2.kel
+! label2.kel:3:3: 型エラー: 操作節の引数にラベルは書けません
+[exit 1]
+==== inner.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) =>
+     5	      resume(perform ask(n) handle {
+     6	        case ask() => resume(0)
+     7	      })
+     8	  }
+     9	echoln(show(r))
+---- diktor-head --type-check inner.kel
+! inner.kel:5:14: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
+[exit 1]
+==== retguard.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case return(v) if true => v
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check retguard.kel
+! retguard.kel:3:3: 型エラー: return 節にガードは書けません
+[exit 1]
+==== cancelguard.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case cancel if true => ()
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check cancelguard.kel
+! cancelguard.kel:3:3: 型エラー: cancel 節にガードは書けません
+[exit 1]
+==== retshape.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case return(a, b) => a
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check retshape.kel
+! retshape.kel:3:3: 型エラー: return 節は case return(x) の形で書いてください
+[exit 1]
+==== qualret.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case Ask.return(v) => v
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check qualret.kel
+! qualret.kel:3:3: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
+[exit 1]
+==== badhead.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case Foo(v) => v
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check badhead.kel
+! badhead.kel:3:3: 型エラー: handle の節は操作名 / return / cancel で始めてください: Foo
+[exit 1]
+==== badhead2.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case 3 => 4
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check badhead2.kel
+! badhead2.kel:3:3: 型エラー: handle の節は操作名 / return / cancel で始めてください
+[exit 1]
+==== cancelarg.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case cancel(x) => ()
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check cancelarg.kel
+! cancelarg.kel:3:3: 未実装: cancel(reason)(v0 は case cancel のみ)
+[exit 4]
+==== notbelong.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	effect Tell = { tell: (Int32) => Unit }
+     3	let r =
+     4	  perform Ask.ask(1) handle {
+     5	    case Ask.ask(n) => resume(n)
+     6	    case tell(x) => resume(())
+     7	  }
+     8	echoln(show(r))
+---- diktor-head --type-check notbelong.kel
+! notbelong.kel:4:3: 型エラー: 操作 tell はエフェクト Ask に属しません
+[exit 1]
+==== tworet.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case ask(n) => resume(n)
+     5	    case return(v) => v
+     6	    case return(w) => w
+     7	  }
+     8	echoln(show(r))
+---- diktor-head --type-check tworet.kel
+! tworet.kel:3:3: 型エラー: return 節は1つまでです
+[exit 1]
+==== unknownqual.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r =
+     3	  perform ask(1) handle {
+     4	    case Nope.ask(n) => resume(n)
+     5	  }
+     6	echoln(show(r))
+---- diktor-head --type-check unknownqual.kel
+! unknownqual.kel:3:3: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+==== label1.kel
+     1	effect Ask = { ask: (x: Int32, y: Int32) => Int32 }
+     2	let r =
+     3	  perform ask(x = 1, y = 2) handle {
+     4	    case return(v) => v
+     5	    case ask(x = a, z = b) => resume(a)
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check label1.kel
+label1.kel:1:23: パースエラー(付近のトークンを確認してください)
+[exit 2]
+==== missing.kel
+     1	effect Two = { one: () => Int32, two: () => Int32 }
+     2	let r =
+     3	  perform one() handle {
+     4	    case return(v) => v
+     5	    case one() => resume(1)
+     6	  }
+     7	echoln(show(r))
+---- diktor-head --type-check missing.kel
+! missing.kel:3:3: 型エラー: ハンドラが操作を網羅していません: Two の two が漏れています
+[exit 1]

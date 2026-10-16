@@ -1,0 +1,17 @@
+effect Log = { log: (String) => Unit }
+effect Tick = { tick: () => Int32 }
+newtype Holder[F] = MkHolder(Box[{Tick extends F}])
+newtype Box[E] = MkBox((() => Unit @ E, () => Unit @ {Log, Tick}))
+let run2(h: Holder[{Log}]): Unit @ {Log, Tick} = h match {
+  case MkHolder(MkBox((g, k))) => { g(); k() }
+}
+let main() = {
+  ({
+    run2(MkHolder(MkBox((fn() => { let n = perform tick(); if n > 0 then perform log("pos") else perform log("neg") }, fn() => perform log("k")))))
+  } handle {
+    case tick() => resume(3)
+  }) handle {
+    case log(s) => { echoln(s); resume(()) }
+  }
+}
+main()

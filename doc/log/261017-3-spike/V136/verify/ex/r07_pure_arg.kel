@@ -1,0 +1,4 @@
+type class Ap[A] { val ap: (A, (A) => A) => A }
+let twice(f: (Int32) => Int32 @ {Console}, x: Int32) @ {Console} = f(f(x))
+type instance Ap[Int32] { let ap(x, f) = f(f(x)) }
+echo(show(ap(3i32, fn(y) => y + 1)))

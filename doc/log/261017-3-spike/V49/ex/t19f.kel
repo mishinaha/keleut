@@ -1,0 +1,7 @@
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g(x: Int32): Int32 = k(x)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))

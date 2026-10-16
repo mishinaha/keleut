@@ -1,0 +1,6 @@
+module M {
+  pub let f[E](g: () => Int32 @ E): Int32 @ E = {
+    let k: () => Int32 @ {} = g
+    k()
+  }
+}

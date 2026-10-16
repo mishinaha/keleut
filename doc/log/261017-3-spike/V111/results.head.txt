@@ -1,0 +1,123 @@
+== l2.kel
+let rec f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
+and g[B: Eq](x: B, y: B): Boolean = x == y || f(x, y)
+echoln(show(f(1, 2)))
+-- HEAD
+! l2.kel:2:49: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== l2rev.kel
+let rec g[B: Eq](x: B, y: B): Boolean = x == y || f(x, y)
+and f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
+echoln(show(f(1, 2)))
+-- HEAD
+! l2rev.kel:2:49: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== l2same.kel
+let rec f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
+and g[A: Eq](x: A, y: A): Boolean = x == y || f(x, y)
+echoln(show(f(1, 2)))
+-- HEAD
+! l2same.kel:2:49: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== l2b.kel
+let rec f[A: Eq](x: A, y: A): Boolean = x == y
+and g[B: Eq](x: B, y: B): Boolean = x == y || f(x, y)
+echoln(show(f(1, 2)))
+-- HEAD
+false
+[exit 0]
+== l2noann.kel
+let rec f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
+and g(x, y) = x == y || f(x, y)
+echoln(show(f(1, 2)))
+-- HEAD
+false
+[exit 0]
+== rtp1.kel
+let rec f[A](x: A): Int32 = g(x)
+and g[B](y: B): Int32 = 0
+echoln(show(f(1)))
+-- HEAD
+! rtp1.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== rtp2.kel
+let rec g[B](y: B): Int32 = 0
+and f[A](x: A): Int32 = g(x)
+echoln(show(f(1)))
+-- HEAD
+0
+[exit 0]
+== rtp3.kel
+let rec f[A](x: A): Int32 = g(x)
+and g(y) = 0
+echoln(show(f(1)))
+-- HEAD
+0
+[exit 0]
+== rtp4.kel
+let rec f[A](x: A): Int32 = g(x, 1i32)
+and g[B, C](y: B, z: C): Int32 = 0
+echoln(show(f(1)))
+-- HEAD
+! rtp4.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== gen.kel
+let rec f[A](x: A, n: Int32): Int32 = g(x, n)
+and g[B](y: B, z: Int32): Int32 = 0
+echoln(show(f("a", 1i32)))
+-- HEAD
+! gen.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== genbad.kel
+let rec f[A](x: A): Int32 = g(1i32, x)
+and g[B](y: B, z: Int32): Int32 = 0
+echoln(show(f("a")))
+-- HEAD
+! genbad.kel:2:5: 型エラー: スコープ付きの型が一致しません: Int32 と ς1
+[exit 1]
+== genbadrev.kel
+let rec g[B](y: B, z: Int32): Int32 = 0
+and f[A](x: A): Int32 = g(1i32, x)
+echoln(show(f("a")))
+-- HEAD
+! genbadrev.kel:2:33: 型エラー: スコープ付きの型が一致しません: ς1 と Int32
+[exit 1]
+== conc.kel
+let rec f[A](x: A): Int32 = g(1)
+and g[B](y: B): Int32 = 0
+echoln(show(f(1)))
+-- HEAD
+! conc.kel:2:5: 型エラー: 型パラメータに数値リテラルは使えません。0i32 のように接尾辞を付けるか具体型を使ってください
+[exit 1]
+== conc2.kel
+let rec f[A](x: A): Int32 = g(1i32)
+and g[B](y: B): Int32 = 0
+echoln(show(f(1)))
+-- HEAD
+! conc2.kel:2:5: 型エラー: スコープ付きの型が一致しません: Int32 と ς1
+[exit 1]
+== gnotp.kel
+let rec f[A](x: A): Int32 = g(x)
+and g(y: Int32): Int32 = 0
+echoln(show(f(1)))
+-- HEAD
+! gnotp.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と Int32
+[exit 1]
+== fp1.kel
+let rec f(n: Int32): Unit = ()
+and bump[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+-- HEAD
+! fp1.kel:2:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== fp2.kel
+let rec f[h](a: MutableArray[h, Int32]): Unit = bump(a)
+and bump[k](a: MutableArray[k, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+-- HEAD
+! fp2.kel:2:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+== fp3.kel
+let rec f(a: Int32): Unit = bump(a)
+and bump[k](a: k): Unit = { let g[h](b: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(b, 0, 42) }; () }
+-- HEAD
+! fp3.kel:2:99: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]

@@ -1,0 +1,4 @@
+let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+and a[E](n: Int32): Int32 @ {Console extends E} = b(n)
+let use(): Int32 @ {Console, Print} = { println("p"); a(1) + b(2) }
+echoln(show(with_stdout(fn() => use())))

@@ -1,0 +1,8 @@
+module M {
+  pub let classify(x: Int32): String = x match {
+    case n if n > 10 => "big"
+    case _ => "small"
+  }
+}
+echoln(M.classify(11))
+echoln(M.classify(1))

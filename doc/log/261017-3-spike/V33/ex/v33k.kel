@@ -1,0 +1,3 @@
+newtype Box = Box(Int32)
+type class Pr[T] { val pr: (T) => Unit @ Print }
+type instance Pr[Box] { let pr(b: Box): Unit @ Console = () }

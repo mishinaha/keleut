@@ -1,0 +1,89 @@
+$ diktor --type-check params.kel
+pv : (Empt) => Int32
+pn : (Never) => Int32
+pw : (Never) => Int32
+pr : ({x: Empt}) => Int32
+pt : ((Int32, Never)) => Int32
+pc : (Absurd) => Int32
+pc2 : (Absurd) => Int32
+pa : (Absurd) => Int32
+pnest : ({x: Absurd}) => Int32
+pvar : (#V(Never)) => Int32
+[exit 0]
+$ diktor --type-check lambdas.kel
+lv : (Empt) => Int32
+lr : ({x: Never}) => Int32
+lt : ((Int32, Never)) => Int32
+lc : (Absurd) => Int32
+app : ((Never) => Int32 @ {}) => Int32
+lchk : Int32
+[exit 0]
+$ diktor --type-check matches.kel
+mv : (Never) => Int32
+mw : (Never) => Int32
+mc : (Absurd) => Int32
+me : (Never) => Int32
+mt : ((Int32, Never)) => Int32
+mr : ({x: Never}) => Int32
+[exit 0]
+$ diktor --type-check binds.kel
+bv : () => Int32 @ {Fail}
+bt : () => Int32 @ {Fail}
+bc : () => Int32 @ {Fail}
+br : () => Int32 @ {Fail}
+[exit 0]
+$ diktor --type-check rets.kel
+rv : (() => Never @ {Nop}) => Int32
+rc : (() => Absurd @ {Nop}) => Int32
+rr : (Never) => Int32
+rr2 : (Absurd) => Int32
+[exit 0]
+$ diktor --type-check absurd.kel
+absurd : (Never) => A
+elim : (Empt) => A
+main : () => {} @ {Print extends R1}
+[exit 0]
+$ diktor --type-check elim.kel
+e1 : (Absurd) => A
+⚠ match が非網羅的です。例えば MkA(_) が漏れています
+e2 : (Absurd) => A
+e3 : (Absurd) => A
+e4 : (Absurd) => Int32
+e5 : ((Int32, Never)) => Int32
+e6 : (Never) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+⚠ 第 2 節は到達不能です(冗長)
+[exit 0]
+$ diktor --type-check rec.kel
+r1 : (L) => Int32
+r2 : (M[Never]) => Int32
+⚠ match が非網羅的です。例えば S(_) が漏れています
+⚠ このパターンには一致する値がありません
+r3 : (M[Never]) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+[exit 0]
+$ diktor --type-check keep.kel
+k1 : (Opt2[Empt]) => Int32
+⚠ match が非網羅的です。例えば Nn が漏れています
+⚠ このパターンには一致する値がありません
+k2 : (Opt2[Never]) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+k3 : (#Ok(Int32) | #Err(Never)) => Int32
+⚠ 第 2 節は到達不能です(冗長)
+k4 : (Boolean) => Int32
+⚠ match が非網羅的です。例えば false が漏れています
+k5 : ((Boolean, Int32)) => Int32
+⚠ match が非網羅的です。例えば (false, _) が漏れています
+k6 : (#A) => Int32
+[exit 0]
+$ diktor --type-check guard.kel
+g1 : (Never) => Int32
+g2 : (Absurd) => Int32
+g3 : (Int32) => Int32
+g4 : (Boolean) => Int32
+⚠ match が非網羅的です。例えば true が漏れています
+[exit 0]
+$ diktor run.kel
+42[exit 0]
+$ diktor --strict-exhaustive run.kel
+42[exit 0]

@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let rec go(n: Int32): Int32 = if n == 0 then 0 else { perform ask(); go(n - 1) }
+let r = go(5404) handle {
+  case ask() => { let x = resume(1); x + 1 }
+}
+echoln(show(r))

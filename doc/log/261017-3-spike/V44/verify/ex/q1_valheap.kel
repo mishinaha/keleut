@@ -1,0 +1,6 @@
+module M {
+  pub let g: (Int32) => Int32 = run h {
+    let r = Ref.new(0)
+    fn(x) => { Ref.set(r, x); x }
+  }
+}

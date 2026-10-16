@@ -1,0 +1,3 @@
+effect Get = { get: () => Unit }
+effect Reg = { reg: (() => Unit) => Unit }
+pub let use(): Unit = perform reg(fn() => ())

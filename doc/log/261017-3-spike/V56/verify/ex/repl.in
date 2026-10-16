@@ -1,0 +1,8 @@
+module P { pub type P: EffectRow = {Console}
+ type Q = Int32 }
+let f(x: Int32): Int32 @ P = { echoln("r"); x }
+f(2)
+module Z { type Z = Int32 }
+let g(x: Int32): Int32 @ Z = x
+let h(x: Int32): Int32 @ {Z} = x
+f(3)

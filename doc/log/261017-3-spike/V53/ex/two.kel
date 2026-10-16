@@ -1,0 +1,6 @@
+effect Pair = { pair: (Int32, Boolean) => Int32 }
+let r = perform pair(1, true) handle {
+  case pair(n, true) => resume(n)
+  case return(x) => x
+}
+echoln(show(r))

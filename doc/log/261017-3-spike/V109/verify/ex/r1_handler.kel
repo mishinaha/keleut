@@ -1,0 +1,11 @@
+effect Ask = { ask: () => Int32 }
+let withAsk[A: Show, E](x: A, body: () => Int32 @ {Ask extends E}): String @ E =
+  body() handle {
+    case ask() if show(x) != "" => resume(1) + "!"
+    case ask() => resume(2)
+    case return(r) => show(x) + "=" + show(r)
+  }
+let outer[B: Show](y: B): String =
+  withAsk(y, fn() => perform ask() + 1) + "|" + withAsk(Cons(y, Nil), fn() => { let a = perform ask(); a * 100 })
+echoln(outer(true))
+echoln(outer("q"))

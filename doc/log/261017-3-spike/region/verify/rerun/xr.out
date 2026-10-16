@@ -1,0 +1,40 @@
+get : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+first : (MutableArray[h, A]) => A @ {Heap[h]}
+both : (Ref[h, A], MutableArray[h, B]) => A @ {Heap[h]}
+poly : (A) => Ref[h, Int32] @ {Heap[h] extends R1}
+two : (Ref[h, Int32], Ref[h1, Int32]) => Int32 @ {Heap[h], Heap[h1]}
+pair : (Ref[h, Int32]) => (Ref[h, Int32], Int32)
+[exit 0]
+f : (Ref[h, Int32]) => Int32 @ {Heap[h]}
+! r2.kel:2:50: 型エラー: 型が一致しません: String と Int32
+[exit 1]
+f : (h, Ref[h, Int32]) => Int32
+g : (A) => Int32
+[exit 0]
+! r4.kel:1:21: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+r : (A) => Ref[h, A] @ {Heap[h] extends R1}
+[exit 0]
+f : (Ref[Int32, Int32]) => Int32
+g : () => Int32 @ {Heap[Int32]}
+[exit 0]
+first : (MutableArray[h, A]) => A @ {Heap[h]}
+! r7.kel:2:53: 型エラー: 型が一致しません: Ref[ς1, Int32] と MutableArray[ς1, _A]
+[exit 1]
+id : (A) => A
+w : (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1}
+! r8.kel:3:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1})
+[exit 1]
+h1 : (Ref[h, Int32]) => Int32 @ {Heap[h] extends R1}
+k : (Ref[h, Int32]) => Int32 @ {Heap[h] extends R1}
+[exit 0]
+M.f : (M.Ref[A, Int32]) => Int32 @ {}
+g : (M.Ref[A, Int32]) => Int32
+[exit 0]
+! r11.kel:2:18: 型エラー: 型構成子 Ref には型引数が必要です
+[exit 1]
+! r12.kel:2:34: 型エラー: 型構成子 Ref には型引数が必要です
+[exit 1]
+v : (F[A, Int32]) => Wrap[F, A]
+x : (Ref[h, Int32]) => Wrap[Ref, h]
+[exit 0]

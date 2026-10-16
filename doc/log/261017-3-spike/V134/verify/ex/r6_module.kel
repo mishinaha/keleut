@@ -1,0 +1,6 @@
+module M {
+  pub let f(x: Int32): Int32 = x
+  let g(x) = x match {}
+  pub let h(b: Boolean): Int32 = if b then g(3) else 1
+}
+echoln(show(M.h(false)))

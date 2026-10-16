@@ -1,0 +1,4 @@
+module M {
+  type T: EffectRow = {Print}
+}
+let f(): Int32 @ {M.T} = 1

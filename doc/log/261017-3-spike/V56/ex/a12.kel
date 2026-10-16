@@ -1,0 +1,4 @@
+module P {
+  type P[A] = A
+}
+let f(): Int32 @ {P[Int32]} = 1

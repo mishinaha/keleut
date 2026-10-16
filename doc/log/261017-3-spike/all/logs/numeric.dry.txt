@@ -1,0 +1,23 @@
+checking file lib/aux.ml
+checking file lib/driver.ml
+Hunk #1 FAILED at 1046.
+1 out of 1 hunk FAILED
+checking file lib/elab.ml
+Hunk #9 succeeded at 5646 (offset 16 lines).
+Hunk #10 succeeded at 5673 (offset 16 lines).
+checking file lib/exhaust.ml
+checking file lib/lexer.ml
+Hunk #1 succeeded at 81 (offset 7 lines).
+Hunk #2 succeeded at 99 (offset 7 lines).
+Hunk #3 succeeded at 137 (offset 7 lines).
+checking file lib/syntax.ml
+Hunk #1 succeeded at 637 (offset -2 lines).
+Hunk #2 succeeded at 721 (offset -2 lines).
+checking file lib/unify.ml
+checking file test/dictionary_passing.t
+checking file test/literal_default.t
+checking file test/neg_rem.t
+checking file test/numeric.t
+checking file test/smoke.t
+checking file test/typecheck.t
+checking file test/verify_fixes.t

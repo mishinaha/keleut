@@ -1,0 +1,103 @@
+=== p1.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = Cons(MkOpaque(1i32), Nil) == Nil
+--- diktor-head --type-check p1.kel
+! p1.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p2.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = Cons(Cons(MkOpaque(1i32), Nil), Nil) == Nil
+--- diktor-head --type-check p2.kel
+! p2.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p3.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = Some(Cons(MkOpaque(1i32), Nil)) == None
+--- diktor-head --type-check p3.kel
+! p3.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p4.kel
+newtype Opaque = MkOpaque(Int32)
+let ng(p: {xs: List[Opaque]}, q: {xs: List[Opaque]}): Boolean = p == q
+--- diktor-head --type-check p4.kel
+! p4.kel:2:65: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p5.kel
+newtype Opaque = MkOpaque(Int32)
+let s = show(Cons(MkOpaque(1i32), Nil))
+--- diktor-head --type-check p5.kel
+! p5.kel:2:14: 型エラー: Opaque は Show のインスタンスではありません
+[exit 1]
+=== p6.kel
+let f[A](xs: List[A], ys: List[A]): Boolean = xs == ys
+--- diktor-head --type-check p6.kel
+! p6.kel:1:47: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
+[exit 1]
+=== p7.kel
+newtype Opaque = MkOpaque(Int32)
+let same[A: Eq](x: A, y: A): Boolean = x == y
+let ng = same(Cons(MkOpaque(1i32), Nil), Nil)
+--- diktor-head --type-check p7.kel
+same : [A: Eq] (A, A) => Boolean
+! p7.kel:3:15: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p8.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = MkOpaque(1i32) == MkOpaque(1i32)
+--- diktor-head --type-check p8.kel
+! p8.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p9.kel
+let ng = Cons((x: Int32) => x, Nil) == Nil
+--- diktor-head --type-check p9.kel
+p9.kel:1:17: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== p10.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = Cons(Some(MkOpaque(1i32)), Nil) == Nil
+--- diktor-head --type-check p10.kel
+! p10.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p11.kel
+newtype Opaque = MkOpaque(Int32)
+let ng(xs: List[List[Opaque]]): Boolean = xs == xs
+--- diktor-head --type-check p11.kel
+! p11.kel:2:43: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p12.kel
+let ng[A](xs: List[List[A]]): Boolean = xs == xs
+--- diktor-head --type-check p12.kel
+! p12.kel:1:41: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
+[exit 1]
+=== p13.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = Nil == Cons(MkOpaque(1i32), Nil)
+--- diktor-head --type-check p13.kel
+! p13.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p14.kel
+newtype Opaque = MkOpaque(Int32)
+let ng(xs: List[Opaque]): Boolean = Nil == xs
+--- diktor-head --type-check p14.kel
+! p14.kel:2:37: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p9.kel
+let id(x: Int32): Int32 = x
+let ng = Cons(id, Nil) == Nil
+--- diktor-head --type-check p9.kel
+id : (Int32) => Int32
+! p9.kel:2:10: 型エラー: (Int32) => Int32 は Eq のインスタンスではありません
+[exit 1]
+=== p15.kel
+let ng[F[_]](xs: List[F[Int32]]): Boolean = xs == xs
+--- diktor-head --type-check p15.kel
+! p15.kel:1:45: 型エラー: 制約 Eq を ς1[Int32] に付けられません(頭が型変数の適用には制約を貼れません)
+[exit 1]
+=== p16.kel
+newtype Opaque = MkOpaque(Int32)
+newtype Box[A] = MkBox(A)
+type instance[A: Eq] Eq[Box[_]] { let eq(p, q) = true }
+let ng = Cons(MkBox(Cons(MkOpaque(1i32), Nil)), Nil) == Nil
+--- diktor-head --type-check p16.kel
+! p16.kel:4:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]

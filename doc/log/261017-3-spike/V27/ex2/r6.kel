@@ -1,0 +1,4 @@
+newtype Holder[F, E] = Holder(Callback[F[E]])
+newtype Callback[E] = Callback(() => Unit @ E)
+let main(): Unit @ Console = with_stdout(fn() => println("unused newtype"))
+main()

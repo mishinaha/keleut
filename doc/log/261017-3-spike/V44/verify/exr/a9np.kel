@@ -1,0 +1,5 @@
+let idf[A](x: A): A = x
+module M {
+  let r = idf({go = fn(u: Int32) => u + 1})
+  let f(): Int32 = run h { r.go(1) }
+}

@@ -1,0 +1,2 @@
+pub type E = Int32
+pub type R: EffectRow = {Print}

@@ -1,0 +1,12 @@
+let g = fn() => 1
+let h = fn(x: Int32) => x
+let ws[A, E](body: () => A @ E): A @ E = body()
+let wx[A, E](body: (Int32) => A @ E): A @ E = body(4)
+let a(): Int32 = {
+  with _ = ws()
+  with (_) = ws()
+  with _x = wx()
+  with y = wx()
+  g() + h(y)
+}
+echoln(show(a()))

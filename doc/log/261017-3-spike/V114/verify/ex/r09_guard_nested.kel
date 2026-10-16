@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int64 }
+let f(n: Int64): Int32 = n match {
+  case x if x == 0x10i64 => 1
+  case _ => 2
+}
+let r = ((perform ask() + 1i64) handle { case ask() => resume(15i64) }) handle { case ask() => resume(0i64) }
+echoln(show(f(r)))

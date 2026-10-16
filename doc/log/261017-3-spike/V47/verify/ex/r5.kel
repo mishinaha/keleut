@@ -1,0 +1,3 @@
+let bump[h](r: Ref[h, Int32]): Int32 @ Heap[h] = { Ref.set(r, Ref.get(r) + 1); Ref.get(r) }
+let v: Int32 = run h { let r = Ref.new(41); bump(r) }
+with_stdout(fn() => println(show(v)))

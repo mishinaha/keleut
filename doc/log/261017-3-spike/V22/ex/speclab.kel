@@ -1,0 +1,5 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype A17[X] = MkA17(B17[{Log extends X}])
+newtype B17[E] = MkB17((() => Unit @ E, () => Unit @ {Log}))
+let f[E](x: A17[E]): A17[E] = x

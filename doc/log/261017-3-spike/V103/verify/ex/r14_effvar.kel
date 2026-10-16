@@ -1,0 +1,9 @@
+let id[T](x: T): T = x
+let use[E](f: (Int32) => String @ E, x: Int32): String @ E = f(x)
+let main(): Unit @ Console = {
+  let s = id(Show.show)
+  echoln(use(s, 1))
+  let r = with_stdout(fn() => { println(use(s, 2)); 3 })
+  echoln(show(r))
+}
+main()

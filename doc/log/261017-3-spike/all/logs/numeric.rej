@@ -1,0 +1,15 @@
+--- lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ lib/driver.ml	2026-10-17 04:45:49.707770045 +0900
+@@ -1046,10 +1046,10 @@
+    | コード | 意味 | 出所 |
+    |---|---|---|
+    | 0 | 正常終了 | `run_with` が最後まで走った |
+-   | 1 | 型エラー、import エラー | 第11章の診断、`Aux.Type_error`、`--strict-exhaustive`、§16.3b の `Import_error` |
++   | 1 | 型エラー、import エラー | 第11章の診断(言語に無い数値の接尾辞を含む)、`Aux.Type_error`、`--strict-exhaustive`、§16.3b の `Import_error` |
+    | 2 | 構文エラー、字句エラー | `Parse_error`、`Lex_error`、不正な UTF-8 |
+    | 3 | 実行時エラー | `Runtime_error`、未処理のエフェクト、再帰過多、メモリ不足、内部異常 |
+-   | 4 | 未実装(Diktor が実装していない機能) | `Aux.NotImplemented`(1u8、Int8、module の入れ子など) |
++   | 4 | 未実装(Diktor が実装していない機能) | `Aux.NotImplemented`(module の入れ子、cancel(reason) など) |
+    | 64 | 使い方の誤り | 引数解析の失敗、入力ファイルや import 先を開けない |
+    | 74 | 出力に書き出せない | 標準出力への flush の失敗 |
+ 

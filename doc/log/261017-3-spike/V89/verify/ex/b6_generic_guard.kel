@@ -1,0 +1,6 @@
+effect Choose = { choose: () => Boolean }
+let both[A](f: () => A @ Choose): List[A] = f() handle {
+  case choose() => () match { case _ if { let xs = resume(true); true } => Nil case _ => Nil }
+  case return(x) => Cons(x, Nil)
+}
+echoln(show(both(fn() => if perform choose() then 1 else 2)))

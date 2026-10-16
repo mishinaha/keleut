@@ -1,0 +1,2 @@
+let q = { let k = 1 / 0; show }
+echoln("a")

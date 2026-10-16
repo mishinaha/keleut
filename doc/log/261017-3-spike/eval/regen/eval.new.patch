@@ -1,0 +1,810 @@
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:45:37.392634244 +0900
+@@ -729,6 +729,11 @@
+    値は、型の頭が newtype で、その型が `Show` を満たすときだけ `Show.show` で表示する。
+    満たすかどうかは、型検査器に `Show` の制約を足して確かめ、足した書き換えはすぐ戻す。
+    それ以外は `Value.show` で表示する。
++   関数の値は、組み込みの関数も含めて `<fn>` と表示する。
++   辞書を受け取る値(制約付きで一般化した値束縛と式文)は、型の決まっていない辞書を渡して評価し、
++   その値を表示する。
++   初期化式は構文上の値なので、この評価は停止し、エフェクトを起こさない。
++   初期化式が穴に到達したときだけ、値の代わりに `<unevaluated>` を出す。
+    組み込みの `Show[String]` は引用符を付けないので、
+    文字列を `Show.show` で出すと識別子と区別できない。
+ 
+@@ -801,7 +806,21 @@
+       undo ();
+       raise ex
+ 
++(* 辞書を受け取る値は、型の決まっていない辞書(DPending)を渡して評価してから表示する。
++   初期化式は構文上の値なので停止し、エフェクトを起こさない。
++   穴に到達して実行時エラーになったときは、評価しない印を出す *)
++let force_for_display v =
++  match v with
++  | Value.VDictAbs da -> (
++      match da.Value.da_fn (List.init da.Value.da_arity (fun _ -> Value.VDict Value.DPending)) with
++      | v -> Some v
++      | exception Value.Runtime_error _ -> None)
++  | v -> Some v
++
+ let show_value ty v =
++  match force_for_display v with
++  | None -> "<unevaluated>"
++  | Some v ->
+   let open Syntax.Type in
+   let shows =
+     match repr ty with
+@@ -811,12 +830,12 @@
+   in
+   if shows then
+     (* 型から Show の証拠を組み、辞書にしてメソッドを選ぶ。型の決まらない部分の辞書は DPending になる *)
+-    let env = { Value.globals = Hashtbl.create 1; locals = Value.SMap.empty; resume = None } in
++    let env = { Value.globals = Hashtbl.create 1; locals = Value.SMap.empty; dicts = Value.DMap.empty; resume = None } in
+     let d = Interp.eval_ev env (Unify.display_evidence (intern "Show") ty) in
+     match Interp.apply (Interp.select_method ~cls:(intern "Show") d "show" []) (Value.VRecord [ (l_item, v) ]) with
+     | Value.VText s -> s
+-    | v -> Value.show v
+-  else Value.show v
++    | v -> Value.show ~fn_name:false v
++  else Value.show ~fn_name:false v
+ 
+ let repl options =
+   let print_owned () = Decls.prelude_owned "effect" (Syntax.Type.intern "Print") in
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/interp.ml	2026-10-17 04:45:37.394615614 +0900
+@@ -26,8 +26,8 @@
+    | 深いハンドラ `handle { … }` | `match_with` 1 つ |
+    | `perform op(args)` | `Effect.perform (Op (op, args))` |
+    | `resume(e)` | `Effect.Deep.continue k v` |
+-   | resume を呼ばずに節を抜ける | `discontinue k (Unwind (inst, v))` |
+-   | 再開しない操作の節 | 節の本体の前に `discontinue`、本体は `effc` の末尾で評価 |
++   | resume を呼ばずに節を抜ける | `discontinue k (Unwind (inst, UValue v))` |
++   | 再開しない操作の節 | 節の本体の前に `discontinue`、本体は `exnc` の末尾で評価 |
+    | `case return(x)` | `retc`(親のスタック上で走る) |
+    | `case cancel` | `exnc` の中で節を走らせる |
+    | 最も内側のハンドラが捕まえる | `effc` が `None` を返せば外側へ進む |
+@@ -83,18 +83,18 @@
+    要る表は、利用者が宣言したインスタンスの `instance_impls` と、
+    第13章の組み込みのメソッド表である。
+    型構成子は第1章のインターン表の oid で、型の側と同じ番号を使う。
+-   辞書パラメータは局所環境 `locals` に名前で置くので、
+-   閉包が辞書を字句的に捕まえる仕組みを別に持たない。 *)
++   辞書パラメータは環境の `dicts` に鍵 (型変数の vid, クラスの oid) で置く(第12章 §12.3)。
++   `dicts` は環境の一部なので、閉包は `c_env` とともに辞書を字句的に捕まえ、別の仕組みを持たない。
++   鍵を整数の組のまま比べるので、辞書を引くたびに名前の文字列を作らない。 *)
+ 
+ (* 利用者が宣言したインスタンスのメソッド。(クラス, 型構成子) → メソッド名 → 前提と
+    メソッド自身の辞書を受け取って実装を返す関数。exec_decl の DInstance だけが jreplace で書く *)
+ let instance_impls : (oid * oid, (oid * (Value.t list -> Value.t)) list) Hashtbl.t = Hashtbl.create 32
+ 
+-(* 辞書パラメータの鍵(型変数の vid, クラスの oid)を局所環境の名前にする。
+-   利用者の識別子は英字か _ で始まるので、$ で始まる名前とは衝突しない *)
++(* 辞書パラメータの鍵(型変数の vid, クラスの oid)を診断のために文字列にする *)
+ let dkey_name ((v, c) : Tree.dkey) = "$d" ^ string_of_int v ^ ":" ^ string_of_int c
+ 
+-let bind_dicts env ks ds = { env with locals = List.fold_left2 (fun l k d -> SMap.add (dkey_name k) d l) env.locals ks ds }
++let bind_dicts env ks ds = { env with dicts = List.fold_left2 (fun m k d -> DMap.add k d m) env.dicts ks ds }
+ 
+ (* 辞書パラメータを含まない証拠の辞書は、穴ごとに 1 回だけ作って覚える *)
+ let closed_cache : (oid, Value.t) Hashtbl.t = Hashtbl.create 64
+@@ -407,9 +407,9 @@
+       (* この分岐に来るのは、節本体の末尾の背骨の外にある resume だけである。
+          背骨の上の resume は §14.9 の eval_clause_tail が処理する *)
+       let r, v = take_resume env arg in
+-      (* 末尾でない resume。再開した計算が再開しない操作の節で終わると、その節の本体の
+-         閉包(破棄の印)が戻ってくるので、ここで評価した値を resume の返り値にする *)
+-      (match Effect.Deep.continue r.r_k v with VPending f -> f () | v -> v)
++      (* 末尾でない resume。再開した計算が再開しない操作の節で終わると、その節の本体は
++         ハンドラの exnc で評価済みで、その値がここに戻る *)
++      Effect.Deep.continue r.r_k v
+   | T.Run (_, body) -> eval env body (* 実行時は恒等。リージョンの安全性は型が保証する *)
+ 
+ (* ## 14.5 関数の適用
+@@ -475,7 +475,7 @@
+ and eval_ev env (ev : Tree.evidence) =
+   match ev with
+   | Tree.EvParam k -> (
+-      match SMap.find_opt (dkey_name k) env.locals with Some d -> d | None -> bug ("辞書パラメータが束縛されていません: " ^ dkey_name k))
++      match DMap.find_opt k env.dicts with Some d -> d | None -> bug ("辞書パラメータが束縛されていません: " ^ dkey_name k))
+   | Tree.EvInst (c, n, subs) -> VDict (DInst (c, n, List.map (eval_ev env) subs, ref []))
+   | Tree.EvRecord fs -> VDict (DRecord (List.map (fun (l, e) -> (l, eval_ev env e)) fs))
+   | Tree.EvVariant fs -> VDict (DVariant (List.map (fun (l, e) -> (l, eval_ev env e)) fs))
+@@ -585,7 +585,7 @@
+ and eval_binding_value env bnode =
+   match dict_params_of bnode with
+   | [] -> eval_binding_value_plain env bnode
+-  | ks -> VDictAbs { da_last = None; da_name = "let"; da_fn = (fun ds -> eval_binding_value_plain (bind_dicts env ks ds) bnode) }
++  | ks -> VDictAbs { da_last = None; da_name = "let"; da_arity = List.length ks; da_fn = (fun ds -> eval_binding_value_plain (bind_dicts env ks ds) bnode) }
+ 
+ and eval_binding env ((_, b) as bnode : T.let_binding) =
+   let v = eval_binding_value env bnode in
+@@ -614,7 +614,7 @@
+         | ks ->
+             ( name,
+               VDictAbs
+-                { da_last = None; da_name = name; da_fn = (fun ds -> VClosure { c_env = bind_dicts !genv ks ds; c_params = ps; c_body = body }) },
++                { da_last = None; da_name = name; da_arity = List.length ks; da_fn = (fun ds -> VClosure { c_env = bind_dicts !genv ks ds; c_params = ps; c_body = body }) },
+               None ))
+       bs
+   in
+@@ -642,15 +642,14 @@
+ 
+    ### Unwind のプロトコル
+ 
+-   `Unwind (inst, v)` は、例外の形をした通知である。
+-   resume されずに終わった節の値 `v` を、
+-   `inst` 番のハンドラの handle 式全体の値として届けることを依頼する。
+-   再開しない操作の節では、`v` は節の本体を評価する閉包(`VPending`。破棄の印)で、
+-   受け取った側が評価する
+-   (下の「再開しない操作の節」)。
++   `Unwind (inst, u)` は、例外の形をした通知である。
++   `inst` 番のハンドラに、handle 式全体の値をそこで決めることを依頼する。
++   `u` は、resume されずに終わった再開する操作の節の値 `UValue v` か、
++   再開しない操作の節の本体を評価する閉包 `UClause f` である。
++   閉包は、受け取ったハンドラの `exnc` が評価する(下の「再開しない操作の節」)。
+ 
+    1. 節が resume を呼ばずに `v` を返す。
+-   2. `discontinue k (Unwind (inst, v))` で、捨てる継続の中にこの例外を送り込む。
++   2. `discontinue k (Unwind (inst, UValue v))` で、捨てる継続の中にこの例外を送り込む。
+    3. 中断された計算の断片が、内側から巻き戻る。
+       途中のハンドラは `exnc` で自分宛てでない `Unwind` を受け取り、
+       `cancel` 節を走らせてから再送出する。
+@@ -670,7 +669,7 @@
+    | 節の終わり方 | 処理 | 理由 |
+    |---|---|---|
+    | resume した後に値 `v` を返した | `v` を返す | 継続は消費済みで、返り値が handle 式の値になる |
+-   | resume せずに値 `v` を返した | `discontinue k (Unwind (inst, v))` | 捨てた継続の中の cancel 節を走らせる |
++   | resume せずに値 `v` を返した | `discontinue k (Unwind (inst, UValue v))` | 捨てた継続の中の cancel 節を走らせる |
+    | 例外 `ex` で脱出した | resume していなければ `discontinue k ex` | 捨てた継続の中と自分の cancel 節を走らせる |
+ 
+    2 行目で `v` を直接返すと、捨てた継続の中にあるハンドラの `cancel` 節が走らず、資源が漏れる。
+@@ -701,55 +700,47 @@
+    返り値の型が `Never` の操作(再開しない操作。第11章 §11.15)の節には、
+    第11章が `RNeverOp` の印を付ける。
+    この節は `resume` を持てないので、継続を捨てる時点を節の評価の前に動かせる。
+-   `effc` は、節を選んだ後、`discontinue k (Unwind (inst, 印))` で継続を捨てる。
+-   印は、節の本体を評価する閉包(`VPending`)で、破棄ごとに新しく確保する。
++   `effc` は、節を選んだ後、節の本体を評価する閉包 `f` を作り、
++   `discontinue k (Unwind (inst, UClause f))` を末尾で呼んで継続を捨てる。
+    捨てる継続の中のハンドラは内側から外側の順に `cancel` 節を走らせ、
+-   最後に自分の `exnc` が自分宛ての `Unwind` を受け取って、
+-   載っていた印を持って `discontinue` が戻る。
+-   印が戻った後、節の本体を `effc` の関数の末尾で評価し、その値が handle 式の値になる。
++   最後に自分の `exnc` が自分宛ての `Unwind` を受け取って、`f` を末尾で呼ぶ。
++   その値が handle 式の値になる。
+    継続が無いので、3 つの経路の包み(`match … with exception`)は要らない。
+-   本体の実行時エラーはそのまま `effc` の外へ出て、自分の `exnc` を通らないので、
++   本体の実行時エラーはそのまま `exnc` の外へ出て、自分の `exnc` には戻らないので、
+    自分の `cancel` 節は走らない。
+    本体から操作を起こして外側のハンドラが継続を捨てるときも同じである。
+    同じエフェクトへの再送出でも、別のエフェクトの再開しない操作でも、
+    resume しない外側の節でも変わらない。
++
+    送った `Unwind` が、捨てる継続の中の `cancel` 節の打ち切り(下の「cancel 節の実行文脈」)で止まることがある。
+    `cancel` 節が再開しない操作を起こした場合である。
+-   このとき `discontinue` は、本体が返した値か、先に送られていた別の破棄の印を持って戻る。
++   このとき、自分宛ての `Unwind` は自分の `exnc` に届かず、`f` は呼ばれない。
++   ハンドラの本体はそのまま続き、その値か、先に送られていた別の破棄の節の値が、
++   `discontinue` の値になる。
+    後者は、破棄を進めている当のハンドラが `cancel` 節からの操作を受け取ったときで、
+-   先の破棄の `Unwind` が自分の `exnc` に届き、その印が内側の `discontinue` に戻る。
+-   そこで、印は破棄ごとに新しく確保し、
+-   `discontinue` が自分の印を持って戻ったときだけ本体を評価する。
+-   印が戻らなければ節の本体を評価せず、戻った値をそのまま返す。
+-   内側の `effc` が返した先の破棄の印は、外側の `discontinue` か末尾でない `resume` の戻り値になり、
+-   そこで先の操作の節の本体が走る。
+-   印を 1 つの真偽値で持つと、当のハンドラが受け取った場合に打ち切られた操作の節の本体が走り、
+-   先の操作の節の本体が走らない。
+-   印を使わずに常に本体を評価すると、本体が正常に終わった後に節の本体が走り、本体の値が捨てられる。
++   先の破棄の `Unwind` が自分の `exnc` に届き、そこで先の操作の節の本体が走る。
++   どの節の本体が走るかは、どの `Unwind` が `exnc` に届いたかだけで決まるので、
++   破棄ごとの印も、印の照合も要らない。
++   本体を `effc` の中で `discontinue` が戻った後に評価する形では、
++   `discontinue` が先の破棄の値を持って戻ったときに打ち切られた節の本体を走らせないよう、
++   破棄ごとの印で区別しなければならない。
+    回帰テストは `test/never_ops.t` の cancelnormal と cancelsame である。
+ 
+-   印が、同じハンドラの再開する操作の節の、末尾でない `resume` の戻り値として届くこともある。
++   先の破棄の節の値が、同じハンドラの再開する操作の節の、
++   末尾でない `resume` の戻り値になることもある。
+    捨てる継続の中の `cancel` 節がその操作を起こし、その節が末尾でない `resume` で再開した場合で、
+-   再開した計算が先の破棄で終わると、`continue` は印を持って戻る。
+-   §14.4 の `Resume` は、戻り値が `VPending` ならその閉包を評価し、
+-   その値を `resume` の返り値にする。
++   再開した計算が先の破棄で終わると、`exnc` が評価した節の値を持って `continue` が戻る。
+    仕様(LangSpec.md §13.6)が、末尾位置にない `resume` で再開した計算の中では節の値がその `resume` の返り値になる、
+    と定めているのにあたる。
+-   印を閉包ではなく値にすると、この経路で印が利用者の値として漏れ、節の本体が走らない。
+    回帰テストは `test/never_ops.t` の cancelresume である。
+-   この分岐のために §14.4 の `Resume` の `continue` は末尾呼び出しでなくなり、
+-   末尾でない `resume` を入れ子にできる深さは、
+-   小さいスタックの上限の下で 2 割強浅くなる(再開しない操作を使わないプログラムも同じ)。
+-   末尾でない `resume` は仕様が領域を保証しない範囲である(LangSpec.md §5.7)。
+-   判定を `exnc` に移せば `continue` を末尾に保てるが、採っていない。
+-
+-   打ち切られたハンドラの `effc` は、`discontinue` が戻るまで、
+-   つまりそのハンドラ式の値が決まるまで枠を残す。
+-   打ち切られたのが破棄を進めている当のハンドラなら、進めていた破棄が終わって枠はすぐ戻る。
+-   別のハンドラが打ち切られると、
+-   その後にそのハンドラの本体の中で評価される節の本体(再試行の再帰など)は、
+-   残った枠の上で走り、繰り返すと領域が回数に比例して増える。
+-   仕様(LangSpec.md §5.7)はこの形を末尾位置の保証から除いている。
++   §14.4 の `Resume` は戻り値を調べないので、`continue` は末尾呼び出しである。
++
++   `effc` は `discontinue` を末尾で呼ぶので、`discontinue` が戻るのを待つ枠を残さない。
++   打ち切られたハンドラが、破棄を進めている当のハンドラでも別のハンドラでも、
++   打ち切りの後にそのハンドラの本体の中で評価される節の本体(再試行の再帰など)は、
++   打ち切りの回数によって領域を増やさない。
++   回帰テストは `test/tail_calls.t` の retrycancel と retrycancelvia である。
++
+    仕様(LangSpec.md §13.6)は、再開しない操作の節の本体をハンドラの外側で評価し、
+    ハンドラ自身の `return` 節と `cancel` 節を実行しないと定めている。
+    内側の `cancel` 節が節の本体より先に走る順序は `test/never_ops.t` の order が、
+@@ -815,7 +806,7 @@
+    `match_with` の結果を受け取ってから何かをする形にすると、`return` 節の経路で
+    `eval_handle` の枠が再帰の段ごとに残り、
+    `test/tail_calls.t` の retc.kel が小さいスタックの上限で落ちる。
+-   再開しない操作の節の本体を、`match_with` の後ではなく `effc` の末尾で評価するのは、
++   再開しない操作の節の本体を、`match_with` の後ではなく `exnc` の末尾で評価するのは、
+    このためである。
+ 
+    ### アフィンな resume と second-class
+@@ -995,9 +986,10 @@
+       exnc =
+         (fun ex ->
+           match ex with
+-          (* 自分宛ての巻き戻し。保留していた節の値(再開しない操作の節では破棄の印)を
+-             discontinue の戻り値として effc に返す *)
+-          | Unwind (id, v) when id = inst -> v
++          (* 自分宛ての巻き戻し。再開する操作の節の値はそのまま返し、再開しない操作の
++             節の本体はここで末尾で評価する。どちらも handle 式の値になる *)
++          | Unwind (id, UValue v) when id = inst -> v
++          | Unwind (id, UClause f) when id = inst -> f ()
+           | ex ->
+               (* 外側による巻き戻し(または実行時エラー)の通過。cancel 節を実行してから再送出する *)
+               run_cancel ();
+@@ -1047,20 +1039,14 @@
+                           Effect.Deep.discontinue k
+                             (Runtime_error ("handle のどの節にも一致しません: " ^ Type.display_of op ^ show args))
+                       | Some (locals, c, `Never) ->
+-                          (* 再開しない操作の節。継続を先に捨てて(捨てた継続の中の cancel 節を
+-                             走らせ、自分の exnc が Unwind を受け取る)、節の本体をこの関数の
+-                             末尾で評価する。継続は無いので、本体の例外に備える包みは要らず、
+-                             自分の cancel 節も走らない。Unwind には、節の本体を評価する閉包を
+-                             破棄ごとに新しく確保して載せる。discontinue が同じ閉包(物理的に
+-                             同じ値)を持って戻ったときだけ本体を評価する。閉包が戻らないのは、
+-                             送った Unwind が cancel 節の打ち切りで止まったときで、本体の値か、
+-                             先に送った別の破棄の閉包が戻る。そのときは本体を評価せず、戻った
+-                             値をそのまま返す。閉包が末尾でない resume の戻り値として別の節に
+-                             届いたときは、その節が評価する(§14.4 の Resume) *)
+-                          let tok = VPending (fun () -> eval { env with locals; resume = None } c.T.cl_body) in
+-                          (match Effect.Deep.discontinue k (Unwind (inst, tok)) with
+-                          | VPending f as v when v == tok -> f ()
+-                          | v -> v)
++                          (* 再開しない操作の節。節の本体の閉包を Unwind に載せて継続を
++                             末尾で捨てる。捨てた継続の中の cancel 節が走った後、自分の exnc が
++                             閉包を受け取って本体を評価する。継続は無いので、本体の例外に備える
++                             包みは要らず、自分の cancel 節も走らない。送った Unwind が cancel 節の
++                             打ち切りで止まったときは exnc に届かず、本体は評価されない。
++                             discontinue を末尾で呼ぶので、この関数の枠は残らない *)
++                          Effect.Deep.discontinue k
++                            (Unwind (inst, UClause (fun () -> eval { env with locals; resume = None } c.T.cl_body)))
+                       | Some (locals, c, `Resumable tail) -> (
+                           match snd c.T.cl_body with
+                           | T.Resume arg -> (
+@@ -1090,7 +1076,7 @@
+                               match eval { env with locals; resume = Some r } c.T.cl_body with
+                               | v ->
+                                   r.r_alive <- false;
+-                                  if r.r_used then v else Effect.Deep.discontinue k (Unwind (inst, v))
++                                  if r.r_used then v else Effect.Deep.discontinue k (Unwind (inst, UValue v))
+                               | exception ex ->
+                                   r.r_alive <- false;
+                                   if r.r_used then raise ex else Effect.Deep.discontinue k ex)
+@@ -1106,7 +1092,7 @@
+                                   r.r_alive <- false;
+                                   (* resume していなければ継続を巻き戻し、
+                                      自分の exnc で v を受け取り直す *)
+-                                  if r.r_used then v else Effect.Deep.discontinue k (Unwind (inst, v))
++                                  if r.r_used then v else Effect.Deep.discontinue k (Unwind (inst, UValue v))
+                               | exception ex ->
+                                   (* 節が例外で脱出したときも、resume していなければ
+                                      discontinue して、捨てた継続の中の cancel 節を走らせる。
+@@ -1255,6 +1241,7 @@
+     {
+       da_last = None;
+       da_name = cls_name ^ "." ^ m;
++      da_arity = List.length cs;
+       da_fn =
+         (fun ds ->
+           let d = List.nth ds idx in
+@@ -1408,12 +1395,14 @@
+       let prim = VPrim { p_name = ex.T.ex_name; p_fn = impl } in
+       let v =
+         match Tree.get_dict node with
+-        | Tree.DAbs (_ :: _) -> VDictAbs { da_last = None; da_name = ex.T.ex_name; da_fn = (fun _ -> prim) }
++        | Tree.DAbs (_ :: _ as ks) -> VDictAbs { da_last = None; da_name = ex.T.ex_name; da_arity = List.length ks; da_fn = (fun _ -> prim) }
+         | _ -> prim
+       in
+       bind_globals env [ (Tree.GDecl (Tree.oid_of node, ex.T.ex_name), v) ]
+   | T.DType _ | T.DNewtype _ | T.DEffect _ | T.DClass _ -> env
+-  | T.DModule _ -> runtime_error "module の評価は未実装です(M10)"
++  | T.DModule _ ->
++      (* 平坦化を通っていれば到達しない。来たら不変条件の違反で、処理系の欠陥である *)
++      bug "module が平坦化されていません(flatten_modules を先に呼んでください)"
+ 
+ (* ## 14.13 run
+ 
+@@ -1445,7 +1434,7 @@
+   let globals = Hashtbl.create 512 in
+   register_builtin_values globals;
+   register_class_methods globals;
+-  { globals; locals = SMap.empty; resume = None }
++  { globals; locals = SMap.empty; dicts = DMap.empty; resume = None }
+ 
+ (* 単位 1 個の宣言を、前の単位までの大域の環境の上で実行する。
+    値の参照は型検査が木に書いた実体で引くので、単位をまたいでも名前は衝突しない *)
+@@ -1504,9 +1493,8 @@
+    辞書パラメータを含まない証拠の辞書は穴ごとに 1 回だけ作り、
+    辞書を受け取る値は直前に受け取った辞書の列と結果を覚えるので、
+    同じ呼び出し地点を繰り返しても辞書を作り直さない。
+-   制約付きの多相関数の再帰は、再帰のたびに辞書を局所環境から引いて渡すので、
+-   単相の関数より遅い。
+-   辞書パラメータを名前の文字列で引くことがその費用の中心である。
++   制約付きの多相関数の再帰は、再帰のたびに辞書パラメータを `dicts` から引いて渡し、
++   演算子の辞書からメソッドを選ぶので、その分だけ単相の関数より遅い。
+ 
+    最後に、本章で外すと気づかれずに壊れるものを並べる。
+ 
+@@ -1575,10 +1563,10 @@
+             bind_globals env (List.map (fun ((m, _) as ms) -> (Tree.GMethod (cls_name ^ "." ^ m), method_selector ci ms)) ci.Decls.ci_methods)
+         | None -> env)
+     | T.DExp e ->
+-        (* 辞書パラメータを持つ式文は評価せず、辞書を受け取る値として表示する(<fn>) *)
++        (* 辞書パラメータを持つ式文は宣言の位置で評価せず、辞書を受け取る値にする。表示は第16章 §16.6b が評価する *)
+         let v =
+           match Tree.get_dict node with
+-          | Tree.DAbs ks -> VDictAbs { da_last = None; da_name = "_"; da_fn = (fun ds -> eval (bind_dicts env ks ds) e) }
++          | Tree.DAbs ks -> VDictAbs { da_last = None; da_name = "_"; da_arity = List.length ks; da_fn = (fun ds -> eval (bind_dicts env ks ds) e) }
+           | _ -> eval env e
+         in
+         shown := ("_", `Exp e, v) :: !shown;
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/lib/prelude.kel b/lib/prelude.kel
+--- a/lib/prelude.kel	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/prelude.kel	2026-10-17 04:45:37.396314783 +0900
+@@ -411,16 +411,31 @@
+ // `Show[String]` は引用符を付けない恒等写像なので、`show(Cons("a", Nil))` は `[a]` になる。
+ // この非対称は `Show[String]` の側の性質で、本章では変えない。
+ //
+-// 再帰を `show` 自身ではなく `let rec go` に持たせたのは、括弧を付けるのが 1 回だけだからである。
++// 再帰を `show` 自身ではなく本体の中の `let rec` に持たせたのは、
++// 括弧を付けるのが 1 回だけだからである。
+ // `show` は `[` と `]` を付けるので、尾を `show(t)` で畳むと、
+ // `[1, [2, [3, []]]]` のように括弧が入れ子になる。
+-// `go` は区切りの `, ` だけを担当し、括弧はメソッドの最後で 1 回だけ付ける。
++// 補助の関数は要素と区切りの `, ` だけを担当し、括弧はメソッドの最後で 1 回だけ付ける。
+ //
+-// その `go` を、インスタンス本体にメソッドと並べて書くことはできない。
+-// 本体に書けるのはクラスのメソッドだけで、`go` を並べて書くと
+-// 「クラス Show にメソッド go はありません」で落ちる(第11章)。
+-// 補助関数をプレリュードのトップレベルに置くと大域の名前が 1 つ増えるので、
+-// `go` はメソッド本体のブロックの中に閉じ込めた。
++// 要素を先頭から `Show.show(h) + ", " + go(t)` の形で畳むと、
++// 複写の量がリストの長さの 2 乗に比例する。
++// `String` の `+` は両辺を複写して新しい文字列を作るので、
++// 尾の文字列を要素の数だけ複写し直すからである。
++// そこで、隣り合う 2 つの文字列をつなぐ処理を、文字列が 1 つになるまで繰り返す。
++// `strs` は、要素を先頭から 4 つずつ表示して `, ` でつなぎ、その塊を逆順に並べたリストを返す。
++// `bwd` は逆順のリストを、`fwd` は正順のリストを、先頭から 2 つずつつないで、
++// 逆の向きのリストを返す。
++// `join` は、いまのリストがどちらの向きかを `rev` で持ち、この 2 つを交互に呼ぶ。
++// 1 回つなぐごとにリストの長さは半分になり、1 回でつなぐ文字列の長さの合計は出力の長さを超えない。
++// したがって、複写の量は全体で、出力の長さとリストの長さの対数の積で押さえられる。
++// 4 つずつの塊にするのは、短いリストでつなぐ回数とリストのセルを減らすためである。
++// 要素の `show` を呼ぶ順序は先頭からで、出力も先頭から畳む形と同じである。
++//
++// 補助の関数を、インスタンス本体にメソッドと並べて書くことはできない。
++// 本体に書けるのはクラスのメソッドだけで、`strs` を並べて書くと
++// 「クラス Show にメソッド strs はありません」で落ちる(第11章)。
++// 補助関数をプレリュードのトップレベルに置くと大域の名前が増えるので、
++// `strs`、`fwd`、`bwd`、`join` はメソッド本体のブロックの中に閉じ込めた。
+ //
+ // 要素の側を `Show.show` と修飾したのは、クラスのメソッドを呼んでいることを綴りで示すためである。
+ // ここでは非修飾の `show` でも同じ意味になる。
+@@ -433,14 +448,35 @@
+ 
+ type instance[A: Show] Show[List[_]] {
+   let show(xs) = {
+-    let rec go(ys) = ys match {
+-      case Nil => ""
+-      case Cons(head = h, tail = t) => t match {
+-        case Nil => Show.show(h)
+-        case _   => Show.show(h) + ", " + go(t)
++    let rec strs(ys, acc) = ys match {
++      case Cons(a, Cons(b, Cons(c, Cons(d, t)))) => {
++        let s = Show.show(a) + ", " + Show.show(b) + ", " + Show.show(c) + ", " + Show.show(d)
++        strs(t, Cons(s, acc))
+       }
++      case Cons(a, Cons(b, Cons(c, Nil))) =>
++        Cons(Show.show(a) + ", " + Show.show(b) + ", " + Show.show(c), acc)
++      case Cons(a, Cons(b, Nil)) => Cons(Show.show(a) + ", " + Show.show(b), acc)
++      case Cons(a, Nil) => Cons(Show.show(a), acc)
++      case Nil => acc
++    }
++    let rec fwd(ss, acc) = ss match {
++      case Cons(a, Cons(b, t)) => fwd(t, Cons(a + ", " + b, acc))
++      case Cons(a, Nil) => Cons(a, acc)
++      case Nil => acc
++    }
++    let rec bwd(ss, acc) = ss match {
++      case Cons(b, Cons(a, t)) => bwd(t, Cons(a + ", " + b, acc))
++      case Cons(a, Nil) => Cons(a, acc)
++      case Nil => acc
++    }
++    let rec join(ss, rev) = ss match {
++      case Cons(s, Nil) => s
++      case _ => if rev then join(bwd(ss, Nil), false) else join(fwd(ss, Nil), true)
++    }
++    xs match {
++      case Nil => "[]"
++      case _ => "[" + join(strs(xs, Nil), true) + "]"
+     }
+-    "[" + go(xs) + "]"
+   }
+ }
+ 
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/lib/value.ml b/lib/value.ml
+--- a/lib/value.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/value.ml	2026-10-17 04:45:37.392939594 +0900
+@@ -33,6 +33,15 @@
+ module T = Tree.Tree
+ module SMap = Map.Make (String)
+ 
++(* 辞書パラメータの鍵(型変数の vid, クラスの oid)の Map *)
++module DMap = Map.Make (struct
++  type t = int * int
++
++  let compare ((v1, c1) : t) ((v2, c2) : t) =
++    let r = Int.compare v1 v2 in
++    if r <> 0 then r else Int.compare c1 c2
++end)
++
+ (* ## 12.1 値の一覧
+ 
+    | コンストラクタ | 表すもの |
+@@ -85,7 +94,6 @@
+   | VMutArray of t array
+   | VDict of dict (* 辞書。型検査が選んだインスタンスと前提の辞書(第5章 §5.1b の証拠を評価したもの) *)
+   | VDictAbs of dict_abs (* 辞書パラメータを持つ束縛の値。辞書の列を受け取って値を返す *)
+-  | VPending of (unit -> t) (* 再開しない操作の節の本体を評価する閉包。破棄の印として Unwind に載せ、受け取った側が評価する *)
+ 
+ (* 辞書は、(クラス, 型構成子)と前提の辞書の列の組で表す。メソッドの実装は、メソッドを
+    呼び出す時点でインスタンスの表から引く(第14章 §14.6)。最後の成分は選んだメソッドの覚え書き。
+@@ -97,8 +105,9 @@
+   | DVariant of (oid * t) list
+   | DPending
+ 
+-(* 辞書を受け取る値。直前に受け取った辞書の列(物理的に同じもの)と結果を覚える *)
+-and dict_abs = { da_name : string; da_fn : t list -> t; mutable da_last : (t list * t) option }
++(* 辞書を受け取る値。da_arity は受け取る辞書の個数。
++   直前に受け取った辞書の列(物理的に同じもの)と結果を覚える *)
++and dict_abs = { da_name : string; da_arity : int; da_fn : t list -> t; mutable da_last : (t list * t) option }
+ 
+ (* ## 12.2 クロージャの環境が可変である理由
+ 
+@@ -160,11 +169,17 @@
+ 
+    その代わり、局所束縛を 1 つ追加するたびに、Map への挿入に対数時間がかかる。
+    この 2 層の構成は、環境をハッシュ表 1 つにして push と pop で管理する実装と比べると、
+-   深い再帰ではわずかに遅いが、クロージャによる環境の捕獲を O(1) で正しく行える。 *)
++   深い再帰ではわずかに遅いが、クロージャによる環境の捕獲を O(1) で正しく行える。
++
++   型クラスの辞書パラメータは局所の層に属し、`locals` と別の不変の Map `dicts` に、
++   鍵 (型変数の vid, クラスの oid) で置く(第14章 §14.1)。
++   利用者の名前と鍵の空間が分かれるので衝突せず、整数の組で比べるので引くのが安い。
++   `locals` と同じく不変なので、クロージャは `c_env` に持つだけで辞書も捕まえる。 *)
+ 
+ and env = {
+   globals : (Tree.gref, t) Hashtbl.t;
+   locals : t SMap.t;
++  dicts : t DMap.t;
+   resume : resume option;
+ }
+ 
+@@ -183,7 +198,7 @@
+    `resume` をレコードや配列に入れたり、関数から返したりできてしまう。
+    `t` にそのコンストラクタが無いので、継続を値としてどこかへ運ぶことはできない。
+ 
+-   その代わり、継続は環境の 3 つ目のフィールド `resume` に入れて運ぶ。
++   その代わり、継続は環境のフィールド `resume` に入れて運ぶ。
+    このフィールドは、操作節の本体を評価するあいだだけ `Some` になる。
+    第14章はハンドラの `effc` で `{ env with locals; resume = Some r }` を作り、
+    `return` 節、`cancel` 節、ガード式では `resume = None` にする。
+@@ -228,8 +243,8 @@
+    - **引数レコード**：呼び出し規約が §12.2 のとおり統一されているので、
+      操作の引数も普通の関数と同じく 1 個のレコードである
+ 
+-   `Unwind` は、ハンドラの活性化 id と、保留中の節の値(再開しない操作の節では、
+-   節の本体を評価する閉包 `VPending`。破棄の印)を運ぶ。
++   `Unwind` は、ハンドラの活性化 id と、保留中の節の値 `UValue` か、
++   再開しない操作の節の本体を評価する閉包 `UClause` を運ぶ。
+    この id は AST のノードの id ではなく、ハンドラの活性化ごとに振る番号である。
+    同じ `handle` 式が入れ子に活性化したとき(再帰の中の `handle` や、`with_file` の 2 回の呼び出し)、
+    ノードの id を使うと、内側のハンドラが外側宛の `Unwind` を自分宛と取り違えて飲み込んでしまう。
+@@ -245,8 +260,11 @@
+ (* エフェクトのプロトコル。完全操作名の oid と引数レコードを運ぶ *)
+ type _ Effect.t += Op : oid * t -> t Effect.t
+ 
+-(* 自動の巻き戻し。ハンドラの活性化 id と、保留中の節の値(または破棄の印 VPending)を運ぶ *)
+-exception Unwind of oid * t
++(* 自動の巻き戻しが運ぶもの。再開する操作の節の値か、再開しない操作の節の本体を評価する閉包 *)
++type unwind = UValue of t | UClause of (unit -> t)
++
++(* 自動の巻き戻し。ハンドラの活性化 id と、保留中の節の値か節の本体の閉包を運ぶ *)
++exception Unwind of oid * unwind
+ 
+ exception Runtime_error of string
+ 
+@@ -451,9 +469,11 @@
+     in
+     if String.exists (fun c -> c = '.' || c = 'e' || c = 'E') s then s else s ^ ".0"
+ 
+-  (* ---- 印字(実行時エラーの表示用) ---- *)
++  (* ---- 印字(実行時エラーと対話的な実行の表示用) ----
++     fn_name が偽なら、組み込みの関数も <fn> と印字する(対話的な実行の表示) *)
+ 
+-let rec show v =
++let rec show ?(fn_name = true) v =
++  let show v = show ~fn_name v in
+   match v with
+   | VBool b -> string_of_bool b
+   | VInt32 n -> Int32.to_string n
+@@ -472,10 +492,9 @@
+       if Array.length d_fields = 0 then Type.display_of d_ctor
+       else Type.display_of d_ctor ^ "(" ^ String.concat ", " (Array.to_list (Array.map show d_fields)) ^ ")"
+   | VClosure _ -> "<fn>"
+-  | VPrim p -> "<prim " ^ Type.display p.p_name ^ ">"
++  | VPrim p -> if fn_name then "<prim " ^ Type.display p.p_name ^ ">" else "<fn>"
+   | VRef _ -> "<ref>"
+   | VArray a -> "[" ^ String.concat ", " (Array.to_list (Array.map show a)) ^ "]"
+   | VMutArray a -> "<mutable [" ^ String.concat ", " (Array.to_list (Array.map show a)) ^ "]>"
+   | VDict _ -> "<dict>"
+   | VDictAbs _ -> "<fn>"
+-  | VPending _ -> "<pending>"
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/test/classes.t b/test/classes.t
+--- a/test/classes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/classes.t	2026-10-17 04:45:37.396398693 +0900
+@@ -287,6 +287,43 @@
+   [Some(1), None]
+   [a, b]
+ 
++長さ 0 から 20 のリストと入れ子のリストで、要素の順序と区切りが先頭から畳んだ形と
++同じになること(Show[List] は要素を 4 つずつの塊にし、隣り合う 2 つをつなぐ処理を
++向きを交互に変えて繰り返す。長さ 20 までで、塊とつなぐ回数の端の形が一通り出る):
++
++  $ cat > pshowsplit.kel <<'KEL'
++  > let rec upto(i: Int32, acc: List[Int32]): List[Int32] = if i == 0 then acc else upto(i - 1, Cons(i, acc))
++  > let rec each(n: Int32): Unit @ Console = if n == 21 then () else {
++  >   echoln(show(upto(n, Nil)))
++  >   each(n + 1)
++  > }
++  > each(0)
++  > echoln(show(Cons(upto(3, Nil), Cons(upto(0, Nil), Cons(upto(5, Nil), Nil)))))
++  > KEL
++  $ diktor pshowsplit.kel
++  []
++  [1]
++  [1, 2]
++  [1, 2, 3]
++  [1, 2, 3, 4]
++  [1, 2, 3, 4, 5]
++  [1, 2, 3, 4, 5, 6]
++  [1, 2, 3, 4, 5, 6, 7]
++  [1, 2, 3, 4, 5, 6, 7, 8]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
++  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
++  [[1, 2, 3], [], [1, 2, 3, 4, 5]]
++
+ 頭に書いた前提 [A: Show] は効いている。要素が Show のインスタンスでなければ落ちる:
+ 
+   $ cat > pshowop.kel <<'KEL'
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/test/dictionary_passing.t b/test/dictionary_passing.t
+--- a/test/dictionary_passing.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/dictionary_passing.t	2026-10-17 04:45:37.390760679 +0900
+@@ -419,3 +419,15 @@
+   $ diktor negremf.kel
+   ! negremf.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
++
++mkshow が返すラムダは、mkshow の外で呼んでも、作った位置の型の show を使う。
++f は Int32 の show、g は Bool の show を使い、f を後でもう一度呼んでも変わらない:
++
++  $ cat > capdict.kel <<'KEL'
++  > let mkshow[A: Show](x: A): () => String = fn() => show(x) + "!"
++  > let f = mkshow(1)
++  > let g = mkshow(true)
++  > echoln(f() + g() + f())
++  > KEL
++  $ diktor capdict.kel
++  1!true!1!
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/test/repl.t b/test/repl.t
+--- a/test/repl.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/repl.t	2026-10-17 04:45:37.393024204 +0900
+@@ -278,6 +278,61 @@
+   _ : ((Int32) => Int32, Int32) = (<fn>, 5)
+   _ : Option[(Int32) => Int32] = Some(<fn>)
+ 
++制約付きで一般化した値束縛と式文の値は、関数でなければ、
++型の決まっていない辞書を渡して評価した値を表示する。
++関数の値は、組み込みの関数を選んだものも含めて <fn> と表示する。
++初期化式が穴に到達するときは、値の代わりに <unevaluated> を出し、入力は受理する:
++
++  $ diktor --repl <<'EOF2'
++  > let p = (show, 1)
++  > (show, eq, 3)
++  > let k = {f = show, n = 1}
++  > let m = Some(show)
++  > let v = #Tag(show)
++  > let idf[A](x: A): A = x
++  > let t = idf(show); t(2i32)
++  > let h: (Int32) => String = show
++  > let rec ev[A: Eq](x: A): Boolean = eq(x, x)
++  > (ev, 2)
++  > extern "prim" let ex1[A: Show](x: A): String
++  > (ex1, 1)
++  > let q = (show, ???)
++  > q
++  > EOF2
++  p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
++  _ : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = (<fn>, <fn>, 3)
++  k : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
++  m : [A: Show] Option[(A) => String] = Some(<fn>)
++  v : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
++  idf : (A) => A = <fn>
++  t : (Int32) => String @ {Console, Blocking, Print} = <fn>
++  _ : String = "2"
++  h : (Int32) => String = <fn>
++  ev : [A: Eq] (A) => Boolean = <fn>
++  _ : [A: Eq] ((A) => Boolean, Int32) = (<fn>, 2)
++  _ : [A: Show] ((A) => String, Int32) = (<fn>, 1)
++  q : [A: Show] ((A) => String, B) = <unevaluated>
++  _ : [A: Show] ((A) => String, B) = <unevaluated>
++
++型の頭が newtype で Show を満たす値は、評価した値を利用者の show に渡す。
++show が引数を照合しても、評価した値に照合する。
++初期化式が穴に到達するときは、show が引数を見なくても <unevaluated> を出す:
++
++  $ diktor --repl <<'EOF2'
++  > newtype W[A] = W(A)
++  > type instance[A] Show[W[_]] { let show(w) = w match { case W(_) => "W!" } }
++  > let x = W(show)
++  > x
++  > newtype U[A] = U(A)
++  > type instance[A] Show[U[_]] { let show(u) = "U!" }
++  > let y = U(show)
++  > let z = U((show, ???))
++  > EOF2
++  x : [A: Show] W[(A) => String] = W!
++  _ : [A: Show] W[(A) => String] = W!
++  y : [A: Show] U[(A) => String] = U!
++  z : [A: Show] U[((A) => String, B)] = <unevaluated>
++
+ 型エラーと曖昧性エラーで失敗した入力の中で宣言したインスタンスは、後の入力から見えない:
+ 
+   $ diktor --repl <<'EOF2'
+diff -ruN -x _build -x '*.orig' -x '*.rej' a/test/tail_calls.t b/test/tail_calls.t
+--- a/test/tail_calls.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/tail_calls.t	2026-10-17 04:45:37.388577672 +0900
+@@ -193,6 +193,100 @@
+   実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+   [3]
+ 
++cancel 節から起こした再開しない操作による破棄が打ち切られた後に、ハンドラの本体の中で
++評価される節の本体も、末尾位置にある(§5.7、§13.6)。打ち切られるのが外側のハンドラ
++(retrycancel)でも、再開する操作の節から送出を受けるハンドラ(retrycancelvia)でも、
++破棄を進めている当のハンドラ(retrycancelsame)でも、再試行の回数によって領域が増えない。
++打ち切りのたびに同じ診断が 1 行記録される:
++
++  $ cat > retrycancel.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Stop = { stop: () => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   ({ perform use(); perform stop(); 1 }) handle {
++  >     case use() => resume()
++  >     case cancel => perform throw("from cancel")
++  >   } handle {
++  >     case stop() => loop(n - 1)
++  >   }
++  > let r = loop(100000) handle {
++  >   case throw(e) => { echoln("caught " + e); 1 }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retrycancel.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  $ cat > retrycancelvia.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Ask = { ask: () => Int32 }
++  > effect Stop = { stop: () => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   ({ perform use(); perform stop(); 1 }) handle {
++  >     case use() => resume()
++  >     case cancel => { let a = perform ask(); () }
++  >   } handle {
++  >     case stop() => loop(n - 1)
++  >   }
++  > let r = (loop(100000) handle {
++  >   case ask() => perform throw("from ask")
++  > }) handle {
++  >   case throw(e) => { echoln("caught " + e); 1 }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retrycancelvia.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  $ cat > retrycancelsame.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   ({ perform use(); perform throw("first") }) handle {
++  >     case use() => resume()
++  >     case cancel => perform throw("from cancel")
++  >   } handle {
++  >     case throw(e) => loop(n - 1)
++  >   }
++  > echoln(show(loop(100000)))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retrycancelsame.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++
++打ち切られた外側のハンドラの return 節も末尾位置にあり(§5.7)、return 節から再帰しても
++回数によって領域が増えない:
++
++  $ cat > retcancelret.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Stop = { stop: () => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   (({ perform use(); perform stop(); 1 }) handle {
++  >     case use() => resume()
++  >     case cancel => perform throw("from cancel")
++  >   } handle {
++  >     case stop() => 5
++  >   }) handle {
++  >     case throw(e) => { echoln("caught " + e); 1 }
++  >     case return(x) => loop(n - 1)
++  >   }
++  > echoln(show(loop(100000)))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retcancelret.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++
+ 再開しない操作の節の値が、同じハンドラの末尾でない resume の戻り値として届く形(§5.7 の
+ 但し書き)。保留していた節の評価が続くので、節の本体は末尾位置にならず、この実装では
+ 小さい上限で落ちる:

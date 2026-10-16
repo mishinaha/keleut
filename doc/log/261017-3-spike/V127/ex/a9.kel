@@ -1,0 +1,3 @@
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let h = fn() => 2
+let b(): Int32 = one(h)

@@ -1,0 +1,143 @@
+== ef1.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  level: Int32
+     4	}
+-- out
+! ef1.kel:1:1: 型エラー: 操作 level の型は矢印型でなければなりません
+[exit 1]
+== ef2.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  cancel: () => Unit
+     4	}
+-- out
+! ef2.kel:1:1: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
+[exit 1]
+== ef3.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  _x: () => Unit
+     4	}
+-- out
+! ef3.kel:1:1: 型エラー: 操作名 _x は英小文字で始めてください(handle の節が操作名として読めません)
+[exit 1]
+== ef4.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  log: () => Unit
+     4	}
+-- out
+! ef4.kel:1:1: 型エラー: 操作 log が二重に宣言されています
+[exit 1]
+== ef5.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  flush: () => Unit @ {Print}
+     4	}
+-- out
+[exit 0]
+== ef6.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  flush: () => Unit @ {Nope}
+     4	}
+-- out
+! ef6.kel:3:23: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+== ef7.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  flush: () => Nope
+     4	}
+-- out
+! ef7.kel:3:16: 型エラー: 未知の型: Nope
+[exit 1]
+== effmix.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  log: Int32
+     4	}
+-- out
+! effmix.kel:1:1: 型エラー: 操作 log の型は矢印型でなければなりません
+[exit 1]
+== effpos4.kel
+     1	effect Log = {
+     2	  log: (String) => Unit,
+     3	  flush: () => Unit,
+     4	  log: () => Unit
+     5	}
+-- out
+! effpos4.kel:1:1: 型エラー: 操作 log が二重に宣言されています
+[exit 1]
+== effpos5.kel
+     1	effect Log[A] = {
+     2	  log: (A) => Unit
+     3	}
+-- out
+! effpos5.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+== nt1.kel
+     1	module P {
+     2	  pub newtype Parser[A] = Parser(go: (String) => Option[A] @ {}, fail: (String) => Unit)
+     3	}
+-- out
+! nt1.kel:2:3: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+== nt1m.kel
+     1	module P {
+     2	  pub newtype Parser[A] = Parser(
+     3	    go: (String) => Option[A] @ {},
+     4	    fail: (String) => Unit)
+     5	}
+-- out
+! nt1m.kel:2:3: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+== nt2.kel
+     1	pub newtype T = A((Int32) => Int32 @ {})
+     2	  | B(Int32, (Int32) => Int32)
+-- out
+! nt2.kel:1:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+== nt3.kel
+     1	pub newtype T(Int32, List[(Int32) => Int32])
+-- out
+! nt3.kel:1:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+== nt4.kel
+     1	newtype T(
+     2	  Int32,
+     3	  (Int32) => Nope
+     4	)
+-- out
+! nt4.kel:3:14: 型エラー: 未知の型: Nope
+[exit 1]
+== nt5.kel
+     1	newtype T[E](
+     2	  Int32,
+     3	  E
+     4	)
+     5	let x: T[{}] = T(1, {})
+-- out
+x : T[{}]
+[exit 0]
+== ntpos2.kel
+     1	pub newtype T = A((Int32) => Int32 @ {})
+     2	  | B(Int32, List[(Int32) => Int32])
+-- out
+! ntpos2.kel:1:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+== pl1.kel
+     1	pub let f(
+     2	  x: Int32,
+     3	  g: List[(Int32) => Int32]
+     4	): Int32 @ {} = x
+-- out
+! pl1.kel:1:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+== ex/r10_classdup.kel
+! ex/r10_classdup.kel:1:1: 型エラー: メソッド f が二重に宣言されています
+[exit 1]
+== ex/r11_classnonarrow.kel
+! ex/r11_classnonarrow.kel:1:1: 型エラー: メソッド h の型は矢印型でなければなりません
+[exit 1]

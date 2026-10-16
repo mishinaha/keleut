@@ -1,0 +1,6 @@
+from "./lib/eff" import { Ask }
+let h[E](): String @ E = perform ask(fn() => "x") handle {
+  case ask(f) => resume(f() + "y")
+  case return(x) => x
+}
+echoln(h())

@@ -1,0 +1,5 @@
+let ap3(a: () => Int32 @ {}, b: () => Int32 @ {}): Int32 = a() + b()
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: (() => Int32 @ {}, () => Int32 @ E) => Int32 = ap3
+  k(fn() => 1, g)
+}

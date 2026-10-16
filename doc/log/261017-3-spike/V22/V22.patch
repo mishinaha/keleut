@@ -1,0 +1,100 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:12:24.189697287 +0900
+@@ -508,6 +508,14 @@
+    型引数の読み分け(elab_con_args)がこれを見て、型としても行としても読める字面を飛ばす *)
+ let speculating = ref false
+ 
++(* 名前 e がエフェクトラベルとして引けるかを判定する。
++   effect の操作の登録は 1b なので、1b より前の投機の時点では、
++   利用者が宣言した effect はまだ宣言表に無い。
++   そこで投機の間だけ、1a が型の名前空間に effect として主張した名前も数える。
++   投機は読んだ型を捨て、カインドの張りだけを残すので、操作の型が要らない *)
++let is_effect_name e =
++  Hashtbl.mem Decls.effects e || (!speculating && Hashtbl.find_opt Decls.type_namespace e = Some "effect")
++
+ let rec elab_type env level ~expanding ?(outer = false) (((_, te) as t) : T.type_exp) : ty =
+   (* 内部の再帰にも at_node を掛ける。入口だけを包むと、入れ子の注釈のどこで落ちても、
+      注釈全体の先頭が診断の位置になってしまう *)
+@@ -914,7 +922,7 @@
+   let found =
+     match find_row_alias n with
+     | Some _ as r -> r
+-    | None when Hashtbl.mem Decls.effects (Decls.resolve_unit c) -> None
++    | None when is_effect_name (Decls.resolve_unit c) -> None
+     | None ->
+         List.find_map
+           (fun oid -> Option.map (fun info -> (oid, info)) (Hashtbl.find_opt Decls.aliases oid))
+@@ -1176,7 +1184,7 @@
+       | None ->
+           (* @ Print = @ {Print} の略記 *)
+           let e = Decls.resolve_unit (intern n) in
+-          if Hashtbl.mem Decls.effects e then TRowExtend (e, t_unit, TRowEmpty) else type_error (unknown_effect n))
++          if is_effect_name e then TRowExtend (e, t_unit, TRowEmpty) else type_error (unknown_effect n))
+   | T.EApply ((_, T.EIdent (LongId [ n ])), args)
+     when (not (SMap.mem n env.types)) && Option.is_some (find_row_alias n) ->
+       (* EffectRow エイリアスの適用(@ W[E])。波括弧の中の要素と同じく find_row_alias で引き、
+@@ -1185,7 +1193,7 @@
+       let oid, info = Option.get (find_row_alias n) in
+       Decls.check_con_visible oid;
+       expand_alias env level ~expanding info args
+-  | T.EApply ((_, T.EIdent (LongId [ n ])), args) when Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) ->
++  | T.EApply ((_, T.EIdent (LongId [ n ])), args) when is_effect_name (Decls.resolve_unit (intern n)) ->
+       (* @ Heap[h] = @ {Heap[h]} の略記。sample.kel:469 の略記の規則は、
+          引数つきのラベルを除外していない *)
+       TRowExtend
+@@ -1225,7 +1233,7 @@
+                        引数つきのときに env.types を見ないのは、型パラメータへの適用が
+                        行の要素になれないからである *)
+                     type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
+-                  else if Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) then
++                  else if is_effect_name (Decls.resolve_unit (intern n)) then
+                     TRowExtend
+                       ( Decls.resolve_unit (intern n),
+                         (match args with
+@@ -4786,13 +4794,38 @@
+       | _ -> ())
+     decls;
+   (* パス 1a の後始末: newtype の本体の投機。宣言順に依存せずにパラメータのカインドを
+-     決めるため、登録の前に本体を一度読んで捨てる *)
+-  List.iter
+-    (fun ((_, d) as node : T.decl) ->
+-      at_node node @@ fun () ->
+-      with_decl_module node @@ fun () ->
+-      match d with T.DNewtype n -> speculate_newtype env n | _ -> ())
+-    decls;
++     決めるため、登録の前に本体を読んで捨てる。1 周で決まったカインドが、前の周で
++     落ちたフィールドを読めるようにすることがあるので、決まったパラメータの数が
++     増えなくなるまで周回する。数はパラメータの総数で抑えられるので、周回は止まる *)
++  let speculate_all () =
++    List.iter
++      (fun ((_, d) as node : T.decl) ->
++        at_node node @@ fun () ->
++        with_decl_module node @@ fun () ->
++        match d with T.DNewtype n -> speculate_newtype env n | _ -> ())
++      decls
++  in
++  let settled () =
++    List.fold_left
++      (fun acc ((_, d) as node : T.decl) ->
++        match d with
++        | T.DNewtype n ->
++            with_decl_module node @@ fun () ->
++            let rec count k =
++              match kind_repr k with
++              | KArrow (a, r) -> (match kind_repr a with KVar _ -> 0 | _ -> 1) + count r
++              | _ -> 0
++            in
++            acc + count (Decls.con_kind (intern n.T.nt_name) (List.length n.T.nt_params))
++        | _ -> acc)
++      0 decls
++  in
++  let rec speculate_until_stable prev =
++    speculate_all ();
++    let now = settled () in
++    if now > prev then speculate_until_stable now
++  in
++  speculate_until_stable (settled ());
+   (* パス 1b: newtype のコンストラクタ、effect、type class の登録(相互再帰と前方参照を許す) *)
+   let env =
+     List.fold_left

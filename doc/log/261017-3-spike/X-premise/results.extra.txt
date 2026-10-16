@@ -1,0 +1,22 @@
+=== p17.kel
+newtype Opaque = MkOpaque(Int32)
+let ng = Nil == Cons(Cons(MkOpaque(1i32), Nil), Nil)
+--- head --type-check p17.kel
+! p17.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+--- spike --type-check p17.kel
+! p17.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p18.kel
+newtype Opaque = MkOpaque(Int32)
+let ng(o: Opaque): Boolean = {
+  let xs = Cons(Nil, Nil)
+  let ok = xs == Nil
+  xs == Cons(Cons(o, Nil), Nil)
+}
+--- head --type-check p18.kel
+! p18.kel:5:3: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+--- spike --type-check p18.kel
+! p18.kel:5:3: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]

@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+newtype Box = Box(Int32)
+type class R3[T] { val r3[E]: (T, () => Unit @ E) => Unit @ E }
+type instance R3[Box] { let r3[F](b: Box, f: () => Unit @ F): Unit @ F = f() }
+r3(Box(1), fn() => echoln("called"))
+r3(Box(2), fn() => echoln(show(perform ask()))) handle { case ask() => resume(10) }
+r3(Box(3), fn() => { r3(Box(4), fn() => echoln(show(perform ask() + 1))) } handle { case ask() => resume(20) }) handle { case ask() => resume(30) }

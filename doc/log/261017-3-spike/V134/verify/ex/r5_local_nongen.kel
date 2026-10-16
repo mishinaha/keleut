@@ -1,0 +1,3 @@
+let id(x) = x
+let g(b: Boolean): Int32 = { let h = id(fn(y) => y match {}); if b then h(3) else 0 }
+echoln(show(g(false)))

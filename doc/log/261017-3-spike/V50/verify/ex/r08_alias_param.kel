@@ -1,0 +1,4 @@
+type W: EffectRow = {Print}
+type K[W]: EffectRow = {Console, W}
+let f(u: Unit): Unit @ K[Unit] = { println("p"); echoln("c") }
+with_stdout(fn() => f(()))

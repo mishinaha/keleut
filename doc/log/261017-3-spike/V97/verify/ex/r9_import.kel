@@ -1,0 +1,8 @@
+from "./imp/lib" import { inc, len, sh }
+let idf[A](x: A): A = x
+let s2 = idf(Show.show)
+let arr: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(3, 7)) }
+let p(): Unit @ Console = echoln(sh(inc(len(arr))) + s2(1))
+let q(): Unit @ Print = println(s2(2))
+p()
+with_stdout(q)

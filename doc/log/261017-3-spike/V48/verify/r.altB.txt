@@ -1,0 +1,131 @@
+$ diktor --type-check params.kel
+pv : (Empt) => Int32
+⚠ このパターンには一致する値がありません
+pn : (Never) => Int32
+⚠ このパターンには一致する値がありません
+pw : (Never) => Int32
+⚠ このパターンには一致する値がありません
+pr : ({x: Empt}) => Int32
+⚠ このパターンには一致する値がありません
+pt : ((Int32, Never)) => Int32
+⚠ このパターンには一致する値がありません
+pc : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+pc2 : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+pa : (Absurd) => Int32
+pnest : ({x: Absurd}) => Int32
+⚠ このパターンには一致する値がありません
+pvar : (#V(Never)) => Int32
+⚠ このパターンには一致する値がありません
+[exit 0]
+$ diktor --type-check lambdas.kel
+lv : (Empt) => Int32
+⚠ このパターンには一致する値がありません
+lr : ({x: Never}) => Int32
+⚠ このパターンには一致する値がありません
+lt : ((Int32, Never)) => Int32
+⚠ このパターンには一致する値がありません
+lc : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+app : ((Never) => Int32 @ {}) => Int32
+lchk : Int32
+⚠ このパターンには一致する値がありません
+[exit 0]
+$ diktor --type-check matches.kel
+mv : (Never) => Int32
+⚠ このパターンには一致する値がありません
+⚠ このパターンには一致する値がありません
+mw : (Never) => Int32
+⚠ このパターンには一致する値がありません
+⚠ このパターンには一致する値がありません
+mc : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+me : (Never) => Int32
+⚠ このパターンには一致する値がありません
+mt : ((Int32, Never)) => Int32
+⚠ このパターンには一致する値がありません
+mr : ({x: Never}) => Int32
+⚠ このパターンには一致する値がありません
+[exit 0]
+$ diktor --type-check binds.kel
+bv : () => Int32 @ {Fail}
+bt : () => Int32 @ {Fail}
+⚠ このパターンには一致する値がありません
+bc : () => Int32 @ {Fail}
+⚠ このパターンには一致する値がありません
+br : () => Int32 @ {Fail}
+⚠ このパターンには一致する値がありません
+[exit 0]
+$ diktor --type-check rets.kel
+rv : (() => Never @ {Nop}) => Int32
+⚠ このパターンには一致する値がありません
+rc : (() => Absurd @ {Nop}) => Int32
+⚠ このパターンには一致する値がありません
+rr : (Never) => Int32
+rr2 : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+⚠ このパターンには一致する値がありません
+[exit 0]
+$ diktor --type-check absurd.kel
+absurd : (Never) => A
+⚠ このパターンには一致する値がありません
+elim : (Empt) => A
+⚠ このパターンには一致する値がありません
+main : () => {} @ {Print extends R1}
+[exit 0]
+$ diktor --type-check elim.kel
+e1 : (Absurd) => A
+⚠ match が非網羅的です。例えば MkA(_) が漏れています
+e2 : (Absurd) => A
+⚠ このパターンには一致する値がありません
+e3 : (Absurd) => A
+⚠ このパターンには一致する値がありません
+e4 : (Absurd) => Int32
+e5 : ((Int32, Never)) => Int32
+⚠ このパターンには一致する値がありません
+e6 : (Never) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+⚠ 第 2 節は到達不能です(冗長)
+⚠ このパターンには一致する値がありません
+[exit 0]
+$ diktor --type-check rec.kel
+r1 : (L) => Int32
+r2 : (M[Never]) => Int32
+⚠ match が非網羅的です。例えば S(_) が漏れています
+⚠ このパターンには一致する値がありません
+r3 : (M[Never]) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+[exit 0]
+$ diktor --type-check keep.kel
+k1 : (Opt2[Empt]) => Int32
+⚠ match が非網羅的です。例えば Nn が漏れています
+⚠ このパターンには一致する値がありません
+k2 : (Opt2[Never]) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+k3 : (#Ok(Int32) | #Err(Never)) => Int32
+⚠ 第 2 節は到達不能です(冗長)
+k4 : (Boolean) => Int32
+⚠ match が非網羅的です。例えば false が漏れています
+k5 : ((Boolean, Int32)) => Int32
+⚠ match が非網羅的です。例えば (false, _) が漏れています
+k6 : (#A) => Int32
+[exit 0]
+$ diktor --type-check guard.kel
+g1 : (Never) => Int32
+⚠ このパターンには一致する値がありません
+⚠ このパターンには一致する値がありません
+g2 : (Absurd) => Int32
+g3 : (Int32) => Int32
+⚠ このパターンには一致する値がありません
+g4 : (Boolean) => Int32
+⚠ match が非網羅的です。例えば true が漏れています
+[exit 0]
+$ diktor run.kel
+⚠ このパターンには一致する値がありません
+⚠ このパターンには一致する値がありません
+42[exit 0]
+$ diktor --strict-exhaustive run.kel
+⚠ このパターンには一致する値がありません
+⚠ このパターンには一致する値がありません
+[exit 1]

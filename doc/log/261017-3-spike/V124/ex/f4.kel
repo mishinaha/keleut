@@ -1,0 +1,2 @@
+effect Log = { log: (String) => Unit }
+newtype N = MkN((() => Unit @ {}, () => Unit @ {Log}))

@@ -1,0 +1,5 @@
+module M {
+  pub let m[A: Rem](x: A, y: A): A = x % y
+}
+let a = 0
+let r = M.m(1.5, 2.0)

@@ -1,0 +1,8 @@
+effect Fail = { throw: (String) => Never }
+let rec sum(n: Int32): Int32 = if n == 0 then 0 else n + sum(n - 1)
+echoln("before")
+let w = (echoln(show(sum(1000000)))) handle {
+  case throw(e) => ()
+  case cancel => echoln("cancel")
+}
+echoln("after")

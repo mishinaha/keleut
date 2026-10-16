@@ -1,0 +1,4 @@
+show(Cons(1, Nil) == Cons(1, Nil))
+let x = Some(3)
+with_stdout(fn() => println(show(x)))
+with_stdout(fn() => println(show(Cons(x, Nil))))

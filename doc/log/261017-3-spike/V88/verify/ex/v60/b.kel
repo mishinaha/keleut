@@ -1,0 +1,2 @@
+module M { pub newtype T = Foo(Int32) }
+let y = M.Foo { 1 }

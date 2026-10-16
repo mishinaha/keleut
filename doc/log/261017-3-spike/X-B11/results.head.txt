@@ -1,0 +1,47 @@
+## diktor top.kel
+module M {
+  pub let f(x: Int32): Int32 = x + 1
+}
+echoln(show(M.f(41)))
+--- out
+42
+exit=0
+## diktor nested.kel
+module M {
+  module N {
+    pub let g(x: Int32): Int32 = x
+  }
+}
+--- out
+! nested.kel:2:3: 未実装: module の入れ子(M10)
+exit=4
+## diktor --prelude prel.kel usepm.kel (prel.kel = lib/prelude.kel の末尾に module PM を足したもの)
+
+module PM {
+  pub let h(x: Int32): Int32 = x * 2
+}
+echoln(show(PM.h(21)))
+--- out
+42
+exit=0
+## diktor imp.kel (a.kel に pub module AM)
+pub module AM {
+  pub let k(x: Int32): Int32 = x - 1
+}
+from "./a" import AM.k
+echoln(show(k(8)))
+--- out
+7
+exit=0
+## diktor --repl < repl.in
+module R { pub let r(x: Int32): Int32 = x }
+R.r(5)
+--- out
+R.r : (Int32) => Int32 @ {} = <fn>
+_ : Int32 = 5
+exit=0
+
+## API 経路(probe/probe.ml を写しのライブラリにつないで実行。HEAD)
+eval_string: Ok, out="42\n"
+type_check_string: M.f : (Int32) => Int32 @ {}; _ : {} / None
+Interp.run raw: 実行時エラー: module の評価は未実装です(M10)

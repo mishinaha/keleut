@@ -1,0 +1,98 @@
+== x01alias.kel
+[H]
+x
+exit=0
+[N]
+x
+exit=0
+== x02show.kel
+[H]
+3
+exit=0
+[N]
+3
+exit=0
+== x03with.kel
+[H]
+x03with.kel:3:24: パースエラー(付近のトークンを確認してください)
+exit=2
+[N]
+x03with.kel:3:24: パースエラー(付近のトークンを確認してください)
+exit=2
+== x04nested.kel
+[H]
+42
+exit=0
+[N]
+42
+exit=0
+== x05guard.kel
+[H]
+! x05guard.kel:1:33: 型エラー: 未知の型: Bool
+exit=1
+[N]
+! x05guard.kel:1:33: 型エラー: 未知の型: Bool
+exit=1
+== x06annot.kel
+[H]
+42
+exit=0
+[N]
+42
+exit=0
+== x07module.kel
+[H]
+! x07module.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+exit=4
+[N]
+! x07module.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+exit=4
+== x08resumefn.kel
+[H]
+21
+exit=0
+[N]
+21
+exit=0
+== x09opt.kel
+[H]
+x09opt.kel:3:61: パースエラー(付近のトークンを確認してください)
+exit=2
+[N]
+x09opt.kel:3:61: パースエラー(付近のトークンを確認してください)
+exit=2
+== x10poly.kel
+[H]
+14
+exit=0
+[N]
+14
+exit=0
+== x11rowvar.kel
+[H]
+! x11rowvar.kel:2:5: 型エラー: 未知のクラス: EffectRow
+exit=1
+[N]
+! x11rowvar.kel:2:5: 型エラー: 未知のクラス: EffectRow
+exit=1
+== x12arity.kel
+[H]
+! x12arity.kel:2:25: 型エラー: ラベル _item がありません(行は閉じています)
+exit=1
+[N]
+! x12arity.kel:2:25: 型エラー: ラベル _item がありません(行は閉じています)
+exit=1
+== x13arity0.kel
+[H]
+! x13arity0.kel:2:25: 型エラー: ラベル _item がありません(行は閉じています)
+exit=1
+[N]
+! x13arity0.kel:2:25: 型エラー: ラベル _item がありません(行は閉じています)
+exit=1
+== x14resumeunit.kel
+[H]
+! x14resumeunit.kel:2:60: 型エラー: 型が一致しません: Int32 と {}
+exit=1
+[N]
+! x14resumeunit.kel:2:67: 型エラー: 型が一致しません: Int32 と {}
+exit=1

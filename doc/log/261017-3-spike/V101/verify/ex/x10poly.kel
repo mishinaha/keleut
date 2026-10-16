@@ -1,0 +1,9 @@
+effect Reg = { reg: ((Int32) => Int32) => Int32 }
+let id[A](x: A): A = x
+let main(): Unit @ Console = {
+  let r = { perform reg(id) + perform reg(fn(x) => id(x)) } handle {
+    case reg(f) => resume(f(7i32))
+  }
+  echoln(show(r))
+}
+main()

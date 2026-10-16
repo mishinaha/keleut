@@ -1,0 +1,9 @@
+type class Size[A] { val size: (A) => Int32 @ {} }
+type instance Size[Int32] { let size(x: Int32): Int32 = 4 }
+type instance Size[String] { let size(s: String): Int32 = 99 }
+let rec total[A: Size](xs: List[A]): Int32 = xs match {
+  case Nil => 0
+  case Cons(h, t) => size(h) + total(t)
+}
+echoln(show(total(Cons(1, Cons(2, Nil)))))
+echoln(show(total(Cons("a", Nil))))

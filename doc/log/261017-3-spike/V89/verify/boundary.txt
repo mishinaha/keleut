@@ -1,0 +1,112 @@
+=== b1_innerhandle_in_guard.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() if (perform Ask.ask() handle { case ask() => resume(1) }) > 0 => resume(true)
+  case test() => false
+}
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]
+=== b2_innerhandle_in_return.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => resume(true)
+  case return(b) => (perform Ask.ask() handle { case ask() => resume(2) }) > 1 && b
+}
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]
+=== b3_innerhandle_in_cancel.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+effect Fail = { throw: (String) => Never }
+let r = ({ let b = perform test(); if b then perform throw("x") else false } handle {
+  case test() => resume(true)
+  case cancel => { let n = perform Ask.ask() handle { case ask() => resume(3) }; echoln("cancel " + show(n)) }
+}) handle { case throw(m) => false }
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+cancel 3
+false
+[0]
+=== b4_innerbody_matchguard.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => (1 match { case _ if resume(perform Ask.ask() > 0) => true case _ => false }) handle {
+    case ask() => resume(1)
+  }
+}
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]
+=== b5_alias_guard.kel
+effect Test = { test: () => Int32 }
+type TE: EffectRow = {Test}
+let f(): Int32 @ TE = { let a = perform test(); a * 2 }
+let r = f() handle {
+  case Test.test() => 0 match { case n if n == 0 && resume(5) > 9 => 1 case _ => 2 }
+}
+echoln(show(r))
+--- tc
+f : () => Int32 @ {Test}
+r : Int32
+_ : {}
+[0]
+--- run
+1
+[0]
+=== b6_generic_guard.kel
+effect Choose = { choose: () => Boolean }
+let both[A](f: () => A @ Choose): List[A] = f() handle {
+  case choose() => () match { case _ if { let xs = resume(true); true } => Nil case _ => Nil }
+  case return(x) => Cons(x, Nil)
+}
+echoln(show(both(fn() => if perform choose() then 1 else 2)))
+--- tc
+both : (() => A @ {Choose}) => List[A]
+_ : {}
+[0]
+--- run
+[]
+[0]
+=== b7_inner_body_match_inner_resume.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => {
+    let ok = (perform Ask.ask() > 0) handle {
+      case ask() => 1 match { case _ if resume(4) => true case _ => false }
+    }
+    resume(ok)
+  }
+}
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]

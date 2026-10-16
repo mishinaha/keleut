@@ -1,0 +1,7 @@
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let main(): Unit @ Console = {
+  perform preg(fn() => echoln("p1"))
+  perform preg(a)
+} handle { case preg(f) => { f(); resume() } }
+main()

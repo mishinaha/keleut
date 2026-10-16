@@ -1,0 +1,2 @@
+from "./r7b_import_ok_lib" import rd
+echoln(show(run h { let r = Ref.new(41); Ref.set(r, 42); rd(r) }))

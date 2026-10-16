@@ -1,0 +1,2 @@
+newtype MutableArray[h, A] = ???
+let f[h](r: MutableArray[h, Int32]): Int32 = 0

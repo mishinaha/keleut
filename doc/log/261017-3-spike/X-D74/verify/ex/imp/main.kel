@@ -1,0 +1,3 @@
+from "./lib" import incr
+let v: Int32 = run h { let r = Ref.new(40); incr(r); incr(r); Ref.get(r) }
+echoln(show(v))

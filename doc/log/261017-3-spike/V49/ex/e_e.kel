@@ -1,0 +1,7 @@
+let f(): Int32 = run h {
+  let c = Ref.new(1)
+  let g: () => Int32 @ {Heap[h]} = { let d = 2; fn() => Ref.get(c) + d }
+  let _ = Ref.set(c, 10)
+  g()
+}
+echoln(show(f()))

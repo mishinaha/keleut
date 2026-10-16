@@ -1,0 +1,247 @@
+== blk.kel
+let f() = {
+  pub let x = 1
+  x
+}
+println(f())
+-- head
+blk.kel:4:2: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+exit=2
+-- proto
+blk.kel:4:2: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+exit=2
+== eff.kel
+type class C[A] {
+  val c: (A) => Unit @ E
+}
+-- head
+! eff.kel:2:24: 型エラー: 未知のエフェクト: E
+exit=1
+-- proto
+! eff.kel:2:24: 型エラー: 未知のエフェクト: E
+exit=1
+== mod1.kel
+module M {
+  type class Describe[A] {
+    val describe: (A) => String
+  }
+  type instance Describe[Int32] {
+    pub let describe(n) = "int"
+  }
+}
+println(M.describe(1i32))
+-- head
+! mod1.kel:2:3: 未実装: module 内の type class 宣言(M10): module M
+exit=4
+-- proto
+mod1.kel:5:3: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== modpub.kel
+pub newtype Box(Int32)
+module M {
+  type instance Show[Box] {
+    pub let show(b: Box): String = "box"
+  }
+}
+-- head
+exit=0
+-- proto
+modpub.kel:3:3: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): show
+exit=2
+== nopub3.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  let describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))
+-- head
+int
+exit=0
+-- proto
+int
+exit=0
+== nopubeff.kel
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  let say(n: Int32): Unit = println("int")
+}
+with_stdout(fn() => say(1i32))
+-- head
+int
+exit=0
+-- proto
+int
+exit=0
+== pub1.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let describe(n) = "int"
+}
+println(describe(1i32))
+-- head
+! pub1.kel:5:11: 型エラー: pub な宣言には完全な型注釈が必要です(引数に型注釈がありません)
+exit=1
+-- proto
+pub1.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== pub2.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let rec describe(n) = "int"
+}
+println(describe(1i32))
+-- head
+! pub2.kel:5:15: 型エラー: pub な宣言には完全な型注釈が必要です(引数に型注釈がありません)
+exit=1
+-- proto
+pub2.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== pub3.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))
+-- head
+int
+exit=0
+-- proto
+pub3.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== pub4.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let describe(n: Int32): String = "int"
+}
+let main() = println(describe(1i32))
+main()
+-- head
+! pub4.kel:8:1: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+-- proto
+pub4.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== pub5.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let describe(n: Int32): String = "int"
+}
+let s = describe(1i32)
+-- head
+exit=0
+-- proto
+pub5.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== pubeff2.kel
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  pub let say(n: Int32): Unit @ Print = println("int")
+}
+with_stdout(fn() => say(1i32))
+-- head
+int
+exit=0
+-- proto
+pubeff2.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): say
+exit=2
+== pubeff.kel
+type class Say[A] {
+  val say: (A) => Unit @ {Print}
+}
+type instance Say[Int32] {
+  pub let say(n: Int32): Unit = println("int")
+}
+with_stdout(fn() => say(1i32))
+-- head
+! pubeff.kel:5:33: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Print がありません(行は閉じています))
+exit=1
+-- proto
+pubeff.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): say
+exit=2
+== pubmix.kel
+type class Pair[A] {
+  val first: (A) => Int32
+  val second: (A) => Int32
+}
+type instance Pair[Int32] {
+  let first(n: Int32): Int32 = n
+  pub let second(n: Int32): Int32 = n
+}
+-- head
+exit=0
+-- proto
+pubmix.kel:5:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): second
+exit=2
+== pubrec2.kel
+type class Pair[A] {
+  val first: (A) => Int32
+  val second: (A) => Int32
+}
+type instance Pair[Int32] {
+  let rec first(n: Int32): Int32 = n
+  and pub second(n: Int32): Int32 = n
+}
+-- head
+pubrec2.kel:7:7: パースエラー(付近のトークンを確認してください)
+exit=2
+-- proto
+pubrec2.kel:7:7: パースエラー(付近のトークンを確認してください)
+exit=2
+== pubrec.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let rec describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))
+-- head
+int
+exit=0
+-- proto
+pubrec.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(インスタンスのメソッドは import できません): describe
+exit=2
+== pubtype.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub type T = Int32
+  let describe(n: Int32): String = "int"
+}
+-- head
+! pubtype.kel:4:1: 型エラー: インスタンス本体には let(と let rec)だけが書けます
+exit=1
+-- proto
+! pubtype.kel:4:1: 型エラー: インスタンス本体には let(と let rec)だけが書けます
+exit=1
+== withpub.kel
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  with x = id(1)
+  pub let describe(n: Int32): String = "int"
+}
+-- head
+withpub.kel:7:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+exit=2
+-- proto
+withpub.kel:7:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+exit=2

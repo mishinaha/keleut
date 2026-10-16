@@ -1,0 +1,7 @@
+type Fn = (Int32) => Int32 @ {}
+type Eff: EffectRow = {Console}
+pub newtype W = W(Fn, (Int32) => Unit @ Eff)
+effect Op = { op: (Fn) => Int32 }
+let w = W(fn(x: Int32) => x + 1, fn(x: Int32) => echoln(show(x)))
+let r = (perform op(fn(x: Int32) => x * 2)) handle { case op(g) => resume(g(21)) }
+w match { case W(f, p) => p(f(r)) }

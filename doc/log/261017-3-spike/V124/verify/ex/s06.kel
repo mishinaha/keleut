@@ -1,0 +1,6 @@
+module M {
+  pub type P[E] = (E, Q[E])
+  pub newtype Q[X] = MkQ(X)
+}
+let v: M.P[{}] = ({}, M.MkQ({}))
+v match { case (_, M.MkQ(_)) => echoln("ok") }

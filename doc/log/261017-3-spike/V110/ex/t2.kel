@@ -1,0 +1,5 @@
+newtype Foo = Foo
+let f: (Foo) => String = { echoln("init"); fn(x) => "foo" }
+let g = { echoln("init"); fn(x: Foo) => "foo" }
+let h: (Foo) => String = { fn(x) => "foo" }
+let k = { let r = Ref.new(0i32); fn(x: Foo) => "foo" }

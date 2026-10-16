@@ -1,0 +1,14 @@
+effect P = { p: (() => Unit @ {}) => Unit }
+effect Mk = { mk: () => (() => Int32) }
+let noop[E](): Unit @ E = {}
+let pure(): Unit = {}
+let run_p[E](body: () => Unit @ {P extends E}): Unit @ E = body() handle {
+  case p(g) => { g(); resume() }
+  case return(x) => x
+}
+let k(): Int32 = (perform mk())() handle {
+  case mk() => resume(fn() => 5)
+  case return(x) => x
+}
+run_p(fn() => { perform p(noop); perform p(pure); perform p(fn() => noop()) })
+echoln(show(k()))

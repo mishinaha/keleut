@@ -1,0 +1,13 @@
+effect Ask = { ask: () => Int32 }
+pub let inc(x: Int32): Int32 = x + 1
+let idf[A](x: A): A = x
+let main(): Unit @ {Console} = {
+  let g: (Int32) => Int32 = idf(fn(x) => Show.show(x).length)
+  let b = (g(2) + perform ask()) handle {
+    case ask() => resume(10)
+    case return(x) => x
+  }
+  let a = g(1)
+  echoln(show(a + b))
+}
+main()

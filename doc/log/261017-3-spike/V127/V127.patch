@@ -1,0 +1,278 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:28:58.139456255 +0900
+@@ -281,6 +281,25 @@
+   in
+   has "行型ではありません" msg || has "スコープ付きの型" msg || has "ラベル " msg || has "は注釈で固定された行変数" msg
+ 
++(* 呼び出しの実引数の並び(_item の RecordExtend の連なり)の個数。
++   ラベル付きの引数を含むときは None *)
++let rec args_arity ((_, e) : T.exp) =
++  match e with
++  | T.RecordEmpty -> Some 0
++  | T.RecordExtend (rest, l, _) when l = "_item" -> Option.map succ (args_arity rest)
++  | _ -> None
++
++(* 実引数の並びと仮引数の行がどちらも _item だけで、個数が違えば、
++   実引数を精緻化する前に個数の不一致として報告する。
++   実引数の中に別の誤りがあっても、個数の不一致が先に報告される *)
++let check_call_arity what arg params =
++  match (args_arity arg, Unify.item_arity params) with
++  | Some n, Some m when n <> m ->
++      type_error
++        ("引数の個数が一致しません: " ^ what ^ " " ^ string_of_int m ^ " 個の引数を取りますが、" ^ string_of_int n
++       ^ " 個を渡しています")
++  | _ -> ()
++
+ (* 最外の行が閉じた矢印の尾部を、新しい行変数で開く(使用時の開き。§11.26)。
+    名前で参照した関数の型(§11.11)と、呼び出し先の関数の型(§11.12)に掛ける。
+    開いてから単一化すると、閉じた行のラベルを含むどの行の下からでも使える。
+@@ -1711,7 +1730,17 @@
+    この位置の行が空(注釈の `@ {}` か、高階の引数の行が `@ {}`)である形では、
+    仕様 §9 の、入れ子の矢印で省略した `@` を `@ {}`(純粋)と読む規則を案内する。
+    言い換えるのは行に由来する失敗だけで、その判定を `row_failure` が行う。
+-   引数の型の不一致は言い換えない。 *)
++   引数の型の不一致は言い換えない。
++
++   引数を検査する前に、`check_call_arity` が実引数の個数と仮引数の個数を比べる。
++   実引数の並びが `_item` だけでできていて、仮引数の行が閉じた `_item` 行のときに限り、
++   個数が違えば、引数の個数の不一致として報告する。
++   この検査が無くても、閉じた行どうしの単一化は失敗する。
++   しかし、その報告は行の途中で尽きたラベル `_item` を名指すだけで、個数の違いに読み替えにくい。
++   ラベル付きの引数を含む呼び出しと、仮引数の型がまだ決まっていない呼び出しは比べず、
++   単一化に任せる。
++   実引数を精緻化する前に比べるので、実引数の中に別の誤りがあっても、個数の不一致を先に報告する。
++   perform の引数(§11.15)も同じ検査を通す。 *)
+ 
+   | T.Apply (f, arg) ->
+       let tf = elab_exp env level eff f in
+@@ -1733,6 +1762,7 @@
+              (msg
+             ^ "(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)")
+          else type_error msg);
++      check_call_arity "呼び出す関数は" arg pvar;
+       elab_check env level eff arg pvar;
+       tr
+ (* ## 11.13 演算子とレコードの 4 操作
+@@ -1911,6 +1941,7 @@
+         | TArrow (a, r, _) -> (a, r)
+         | _ -> bug "操作スキーマが矢印型ではありません"
+       in
++      check_call_arity ("操作 " ^ display_of op ^ " は") arg args_row;
+       Unify.unify (elab_exp env level eff arg) args_row;
+       (try Unify.unify eff (TRowExtend (eff_name, t_unit, new_row_var level))
+        with Type_error msg ->
+@@ -4543,6 +4574,8 @@
+        実装できないメソッドが生じる *)
+     match (repr inf, repr skol) with
+     | TArrow (ia, ir, ie), TArrow (sa, sr, se) ->
++        (* 引数の行どうしを単一化する前に、矢印どうしの単一化と同じく個数を比べる *)
++        wrap (fun () -> Unify.check_arity inf skol ia sa);
+         wrap (fun () -> Unify.unify ia sa);
+         wrap (fun () -> Unify.unify ir sr);
+         (* 実装の最外の行が閉じていれば、使用時の開きと同じく尾部を開いてから宣言の行と一致させる。
+diff a/lib/parser.mly b/lib/parser.mly
+--- a/lib/parser.mly	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/parser.mly	2026-10-17 04:12:14.478691165 +0900
+@@ -187,6 +187,7 @@
+    この表現から得られるものが 2 つある。
+    1 つ目は、**arity の検査がただの単一化になる**ことである。
+    引数の個数が違えば、閉じた行どうしの単一化が失敗する。
++   失敗の報告は、第8章 §8.7 と第11章 §11.12 が引数の個数の不一致として述べ直す。
+    2 つ目は、`fst[A, R](t: {_item: A extends R})` のような、タプルの先頭を取る前置多相の関数を、
+    同じ仕組みでそのまま書けることである。
+    タプルと引数リストが同じ表現だからである。
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:11:59.271016288 +0900
+@@ -497,7 +497,11 @@
+    関数を呼ぶ側の行と呼ばれる側の行がここで結ばれることで、エフェクトが型に乗る。
+    Keleut の引数は閉じた `_item` 行のレコードなので、
+    関数適用の引数の個数の不一致は行の単一化から検出される。
+-   関数適用(第11章 §11.12)には、引数の個数を数える専用のコードがない。
++   ただし、行の単一化が報告するのは、片方の行で尽きたラベル `_item` だけである。
++   そこで、2 つの矢印の引数の行がどちらも閉じた `_item` 行で個数が違うときは、
++   行に入る前に `check_arity` が両方の矢印と個数を示して報告する。
++   どちらかの行が開いているか、`_item` 以外のラベルを含むときは、そのまま行を単一化する。
++   呼び出しの実引数の並びと仮引数の行の個数は、第11章 §11.12 の `check_call_arity` が比べる。
+ 
+    ### 型適用(高階カインド)
+ 
+@@ -534,6 +538,13 @@
+    行が注釈で固定されていることを述べるメッセージを出す。
+    「{} と ς1」が一致しないとだけ伝えても、利用者は原因を読み取りにくいからである。 *)
+ 
++let item_arity t =
++  match repr t with
++  | TRecord row ->
++      let fields, tail = row_fields row in
++      if repr tail = TRowEmpty && List.for_all (fun (l, _) -> l = l_item) fields then Some (List.length fields) else None
++  | _ -> None
++
+ let rec unify a b =
+   let t1 = repr a in
+   let t2 = repr b in
+@@ -559,6 +570,7 @@
+             unify (TCon (n, init)) f;
+             unify last x
+         | TArrow (p1, r1, e1), TArrow (p2, r2, e2) ->
++            check_arity t1 t2 p1 p2;
+             unify p1 p2;
+             unify r1 r2;
+             unify e1 e2
+@@ -577,6 +589,16 @@
+         | (TVar _, _ | _, TVar _) -> type_error ("スコープ付きの型が一致しません: " ^ show2 t1 t2)
+         | _ -> type_error ("型が一致しません: " ^ show2 t1 t2))
+ 
++(* 引数の行がどちらも閉じた _item 行で、個数が違えば、行の単一化に入る前に
++   個数の不一致として報告する *)
++and check_arity t1 t2 p1 p2 =
++  match (item_arity p1, item_arity p2) with
++  | Some n1, Some n2 when n1 <> n2 ->
++      let strs = show2 t1 t2 in
++      type_error
++        ("引数の個数が一致しません: " ^ strs ^ "(引数は " ^ string_of_int n1 ^ " 個と " ^ string_of_int n2 ^ " 個です)")
++  | _ -> ()
++
+ and split_last = function
+   | [] -> bug "split_last: empty"
+   | xs ->
+diff a/test/arity.t b/test/arity.t
+--- a/test/arity.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/arity.t	2026-10-17 04:29:19.481528671 +0900
+@@ -0,0 +1,135 @@
++引数の個数の不一致は、関数の呼び出し、perform、関数型どうしの単一化の
++どれでも「引数の個数が一致しません」と報告する(LangSpec §3.4)。
++
++呼び出しの実引数が仮引数より少ないときと多いとき。呼び出す関数の
++仮引数の個数と渡した個数を述べる:
++
++  $ cat > call0.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f()
++  > KEL
++  $ diktor --type-check call0.kel
++  f : (Int32) => Int32
++  ! call0.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数は 1 個の引数を取りますが、0 個を渡しています
++  [1]
++  $ cat > call2.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f(1, 2)
++  > KEL
++  $ diktor --type-check call2.kel
++  f : (Int32) => Int32
++  ! call2.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数は 1 個の引数を取りますが、2 個を渡しています
++  [1]
++
++perform の引数の個数も同じく調べる:
++
++  $ cat > perf0.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let f(): Int32 @ Ask = perform ask()
++  > KEL
++  $ diktor --type-check perf0.kel
++  ! perf0.kel:2:24: 型エラー: 引数の個数が一致しません: 操作 ask は 1 個の引数を取りますが、0 個を渡しています
++  [1]
++
++1 引数の関数を求める位置に 0 引数のラムダを渡す形。with _ は引数のない
++無名関数を渡す(LangSpec §6.5)ので同じ報告になり、2 つの矢印と個数を述べる:
++
++  $ cat > lam.kel <<'KEL'
++  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
++  > let b(): Int32 = one(fn() => 2)
++  > KEL
++  $ diktor --type-check lam.kel
++  one : ((Int32) => A) => A
++  ! lam.kel:2:22: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
++  [1]
++  $ cat > withw.kel <<'KEL'
++  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
++  > let b(): Int32 = {
++  >   with _ = one()
++  >   2
++  > }
++  > KEL
++  $ diktor --type-check withw.kel
++  one : ((Int32) => A) => A
++  ! withw.kel:3:3: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
++  [1]
++
++注釈の矢印と初期化式の矢印の個数が違う形:
++
++  $ cat > ann.kel <<'KEL'
++  > let g: (Int32) => Int32 = fn() => 2
++  > KEL
++  $ diktor --type-check ann.kel
++  ! ann.kel:1:5: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 と () => _A(引数は 1 個と 0 個です))
++  [1]
++
++ラベル付きの引数を含む呼び出しは個数を比べず、従来どおりラベルの
++有無を報告する:
++
++  $ cat > label.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f(x = 1)
++  > KEL
++  $ diktor --type-check label.kel
++  f : (Int32) => Int32
++  ! label.kel:2:18: 型エラー: ラベル x がありません(行は閉じています)
++  [1]
++
++newtype のコンストラクタの関数のフィールド、pub の値束縛の注釈、
++インスタンスメソッドとクラス宣言の型でも、2 つの矢印と個数を述べる:
++
++  $ cat > ctor.kel <<'KEL'
++  > newtype Fn1 = Fn1((Int32) => Int32)
++  > let v = Fn1(fn() => 1)
++  > KEL
++  $ diktor --type-check ctor.kel
++  ! ctor.kel:2:9: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => Int32 @ {}(引数は 0 個と 1 個です)
++  [1]
++  $ cat > pubv.kel <<'KEL'
++  > pub let h: (Int32) => Int32 = fn() => 1
++  > KEL
++  $ diktor --type-check pubv.kel
++  ! pubv.kel:1:9: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 @ {} と () => _A(引数は 1 個と 0 個です))
++  [1]
++  $ cat > inst.kel <<'KEL'
++  > type class Sh[A] {
++  >   val sh: (A) => Int32
++  > }
++  > type instance Sh[Int32] {
++  >   let sh() = 1
++  > }
++  > KEL
++  $ diktor --type-check inst.kel
++  ! inst.kel:5:7: 型エラー: インスタンスメソッド sh がクラス宣言の型を満たしません(引数の個数が一致しません: () => Int32 と (Int32) => Int32 @ {}(引数は 0 個と 1 個です))
++  [1]
++
++呼び出しの個数は実引数を調べる前に比べる。実引数の中に別の誤りが
++あっても、個数の不一致を呼び出しの位置で先に報告する:
++
++  $ cat > first.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f(nosuch, 2)
++  > KEL
++  $ diktor --type-check first.kel
++  f : (Int32) => Int32
++  ! first.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数は 1 個の引数を取りますが、2 個を渡しています
++  [1]
++
++個数が合う呼び出しは通る:
++
++  $ cat > ok.kel <<'KEL'
++  > let zero[A, E](body: () => A @ E): A @ E = body()
++  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
++  > let f(x: Int32, y: Int32): Int32 = x + y
++  > let a(): Int32 = {
++  >   with _ = zero()
++  >   1
++  > }
++  > let b(): Int32 = {
++  >   with x = one()
++  >   x
++  > }
++  > echoln(show(a() + b() + f(1, 2)))
++  > KEL
++  $ diktor ok.kel
++  9

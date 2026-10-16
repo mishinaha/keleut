@@ -1,0 +1,4 @@
+effect Fail = { throw: (String) => Never }
+let rec f(n: Int32): Int32 @ Fail = if n == 0 then { perform throw("z") match {} } else g(n - 1)
+and g(n: Int32): Int32 @ Fail = f(n)
+echoln(show({ f(2) } handle { case throw(e) => -1 }))

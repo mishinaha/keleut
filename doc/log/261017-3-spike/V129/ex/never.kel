@@ -1,0 +1,2 @@
+let absurd[A](n: Never): A = n match {}
+echoln("ok")

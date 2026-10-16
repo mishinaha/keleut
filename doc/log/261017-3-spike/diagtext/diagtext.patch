@@ -1,0 +1,1300 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:45:57.276643914 +0900
+@@ -273,14 +273,36 @@
+    pub の言い換え(§11.12、§11.28、§11.29)、行が空の位置の言い換え(§11.12)、
+    newtype のフィールドの言い換え(§11.18)、
+    インスタンスメソッドの純粋性の言い換え(§11.38)が共用する *)
++let has_sub sub s =
++  let n = String.length sub and m = String.length s in
++  let rec go i = i + n <= m && (String.sub s i n = sub || go (i + 1)) in
++  go 0
++
+ let row_failure msg =
+-  let has sub s =
+-    let n = String.length sub and m = String.length s in
+-    let rec go i = i + n <= m && (String.sub s i n = sub || go (i + 1)) in
+-    go 0
+-  in
++  let has = has_sub in
+   has "行型ではありません" msg || has "スコープ付きの型" msg || has "ラベル " msg || has "は注釈で固定された行変数" msg
+ 
++(* 型の中に、閉じた行を書いた位置があるかどうか。
++   数えるのは、最外の行が閉じた矢印と、型の型引数に書いた閉じた行(`Cb[{}]` の `{}`)である。
++   newtype のフィールドの言い換え(§11.18)が、言い換えの条件に使う。
++   フィールドの型は宣言から作ったスキーマで、型パラメータは Generic の変数である。
++   型パラメータの位置は、閉じた行を書いた位置として数えない。 *)
++let closed_row_arg t =
++  match repr t with
++  | TRowEmpty -> true
++  | TRowExtend _ -> (match snd (row_fields t) with TRowEmpty -> true | _ -> false)
++  | _ -> false
++
++let rec has_closed_arrow ty =
++  match repr ty with
++  | TArrow (args, ret, eff) ->
++      (match snd (row_fields eff) with TRowEmpty -> true | _ -> false) || has_closed_arrow args || has_closed_arrow ret
++  | TCon (_, tys) -> List.exists (fun t -> closed_row_arg t || has_closed_arrow t) tys
++  | TApp (f, a) -> has_closed_arrow f || has_closed_arrow a
++  | TRecord r | TVariant r -> has_closed_arrow r
++  | TRowExtend (_, f, rest) -> has_closed_arrow f || has_closed_arrow rest
++  | TRowEmpty | TVar _ -> false
++
+ (* 最外の行が閉じた矢印の尾部を、新しい行変数で開く(使用時の開き。§11.26)。
+    名前で参照した関数の型(§11.11)と、呼び出し先の関数の型(§11.12)に掛ける。
+    開いてから単一化すると、閉じた行のラベルを含むどの行の下からでも使える。
+@@ -2042,6 +2064,12 @@
+ 
+    newtype のフィールドの矢印は書いたとおりに読み、`@` の省略は `@ {}` と読む(仕様 §9)。
+    コンストラクタの引数の単一化が行の不一致で落ちたときは、エラーにこの規則を添える。
++   添えるのは、宣言したフィールドの型に行の閉じた矢印か、
++   型引数に書いた閉じた行があるときだけである。
++   フィールドの型が型パラメータ(`Cons` の `A`)のときは、
++   行の閉じた矢印は別の実引数から型パラメータに流れ込んだもので、
++   この規則は原因でない。
++   このときは、型変数の仮引数を持つ関数の呼び出し(§11.12)と同じく、単一化の報告をそのまま出す。
+    たとえば、エフェクトつきの閉包を newtype に入れて純粋な関数として取り出そうとする形は、
+    この単一化で落ち、この規則を添えたエラーになる。
+    行に由来する失敗かどうかは、§11.12 と同じ `row_failure` で判定する。
+@@ -2110,9 +2138,10 @@
+             in
+             let fty = Unify.subst_params level subst f.Decls.fi_ty in
+             (* エフェクトつきの閉包を newtype に入れる形はここで落ちるので、
+-               行に由来する失敗だけを §9 の規則で言い換える *)
++               行に由来する失敗だけを §9 の規則で言い換える。
++               フィールドの型に閉じた行を書いた位置が無ければ、この規則は原因でないので言い換えない *)
+             try Unify.unify ety fty
+-            with Type_error msg when row_failure msg ->
++            with Type_error msg when row_failure msg && has_closed_arrow f.Decls.fi_ty ->
+               type_error
+                 (msg ^ "(コンストラクタ " ^ cname
+                ^ " のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)"))
+@@ -3262,6 +3291,25 @@
+    前の束縛の剛定数は、相手の `pre` に入り込んでいなければ本体の検査の後に Generic に変わるので、
+    後ろの本体はそれを参照するたびに具体化できる(下の小節の recandpoly と同じ仕組み)。
+ 
++   ### 型パラメータの衝突の報告
++
++   上の形の報告は、表示用の名前 `ς1` と `ς2` しか含まず、
++   どの束縛のどの型パラメータが衝突したかを利用者がたどれない。
++   そこで、剛定数の衝突で落ちたときに、第8章の `last_rigid_clash` が残した 2 つの型を見て、
++   原因に近い事実を報告に添える(`group_note`)。
++   添えるのは、衝突した一方が検査している束縛自身の型パラメータの剛定数のときに限る。
++   もう一方が群のほかの束縛の型パラメータで、
++   その剛定数が検査している束縛の `pre` に入り込んでいれば、
++   その束縛と型パラメータの名前を挙げる(`test/rec_tparam_note.t` の twotp)。
++   もう一方がそれ以外の型で、落ちたのが `pre` と本体の型の単一化で、
++   本体を検査する前に `pre` の未定変数のどれかがすでに決まっていたなら、
++   前にある束縛のうち検査している束縛を参照したものの名前を挙げる(concrete)。
++   このときの末尾には、具体的な型を渡す形を書いた §18.2 も挙げる。
++   本体を検査する前に `pre` が決まっていなければ、`pre` を決めたのは束縛自身の本体なので、
++   前の束縛の参照を原因として挙げない(selfrec)。
++   本体の中で起きた衝突のうち、ほかの束縛の型パラメータと関わらないもの(別の `run` のヒープなど)には添えない。
++   群の参照と関わらない誤りに、群の順序の話を添えないためである(notp、region)。
++
+    ### 剛定数の解放は、相手に入り込んだものだけ群の終わりに行う
+ 
+    束縛が作った型パラメータの剛定数のうち、
+@@ -3366,11 +3414,76 @@
+   let g = { g_pres = List.map2 (fun (_, pre) bn -> (pre, bn)) names bs; g_cur = ref None; g_refs = [] } in
+   group_stack := g :: !group_stack;
+   let member_marks = ref [] in
++  (* 剛定数の衝突に、群の中の参照が単相であることから来る事実を添える(§11.29)。
++     at_pre は、pre と本体の型の単一化で落ちたときに真である *)
++  let members = List.combine bs (List.combine names tps) in
++  (* pre の中の未定変数を群の入り口で集め、各束縛の本体の前に、そのどれかがすでに
++     決まっていたか(前にある束縛の参照が決めたか)を記録する *)
++  let rec unbound_vars acc t =
++    match repr t with
++    | TVar ({ contents = Unbound _ } as r) -> if List.memq r acc then acc else r :: acc
++    | TVar _ | TRowEmpty -> acc
++    | TCon (_, args) -> List.fold_left unbound_vars acc args
++    | TApp (f, a) -> unbound_vars (unbound_vars acc f) a
++    | TArrow (a, ret, _) -> unbound_vars (unbound_vars acc a) ret
++    | TRecord row | TVariant row -> unbound_vars acc row
++    | TRowExtend (_, f, rest) -> unbound_vars (unbound_vars acc f) rest
++  in
++  let pre_vars = List.map (fun (_, pre) -> (pre, unbound_vars [] pre)) names in
++  let settled_before = ref [] in
++  let settled pre =
++    List.exists
++      (fun r -> match repr (TVar r) with TVar { contents = Unbound _ } -> false | _ -> true)
++      (List.assq pre pre_vars)
++  in
++  Unify.last_rigid_clash := None;
++  let group_note ~at_pre cur =
++    let clashed =
++      match !Unify.last_rigid_clash with
++      | Some (t1, t2) -> List.filter_map (fun t -> match repr t with TVar r -> Some r | _ -> None) [ t1; t2 ]
++      | None -> []
++    in
++    let (x, pre), own = List.assq cur members in
++    let flowed =
++      List.concat_map
++        (fun (_, ((y, pre_y), rigids)) ->
++          List.filter_map
++            (fun (tp, _, r) ->
++              if pre_y != pre && List.memq r clashed && mentions r pre then
++                Some (Printf.sprintf "%s の型パラメータ %s が %s の型に入り込んでいます" y tp x)
++              else None)
++            rigids)
++        members
++    in
++    let callers =
++      List.sort_uniq compare
++        (List.filter_map
++           (fun (_, from, tgt, _) ->
++             match from with Some f when tgt == cur && f != cur -> Some (fst (fst (List.assq f members))) | _ -> None)
++           g.g_refs)
++    in
++    let facts =
++      if not (List.exists (fun (_, _, r) -> List.memq r clashed) own) then []
++      else if flowed <> [] then flowed
++      else if at_pre && List.memq cur !settled_before then List.map (fun y -> Printf.sprintf "%s の本体が、型パラメータを持つ %s を参照しています" y x) callers
++      else []
++    in
++    let sections = if flowed <> [] then "§6.3" else "§6.3、§18.2" in
++    match facts with
++    | [] -> None
++    | _ ->
++        Some
++          ("(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。" ^ String.concat "。" facts
++         ^ "。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。" ^ sections ^ ")")
++  in
++  let clash msg = has_sub "スコープ付きの型が一致しません" msg && not (has_sub "再帰群の中で、前にある束縛" msg) in
+   Fun.protect ~finally:(fun () -> group_stack := List.filter (fun g' -> g' != g) !group_stack) @@ fun () ->
+   List.iter2
+     (fun ((_, b) as bnode) (((_, pre), (sig_eff, sig_vty)), rigids) ->
++      (try
+       at_node bnode @@ fun () ->
+       g.g_cur := Some bnode;
++      if settled pre then settled_before := bnode :: !settled_before;
+       member_marks := (bnode, Unify.hole_mark ()) :: !member_marks;
+       (* pub の完全注釈検査と、@ の省略を @ {} と読む規則は、let(§11.28)と同じ。
+          値束縛の頭の矢印も最外として扱う(§11.29) *)
+@@ -3402,13 +3515,17 @@
+                type_error ("pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: " ^ msg ^ ")"));
+             vty
+       in
+-      Unify.unify pre fn_ty;
++      (try Unify.unify pre fn_ty
++       with Type_error msg when clash msg -> (
++         match group_note ~at_pre:true bnode with Some note -> type_error (msg ^ note) | None -> type_error msg));
+       Tree.set_ty bnode fn_ty;
+       let shared, own =
+         List.partition (fun (_, _, r) -> List.exists (fun (_, other) -> other != pre && mentions r other) names) rigids
+       in
+       release_rigids own;
+-      group_rigids := shared @ !group_rigids)
++      group_rigids := shared @ !group_rigids
++      with Type_error_at (loc, msg) when clash msg -> (
++        match group_note ~at_pre:false bnode with Some note -> raise (Type_error_at (loc, msg ^ note)) | None -> raise (Type_error_at (loc, msg)))))
+     bs
+     (List.combine (List.combine names sigs) tps);
+   release_rigids !group_rigids;
+@@ -3745,9 +3862,11 @@
+                        省略の意味は @ {} に決まっているが、公開 API では、純粋を
+                        意図したのか書き忘れたのかを読み手が区別できなければならない
+                        (sample.kel:825-831。フィールドへの適用は :828-829 に
+-                       明記されている) *)
++                       明記されている)。診断はそのフィールドの型を指す。
++                       宣言の先頭を指すと、どのフィールドが悪いかを位置から読めない *)
+                     (if n.T.nt_pub && not (fully_effected f.T.fd_ty) then
+-                       type_error "pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)");
++                       at_node f.T.fd_ty (fun () ->
++                           type_error "pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)"));
+                     let ty = elab_type env' 1 f.T.fd_ty in
+                     (* フィールドの型のカインドは Type。値の型の位置に対する一般の検査
+                        (§11.3)をフィールドに当てはめたものなので、照合そのものは
+@@ -3785,7 +3904,12 @@
+    同じエフェクトの中での操作名の重複は拒否する。
+    別のエフェクトとの重複は許す。
+    §11.20 の非修飾の操作名の解決は、
+-   別のエフェクトどうしで操作名が重複しうることを前提にしている。 *)
++   別のエフェクトどうしで操作名が重複しうることを前提にしている。
++
++   操作ごとの診断(予約された名前、名前の頭の文字、矢印でない型、名前の重複)は、
++   その操作の型の位置を指す。
++   構文木の操作名は位置を持たないので、同じ行の右にある型で操作を指す。
++   名前の重複は、2 度目の宣言の型を指す。 *)
+ 
+ let register_effect env (e : T.effect') =
+   if e.T.ef_params <> [] then type_error "effect 宣言に型パラメータは書けません(sample.kel §9)";
+@@ -3793,7 +3917,8 @@
+      操作名としては宣言できない。受理すると、その操作を含む effect は、
+      修飾しても節を書きようがなく、ハンドルできない *)
+   List.iter
+-    (fun (op, _) ->
++    (fun (op, te) ->
++      at_node te @@ fun () ->
+       if op = "return" || op = "cancel" then
+         type_error ("操作名 " ^ op ^ " は予約されています(handle の " ^ op ^ " 節と衝突するため宣言できません)");
+       (* 節の分類器(§11.22)が操作節として読むのは、英小文字で始まる名前だけ。
+@@ -3801,6 +3926,15 @@
+       if String.length op = 0 || not (op.[0] >= 'a' && op.[0] <= 'z') then
+         type_error ("操作名 " ^ op ^ " は英小文字で始めてください(handle の節が操作名として読めません)"))
+     e.T.ef_ops;
++  (* 同じ effect の中での操作名の重複を拒否する。2 度目の宣言の型を指す *)
++  let rec dup = function
++    | [] -> ()
++    | (op, _) :: rest ->
++        (match List.assoc_opt op rest with
++        | Some te2 -> at_node te2 (fun () -> type_error ("操作 " ^ op ^ " が二重に宣言されています"))
++        | None -> ());
++        dup rest
++  in
+   let ops =
+     List.map
+       (fun (op, te) ->
+@@ -3809,15 +3943,10 @@
+             let ty = elab_type env 1 te in
+             Unify.generalize 0 ty;
+             (intern op, ty)
+-        | _ -> type_error ("操作 " ^ op ^ " の型は矢印型でなければなりません"))
++        | _ -> at_node te (fun () -> type_error ("操作 " ^ op ^ " の型は矢印型でなければなりません")))
+       e.T.ef_ops
+   in
+-  (* 同じ effect の中での操作名の重複を拒否する *)
+-  let rec dup = function
+-    | [] -> ()
+-    | (op, _) :: rest -> if List.mem_assoc op rest then type_error ("操作 " ^ display_of op ^ " が二重に宣言されています") else dup rest
+-  in
+-  dup ops;
++  dup e.T.ef_ops;
+   Decls.add_effect { Decls.ef_name = intern e.T.ef_name; ef_ops = ops }
+ 
+ let binding_name (b : T.let_binding') = match snd b.T.lb_name with T.PVar x -> Some x | _ -> None
+@@ -4002,23 +4131,30 @@
+         (* クラスパラメータがメソッドの型のどこかに現れることを要求する(§11.33)。
+            メソッドの参照で作る穴の型が、クラスパラメータの現れる位置の型から決まるためである。
+            一般化したスキーマの制約の鍵の列にクラスパラメータの鍵があるかで判定する *)
+-        (match repr ty with
+-        | TArrow _ ->
+-            if not (List.exists (fun (vid, _) -> vid = pinfo.vid) (Unify.dkeys_of ty)) then
+-              type_error
+-                ("メソッド " ^ v.T.cv_name ^ " の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)")
+-        | _ -> type_error ("メソッド " ^ v.T.cv_name ^ " の型は矢印型でなければなりません"));
++        (at_node v.T.cv_ty @@ fun () ->
++         match repr ty with
++         | TArrow _ ->
++             if not (List.exists (fun (vid, _) -> vid = pinfo.vid) (Unify.dkeys_of ty)) then
++               type_error
++                 ("メソッド " ^ v.T.cv_name ^ " の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)")
++         | _ -> type_error ("メソッド " ^ v.T.cv_name ^ " の型は矢印型でなければなりません"));
+         (v.T.cv_name, ty))
+       c.T.cls_vals
+   in
+   (* 同じクラスの中でのメソッドの重複を拒否する(register_effect の操作の重複と同じ)。
+      素通しにすると、elab の修飾名の型は最後の宣言で決まり、インスタンス本体の照合は
+-     最初の宣言を見るので、型検査を通ったプログラムが実行時に型やアリティの食い違いで壊れる *)
++     最初の宣言を見るので、型検査を通ったプログラムが実行時に型やアリティの食い違いで壊れる。
++     メソッドごとの診断は、操作と同じく、そのメソッドの型の位置を指す。
++     重複は 2 度目の宣言の型を指す *)
+   let rec dup = function
+     | [] -> ()
+-    | (m, _) :: rest -> if List.mem_assoc m rest then type_error ("メソッド " ^ m ^ " が二重に宣言されています") else dup rest
++    | (v : T.class_val) :: rest ->
++        (match List.find_opt (fun (w : T.class_val) -> w.T.cv_name = v.T.cv_name) rest with
++        | Some w -> at_node w.T.cv_ty (fun () -> type_error ("メソッド " ^ v.T.cv_name ^ " が二重に宣言されています"))
++        | None -> ());
++        dup rest
+   in
+-  dup methods;
++  dup c.T.cls_vals;
+   (* 非修飾名の所有者は高々 1 クラス、という不変条件をここで守る。破れると、elab(宣言順の先勝ち)と
+      interp(クラス名の順の後勝ち)が別の規則で勝者を選ぶ。両者が別のクラスを選ぶと、
+      誤った実体を呼ぶか、偽の「インスタンスが見つかりません」を出す。組み込みと同名の
+@@ -4442,12 +4578,26 @@
+    名指しの判定に要る材料は宣言の側の行 `se` だけで、包摂のこの 1 か所で揃うからである。
+    印を増やせば、そのぶんリセット漏れ(§11.41)の危険も増える。
+ 
+-   判定の材料が宣言の側だけなので、名指しは本来の対象より少し広く働く。
+-   実装が自分の注釈に `@ Print` と書き、その本体は何も起こしていないときも、
+-   宣言の行にラベルが無ければ同じ文言で落ちる。
+-   この形で実際に起きているのは、実装の最外の行が空でないことで、
+-   文言の後半の「本体がエフェクトを起こしています」は字義どおりには成り立たない。
+-   それでも、直し方(実装の側の注釈を外す)には辿り着けるので、本実装はこの文言を使う。
++   名指しするかどうかは宣言の側の行だけで決まるが、
++   名指しの後半で何が空でない行を作ったかを述べる部分は、実装の側の束縛を見て決める。
++   実装が最外の `@` を自分で書いていれば(`outer_eff_written` が真なら)、
++   空でない行はその注釈に由来する。
++   実装が自分の注釈に `@ Print` と書き、その本体は何も起こしていないときも包摂は落ちるので、
++   このときは「本体がエフェクトを起こしています」ではなく
++   「注釈に `@ {}` 以外の行を書いています」と述べる(clsannotrow)。
++   本体が実際に `Print` を起こしていても、注釈を外せば本体の行が残って本体を指す文言になるので、
++   注釈の側を先に述べて嘘にならない。
++   注釈が書いたのが行変数 `@ F` で、引数の型を通して宣言の行変数に結ばれたために
++   空にならない形も、この文言で述べる。
++   本体がその引数を呼ばなければ、`@ F` を `@ {}` に書き換えて通る。
++   型エイリアスを頭に書いた値束縛の注釈は、`outer_eff_written` が `@` を書いた側に倒すので、
++   エイリアスの中の `@ Print` も注釈の側として述べる(clsannotalias)。
++   関数束縛が最外の `@` を書いていなければ、実装の行は本体から推論したものなので、
++   空でない行は本体が何かを起こしたことを意味する。
++   値束縛が最外の `@` を書いていなければ、実装の行は初期化式の値の型から来る。
++   `let size = sizeP` のように、`@ Print` と注釈した関数を名前で渡すだけでも行は空でなくなり、
++   このとき本体は何も起こしていない。
++   そこでこの形は「初期化式の値の型の最外の行が空ではありません」と述べる(clsvalrow)。
+ 
+    名指しが届かない形もある。
+    メソッドが `(T, () => Unit @ E) => Unit @ E` のように高階の引数を取り、
+@@ -4556,12 +4706,24 @@
+              宣言が @ Console と書いていればラベルの食い違いなので、
+              クラス宣言の型を満たさないという文言のままにする *)
+           let bare = match row_fields se with [], tail -> ( match repr tail with TVar _ | TRowEmpty -> true | _ -> false) | _ -> false in
++          (* 実装が最外の @ を自分で書いていれば、空でない行はその注釈に由来し、
++             本体が何も起こしていなくても落ちる。そのときは本体ではなく注釈を指す。
++             最外の @ を書いていない値束縛の行は、初期化式の値の型から来るので、
++             本体とも注釈とも言わない *)
++          let culprit =
++            let b = snd bnode in
++            if outer_eff_written b then " の注釈に @ {} 以外の行を書いています。元の報告: "
++            else
++              match b.T.lb_params with
++              | Some _ -> " の本体がエフェクトを起こしています。元の報告: "
++              | None -> " の初期化式の値の型の最外の行が空ではありません。元の報告: "
++          in
+           (try Unify.unify ie se
+            with Type_error msg ->
+              if bare && row_failure msg then
+                type_error
+                  ("型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド " ^ mname
+-                ^ " の本体がエフェクトを起こしています。元の報告: " ^ msg)
++                ^ culprit ^ msg)
+              else type_error ("インスタンスメソッド " ^ mname ^ " がクラス宣言の型を満たしません(" ^ msg ^ ")")));
+         finish_adapter ()
+     | _ ->
+diff a/lib/show.ml b/lib/show.ml
+--- a/lib/show.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/show.ml	2026-10-17 04:45:57.273108055 +0900
+@@ -495,6 +495,12 @@
+   let strs, _ = show_all [ a; b ] in
+   match strs with [ x; y ] -> x ^ " と " ^ y | _ -> bug "show2"
+ 
++let show_pair a b =
++  (* ctx は捨てる。2 つの型を別々の文に埋め込むので、show2 と同じく前置しない *)
++  let strs, _ = show_all [ a; b ] in
++  match strs with [ x; y ] -> (x, y) | _ -> bug "show_pair"
++
+ let () =
+   Unify.show_ref := show;
+-  Unify.show2_ref := show2
++  Unify.show2_ref := show2;
++  Unify.show_pair_ref := show_pair
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:45:57.273201432 +0900
+@@ -128,6 +128,11 @@
+ 
+ let show2 a b = !show2_ref a b
+ 
++let show_pair_ref : (ty -> ty -> string * string) ref = ref (fun _ _ -> ("<型>", "<型>"))
++
++(* 2 つの型を 1 つの名前の表で印字し、別々の文字列として返す *)
++let show_pair a b = !show_pair_ref a b
++
+ (* ## 8.3 occurs check、レベル調整、脱出検査
+ 
+    型変数 `tv` に型 `t` を代入する前に、`occurs_adjust` が `t` を 1 度だけ走査して、
+@@ -246,10 +251,34 @@
+    `TCon` の分岐は、インスタンス表に登録された前提を使う(前提の表は第6章 §6.9)。
+    `Eq[List[_]]` の前提 `A: Eq` は `(0, Eq)` として表に載っている。
+    `List[Opaque]` に `Eq` を要求すると、`Opaque` に `Eq` が伝播し、
+-   「Opaque は Eq のインスタンスではありません」で落ちる(`test/premise.t` の pr2 / pr3)。
++   「Opaque は Eq のインスタンスではありません」に下で述べる出どころを添えた診断で落ちる(`test/premise.t` の pr2 /
++   pr3)。
+    分岐の中の `if i < List.length args` は到達しない保険である。
+    冒頭のカインドの照合が先に落とすので、前提が位置 `i` を持つなら `args` は `i + 1` 個以上ある。
+ 
++   前提をたどって届いた要求が満たされないとき、診断は満たされなかった型だけでなく、
++   前提をたどり始めた型とクラスも添える。
++   `List[List[Opaque]]` に `Eq` を要求したなら、
++   「Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました」と出る。
++   添えるのはたどり始めた 1 組だけで、途中の `List[Opaque]` は書かない。
++   途中の段を並べると、入れ子の深さに応じて文が伸びるからである。
++   そのため `add_class` は、たどり始めた組を省略可能な引数 `via` で持ち回り、
++   前提の分岐で初めて値を入れ、構造的導出の分岐ではそのまま渡す。
++   文言の型と出どころの型は `show_pair` で 1 つの名前の表に載せて印字する。
++   別々に印字すると、名前は印字ごとに振り直されるので、
++   同じ `ς1` が文の前半と後半で別の型パラメータを指すことがある。
++
++   前提が未定変数に届いたときは、その時点では成否が決まらない。
++   `Nil == Cons(MkOpaque(1i32), Nil)` では、左の `Nil` が先に `List[α]` を `Eq` に結び付け、
++   前提が `α` に `Eq` を付ける。
++   `α` が `Opaque` に決まるのは右辺を読んだ後で、そこで `bind` が `add_class` を呼ぶ。
++   この時点の呼び出しにも出どころを添えるため、
++   前提が未定変数に新しく制約を付けたときは、
++   変数とクラスの組を鍵にして出どころを表 `premise_origins` に控える。
++   `bind` はその表を引き、出どころの型の中の束縛する変数を代入先に置き換えた形で `via` に渡す。
++   置き換えは表示のためだけのもので、セルを書き換えない(`subst_unbound`)。
++   `repr` が経路を縮めるので、一時的に `Link` を張って表示してから戻す方法は使えない。
++
+    `TApp` に制約を付けられないのは、修飾型を持たないからである。
+    Haskell は `Show (f a)` のような制約を残して解決を後回しにできるが、
+    本実装の制約は型変数か具体型の頭にしか付けられない。
+@@ -300,10 +329,56 @@
+   (match v with TVar r when classes <> [] -> note_class_var r | _ -> ());
+   v
+ 
+-let rec add_class t c =
++(* 前提をたどって未定変数に届いた制約の出どころ。
++   鍵は (変数の識別子, クラス) で、値はたどり始めた型とクラスの組である。
++   bind がその変数を具体型に束縛するとき、ここから出どころを引いて add_class に渡す。
++   セルの書き換えの記録が有効の間は、書き込みを戻す閉包も積む *)
++let premise_origins : (int * oid, ty * oid) Hashtbl.t = Hashtbl.create 16
++
++let note_premise_origin (i : var_info) c via =
++  let key = (i.vid, c) in
++  if not (Hashtbl.mem premise_origins key) then (
++    Hashtbl.replace premise_origins key via;
++    if !trailing then trail := (fun () -> Hashtbl.remove premise_origins key) :: !trail)
++
++(* 型 ty の中の未定変数 v を t に置き換えた型。診断の表示にだけ使い、セルは書き換えない *)
++let subst_unbound v t ty =
++  let rec go ty =
++    match repr ty with
++    | TVar r when r == v -> t
++    | TVar _ as ty -> ty
++    | TCon (n, args) -> TCon (n, List.map go args)
++    | TApp (g, a) -> tapp (go g) (go a)
++    | TArrow (p, r, e) -> TArrow (go p, go r, go e)
++    | TRecord row -> TRecord (go row)
++    | TVariant row -> TVariant (go row)
++    | TRowEmpty -> TRowEmpty
++    | TRowExtend (l, fld, rest) -> TRowExtend (l, go fld, go rest)
++  in
++  go ty
++
++(* via は、インスタンスの前提をたどって届いた要求のときだけ値を持ち、
++   たどり始めた型とクラスの組を持つ。
++   要求が満たされないときは、その組を診断に添える *)
++let rec add_class ?via t c =
+   let ci =
+     match Decls.find_class c with Some ci -> ci | None -> type_error ("未知のクラス: " ^ display_of c)
+   in
++  (* ty は文言に現れる型で、mk はその印字から文言を作る。
++     出どころを添えるときは、ty と出どころの型を 1 つの名前の表で印字する *)
++  let fail ?advice ?ty mk =
++    let origin vt vc = "。" ^ vt ^ " が " ^ display_of vc ^ " であるための前提として要求されました" in
++    let shown, suffix =
++      match (ty, via) with
++      | Some ty, None -> (show ty, "")
++      | None, None -> ("", "")
++      | Some ty, Some (vt, vc) ->
++          let s, o = show_pair ty vt in
++          (s, origin o vc)
++      | None, Some (vt, vc) -> ("", origin (show vt) vc)
++    in
++    type_error (mk shown ^ suffix ^ match advice with None -> "" | Some a -> "。" ^ a)
++  in
+   if not (same_kind ci.ci_param_kind (kind_of t)) then
+     type_error
+       ("クラス " ^ display_of c ^ " は " ^ show_kind ci.ci_param_kind ^ " のクラスですが、" ^ show t ^ " に要求されました");
+@@ -313,7 +388,8 @@
+       | Unbound i ->
+           if not (List.mem c i.vcls) then (
+             set_tv v (Unbound { i with vcls = c :: i.vcls });
+-            note_class_var v)
++            note_class_var v;
++            Option.iter (note_premise_origin i c) via)
+       | Rigid i | Generic i ->
+           (* Generic に届くのは、宣言のスキーマの中(newtype のフィールドや
+              クラスメソッドの型)で制約つきエイリアスを展開したとき。規則は
+@@ -323,23 +399,27 @@
+             if is_predicate c then
+               type_error "型パラメータに数値リテラルは使えません。0i32 のように接尾辞を付けるか具体型を使ってください"
+             else
+-              type_error
+-                ("型パラメータ " ^ show (TVar v) ^ " は " ^ display_of c ^ " のインスタンスではありません。[A: " ^ display_of c
+-               ^ "] のように制約を書いてください")
+-      | _ -> type_error (show t ^ " に " ^ display_of c ^ " 制約を付けられません"))
++              fail
++                ~advice:("[A: " ^ display_of c ^ "] のように制約を書いてください")
++                ~ty:(TVar v)
++                (fun s -> "型パラメータ " ^ s ^ " は " ^ display_of c ^ " のインスタンスではありません")
++      | _ -> fail ~ty:t (fun s -> s ^ " に " ^ display_of c ^ " 制約を付けられません"))
+   | TCon (n, args) -> (
+       match Decls.find_instance ~cls:c ~con:n with
+       | Some { ii_premises; _ } ->
+-          List.iter (fun (i, c2) -> if i < List.length args then add_class (List.nth args i) c2) ii_premises
+-      | None -> type_error (display_of n ^ " は " ^ display_of c ^ " のインスタンスではありません"))
++          let via = match via with Some _ -> via | None -> Some (t, c) in
++          List.iter (fun (i, c2) -> if i < List.length args then add_class ?via (List.nth args i) c2) ii_premises
++      | None -> fail (fun _ -> display_of n ^ " は " ^ display_of c ^ " のインスタンスではありません"))
+   | (TRecord row | TVariant row) when ci.ci_derive_structural ->
+       (* 閉じた行への構造的導出(sample.kel:392-396)。開いた行は不可 *)
+       let fields, tail = row_fields row in
+       (match repr tail with
+-      | TRowEmpty -> List.iter (fun (_, f) -> add_class f c) fields
+-      | _ -> type_error ("行変数を含む型 " ^ show t ^ " に " ^ display_of c ^ " の構造的導出は適用できません(行が閉じていません)"))
+-  | TApp _ -> type_error ("制約 " ^ display_of c ^ " を " ^ show t ^ " に付けられません(頭が型変数の適用には制約を貼れません)")
+-  | other -> type_error (show other ^ " は " ^ display_of c ^ " のインスタンスではありません")
++      | TRowEmpty -> List.iter (fun (_, f) -> add_class ?via f c) fields
++      | _ ->
++          fail ~ty:t (fun s ->
++              "行変数を含む型 " ^ s ^ " に " ^ display_of c ^ " の構造的導出は適用できません(行が閉じていません)"))
++  | TApp _ -> fail ~ty:t (fun s -> "制約 " ^ display_of c ^ " を " ^ s ^ " に付けられません(頭が型変数の適用には制約を貼れません)")
++  | other -> fail ~ty:other (fun s -> s ^ " は " ^ display_of c ^ " のインスタンスではありません")
+ 
+ (* ## 8.5 代入の 4 つの手順
+ 
+@@ -367,11 +447,17 @@
+ 
+ let bind v t =
+   match !v with
+-  | Unbound { vlevel; vkind; vcls; _ } ->
++  | Unbound ({ vlevel; vkind; vcls; _ } as i) ->
+       if not (same_kind vkind (kind_of t)) then
+         type_error ("カインドが一致しません: " ^ show (TVar v) ^ " :: " ^ show_kind vkind ^ " と " ^ show t);
+       occurs_adjust v vlevel t;
+-      List.iter (fun c -> add_class t c) vcls;
++      List.iter
++        (fun c ->
++          let via =
++            Option.map (fun (vt, vc) -> (subst_unbound v t vt, vc)) (Hashtbl.find_opt premise_origins (i.vid, c))
++          in
++          add_class ?via t c)
++        vcls;
+       set_tv v (Link t)
+   | _ -> bug "束縛できない変数への bind"
+ 
+@@ -532,7 +618,19 @@
+ 
+    空の行と剛な行変数が衝突したときは、その手前の分岐で、
+    行が注釈で固定されていることを述べるメッセージを出す。
+-   「{} と ς1」が一致しないとだけ伝えても、利用者は原因を読み取りにくいからである。 *)
++   「{} と ς1」が一致しないとだけ伝えても、利用者は原因を読み取りにくいからである。
++   このメッセージは原因だけを述べ、直し方を書かない。
++   直し方は、衝突した束縛の種類と、空の行がどちらの側にあるかで変わり、
++   単一化はそのどちらも知らない。
++   値束縛は型パラメータを取れないので、行変数を新しく導入する直し方は使えない。
++   空の行が初期化式や呼び出した関数の側にあるときは、注釈ではなくその関数の側を直す。
++
++   剛定数が一致しない分岐は、衝突した 2 つの型を `last_rigid_clash` に残してから報告する。
++   第11章の再帰群(§11.29)は、報告を受け取った後でこの組を見て、
++   衝突した剛定数が群のどの束縛の型パラメータかを調べ、原因に近い事実を報告に添える。
++   報告の文面は型を表示用の名前でしか持たないので、剛定数の同一性はこの組からしか分からない。 *)
++
++let last_rigid_clash : (ty * ty) option ref = ref None
+ 
+ let rec unify a b =
+   let t1 = repr a in
+@@ -573,8 +671,10 @@
+            伝えても、原因を読み取りにくいからである *)
+         | ((TVar _ as rv), TRowEmpty) | (TRowEmpty, (TVar _ as rv)) ->
+             type_error
+-              ("行 " ^ show rv ^ " は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)")
+-        | (TVar _, _ | _, TVar _) -> type_error ("スコープ付きの型が一致しません: " ^ show2 t1 t2)
++              ("行 " ^ show rv ^ " は注釈で固定された行変数なので、空の行と一致させられません")
++        | (TVar _, _ | _, TVar _) ->
++            last_rigid_clash := Some (t1, t2);
++            type_error ("スコープ付きの型が一致しません: " ^ show2 t1 t2)
+         | _ -> type_error ("型が一致しません: " ^ show2 t1 t2))
+ 
+ and split_last = function
+@@ -1062,4 +1162,5 @@
+ 
+ let reset () =
+   class_vars := [];
++  Hashtbl.reset premise_origins;
+   holes := []
+diff a/test/annot_rows.t b/test/annot_rows.t
+--- a/test/annot_rows.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/annot_rows.t	2026-10-17 04:46:55.523760755 +0900
+@@ -953,7 +953,7 @@
+   $ diktor --type-check nonnamelist.kel
+   mkp : () => () => Int32 @ {}
+   b : () => Int32 @ {Console}
+-  ! nonnamelist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! nonnamelist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)
+   [1]
+ 
+ 無名関数で包めば通る(制限の 1 つ目の回避)。mkp()() は呼び出しなので尾部を開き、
+@@ -1048,7 +1048,7 @@
+   > with_stdout(fn() => f(1))
+   > KEL
+   $ diktor --type-check recrejtpflow.kel
+-  ! recrejtpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! recrejtpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。f の型パラメータ A が g の型に入り込んでいます。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。§6.3)
+   [1]
+   $ cat > rectpflowrev.kel <<'KEL'
+   > let rec g[A](x: A): Unit @ {} = ()
+diff a/test/classes.t b/test/classes.t
+--- a/test/classes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/classes.t	2026-10-17 04:46:55.523760755 +0900
+@@ -242,6 +242,45 @@
+   ! clsbarerow.kel:3:30: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド pr2 の本体がエフェクトを起こしています。元の報告: 行 ς1 は注釈で固定された行変数なので、ラベル Console を足せません(注釈側に Console を(必要なら引数つきで)書き足してください)
+   [1]
+ 
++名指しの後半は実装の側の束縛で言い分ける。実装が最外の @ を自分で書いていれば、
++本体が何も起こしていなくても注釈の行で落ちるので、本体ではなく注釈を指す
++(本体が何かを起こした形は上の clsimpure):
++
++  $ cat > clsannotrow.kel <<'KEL'
++  > newtype Box = Box(Int32)
++  > type class Sizer[T] { val size: (T) => Int32 }
++  > type instance Sizer[Box] { let size(b: Box): Int32 @ Print = b match { case Box(x) => x } }
++  > KEL
++  $ diktor --type-check clsannotrow.kel
++  ! clsannotrow.kel:3:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の注釈に @ {} 以外の行を書いています。元の報告: ラベル Print がありません(行は閉じています)
++  [1]
++
++値束縛の注釈の頭に型エイリアスを書いた形も、エイリアスの中の @ を注釈の側として述べる:
++
++  $ cat > clsannotalias.kel <<'KEL'
++  > newtype Box = Box(Int32)
++  > type Fn = (Box) => Int32 @ Print
++  > type class Sizer[T] { val size: (T) => Int32 }
++  > type instance Sizer[Box] { let size: Fn = fn(b) => 1 }
++  > KEL
++  $ diktor --type-check clsannotalias.kel
++  ! clsannotalias.kel:4:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の注釈に @ {} 以外の行を書いています。元の報告: ラベル Print がありません(行は閉じています)
++  [1]
++
++最外の @ を書いていない値束縛では、行は初期化式の値の型から来る。@ Print と注釈した
++関数を名前で渡すだけでも、本体は何も起こさずに落ちるので、本体とも注釈とも言わない:
++
++  $ cat > clsvalrow.kel <<'KEL'
++  > newtype Box = Box(Int32)
++  > let sizeP(b: Box): Int32 @ Print = 1
++  > type class Sizer[T] { val size: (T) => Int32 }
++  > type instance Sizer[Box] { let size = sizeP }
++  > KEL
++  $ diktor --type-check clsvalrow.kel
++  sizeP : (Box) => Int32 @ {Print}
++  ! clsvalrow.kel:4:32: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド size の初期化式の値の型の最外の行が空ではありません。元の報告: ラベル Print がありません(行は閉じています)
++  [1]
++
+ 名指しは最外の行の単一化で失敗したときのものなので、同じ宣言でも実装しだいで
+ 文言が変わる。高階の引数を呼ばない実装は最外の行まで届き、呼ぶ実装は引数の
+ 単一化のほうが先に失敗する(どちらも落ちることは変わらない):
+@@ -294,7 +333,7 @@
+   > echoln(show(Cons(Op(1), Nil)))
+   > KEL
+   $ diktor --type-check pshowop.kel
+-  ! pshowop.kel:2:13: 型エラー: Opaque は Show のインスタンスではありません
++  ! pshowop.kel:2:13: 型エラー: Opaque は Show のインスタンスではありません。List[Opaque] が Show であるための前提として要求されました
+   [1]
+ 
+ 同梱プレリュードの下でユーザが同じ頭をもう一度宣言すると、コヒーレンス違反に
+diff a/test/ctor_field_row.t b/test/ctor_field_row.t
+--- a/test/ctor_field_row.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/ctor_field_row.t	2026-10-17 04:45:57.266991263 +0900
+@@ -0,0 +1,130 @@
++コンストラクタの実引数とフィールドの型の単一化が行の不一致で落ちたとき、
++フィールドの型に行の閉じた矢印があれば、newtype のフィールドの矢印の読み方(LangSpec §13.2)を
++診断に添える。エイリアスを展開して現れる矢印と、型引数の中の矢印も数える。行パラメータを取る
++型の型引数に書いた閉じた行(Cb[{}] の {})も数える:
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++  $ cat > ctorbox.kel <<'KEL'
++  > newtype Box = Box(() => Int32)
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let x = Box(b)
++  > KEL
++  $ diktor --type-check ctorbox.kel
++  b : () => Int32 @ {Console}
++  ! ctorbox.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++  $ cat > ctoralias.kel <<'KEL'
++  > type F = () => Int32
++  > newtype Box = Box(F)
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let x = Box(b)
++  > KEL
++  $ diktor --type-check ctoralias.kel
++  b : () => Int32 @ {Console}
++  ! ctoralias.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++  $ cat > ctornested.kel <<'KEL'
++  > newtype L = L(List[() => Int32])
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let x = L(Cons(b, Nil))
++  > KEL
++  $ diktor --type-check ctornested.kel
++  b : () => Int32 @ {Console}
++  ! ctornested.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ L のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++  $ cat > ctorrowarg.kel <<'KEL'
++  > newtype Cb[R] = Cb(() => Int32 @ R)
++  > newtype W = W(Cb[{}])
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let w = W(Cb(b))
++  > KEL
++  $ diktor --type-check ctorrowarg.kel
++  b : () => Int32 @ {Console}
++  ! ctorrowarg.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ W のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++
++フィールドの型が型パラメータのときは、閉じた行は別の実引数から型パラメータに流れ込んだもので、
++フィールドの矢印の読み方は原因でない。この読み方を添えず、型変数の仮引数を持つ関数の呼び出し
++と同じく単一化の報告だけを出す。名前の参照でない式(mkp())を置いた形と、型注釈の中の
++入れ子の矢印が閉じた名前(ys)を置いた形:
++
++  $ cat > ctortp.kel <<'KEL'
++  > newtype Pair[A] = Pair(A, A)
++  > let mkp(): () => Int32 = fn() => 1
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let p = Pair(mkp(), b)
++  > KEL
++  $ diktor --type-check ctortp.kel
++  mkp : () => () => Int32 @ {}
++  b : () => Int32 @ {Console}
++  ! ctortp.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
++  $ cat > ctortpname.kel <<'KEL'
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let ys: List[() => Int32] = Nil
++  > let xs = Cons(b, ys)
++  > KEL
++  $ diktor --type-check ctortpname.kel
++  b : () => Int32 @ {Console}
++  ys : List[() => Int32 @ {}]
++  ! ctortpname.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
++
++フィールドの矢印の行が行変数のときも、読み方を添えない。2 つのフィールドが同じ行変数を
++共有し、一方に閉じた行の関数を置いた形:
++
++  $ cat > ctorrowvar.kel <<'KEL'
++  > newtype Two[R] = Two(() => Int32 @ R, () => Int32 @ R)
++  > let mkp(): () => Int32 = fn() => 1
++  > let b(): Int32 @ Console = { echo("b"); 2 }
++  > let t = Two(mkp(), b)
++  > KEL
++  $ diktor --type-check ctorrowvar.kel
++  mkp : () => () => Int32 @ {}
++  b : () => Int32 @ {Console}
++  ! ctorrowvar.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)
++  [1]
++
++矢印も閉じた行も無いフィールドで、レコードのフィールドが欠けた形も、読み方を添えない:
++
++  $ cat > ctorrecnoarrow.kel <<'KEL'
++  > newtype R = R({f: Int32, g: Int32})
++  > let x = R({f = 1})
++  > KEL
++  $ diktor --type-check ctorrecnoarrow.kel
++  ! ctorrecnoarrow.kel:2:9: 型エラー: ラベル g がありません(行は閉じています)
++  [1]
++
++判定はフィールドの型に閉じた行を書いた位置があるかどうかだけを見て、失敗した位置も、
++欠けたラベルがエフェクトかどうかも見ない。行の閉じた矢印と型パラメータを両方含むフィールドで
++型パラメータの側で落ちた形、引数の個数が合わない形(_item)、閉じた矢印を持つレコードの
++フィールドが欠けた形でも、読み方を添える:
++
++  $ cat > ctormixed.kel <<'KEL'
++  > newtype Q[A] = Q(List[(A) => Int32], List[(A) => Int32])
++  > let k(g: () => Int32): Int32 = 0
++  > let k2(g: () => Int32 @ Console): Int32 = 0
++  > let q = Q(Cons(k, Nil), Cons(k2, Nil))
++  > KEL
++  $ diktor --type-check ctormixed.kel
++  k : (() => Int32 @ {}) => Int32
++  k2 : (() => Int32 @ {Console}) => Int32
++  ! ctormixed.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Q のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++  $ cat > ctorarity.kel <<'KEL'
++  > newtype Box = Box((Int32) => Int32)
++  > let k(): Int32 = 1
++  > let x = Box(k)
++  > KEL
++  $ diktor --type-check ctorarity.kel
++  k : () => Int32
++  ! ctorarity.kel:3:9: 型エラー: ラベル _item がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
++  $ cat > ctorrecmiss.kel <<'KEL'
++  > newtype R = R({f: () => Int32, g: Int32})
++  > let x = R({f = fn() => 1})
++  > KEL
++  $ diktor --type-check ctorrecmiss.kel
++  ! ctorrecmiss.kel:2:9: 型エラー: ラベル g がありません(行は閉じています)(コンストラクタ R のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]
+diff a/test/decl_pos.t b/test/decl_pos.t
+--- a/test/decl_pos.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/decl_pos.t	2026-10-17 04:45:57.277037551 +0900
+@@ -0,0 +1,110 @@
++pub newtype のフィールドと effect の操作の診断は、宣言の先頭ではなく、
++そのフィールドや操作の型の位置を指す。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++pub newtype の完全注釈の診断は、@ の無い矢印を含むフィールドの型を指す。
++ラベルつきのフィールドではラベルの右の型を指し、2 つ目のフィールドなら 2 つ目を指す:
++
++  $ cat > ntpos.kel <<'KEL'
++  > module P {
++  >   pub newtype Parser[A] = Parser(
++  >     go: (String) => Option[A] @ {},
++  >     fail: (String) => Unit)
++  > }
++  > KEL
++  $ diktor --type-check ntpos.kel
++  ! ntpos.kel:4:11: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  [1]
++
++コンストラクタが複数あるときも、悪いコンストラクタのフィールドの型を指す。
++矢印が型引数の中にあるときは、フィールドの型の先頭を指す:
++
++  $ cat > ntpos2.kel <<'KEL'
++  > pub newtype T = A((Int32) => Int32 @ {})
++  >   | B(Int32, List[(Int32) => Int32])
++  > KEL
++  $ diktor --type-check ntpos2.kel
++  ! ntpos2.kel:2:14: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  [1]
++
++effect の操作の型が矢印でないときは、その操作の型を指す:
++
++  $ cat > effpos.kel <<'KEL'
++  > effect Log = {
++  >   log: (String) => Unit,
++  >   level: Int32
++  > }
++  > KEL
++  $ diktor --type-check effpos.kel
++  ! effpos.kel:3:10: 型エラー: 操作 level の型は矢印型でなければなりません
++  [1]
++
++予約された操作名と、英小文字で始まらない操作名は、名前の右にある型の位置を指す:
++
++  $ cat > effpos2.kel <<'KEL'
++  > effect Log = {
++  >   log: (String) => Unit,
++  >   cancel: () => Unit
++  > }
++  > KEL
++  $ diktor --type-check effpos2.kel
++  ! effpos2.kel:3:11: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
++  [1]
++
++  $ cat > effpos3.kel <<'KEL'
++  > effect Log = {
++  >   log: (String) => Unit,
++  >   _x: () => Unit
++  > }
++  > KEL
++  $ diktor --type-check effpos3.kel
++  ! effpos3.kel:3:7: 型エラー: 操作名 _x は英小文字で始めてください(handle の節が操作名として読めません)
++  [1]
++
++同じ effect の中での操作名の重複は、2 度目の宣言の型を指す:
++
++  $ cat > effpos4.kel <<'KEL'
++  > effect Log = {
++  >   log: (String) => Unit,
++  >   flush: () => Unit,
++  >   log: () => Unit
++  > }
++  > KEL
++  $ diktor --type-check effpos4.kel
++  ! effpos4.kel:4:8: 型エラー: 操作 log が二重に宣言されています
++  [1]
++
++型パラメータの診断は、操作ではなく宣言全体の誤りなので、宣言の先頭を指す:
++
++  $ cat > effpos5.kel <<'KEL'
++  > effect Log[A] = {
++  >   log: (A) => Unit
++  > }
++  > KEL
++  $ diktor --type-check effpos5.kel
++  ! effpos5.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
++  [1]
++
++type class のメソッドの診断も、操作と同じく、そのメソッドの型を指す。
++型が矢印でないときはその型を指し、メソッドの重複は 2 度目の宣言の型を指す:
++
++  $ cat > clspos.kel <<'KEL'
++  > type class C[A] {
++  >   val g: (A) => Int32
++  >   val h: A
++  > }
++  > KEL
++  $ diktor --type-check --no-prelude clspos.kel
++  ! clspos.kel:3:10: 型エラー: メソッド h の型は矢印型でなければなりません
++  [1]
++  $ cat > clspos2.kel <<'KEL'
++  > type class C[A] {
++  >   val g: (A) => Int32
++  >   val f: (A) => Int32
++  >   val f: (A) => String
++  > }
++  > KEL
++  $ diktor --type-check --no-prelude clspos2.kel
++  ! clspos2.kel:4:10: 型エラー: メソッド f が二重に宣言されています
++  [1]
+diff a/test/dictionary_passing.t b/test/dictionary_passing.t
+--- a/test/dictionary_passing.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/dictionary_passing.t	2026-10-17 04:46:55.523760755 +0900
+@@ -289,7 +289,7 @@
+   > type class C[A] { val f: (Int32) => Int32 }
+   > KEL
+   $ diktor nooccur.kel
+-  ! nooccur.kel:1:1: 型エラー: メソッド f の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)
++  ! nooccur.kel:1:26: 型エラー: メソッド f の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)
+   [1]
+ 
+ 弱い型変数を持つ s の Show の辞書は、後ろの g で Foo に決まる。Foo のインスタンスが
+diff a/test/premise.t b/test/premise.t
+--- a/test/premise.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/premise.t	2026-10-17 04:46:55.523760755 +0900
+@@ -35,7 +35,7 @@
+   > let ng = Cons(MkOpaque(1i32), Nil) == Cons(MkOpaque(1i32), Nil)
+   > EOF
+   $ diktor --type-check --no-prelude pr2.kel
+-  ! pr2.kel:10:10: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr2.kel:10:10: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+   [1]
+ 
+ 前提が構造的導出の先へも届く(レコードのフィールドが List[Opaque]):
+@@ -55,7 +55,7 @@
+   > EOF
+   $ diktor --type-check --no-prelude pr3.kel
+   ok : ({xs: List[Int32]}, {xs: List[Int32]}) => Boolean
+-  ! pr3.kel:11:65: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr3.kel:11:65: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+   [1]
+ 
+ 束縛子を書かないと頭のカインドが合わない(Eq は Type のクラス):
+@@ -303,12 +303,12 @@
+   > EOF
+   $ diktor --type-check --no-prelude pr17.kel
+   ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean
+-  ! pr17.kel:9:68: 型エラー: Opaque は Sh のインスタンスではありません
++  ! pr17.kel:9:68: 型エラー: Opaque は Sh のインスタンスではありません。Pair[Int32, Opaque] が Eq であるための前提として要求されました
+   [1]
+   $ sed 's/Pair\[Int32, Opaque\]/Pair[Opaque, Int32]/g; s/ng1/ng2/' pr17.kel > pr18.kel
+   $ diktor --type-check --no-prelude pr18.kel
+   ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean
+-  ! pr18.kel:9:68: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr18.kel:9:68: 型エラー: Opaque は Eq のインスタンスではありません。Pair[Opaque, Int32] が Eq であるための前提として要求されました
+   [1]
+ 
+ 束縛子が穴より少ない形(部分適用の頭に前提が載る唯一の組み合わせ — 頭は
+@@ -326,5 +326,88 @@
+   > EOF
+   $ diktor --type-check --no-prelude pr19.kel
+   use1 : (P2[Int32, Int32]) => P2[Int32, Int32]
+-  ! pr19.kel:8:57: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr19.kel:8:57: 型エラー: Opaque は Eq のインスタンスではありません。P2[Opaque] が Functor であるための前提として要求されました
++  [1]
++
++前提をたどって届いた要求が満たされないとき、診断はたどり始めた型とクラスを
++添える。入れ子でも添えるのは外側の 1 組だけで、途中の List[Opaque] は書かない:
++
++  $ cat > pr21.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng(xs: List[List[Opaque]]): Boolean = xs == xs
++  > KEL
++  $ diktor --type-check pr21.kel
++  ! pr21.kel:2:43: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
++  [1]
++
++前提が未定変数に先に届き、その変数が後で具体型に決まる形でも、同じ出どころを
++添える(左の Nil が List[α] を Eq に結び付け、α が Opaque に決まるのは右辺を
++読んだ後):
++
++  $ cat > pr22.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng = Nil == Cons(Cons(MkOpaque(1i32), Nil), Nil)
++  > KEL
++  $ diktor --type-check pr22.kel
++  ! pr22.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
++  [1]
++
++型パラメータに届いた場合は、出どころを制約の書き方の案内より前に置く。前提を
++たどらない要求(Opaque そのものの比較)には何も添えない:
++
++  $ cat > pr23.kel <<'KEL'
++  > let f[A](xs: List[A], ys: List[A]): Boolean = xs == ys
++  > KEL
++  $ diktor --type-check pr23.kel
++  ! pr23.kel:1:47: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。List[ς1] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
++  [1]
++  $ cat > pr24.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng = MkOpaque(1i32) == MkOpaque(1i32)
++  > KEL
++  $ diktor --type-check pr24.kel
++  ! pr24.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
++  [1]
++
++型パラメータが 2 個以上あるときも、診断の型と出どころの型は 1 つの名前の表で
++印字する。下の ς1 はどちらも B である:
++
++  $ cat > pr25.kel <<'KEL'
++  > newtype P2[A, B] = MkP2(A, B)
++  > type instance[A: Eq, B: Eq] Eq[P2[_, _]] {
++  >   let eq(p, q) = (p, q) match { case (MkP2(a, b), MkP2(c, d)) => a == c && b == d }
++  > }
++  > let f[A: Eq, B](x: P2[A, B], y: P2[A, B]): Boolean = x == y
++  > KEL
++  $ diktor --type-check pr25.kel
++  ! pr25.kel:5:54: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。P2[ς2, ς1] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
++  [1]
++
++出どころは、前提が未定変数に制約を付けた時点の要求である。診断の位置は、その
++変数が具体型に決まった式を指すので、前提をたどらない比較(5 行目の x == o)の
++位置に、4 行目の比較の出どころが付くことがある。また、let で一般化された変数
++を経ると出どころは引き継がれず、元の文言だけが出る:
++
++  $ cat > pr26.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng(o: Opaque): Boolean = {
++  >   let k = fn(x) => {
++  >     let a = Cons(x, Nil) == Nil
++  >     x == o
++  >   }
++  >   k(o)
++  > }
++  > KEL
++  $ diktor --type-check pr26.kel
++  ! pr26.kel:5:5: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
++  [1]
++  $ cat > pr27.kel <<'KEL'
++  > newtype Opaque = MkOpaque(Int32)
++  > let ng(o: Opaque): Boolean = {
++  >   let k = fn(x) => Cons(x, Nil) == Nil
++  >   k(o)
++  > }
++  > KEL
++  $ diktor --type-check pr27.kel
++  ! pr27.kel:4:5: 型エラー: Opaque は Eq のインスタンスではありません
+   [1]
+diff a/test/pub.t b/test/pub.t
+--- a/test/pub.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/pub.t	2026-10-17 04:46:55.523760755 +0900
+@@ -130,7 +130,7 @@
+ 
+   $ printf 'module P { pub newtype Parser[A] = Parser((String) => Option[A]) }\n' > pubnt.kel
+   $ diktor --type-check pubnt.kel
+-  ! pubnt.kel:1:12: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! pubnt.kel:1:43: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+   $ printf 'module P { pub newtype Parser[A] = Parser((String) => Option[A] @ {}) }\n' > pubnt2.kel
+   $ diktor --type-check pubnt2.kel
+diff a/test/rec_tparam_note.t b/test/rec_tparam_note.t
+--- a/test/rec_tparam_note.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/rec_tparam_note.t	2026-10-17 04:45:57.263698220 +0900
+@@ -0,0 +1,91 @@
++再帰群の中で前にある束縛から後ろにある束縛への参照は単相である(LangSpec §6.3)。
++前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決めると、2 つの剛定数か、
++剛定数と具体的な型が一致せずに型エラーになる。その報告に、どの束縛のどの型パラメータが
++相手の型に入り込んだかを添える。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++[A: Eq] と [B: Eq] を注釈した 2 つの関数が互いを呼ぶ形。f の本体が g を呼ぶ時点で、
++g の引数の型が f の A に決まる。g の本体が f を呼ぶ位置(引数 x)で、A と g の B が
++一致しない:
++
++  $ cat > twotp.kel <<'KEL'
++  > let rec f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
++  > and g[B: Eq](x: B, y: B): Boolean = x == y || f(x, y)
++  > echoln(show(f(1, 2)))
++  > KEL
++  $ diktor twotp.kel
++  ! twotp.kel:2:49: 型エラー: スコープ付きの型が一致しません: ς1 と ς2(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。f の型パラメータ A が g の型に入り込んでいます。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。§6.3)
++  [1]
++
++2 つの束縛を逆の順に書いても、互いを呼ぶので同じ形で落ちる。報告は入れ替わった
++名前を挙げる:
++
++  $ cat > twotprev.kel <<'KEL'
++  > let rec g[B: Eq](x: B, y: B): Boolean = x == y || f(x, y)
++  > and f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
++  > echoln(show(f(1, 2)))
++  > KEL
++  $ diktor twotprev.kel
++  ! twotprev.kel:2:49: 型エラー: スコープ付きの型が一致しません: ς1 と ς2(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。g の型パラメータ B が f の型に入り込んでいます。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。§6.3)
++  [1]
++
++後ろの g の型パラメータの注釈を外すと、g の型は f の A から決まり、群の終わりに
++一般化されるので通る:
++
++  $ cat > twotpinfer.kel <<'KEL'
++  > let rec f[A: Eq](x: A, y: A): Boolean = x == y && g(x, y)
++  > and g(x, y) = x == y || f(x, y)
++  > echoln(show(f(1, 2)))
++  > KEL
++  $ diktor twotpinfer.kel
++  false
++
++前にある束縛が後ろの束縛の型パラメータの位置に具体的な型の値を渡す形。衝突は g の
++本体の型を g の名前の型と一致させるところで起きる:
++
++  $ cat > concrete.kel <<'KEL'
++  > let rec f[A](x: A): Int32 = g(1i32)
++  > and g[B](y: B): Int32 = 0
++  > echoln(show(f(1)))
++  > KEL
++  $ diktor concrete.kel
++  ! concrete.kel:2:5: 型エラー: スコープ付きの型が一致しません: Int32 と ς1(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。f の本体が、型パラメータを持つ g を参照しています。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。§6.3、§18.2)
++  [1]
++
++前にある束縛が後ろの束縛を参照しても、後ろの束縛の型パラメータを決めたのが後ろの
++束縛自身の本体(多相再帰)なら、前の束縛を挙げない。この形は g だけの群でも、2 つを
++逆の順に書いても同じく落ちる:
++
++  $ cat > selfrec.kel <<'KEL'
++  > let rec f(n: Int32): Int32 = { let k = g; n }
++  > and g[B](y: B): Int32 = g(1i32)
++  > echoln(show(f(1i32)))
++  > KEL
++  $ diktor selfrec.kel
++  ! selfrec.kel:2:5: 型エラー: スコープ付きの型が一致しません: Int32 と ς1
++  [1]
++
++後ろの束縛が型パラメータを持たないときの衝突は、群の順序によらない型の誤りなので、
++何も添えない:
++
++  $ cat > notp.kel <<'KEL'
++  > let rec f[A](x: A): Int32 = g(x)
++  > and g(y: Int32): Int32 = 0
++  > echoln(show(f(1)))
++  > KEL
++  $ diktor notp.kel
++  ! notp.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と Int32
++  [1]
++
++群の中の本体で起きた、群の型パラメータと関わらない剛定数の衝突(別の run のヒープ)
++にも添えない。f の h は bump の型に入り込んでいるが、衝突したのは bump の k と run の
++剛定数である:
++
++  $ cat > region.kel <<'KEL'
++  > let rec f[h](a: MutableArray[h, Int32]): Unit = bump(a)
++  > and bump[k](a: MutableArray[k, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
++  > KEL
++  $ diktor --type-check region.kel
++  ! region.kel:2:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  [1]
+diff a/test/rigid_empty_row.t b/test/rigid_empty_row.t
+--- a/test/rigid_empty_row.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/rigid_empty_row.t	2026-10-17 04:45:57.256142457 +0900
+@@ -0,0 +1,86 @@
++型パラメータの行変数と空の行の衝突(LangSpec §13.2)。行変数は何が入るか決まって
++いないので、@ {} や入れ子の矢印で省略した @(どちらも空の行)とは一致しない。
++単一化の報告は原因だけを述べ、直し方を書かない。直し方は束縛の種類と、
++空の行がどちらの側にあるかで変わる。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++関数束縛の返り値の注釈が空の行の矢印だと、原因だけを報告する。返り値の
++矢印に @ E と書けば通る:
++
++  $ cat > fnrigid.kel <<'KEL'
++  > let h[E](g: () => Int32 @ E): () => Int32 @ {} = g
++  > KEL
++  $ diktor --type-check fnrigid.kel
++  ! fnrigid.kel:1:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++  $ cat > fnrigidok.kel <<'KEL'
++  > let h[E](g: () => Int32 @ E): () => Int32 @ E = g
++  > KEL
++  $ diktor --type-check fnrigidok.kel
++  h : (() => Int32) => () => Int32
++
++局所の値束縛は型パラメータを取れない。注釈の空の行が外側の型パラメータの
++行変数とぶつかっても、行変数を新しく導入するよう促す助言は出さない:
++
++  $ cat > valrigid.kel <<'KEL'
++  > let f[E](g: () => Int32 @ E): Int32 @ E = {
++  >   let k: () => Int32 @ {} = g
++  >   k()
++  > }
++  > KEL
++  $ diktor --type-check valrigid.kel
++  ! valrigid.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++
++空の行が初期化式の側(呼ぶ関数の仮引数)にあるときも、同じ文言になる。
++注釈には行変数が既に書かれており、直すのは初期化式の関数の側である:
++
++  $ cat > valinitrigid.kel <<'KEL'
++  > let ap(h: () => Int32 @ {}): Int32 = h()
++  > let f[E](g: () => Int32 @ E): Int32 @ E = {
++  >   let k: (() => Int32 @ E) => Int32 = ap
++  >   k(g)
++  > }
++  > KEL
++  $ diktor --type-check valinitrigid.kel
++  ap : (() => Int32 @ {}) => Int32
++  ! valinitrigid.kel:3:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++
++インスタンスの実装は、値束縛、let rec の値束縛、関数束縛のどれでも原因だけを
++報告する。宣言の行変数 E は実装の側から名指しできない:
++
++  $ cat > clsrigid.kel <<'KEL'
++  > type class Run[A] {
++  >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
++  > }
++  > type instance Run[Int32] {
++  >   let run1: (Int32, () => Int32) => Int32 = fn(a, g) => g()
++  > }
++  > KEL
++  $ diktor --type-check clsrigid.kel
++  ! clsrigid.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++  $ cat > clsrecrigid.kel <<'KEL'
++  > type class Run[A] {
++  >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
++  > }
++  > type instance Run[Int32] {
++  >   let rec run1: (Int32, () => Int32) => Int32 = fn(a, g) => g()
++  > }
++  > KEL
++  $ diktor --type-check clsrecrigid.kel
++  ! clsrecrigid.kel:5:11: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
++  $ cat > clsfnrigid.kel <<'KEL'
++  > type class Run[A] {
++  >   val run1[E]: (A, () => Int32 @ E) => Int32 @ E
++  > }
++  > type instance Run[Int32] {
++  >   let run1(a: Int32, g: () => Int32): Int32 = g()
++  > }
++  > KEL
++  $ diktor --type-check clsfnrigid.kel
++  ! clsfnrigid.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
++  [1]
+diff a/test/typecheck_m7.t b/test/typecheck_m7.t
+--- a/test/typecheck_m7.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/typecheck_m7.t	2026-10-17 04:46:55.523760755 +0900
+@@ -178,7 +178,7 @@
+   >  val f: (A) => String }
+   > KEL
+   $ diktor --type-check --no-prelude c15.kel
+-  ! c15.kel:1:1: 型エラー: メソッド f が二重に宣言されています
++  ! c15.kel:2:9: 型エラー: メソッド f が二重に宣言されています
+   [1]
+ 
+ module 内 let の相互参照と自己再帰(C5a / D39。値の同義語のフォール
+diff a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:46:55.523760755 +0900
+@@ -642,12 +642,12 @@
+ 
+   $ printf 'effect E = { cancel: () => Int32 }\n' > opres.kel
+   $ diktor --type-check opres.kel
+-  ! opres.kel:1:1: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
++  ! opres.kel:1:22: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
+   [1]
+ 
+   $ printf 'effect E2 = { return: () => Int32 }\n' > opres2.kel
+   $ diktor --type-check opres2.kel
+-  ! opres2.kel:1:1: 型エラー: 操作名 return は予約されています(handle の return 節と衝突するため宣言できません)
++  ! opres2.kel:1:23: 型エラー: 操作名 return は予約されています(handle の return 節と衝突するため宣言できません)
+   [1]
+ 
+ 終了は必ず safe_exit を通る(260829-5 M13 検証修正。exit の at_exit が
+@@ -688,7 +688,7 @@
+ 
+   $ printf 'effect E3 = { _foo: (Int32) => Int32 }\n' > opus.kel
+   $ diktor --type-check opus.kel
+-  ! opus.kel:1:1: 型エラー: 操作名 _foo は英小文字で始めてください(handle の節が操作名として読めません)
++  ! opus.kel:1:21: 型エラー: 操作名 _foo は英小文字で始めてください(handle の節が操作名として読めません)
+   [1]
+ 
+ Run モードの診断は stderr(D54。stdout はプログラム出力専用):

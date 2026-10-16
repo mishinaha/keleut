@@ -1,0 +1,26 @@
+分野 effects の差分を当てた順(写しは snap/diktor、patch -p1、各回 --dry-run で確かめた)
+
+1. V25/V25.patch            そのまま当たる
+2. V58/V58.patch            elab.ml hunk 3 が fuzz 2 で当たる(所属の検査の包みを V25 の移した位置に当てる。正しい位置であることを目で確かめた)。typecheck_m6.t は 17 行ずれて当たる
+3. V127/V127.patch          そのまま当たる(elab.ml hunk 5 は 21 行ずれ)
+4. V101/V101.patch          elab.ml hunk 4(perform の引数)が外れる。V127 が直前に check_call_arity の行を足したため。
+                            手直し: 「Unify.unify (elab_exp env level eff arg) args_row;」を「elab_check env level eff arg args_row;」に置き換えた(check_call_arity の行の後に残る)
+5. X-perform/X-perform-over-V101.patch
+                            hunk 1(op_row_note)が fuzz 2 で当たり、V127 の check_call_arity の定義の後に入る(row_failure の記事と定義は離れない)。
+                            hunk 3(perform の elab_check に ~row_note を渡す)が外れる。V127 の check_call_arity の行が前にあるため。
+                            手直し: 同じ行を「elab_check ~row_note:(op_row_note ("操作 " ^ display_of op ^ " の引数の型")) env level eff arg args_row;」に置き換えた
+6. V133/V133.patch          hunk 6(return 節)が fuzz 2 で当たる(V58 がガードの行を at_node の形に変えたため。正しい位置であることを確かめた)。
+                            hunk 7(cancel 節)が外れる。V58 が直前のガードの行を書き換えたため。
+                            手直し: cancel 節の「{ env with resume_ty = None; never_clause = None }」を「{ env with resume_ty = None; no_resume = Some No_cancel_clause }」に置き換えた
+7. V89/V89.patch            そのまま当たる(新しいファイル test/resume_guard.t)
+8. V128/V128.patch          そのまま当たる
+
+合成で見つけた食い違いと、その手直し(項目の差分には無い変更):
+9. X-perform の elab_check の fallback が、期待型の行が閉じた空の行のとき矢印を引数、返り値、行に分けて単一化するので、
+   V127 が Unify.unify の矢印の分岐に入れた check_arity を通らない。
+   そのため perform reg(fn(x, y) => x)(操作の引数が (Int32) => Int32)は、V127 の後も「ラベル _item がありません」のままだった(V101 の e5、実測)。
+   関数呼び出しの同じ形(take(fn(x, y) => x))と、操作の引数の行が空でない形は個数の文面になる(実測)。
+   手直し: fallback の分解の先頭に「Unify.check_arity ty expected p1 p2;」を足し、行コメントを「引数の個数、引数、返り値を先に調べ、…」に改めた。
+   手直しの後、e5 は 2:37「引数の個数が一致しません: (_A, _B) => _A と (Int32) => Int32 @ {}(引数は 2 個と 1 個です)」になり、runtest の結果は変わらない。
+
+注: V101 と X-perform の新しい cram のブロック(nnperform など 8 個、opsigresume など 4 個)は、項目の試作に cram のファイルが無いので合成に含めていない(計画の本文の表から起こす)。

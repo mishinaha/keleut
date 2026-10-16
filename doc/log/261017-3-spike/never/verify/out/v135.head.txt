@@ -1,0 +1,88 @@
+=== ex/a_direct.kel
+! a_direct.kel:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== ex/b_helper.kel
+! b_helper.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== ex/c_annot.kel
+caught x
+[exit 0]
+=== ex/d_let.kel
+caught x
+[exit 0]
+=== ex/e_noinst.kel
+! e_noinst.kel:3:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== ex/f_show.kel
+! f_show.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== ex/g_hole.kel
+! g_hole.kel:3:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== ex/h_ascr.kel
+h_ascr.kel:4:54: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== ex/i_surprise.kel
+! i_surprise.kel:4:5: 型エラー: 曖昧な制約: Parse を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== ex/j_weak.kel
+! j_weak.kel:4:1: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== verify/ex/lib
+dir
+=== verify/ex/r10b_import_ann.kel
+caught x
+[exit 0]
+=== verify/ex/r10_import.kel
+! r10_import.kel:2:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== verify/ex/r11_clause.kel
+caught neg
+[exit 0]
+=== verify/ex/r12_repl.in
+! <stdin>:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+g : () => String @ {Fail} = <fn>
+caught y
+[exit 0]
+=== verify/ex/r13_show_ann.kel
+! r13_show_ann.kel:2:68: 型エラー: Never は Show のインスタンスではありません
+[exit 1]
+=== verify/ex/r1_alias.kel
+caught x
+[exit 0]
+=== verify/ex/r2b_tparam_ann.kel
+caught y
+[exit 0]
+=== verify/ex/r2_tparam.kel
+! r2_tparam.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== verify/ex/r3_pred.kel
+-1
+false
+[exit 0]
+=== verify/ex/r4_option.kel
+! r4_option.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== verify/ex/r5b_module_ann.kel
+! r5b_module_ann.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+=== verify/ex/r5_module.kel
+! r5_module.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+=== verify/ex/r6_guard.kel
+caught neg
+int
+[exit 0]
+=== verify/ex/r7_nested.kel
+a
+caught x
+[exit 0]
+=== verify/ex/r8_shownone.kel
+! r8_shownone.kel:1:1: 型エラー: Show[Never] のインスタンスは、Show か Never を宣言したファイルにだけ書けます
+[exit 1]
+=== verify/ex/r9_list.kel
+! r9_list.kel:3:1: 型エラー: インスタンス頭 List のカインドがクラス Size のパラメータと一致しません
+[exit 1]
+=== verify/ex/r9_list_noconstraint.kel
+r9_list_noconstraint.kel:4:30: パースエラー(付近のトークンを確認してください)
+[exit 2]

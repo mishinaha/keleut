@@ -1,0 +1,7 @@
+newtype Box[A] = B(A)
+let f[A](B(x): Box[A]) = 1
+let g(B(1): Box[Int32]) = 2
+let h[A](p: (A, Never)): Int32 = p match { case (a, b) => 1 }
+let k[A](p: (Box[A], Box[Never])): Int32 = p match { case (B(a), B(b)) => 1 }
+let m[A](o: Option[A]): Int32 = o match { case Some(x) => 1 }
+echo("ok")

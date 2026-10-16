@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+let g(): Int32 @ Ask = run h {
+  let r = Ref.new(0)
+  Ref.set(r, perform ask())
+  Ref.get(r)
+}
+echoln(show({ g() } handle { case ask() => resume(7) }))
+let k(): Int32 = run h { let r = Ref.new(1); { Ref.set(r, perform ask()); Ref.get(r) } handle { case ask() => resume(9) } }
+echoln(show(k()))

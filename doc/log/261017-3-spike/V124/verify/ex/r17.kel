@@ -1,0 +1,6 @@
+newtype N = MkN(C)
+type C = A[{}]
+type A[E] = {f: (Int32) => Int32 @ E, g: E2}
+type E2 = {}
+let n = MkN({f = fn(x) => x + 1, g = {}})
+n match { case MkN(r) => echoln(show(r.f(1))) }

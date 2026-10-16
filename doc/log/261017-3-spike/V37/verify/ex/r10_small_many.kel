@@ -1,0 +1,2 @@
+let rec loop(i: Int32, acc: Int32): Int32 = if i == 0 then acc else loop(i - 1, acc + __string_length(show(Cons(i, Cons(2, Cons(3, Nil))))))
+echoln(show(loop(100000, 0)))

@@ -1,0 +1,8 @@
+effect Ch = { pick: (Int32) => Boolean, zz: () => Unit }
+let g(n: Int32): Int32 @ Ch = if perform pick(n) then n else 0 - n
+let r = g(3) handle {
+  case pick(n) if n > 2 => resume(true)
+  case pick(n) => resume(false)
+  case zz() => resume(())
+}
+echoln(show(r))

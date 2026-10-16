@@ -1,0 +1,5 @@
+patching file lib/elab.ml
+patching file lib/exhaust.ml
+patching file test/instance_param_types.t
+patching file test/typecheck_m7.t
+patching file test/uninhabited_pattern.t

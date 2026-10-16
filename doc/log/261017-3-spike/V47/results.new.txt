@@ -1,0 +1,98 @@
+== a1.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | let g(x: Int32): Int32 @ W[Console] = x
+! a1.kel:2:26: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a2.kel
+  | module M { type W[E]: EffectRow = {Print extends E} }
+  | let g(x: Int32): Int32 @ W[Console] = x
+! a2.kel:2:26: 型エラー: 未知のエフェクト: W
+  [exit 1]
+== a3.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | let g(x: Int32): Int32 @ {W[Console]} = x
+! a3.kel:2:26: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a4.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | let g(x: Int32): Int32 @ M.W[Console] = x
+g : (Int32) => Int32 @ {Print, Console}
+  [exit 0]
+== a5.kel
+  | let g(x: Int32): Int32 @ Nope[Console] = x
+! a5.kel:1:26: 型エラー: 未知のエフェクト: Nope
+  [exit 1]
+== a6.kel
+  | let g(x: Int32): Int32 @ {Nope[Console]} = x
+! a6.kel:1:26: 型エラー: 未知のエフェクト: Nope
+  [exit 1]
+== a7.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | let g(x: Int32): Int32 @ {Console extends W[Print]} = x
+! a7.kel:2:43: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a8.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | type X: EffectRow = W[Console]
+! a8.kel:2:21: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a9.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | newtype Cb[E] = Cb(() => Unit @ E)
+  | let h(c: Cb[W[Console]]): Int32 = 0
+! a9.kel:3:13: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a10.kel
+  | module M { pub type W: EffectRow = {Print} }
+  | let g(x: Int32): Int32 @ W = x
+! a10.kel:2:26: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a11.kel
+  | module M { pub newtype V[A] = V(A) }
+  | let g(x: Int32): Int32 @ V[Int32] = x
+! a11.kel:2:26: 型エラー: 未知のエフェクト: V
+  [exit 1]
+== a12.kel
+  | module M { pub newtype V[A] = V(A) }
+  | let g(x: V[Int32]): Int32 = 0
+! a12.kel:2:10: 型エラー: 未知の型: V(M.V と修飾してください)
+  [exit 1]
+== a13.kel
+  | module M { pub type T[A] = (A, A) }
+  | let g(x: T[Int32]): Int32 = 0
+! a13.kel:2:10: 型エラー: 未知の型: T(M.T と修飾してください)
+  [exit 1]
+== a14.kel
+  | module M { pub newtype V = V(Int32) }
+  | let g(x: V): Int32 = 0
+! a14.kel:2:10: 型エラー: 未知の型: V(M.V と修飾してください)
+  [exit 1]
+== a15.kel
+  | module M { type W[E]: EffectRow = {Print extends E} }
+  | let g(x: Int32): Int32 @ {W[Console]} = x
+! a15.kel:2:26: 型エラー: 未知のエフェクト: W
+  [exit 1]
+== a16.kel
+  | let g(x: Nope[Int32]): Int32 = 0
+! a16.kel:1:10: 型エラー: 未知の型: Nope
+  [exit 1]
+== a17.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | let g[F[_]](x: F[Int32]): Int32 @ W[Console] = 0
+! a17.kel:2:35: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]
+== a18.kel
+  | module N { pub type W[E]: EffectRow = {Print extends E} }
+  | module M { pub type W[E]: EffectRow = {Console extends E} }
+  | let g(x: Int32): Int32 @ W[Fs] = x
+! a18.kel:3:26: 型エラー: 未知のエフェクト: W(N.W か M.W と修飾してください)
+  [exit 1]
+== a19.kel
+  | let g(x: Int32): Int32 @ Int64[Console] = x
+! a19.kel:1:26: 型エラー: 型構成子 Int64 の引数は 0 個必要です(1 個与えられました)
+  [exit 1]
+== a20.kel
+  | module M { pub type W[E]: EffectRow = {Print extends E} }
+  | module K { let g(x: Int32): Int32 @ W[Console] = x }
+! a20.kel:2:37: 型エラー: 未知のエフェクト: W(M.W と修飾してください)
+  [exit 1]

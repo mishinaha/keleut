@@ -1,0 +1,225 @@
+diff a/test/invariants.t b/test/invariants.t
+--- a/test/invariants.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/invariants.t	2026-10-17 04:17:43.594591690 +0900
+@@ -342,6 +342,28 @@
+   $ inv aliasrow_a.kel aliasrow_b.kel
+   same: exit 0
+ 
++§18.4。型の宣言群の中で、後ろで宣言するエイリアスに {} を渡す位置も置き換えられる。
++{} は、エイリアスの本体がパラメータを使う位置(@ の右)で空のエフェクト行と読む:
++
++  $ cat > aliasfwd_a.kel <<'KEL'
++  > newtype Box = Box(() => Unit @ {})
++  > type Use = (Int32) => Unit @ {}
++  > let u: Use = fn(x) => ()
++  > Box(fn() => u(1)) match { case Box(g) => g() }
++  > echoln("ok")
++  > KEL
++  $ cat > aliasfwd_b.kel <<'KEL'
++  > newtype Box = Box(Th[{}])
++  > type Use = A[{}]
++  > type Th[E] = () => Unit @ E
++  > type A[E] = (Int32) => Unit @ E
++  > let u: Use = fn(x) => ()
++  > Box(fn() => u(1)) match { case Box(g) => g() }
++  > echoln("ok")
++  > KEL
++  $ inv aliasfwd_a.kel aliasfwd_b.kel
++  same: exit 0
++
+ §18.4 の 3 つ目の除外。pub のない値束縛の注釈の先頭の矢印で省略した @ は本体からの
+ 推論を表し、エイリアスの本体の矢印で省略した @ は @ {} を表すので、置き換えると型が変わる:
+ 
+diff a/test/kinds.t b/test/kinds.t
+--- a/test/kinds.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/kinds.t	2026-10-17 04:15:33.286556987 +0900
+@@ -219,11 +219,10 @@
+   $ diktor --type-check fwdrowmod2.kel
+   f : (M.A9[R1]) => M.A9[R1]
+ 
+-投機は effect の操作の登録(1b)より前に走るので、同じ宣言群のエフェクトラベルは
+-投機の時点ではすべて未知で、() => Unit @ {Log} のようなフィールドは投機の中で
+-落ちる。例外をフィールドごとに握り潰すので、手前のフィールドが落ちても後続の
+-フィールドがパラメータのカインドを決める(M29 の検証。コンストラクタが 2 つに
+-分かれていても同じ):
++投機は effect の操作の登録(1b)より前に走るが、同じ宣言群で effect として宣言した
++名前は、投機の中でもラベルとして読む。() => Unit @ {Log} のようなフィールドを
++持つ newtype でも、後続のフィールドがパラメータのカインドを決める(コンストラクタが
++2 つに分かれていても同じ):
+ 
+   $ cat > specfield.kel <<'EOF'
+   > type Unit = {}
+@@ -244,11 +243,10 @@
+   $ diktor --type-check --no-prelude specfield2.kel
+   f : (A11) => A11
+ 
+-1 つのフィールドの中で投機が先にラベルへ当たる形では、そのフィールドは丸ごと
+-落ちる(タプルやレコードの要素は右から読むので、右端の {Log} で落ちて左の E に
+-届かない)。それでも通るのは、投機の間だけ、カインドが未確定のパラメータへ渡した
+-要素なしの波括弧 — {} と {extends X} — を読まずに飛ばすからで、1b が相手の
+-カインドの決まった状態でもう一度読む:
++1 つのフィールドの中で、行のパラメータより右にラベルがある形。タプルやレコードの
++要素は右から読むが、右端の {Log} を投機の中でも読めるので、左の E に届く。型引数の
++要素なしの波括弧 — {} と {extends X} — は、投機の間はカインドが未確定の
++パラメータとの照合に使わず、1b が相手のカインドの決まった状態でもう一度読む:
+ 
+   $ cat > specinner.kel <<'EOF'
+   > type Unit = {}
+@@ -269,8 +267,7 @@
+   $ diktor --type-check --no-prelude specinner2.kel
+   f : (A13[R1]) => A13[R1]
+ 
+-前方参照でも同じで、相手の手前のフィールドが投機で落ちても、後続のフィールドから
+-連鎖でカインドが決まれば通る(B14 の第 1 フィールドは投機で落ちるが、第 2 の
++前方参照の連鎖でも、後続のフィールドからカインドが決まる(B14 の第 2 フィールドの
+ C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそれを行にする):
+ 
+   $ cat > specfwd.kel <<'EOF'
+@@ -284,10 +281,8 @@
+   $ diktor --type-check --no-prelude specfwd.kel
+   f : (A14[R1]) => A14[R1]
+ 
+-前方参照の型引数が {}(空の波括弧)の形も、飛ばす読みで通る(台帳 V22 の主たる
+-形)。残るのは、相手の投機がそのパラメータのカインドを決められず、かつ型引数が
+-要素なしの波括弧のときだけ — このとき {} は空レコードとして読めてしまい、
+-照合が相手のパラメータを Type に張る(台帳 V22 の残り):
++前方参照の型引数が {}(空の波括弧)の形。相手の本体で、行のパラメータより右に
++ラベルがあっても通る:
+ 
+   $ cat > specunit.kel <<'EOF'
+   > type Unit = {}
+@@ -304,12 +299,8 @@
+   > newtype B16[E] = MkB16((() => Unit @ E, () => Unit @ {Log}))
+   > EOF
+   $ diktor --type-check --no-prelude specunit2.kel
+-  ! specunit2.kel:4:38: 型エラー: 行カインドではない型パラメータです: E
+-  [1]
+ 
+-投機がパラメータに届かない形では、型引数にラベルを書いても宣言順に依存する。
+-同じ 2 つの宣言を入れ替えれば通るので、効いているのは型引数の字面ではなく、
+-投機が相手のパラメータのカインドを決められたかどうかである:
++型引数にラベルを書いた前方参照も、同じ 2 つの宣言のどちらの順でも通る:
+ 
+   $ cat > speclab.kel <<'EOF'
+   > type Unit = {}
+@@ -319,8 +310,7 @@
+   > let f[E](x: A17[E]): A17[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude speclab.kel
+-  ! speclab.kel:3:28: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+-  [1]
++  f : (A17[R1]) => A17[R1]
+   $ cat > speclab2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }
+@@ -331,6 +321,110 @@
+   $ diktor --type-check --no-prelude speclab2.kel
+   f : (A18[R1]) => A18[R1]
+ 
++型エイリアスの型引数も、パラメータのカインドが決まる前に読む位置がある。後ろで
++宣言するエイリアスに {} を渡しても、エイリアスを先に宣言した形と同じ型になる。
++{} はエイリアスの本体が E を使う位置(ここでは @ の右)で空のエフェクト行と読む:
++
++  $ cat > aliasunit.kel <<'EOF'
++  > type Unit = {}
++  > type C19 = A19[{}]
++  > type A19[E] = (Int32) => Unit @ E
++  > let f(g: C19): Unit = g(1)
++  > EOF
++  $ diktor --type-check --no-prelude aliasunit.kel
++  f : ((Int32) => {} @ {}) => {}
++
++本体が E を値の型の位置で使うエイリアスでは、同じ {} を空レコード型と読む:
++
++  $ cat > aliasunit2.kel <<'EOF'
++  > type Unit = {}
++  > type C20 = A20[{}]
++  > type A20[E] = (E, Int32)
++  > let v: C20 = ({}, 2)
++  > EOF
++  $ diktor --type-check --no-prelude aliasunit2.kel
++  v : ({}, Int32)
++
++エイリアスの連鎖と {extends R} の形。中継のエイリアス B21 のパラメータも、
++末端の A21 が決めるカインドを受け取る。{extends R} の R は行のカインドを持つ:
++
++  $ cat > aliasunit3.kel <<'EOF'
++  > type Unit = {}
++  > type C21[R] = B21[{extends R}]
++  > type D21 = B21[{}]
++  > type B21[E] = A21[E]
++  > type A21[E] = (Int32) => Unit @ E
++  > let f[R](g: C21[R]): Unit @ R = g(1)
++  > let h(g: D21): Unit = g(2)
++  > EOF
++  $ diktor --type-check --no-prelude aliasunit3.kel
++  f : ((Int32) => {}) => {}
++  h : ((Int32) => {} @ {}) => {}
++
++本体でパラメータを使わないエイリアスでは、パラメータのカインドが Type に決まる。
++このとき {extends R} は、宣言の位置で R を行とするレコード型として読む:
++
++  $ cat > aliasunit4.kel <<'EOF'
++  > type C26[R] = A26[{extends R}]
++  > type A26[E] = Int32
++  > let v: C26[{}] = 1
++  > EOF
++  $ diktor --type-check --no-prelude aliasunit4.kel
++  v : Int32
++
++newtype のフィールドからエイリアスへ行を渡す形も、宣言順に依存しない。具体的な
++行({Print})を渡す形は、エイリアスを newtype より前に宣言しても、かつては
++読み分けの時点でエイリアスのパラメータのカインドが決まっていなかった:
++
++  $ cat > ntalias.kel <<'EOF'
++  > type Unit = {}
++  > effect Print = { print: (String) => Unit }
++  > newtype Callback22[E] = MkCb22(() => Unit @ E)
++  > type Cb22[E] = Callback22[E]
++  > newtype N22 = MkN22(Cb22[{Print}])
++  > newtype M22 = MkM22(A22[{}])
++  > type A22[E] = (Int32) => Unit @ E
++  > let f(n: N22, m: M22): Int32 = 0
++  > EOF
++  $ diktor --type-check --no-prelude ntalias.kel
++  f : (N22, M22) => Int32
++
++エイリアスの本体の中で、行のパラメータより右に同じ宣言群のエフェクトラベルがある
++形。投機はラベルの名前だけを知っていればよいので、effect の操作の登録(1b)を
++待たずにパラメータのカインドが決まる:
++
++  $ cat > aliaslab.kel <<'EOF'
++  > type Unit = {}
++  > effect Log = { log: (String) => Unit }
++  > type Cb23[E] = (() => Unit @ E, () => Unit @ {Log})
++  > newtype N23 = MkN23(Cb23[{}])
++  > newtype M23 = MkM23(Cb23[{Log}])
++  > let f(n: N23, m: M23): Int32 = 0
++  > EOF
++  $ diktor --type-check --no-prelude aliaslab.kel
++  f : (N23, M23) => Int32
++
++投機の中でラベルとして読むのは、effect として宣言した名前だけである。宣言の
++無い名前と、effect でない型の名前は、投機の外と同じ診断になる:
++
++  $ cat > aliaslab2.kel <<'EOF'
++  > type Unit = {}
++  > newtype Q24 = MkQ24(Int32)
++  > type C24 = A24[{}]
++  > type A24[E] = (Int32) => Unit @ {Q24 extends E}
++  > EOF
++  $ diktor --type-check --no-prelude aliaslab2.kel
++  ! aliaslab2.kel:4:33: 型エラー: 型 Q24 はエフェクトではありません(ここにはエフェクト行が要ります)
++  [1]
++  $ cat > aliaslab3.kel <<'EOF'
++  > type Unit = {}
++  > type C25 = A25[{}]
++  > type A25[E] = (Int32) => Unit @ {Nope extends E}
++  > EOF
++  $ diktor --type-check --no-prelude aliaslab3.kel
++  ! aliaslab3.kel:3:33: 型エラー: 未知のエフェクト: Nope
++  [1]
++
+ module の中の newtype も同じ経路(1b の後始末は平坦化後の修飾名で引く):
+ 
+   $ cat > modcb.kel <<'EOF'

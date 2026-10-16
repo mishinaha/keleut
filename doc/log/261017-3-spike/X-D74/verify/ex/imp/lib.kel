@@ -1,0 +1,1 @@
+pub let incr[h](r: Ref[h, Int32]): Unit @ Heap[h] = Ref.set(r, Ref.get(r) + 1)

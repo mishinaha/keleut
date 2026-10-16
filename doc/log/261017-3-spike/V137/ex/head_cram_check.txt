@@ -1,0 +1,14 @@
+== HEAD retrycancel
+0
+exit 0
+33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+66229 cancel 節で例外が抑制されました: Stack overflow
+== HEAD retrycancelvia
+0
+exit 0
+33771 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
+66229 cancel 節で例外が抑制されました: Stack overflow
+== HEAD retrycancelsame
+0
+exit 0
+100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました

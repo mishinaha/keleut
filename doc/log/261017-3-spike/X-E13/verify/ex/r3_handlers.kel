@@ -1,0 +1,19 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let try_[A, E](body: () => A @ {Fail extends E}): #Ok(A) | #Err(String) @ E =
+  body() handle {
+    case throw(e)  => #Err(e)
+    case return(x) => #Ok(x)
+  }
+let r = try_(fn() => {
+  let v = (perform ask() + perform ask()) handle {
+    case ask() => resume(21)
+    case cancel => echoln("cancel inner")
+  }
+  if v > 40 then perform throw("big") else v
+})
+r match {
+  case #Ok(v) if v > 0 => echoln("ok " + show(v))
+  case #Ok(_) => echoln("ok other")
+  case #Err(e) => echoln("err " + e)
+}

@@ -1,0 +1,104 @@
+File "test/run_exit.t", line 1, characters 0-0:
+diff --git a/_build/default/test/run_exit.t b/_build/default/test/run_exit.t.corrected
+index 3ddaf16..c09d858 100644
+--- a/_build/default/test/run_exit.t
++++ b/_build/default/test/run_exit.t.corrected
+@@ -45,7 +45,7 @@ import の誤りも 1:
+   $ diktor exitparse.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitparse.kel > /dev/null; echo "exit: $?"
+-  exitparse.kel:3:1: パースエラー(付近のトークンを確認してください)
++  exitparse.kel:2:13: パースエラー(この位置の後ろ、3:1 のトークンが文法に合いません)
+   exit: 2
+   $ printf 'echoln("before")\nlet x = "\\q"\n' > exitlex.kel
+   $ diktor exitlex.kel 2> /dev/null; echo "exit: $?"
+File "test/premise.t", line 1, characters 0-0:
+diff --git a/_build/default/test/premise.t b/_build/default/test/premise.t.corrected
+index ec01057..f219bac 100644
+--- a/_build/default/test/premise.t
++++ b/_build/default/test/premise.t.corrected
+@@ -254,7 +254,7 @@ AST ダンプ(束縛子があるときだけ tparams が出る):
+   [2]
+   $ printf 'newtype List[A] = Cons(A, tail: List[A]) | Nil\npub type instance[A: Eq] Eq[List[_]] { let rec eq(xs, ys) = true }\n' > pr15.kel
+   $ diktor --type-check --no-prelude pr15.kel
+-  pr15.kel:3:1: 構文エラー: type instance に pub は付けられません
++  pr15.kel:2:1: 構文エラー: type instance に pub は付けられません
+   [2]
+ 
+ instance と [ の間には空白・改行・ブロックコメントのどれを挟んでもよく、束縛子
+File "test/nonfeatures.t", line 1, characters 0-0:
+diff --git a/_build/default/test/nonfeatures.t b/_build/default/test/nonfeatures.t.corrected
+index 19d4f63..e1423bc 100644
+--- a/_build/default/test/nonfeatures.t
++++ b/_build/default/test/nonfeatures.t.corrected
+@@ -45,7 +45,7 @@ with だけを見るので基底に式は書けず、大文字始まりは字句
+ 
+   $ printf 'let p = {x = 1}\nlet q = {P with x = 3}\n' > updbase3.kel
+   $ diktor --type-check updbase3.kel
+-  updbase3.kel:3:1: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
++  updbase3.kel:2:10: 構文エラー: レコード更新の基底は小文字始まりの識別子 1 個です
+   [2]
+ 
+ (小文字の基底が通ることは test/typecheck.t / test/eval.t / test/ast.t /
+File "test/invariants.t", line 1, characters 0-0:
+diff --git a/_build/default/test/invariants.t b/_build/default/test/invariants.t.corrected
+index 24dc694..1407b39 100644
+--- a/_build/default/test/invariants.t
++++ b/_build/default/test/invariants.t.corrected
+@@ -413,7 +413,7 @@ r(1) を先に書くと、宣言の終わりの既定化で r が (Int32) => Int
+   $ diff repl_a.out repl_b.out | grep '^[<>]' | sed 's/^>/+/; s/^</-/'
+   + ! <stdin>:2:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+   + 実行時エラー: ゼロ除算です
+-  + <stdin>:7:1: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
++  + <stdin>:6:14: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+   + 実行時エラー: ゼロ除算です
+   + half
+   + 実行時エラー: ゼロ除算です
+File "test/import.t", line 1, characters 0-0:
+diff --git a/_build/default/test/import.t b/_build/default/test/import.t.corrected
+index 17a2de8..4d9ae3f 100644
+--- a/_build/default/test/import.t
++++ b/_build/default/test/import.t.corrected
+@@ -59,7 +59,7 @@ import の直後の { は改行を区切りにしない括弧で、--dump-tokens
+   [2]
+   $ printf 'from "./a" import {\n  A\n  b\n}\n' > nl.kel
+   $ diktor nl.kel
+-  nl.kel:3:3: パースエラー(付近のトークンを確認してください)
++  nl.kel:2:4: パースエラー(この位置の後ろ、3:3 のトークンが文法に合いません)
+   [2]
+ 
+ from と import は予約語である:
+@@ -86,11 +86,11 @@ from と import は予約語である:
+ 
+   $ printf 'let z = { pub let x: Int32 = 1; x }\n' > pb1.kel
+   $ diktor pb1.kel
+-  pb1.kel:2:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
++  pb1.kel:1:11: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+   [2]
+   $ printf 'with x = 1\npub let rec f(n: Int32): Int32 = n\n' > pb2.kel
+   $ diktor pb2.kel
+-  pb2.kel:3:1: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
++  pb2.kel:2:1: 構文エラー: ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)
+   [2]
+ 
+ ## 読み込み
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index 2ecf87b..8673998 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -723,12 +723,12 @@ resume の引数はラベルを取らない(F7。ペイロードは操作の返
+   > }
+   > KEL
+   $ diktor --type-check reslabel.kel
+-  reslabel.kel:7:3: 構文エラー: resume の引数にラベルは付けられません
++  reslabel.kel:6:17: 構文エラー: resume の引数にラベルは付けられません
+   [2]
+ 
+   $ sed 's/resume(x = 1)/resume(1, 2)/' reslabel.kel > res2.kel
+   $ diktor --type-check res2.kel
+-  res2.kel:7:3: 構文エラー: resume の引数は高々1個です
++  res2.kel:6:17: 構文エラー: resume の引数は高々1個です
+   [2]
+ 
+ 組み込みメソッド表の全 39 組が実際に選ばれる(C2 / D37 の網羅回帰):

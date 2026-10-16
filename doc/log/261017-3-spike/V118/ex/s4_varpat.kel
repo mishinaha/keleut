@@ -1,0 +1,5 @@
+let f(v) = v match {
+  case #Foo(a = x) => x
+}
+
+let b = 2

@@ -1,0 +1,3 @@
+module M { pub type Int8 = Int32 }
+let f(x: M.Int8): M.Int8 = x
+echoln(show(f(4)))

@@ -1,0 +1,2 @@
+type class Pp[A] { val pp[B: Eq]: (A) => String }
+type instance Pp[Int32] { let pp(x) = "p" }

@@ -1,0 +1,5 @@
+module E {
+  type E = Int32
+}
+let f[E](x: Int32): Int32 @ {Console extends E} = x
+let g(): Int32 @ {Console} = f(1)

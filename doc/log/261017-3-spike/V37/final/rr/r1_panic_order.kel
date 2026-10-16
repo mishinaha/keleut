@@ -1,0 +1,7 @@
+newtype Boom = Boom(n: Int32)
+type instance Show[Boom] {
+  let show(b) = b match {
+    case Boom(n = n) => if n > 2 then __panic("boom " + show(n)) else "B" + show(n)
+  }
+}
+echoln(show(Cons(Boom(1), Cons(Boom(2), Cons(Boom(3), Cons(Boom(4), Cons(Boom(5), Nil)))))))

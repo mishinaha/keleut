@@ -1,0 +1,42 @@
+### HEAD (diktor-head)
+$ head -c 60 deep.kel (2 行目は 1 + ( を 2 万段入れ子にした式。awk で生成。生成の命令は run_exit.t の試作のブロックと同じ)
+echoln("before")
+let x = 1 + (1 + (1 + (1 + (1 + (1 + (1 + (
+$ OCAMLRUNPARAM=l=100k diktor deep.kel 2> /dev/null; echo exit
+exit: 3
+$ OCAMLRUNPARAM=l=100k diktor deep.kel > /dev/null; echo exit
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+exit: 3
+$ OCAMLRUNPARAM=l=100k diktor --type-check deep.kel; echo exit
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+exit: 3
+$ OCAMLRUNPARAM=l=100k diktor --dump-ast deep.kel > /dev/null; echo exit  (n = 20000 では Dump の印字で溢れる。実行の経路は構文解析を通り型検査で溢れる。試作の文面で確かめた)
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+exit: 3
+$ diktor deep.kel; echo exit  (既定の上限)
+before
+20001
+exit: 0
+$ cat deeprepl.txt | cut -c1-40
+let y = 1
+let x = 1 + (1 + (1 + (1 + (1 + (1 + (1 
+echoln(show(y))
+$ OCAMLRUNPARAM=l=100k diktor --repl < deeprepl.txt; echo exit
+y : Int32 = 1
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+exit: 3
+$ cat replrt.txt
+let rec sum(n: Int32): Int32 = if n == 0 then 0 else n + sum(n - 1)
+echoln(show(sum(100000)))
+echoln("after")
+$ OCAMLRUNPARAM=l=100k diktor --repl < replrt.txt; echo exit  (評価の段の再帰過多。対照)
+sum : (Int32) => Int32 = <fn>
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+after
+exit: 0
+
+### 既定の上限での閾値の探索(HEAD)
+入れ子の深さ n の `let x = 1 + (1 + (... 1 ...))` を、--dump-ast、--type-check、実行の 3 通りで走らせた。
+- OCAMLRUNPARAM=l=100k:n = 2000、3000、5000 はすべて終了状態 0。n = 10000 は --dump-ast が 0、--type-check と実行が 3(実行時エラー: スタックオーバーフロー(再帰が深すぎます))。
+- 既定の上限:n = 10000、100000、1000000(ファイル 6 MB)のどれも 3 通りとも終了状態 0。n = 1000000 の実行は約 25 秒。
+- `let x = ((...(1)...))`(括弧だけの入れ子)は l=100k の n = 10000、既定の n = 100000 でも 0。

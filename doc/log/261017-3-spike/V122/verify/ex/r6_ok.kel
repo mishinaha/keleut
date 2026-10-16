@@ -1,0 +1,8 @@
+let sum(xs: List[Int32]): Int32 = run h {
+  let acc = Ref.new(0)
+  let a = MutableArray.new(3, 1)
+  MutableArray.set(a, 0, 10)
+  Ref.set(acc, MutableArray.get(a, 0) + MutableArray.get(a, 1))
+  Ref.get(acc)
+}
+echoln(show(sum(Nil)))

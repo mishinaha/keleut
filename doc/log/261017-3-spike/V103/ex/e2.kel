@@ -1,0 +1,5 @@
+newtype N(Int32)
+type instance Show[N] {
+  let show(n) = { println("side"); "n" }
+}
+echoln(show(N(1)))

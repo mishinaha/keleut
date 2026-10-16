@@ -1,0 +1,2 @@
+effect A = { a: (() => Unit @ {B}) => Unit }
+effect B = { b: () => Unit }

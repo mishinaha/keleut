@@ -1,0 +1,74 @@
+$ diktor u1_string.kel
+u1_string.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u2_ident.kel
+u2_ident.kel:1:7: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u3_comment.kel
+u3_comment.kel:1:14: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u4_trunc.kel
+u4_trunc.kel:2:1: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u5_surrogate.kel
+u5_surrogate.kel:1:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u6_multibyte.kel
+u6_multibyte.kel:1:12: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u7_late.kel
+u7_late.kel:41:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u8_blockcomment.kel
+u8_blockcomment.kel:1:4: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u9_import.kel
+lib1.kel:1:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor u10_first.kel
+u10_first.kel:1:1: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --type-check u1_string.kel
+u1_string.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --dump-tokens u1_string.kel
+u1_string.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor --dump-ast u1_string.kel
+u1_string.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ diktor ok.kel u10_first.kel
+u10_first.kel:1:1: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+$ printf 'let a = 1
+let x = "\377"
+let b = 2
+' | diktor --repl
+a : Int32 = 1
+<stdin>:2:10: 字句エラー: 不正な UTF-8 バイト列です
+b : Int32 = 2
+exit: 0
+$ printf ':type "\377"
+' | diktor --repl
+<stdin>:1:8: 字句エラー: 不正な UTF-8 バイト列です
+exit: 0
+$ printf 'let s = "abc
+\377"
+' | diktor --repl   (継続行の中)
+<stdin>:2:1: 字句エラー: 不正な UTF-8 バイト列です
+exit: 0
+$ diktor --prelude badprelude.kel u3_comment.kel
+badprelude.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+exit: 2
+byte at codepoint index 510 (col 511)
+b510.kel:1:511: 字句エラー: 不正な UTF-8 バイト列です
+byte at codepoint index 511 (col 512)
+b511.kel:1:512: 字句エラー: 不正な UTF-8 バイト列です
+byte at codepoint index 512 (col 513)
+b512.kel:1:513: 字句エラー: 不正な UTF-8 バイト列です
+byte at codepoint index 513 (col 514)
+b513.kel:1:514: 字句エラー: 不正な UTF-8 バイト列です
+byte at codepoint index 1024 (col 1025)
+b1024.kel:1:1025: 字句エラー: 不正な UTF-8 バイト列です
+$ diktor u11_4byte.kel (4 バイト文字の後ろ)
+u11_4byte.kel:1:11: 字句エラー: 不正な UTF-8 バイト列です

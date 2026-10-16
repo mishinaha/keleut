@@ -1,0 +1,1 @@
+pub let h(f: (Foo) => Int32): Int32 = 0

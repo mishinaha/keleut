@@ -1,0 +1,4 @@
+type Q[F[_]] = F
+type App[G[_]] = G[Int32]
+let get[F[_]](x: App[Q[F]], f: (F[Int32]) => Int32): Int32 = f(x)
+echoln(show(get(Some(5), fn(o) => o match { case Some(n) => n case None => 0 })))

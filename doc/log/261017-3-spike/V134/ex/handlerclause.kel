@@ -1,0 +1,4 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let go(): Int32 @ Fail = { 5 } handle { case ask() => { perform throw("a") match {} } }
+echoln(show({ go() } handle { case throw(e) => -1 }))

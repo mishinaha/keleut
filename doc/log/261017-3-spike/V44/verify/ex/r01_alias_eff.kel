@@ -1,0 +1,6 @@
+type F = (Int32) => Int32 @ {}
+module M {
+  pub let g: F = fn(x) => x + 1
+  pub let h: (Int32) => Int32 = g
+}
+with_stdout(fn() => echoln(show(M.h(1))))

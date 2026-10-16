@@ -1,0 +1,2 @@
+type W: EffectRow = {Print}
+let f[W](u: Unit): Unit @ {W} = println("x")

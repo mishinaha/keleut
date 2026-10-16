@@ -1,0 +1,58 @@
+== badesc.kel: 0000000 l e t x = " \ q " 
+ 0000015 
+badesc.kel:1:11: 字句エラー: invalid escape sequence
+rc=2
+badesc.kel:1:11: 字句エラー: 不正なエスケープです
+rc=2
+== bom.kel: 0000000 l e t a = 1 357 273 277 
+ 0000016 
+bom.kel:1:11: 字句エラー: unexpected character: U+FEFF
+rc=2
+bom.kel:1:11: 字句エラー: 予期しない文字です: U+FEFF
+rc=2
+== char.kel: 0000000 l e t a = 1 302 244 
+ 0000015 
+char.kel:1:11: 字句エラー: unexpected character: ¤
+rc=2
+char.kel:1:11: 字句エラー: 予期しない文字です: ¤
+rc=2
+== esceof.kel: 0000000 l e t s = " \ 0000012 
+esceof.kel:1:11: 字句エラー: invalid escape sequence
+rc=2
+esceof.kel:1:11: 字句エラー: 不正なエスケープです
+rc=2
+== short.kel: 0000000 l e t s = " \ u 1 2 " 
+ 0000017 
+short.kel:1:14: 字句エラー: unexpected end of unicode escape
+rc=2
+short.kel:1:14: 字句エラー: Unicode エスケープの 16 進の桁が足りません
+rc=2
+== shortU.kel: 0000000 l e t s = " \ U 0 0 1 1 " 0000020 
+ 
+shortU.kel:1:16: 字句エラー: unexpected end of unicode escape
+rc=2
+shortU.kel:1:16: 字句エラー: Unicode エスケープの 16 進の桁が足りません
+rc=2
+== stray.kel: 0000000 l e t a = 1 
+ # ! x 
+ 0000016 
+stray.kel:2:1: 字句エラー: stray '#!'
+rc=2
+stray.kel:2:1: 字句エラー: #! はファイルの先頭にだけ書けます
+rc=2
+== surr.kel: 0000000 l e t s = " \ u D 8 0 0 " 0000020 
+ 
+surr.kel:1:15: 字句エラー: invalid unicode escape (out of range or surrogate)
+rc=2
+surr.kel:1:15: 字句エラー: Unicode エスケープの値がサロゲートか、U+10FFFF を超えています
+rc=2
+== untermc.kel: 0000000 l e t a = 1 / * a b c 0000020 
+untermc.kel:1:17: 字句エラー: unterminated block comment
+rc=2
+untermc.kel:1:17: 字句エラー: ブロックコメントが閉じていません
+rc=2
+== unterm.kel: 0000000 l e t a = " a b c 0000014 
+unterm.kel:1:13: 字句エラー: unterminated string literal
+rc=2
+unterm.kel:1:13: 字句エラー: 文字列リテラルが閉じていません
+rc=2

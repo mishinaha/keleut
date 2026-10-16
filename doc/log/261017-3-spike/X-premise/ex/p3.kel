@@ -1,0 +1,2 @@
+newtype Opaque = MkOpaque(Int32)
+let ng = Some(Cons(MkOpaque(1i32), Nil)) == None

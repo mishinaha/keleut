@@ -1,0 +1,3 @@
+from "./imp/lib" import { Tick, ticker }
+newtype T = T(() => Unit @ {Tick})
+let _ = T(ticker) match { case T(g) => g() handle { case tick() => { echoln("t"); resume(()) } } }

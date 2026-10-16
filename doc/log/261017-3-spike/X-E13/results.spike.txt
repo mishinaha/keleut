@@ -1,0 +1,51 @@
+### 試作 (diktor/_build/default/bin/main.exe)
+$ head -c 60 deep.kel (2 行目は 1 + ( を 2 万段入れ子にした式。awk で生成。生成の命令は run_exit.t の試作のブロックと同じ)
+echoln("before")
+let x = 1 + (1 + (1 + (1 + (1 + (1 + (1 + (
+$ OCAMLRUNPARAM=l=100k diktor deep.kel 2> /dev/null; echo exit
+exit: 1
+$ OCAMLRUNPARAM=l=100k diktor deep.kel > /dev/null; echo exit
+! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
+exit: 1
+$ OCAMLRUNPARAM=l=100k diktor --type-check deep.kel; echo exit
+_ : {}
+! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
+exit: 1
+$ OCAMLRUNPARAM=l=100k diktor --dump-ast deep.kel > /dev/null; echo exit  (n = 20000 では Dump の印字で溢れる。実行の経路は構文解析を通り型検査で溢れる。試作の文面で確かめた)
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+exit: 3
+$ diktor deep.kel; echo exit  (既定の上限)
+before
+20001
+exit: 0
+$ cat deeprepl.txt | cut -c1-40
+let y = 1
+let x = 1 + (1 + (1 + (1 + (1 + (1 + (1 
+echoln(show(y))
+$ OCAMLRUNPARAM=l=100k diktor --repl < deeprepl.txt; echo exit
+y : Int32 = 1
+! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
+1
+exit: 0
+$ cat replrt.txt
+let rec sum(n: Int32): Int32 = if n == 0 then 0 else n + sum(n - 1)
+echoln(show(sum(100000)))
+echoln("after")
+$ OCAMLRUNPARAM=l=100k diktor --repl < replrt.txt; echo exit  (評価の段の再帰過多。対照)
+sum : (Int32) => Int32 = <fn>
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+after
+exit: 0
+
+### 試作: 限度を超えた入力の束縛が残らないこと
+$ cat deeprepl2.txt | cut -c1-40   (deeprepl.txt の末尾に echoln(show(x)) を足したもの)
+let y = 1
+let x = 1 + (1 + (1 + (1 + (1 + (1 + (1 
+echoln(show(y))
+echoln(show(x))
+$ OCAMLRUNPARAM=l=100k diktor --repl < deeprepl2.txt; echo exit
+y : Int32 = 1
+! 処理系の限度: 型検査で再帰が深すぎます(スタックオーバーフロー)
+1
+! <stdin>:4:13: 型エラー: 未束縛の変数: x
+exit=0

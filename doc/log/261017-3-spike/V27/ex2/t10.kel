@@ -1,0 +1,1 @@
+newtype H[G] = MkH(#A(Int32) | G[Int32])

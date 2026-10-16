@@ -1,0 +1,2 @@
+type App[G[_]] = G[(Int32) => Int32]
+pub let h(x: App[List]): Int32 = 0

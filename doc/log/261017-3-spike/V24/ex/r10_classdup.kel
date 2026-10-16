@@ -1,0 +1,5 @@
+type class C5[A] {
+  val g: (A) => Int32
+  val f: (A) => Int32
+  val f: (A) => String
+}

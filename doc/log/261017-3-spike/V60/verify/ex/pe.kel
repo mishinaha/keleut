@@ -1,0 +1,4 @@
+let f[A](g: (Int32) => A): A = g(1)
+let u = f { x => }
+let v = f(fn(x) => {})
+echoln(show(u == v))

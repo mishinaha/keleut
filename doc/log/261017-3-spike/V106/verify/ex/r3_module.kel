@@ -1,0 +1,5 @@
+module M {
+  pub type class Pp[A] { val pp[B: Eq]: (A) => String }
+  pub type instance Pp[Int32] { let pp(x) = "m" + show(x) }
+}
+echoln(M.pp(3i32))

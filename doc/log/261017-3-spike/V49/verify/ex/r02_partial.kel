@@ -1,0 +1,3 @@
+let f[A](x: A) = x
+let main(): Unit @ {Console} = echoln(show(f(1)))
+main()

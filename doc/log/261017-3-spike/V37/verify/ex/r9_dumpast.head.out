@@ -1,0 +1,7 @@
+(exp
+ (apply echoln
+  (extend _item
+   (apply show
+    (extend _item
+     (construct Cons 1 (construct Cons 2 (construct Cons 3 Nil))) {})) {})))
+rc=0

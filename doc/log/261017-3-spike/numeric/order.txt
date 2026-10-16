@@ -1,0 +1,21 @@
+numeric の合成の順序と手直し(基: diktor 39d4091 の写し)
+
+1. V91  items/V91/V91.patch    -p1 で全ハンクがそのまま当たる。
+2. V114 items/V114/V114.patch  lib/elab.ml の第 2 ハンク(number_ty の Some _ の分岐と unsupported_numeric)が失敗。
+        V91 が number_ty に ~loc と Unify.note_literal を足したため、文脈が合わない。
+        手直し: V91 後の number_ty の `| Some _ -> noimpl (...)` を V114 の type_error の 3 行に、
+        `unsupported_numeric` の 2 行(コメントと定義)を V114 の `absent_numeric` の 2 行に置き換えた。
+        内容は V114 の差分と同じ。ほかのハンクは offset 4 で当たる。lib/aux.ml は V91(88〜96 行)と V114(47 行)で別の箇所。
+3. V8   items/V8/V8.patch      lib/elab.ml の第 1〜3 ハンクが失敗。
+        第 1 ハンク: §11.2 の記事の末尾。V91 が同じ段落に 2 行足したため、V8 の小見出しの段落を
+          「既定化が表示より先に…現れない。」の後ろに足し、閉じ括弧を V8 の段落の末尾に移した。
+        第 2 ハンク: pattern_numbers と check_pattern_numbers を number_ty の直後(absent_numeric の前)に足した。
+        第 3 ハンク: elab_pat の T.PNumber。V91 の `number_ty ~loc:(Tree.loc_of node) level n` の行の後ろに
+          `pattern_numbers := (node, n) :: !pattern_numbers;` を足した。
+        第 4〜7 ハンクは offset 11 で当たる。lib/lexer.ml(V8 は 74 行、V114 は 91 行と 129 行)と test/numeric.t(offset 47)は当たる。
+4. V91 の期待値の昇格: test/neg_rem.t の remf(1:1 → 1:13)と test/dictionary_passing.t の negremf(2:1 → 2:13)を dune promote で昇格。
+   V91 の差分は昇格を含まない(final.md のコミット 2 に当たる)。V114 と V8 の差分は昇格を含む。
+
+結果: dune build 成功(警告は HEAD と同じ parser.mly の Warning 60 だけ)。昇格の後の dune runtest は差分なし。
+litcheck --old(HEAD の写し)は aux、driver、exhaust、lexer、syntax が code 一致、elab と unify はコードを変えたので不一致、7 ファイルとも marker 0 件。
+合成差分: numeric.patch(diff -ruN -x _build snap/diktor diktor、HEAD の写しへ -p1 で --dry-run が通る)。

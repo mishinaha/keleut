@@ -1,0 +1,2 @@
+let id(x: Int32): Int32 = x
+let ng = Cons(id, Nil) == Nil

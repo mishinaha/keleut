@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+type class Sh[A] { val sh: (A) => String }
+newtype Foo = Foo
+type instance Sh[Foo] {
+  let sh: (Foo) => String = { let n = perform ask(); fn(x) => "foo" }
+}
+echoln(sh(Foo))

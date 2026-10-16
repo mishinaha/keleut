@@ -1,0 +1,2 @@
+from "libnp" import { Describe, Box }
+with_stdout(fn() => println(describe(Box(1i32))))

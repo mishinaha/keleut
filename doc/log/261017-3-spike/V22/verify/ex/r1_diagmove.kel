@@ -1,0 +1,4 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+newtype A = MkA(B[Int32])

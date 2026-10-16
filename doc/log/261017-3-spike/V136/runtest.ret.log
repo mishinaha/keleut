@@ -1,0 +1,28 @@
+File "test/premise.t", line 1, characters 0-0:
+diff --git a/_build/default/test/premise.t b/_build/default/test/premise.t.corrected
+index ec01057..675c2bc 100644
+--- a/_build/default/test/premise.t
++++ b/_build/default/test/premise.t.corrected
+@@ -134,7 +134,7 @@
+   > }
+   > EOF
+   $ diktor --type-check --no-prelude pr7.kel
+-  ! pr7.kel:3:11: 型エラー: インスタンスメソッド eq がクラス宣言の型を満たしません(型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください)
++  ! pr7.kel:5:40: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
+   [1]
+ 
+ 未知のクラス・予約述語は束縛子の位置でも拒む:
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index 4d7271b..431ef4d 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -81,7 +81,7 @@ test/dictionary_passing.t の pure と pureamb):
+   > type instance C[Int32] { let f(x) = x == x }
+   > EOF
+   $ diktor --type-check --no-prelude c3.kel
+-  ! c3.kel:2:30: 型エラー: インスタンスメソッド f がクラス宣言の型を満たしません(型が一致しません: Boolean と Int32)
++  ! c3.kel:2:30: 型エラー: 型が一致しません: Int32 と Boolean
+   [1]
+ 
+   $ cat > c4.kel <<'EOF'

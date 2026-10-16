@@ -1,0 +1,5 @@
+type F = (Int32) => Int32
+type G = F
+pub let k: G = fn(x) => x + 1
+pub let h(g: G): Int32 = g(1)
+echoln(show(h(k)))

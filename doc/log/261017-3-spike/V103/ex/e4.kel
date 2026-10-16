@@ -1,0 +1,8 @@
+type class Render[A] {
+  val render: (A) => String
+}
+newtype N(Int32)
+type instance Render[N] {
+  let render(n) = { println("side"); "n" }
+}
+echoln(render(N(1)))

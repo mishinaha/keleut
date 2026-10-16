@@ -1,0 +1,8 @@
+let f(g: () => Int32): Int32 = g()
+let v = (f(fn() => 1),
+  #A)
+let x: Int32 = (f
+  (fn() => 4))
+let y = (v match { case (n, _) => n })
+  + x
+echoln(show(y))

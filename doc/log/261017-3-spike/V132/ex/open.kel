@@ -1,0 +1,10 @@
+effect Fail = { throw: (String) => Never }
+type class Parse[A] {
+  val parse[E]: (String) => A @ {Fail extends E}
+}
+type instance Parse[Int32] {
+  let parse[E](s: String): Int32 @ {Fail extends E} = if s == "1" then 1 else perform throw("bad: " + s)
+}
+let p[A: Parse, E](s: String): A @ {Fail extends E} = parse(s)
+let r: Int32 = p("2") handle { case throw(e) => { echoln("caught " + e); 0 - 1 } }
+echoln(show(r))

@@ -1,0 +1,42 @@
+patching file lib/elab.ml
+Hunk #1 FAILED at 273.
+Hunk #2 succeeded at 2183 (offset 141 lines).
+Hunk #3 succeeded at 2257 (offset 141 lines).
+Hunk #4 succeeded at 3478 (offset 209 lines).
+Hunk #5 succeeded at 3601 (offset 209 lines).
+Hunk #6 succeeded at 3702 (offset 209 lines).
+Hunk #7 succeeded at 4049 (offset 209 lines).
+Hunk #8 succeeded at 4091 (offset 209 lines).
+Hunk #9 succeeded at 4104 (offset 209 lines).
+Hunk #10 succeeded at 4113 (offset 209 lines).
+Hunk #11 succeeded at 4130 (offset 209 lines).
+Hunk #12 FAILED at 4109.
+Hunk #13 succeeded at 4809 (offset 260 lines).
+Hunk #14 succeeded at 4960 (offset 283 lines).
+2 out of 14 hunks FAILED -- saving rejects to file <一時領域>/all/logs/diagtext.rej
+patching file lib/show.ml
+Hunk #1 succeeded at 534 (offset 39 lines).
+patching file lib/unify.ml
+Hunk #1 succeeded at 129 (offset 1 line).
+Hunk #2 succeeded at 252 (offset 1 line).
+Hunk #3 succeeded at 346 (offset 17 lines).
+Hunk #4 succeeded at 405 (offset 17 lines).
+Hunk #5 succeeded at 416 (offset 17 lines).
+Hunk #6 succeeded at 464 (offset 17 lines).
+Hunk #7 succeeded at 639 with fuzz 2 (offset 21 lines).
+Hunk #8 succeeded at 706 with fuzz 1 (offset 35 lines).
+Hunk #9 FAILED at 1162.
+1 out of 9 hunks FAILED -- saving rejects to file <一時領域>/all/logs/diagtext.rej
+patching file test/annot_rows.t
+patching file test/classes.t
+Hunk #2 succeeded at 370 (offset 37 lines).
+patching file test/ctor_field_row.t
+patching file test/decl_pos.t
+patching file test/dictionary_passing.t
+Hunk #1 succeeded at 289 with fuzz 1.
+patching file test/premise.t
+patching file test/pub.t
+patching file test/rec_tparam_note.t
+patching file test/rigid_empty_row.t
+patching file test/typecheck_m7.t
+patching file test/verify_fixes.t

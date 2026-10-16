@@ -1,0 +1,2 @@
+let f(x: Int32): Int32 @ Out = { echoln("p"); x }
+echoln(show(f(9)))

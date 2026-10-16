@@ -1,0 +1,1 @@
+let g(): Int32 = run h { let a: MutableArray[h, Int32] = MutableArray.new(2, 5); let b: MutableArray[h, String] = a; 0 }

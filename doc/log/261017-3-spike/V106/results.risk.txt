@@ -1,0 +1,90 @@
+=== alias1.kel
+type Pair[X] = (X, X)
+type class Pp[A] {
+  val pp[B: Show]: (A, Pair[B]) => String
+}
+type instance Pp[Int32] {
+  let pp(x, p) = show(x) + show(p)
+}
+echoln(pp(3i32, (true, false)))
+--- HEAD
+! alias1.kel:6:7: 型エラー: インスタンスメソッド pp がクラス宣言の型を満たしません((ς1, ς1) は Show のインスタンスではありません)
+[exit 1]
+--- spike
+! alias1.kel:6:7: 型エラー: インスタンスメソッド pp がクラス宣言の型を満たしません((ς1, ς1) は Show のインスタンスではありません)
+[exit 1]
+=== row1.kel
+type class Pp[A] {
+  val m[E: Show]: (A) => Int32 @ E
+}
+--- HEAD
+[exit 0]
+--- spike
+[exit 0]
+=== hk1.kel
+type class Pp[F[_]] {
+  val pp[B: Show]: (F[B]) => String
+}
+type instance Pp[Option[_]] {
+  let pp(o) = o match { case Some(x) => show(x) case None => "N" }
+}
+echoln(pp(Some(5)))
+--- HEAD
+5
+[exit 0]
+--- spike
+5
+[exit 0]
+=== alias2.kel
+type Pair[X] = (X, X)
+type class Pp[A] {
+  val pp[B: Show]: (A, Pair[B]) => String
+}
+type instance Pp[Int32] {
+  let pp(x, p) = show(x) + p match { case (a, _) => show(a) }
+}
+echoln(pp(3i32, (true, false)))
+--- HEAD
+! alias2.kel:6:43: 型エラー: 型が一致しません: String と (_A, _B)
+[exit 1]
+--- spike
+! alias2.kel:6:43: 型エラー: 型が一致しません: String と (_A, _B)
+[exit 1]
+=== row2.kel
+let m[E: Show](x: Int32): Int32 @ E = x
+echoln(show(m(1)))
+--- HEAD
+! row2.kel:2:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[exit 1]
+--- spike
+! row2.kel:2:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[exit 1]
+=== row3.kel
+type class Pp[A] {
+  val m[E: Show]: (A) => Int32 @ E
+}
+type instance Pp[Int32] {
+  let m(x) = x
+}
+echoln(show(m(1i32)))
+--- HEAD
+! row3.kel:7:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[exit 1]
+--- spike
+! row3.kel:7:13: 型エラー: クラス Show は Type のクラスですが、{Console, Blocking} に要求されました
+[exit 1]
+=== alias2.kel (括弧を足した版)
+type Pair[X] = (X, X)
+type class Pp[A] {
+  val pp[B: Show]: (A, Pair[B]) => String
+}
+type instance Pp[Int32] {
+  let pp(x, p) = show(x) + (p match { case (a, _) => show(a) })
+}
+echoln(pp(3i32, (true, false)))
+--- HEAD
+3true
+[exit 0]
+--- spike
+3true
+[exit 0]

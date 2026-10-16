@@ -1,0 +1,6 @@
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1: (Int32, () => Int32 @ {}) => Int32 @ {} = fn(a, g) => g()
+}

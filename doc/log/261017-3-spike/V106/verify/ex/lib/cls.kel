@@ -1,0 +1,2 @@
+pub type class Pp[A] { val pp[B: Show]: (A) => String }
+type instance Pp[Int32] { let pp(x) = "imp" }

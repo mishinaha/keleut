@@ -1,0 +1,7 @@
+module M {
+  pub type Pair[A] = (A, A)
+  pub let mk[A](a: A): Pair[A] = (a, a)
+  pub let pick(o: Option[Int32]): Int32 = o match { case Some(k) if k > 1 => k case _ => 0 }
+}
+let p: M.Pair[String] = M.mk("é")
+echoln(show(M.pick(Some(3))))

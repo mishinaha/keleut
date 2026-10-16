@@ -1,0 +1,5 @@
+from "./lib/m" import { E, R }
+let f[E](x: Int32): Int32 @ {Console extends E} = { echoln("r4"); x }
+let g(x: Int32): Int32 @ R = { println("g"); x }
+let y: E = f(g(7)) handle { case print(s) => { echoln("P:" + s); resume() } case return(x) => x }
+echoln(show(y))

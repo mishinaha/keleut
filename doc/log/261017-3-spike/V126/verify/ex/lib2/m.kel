@@ -1,0 +1,2 @@
+from "l" import { Size, T, s }
+with_stdout(fn() => { println(show(s(T(7i32)))); println(show(size(T(8i32)))) })

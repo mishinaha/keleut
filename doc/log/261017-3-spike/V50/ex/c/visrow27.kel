@@ -1,0 +1,2 @@
+type E: EffectRow = {Print}
+let f[E](x: Int32): Int32 @ {Console, E} = x

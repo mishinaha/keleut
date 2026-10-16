@@ -1,0 +1,169 @@
+diff a/lib/exhaust.ml b/lib/exhaust.ml
+--- a/lib/exhaust.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/exhaust.ml	2026-10-17 06:15:47.337142287 +0900
+@@ -885,6 +885,16 @@
+    積んだ数の二乗の時間がかかる(§10.13) *)
+ let queue rows ty = pending := { qe_rows = rows; qe_ty = ty } :: !pending
+ 
++let rec inhabited seen ty =
++  let ty = repr ty in
++  match ty with
++  | TCon (n, _) when List.mem n seen -> true
++  | _ -> (
++      let seen = match ty with TCon (n, _) -> n :: seen | _ -> seen in
++      match complete_sig ty with
++      | None -> true
++      | Some cs -> List.exists (fun c -> List.for_all (inhabited seen) (sub_types c ty)) cs)
++
+ let check_entry { qe_rows; qe_ty } =
+   let out = ref [] in
+   let all = List.map (fun (p, guarded) -> ([ convert p ], guarded)) qe_rows in
+@@ -896,6 +906,7 @@
+      節番号を出すと、利用者が存在しない第 1 節を探すことになる。
+      節が 1 つだけの match も同じ扱いになる *)
+   let single = match qe_rows with [ _ ] -> true | _ -> false in
++  if single && not (inhabited [] qe_ty) then [] else begin
+   (* ガード付き節は必ず一致する節として数えない(sample.kel:322-324)ので、網羅性の判定から除く *)
+   (match missing unguarded tys with
+   | Some w -> out := !out @ [ "match が非網羅的です。例えば " ^ String.concat ", " (List.map show_ipat w) ^ " が漏れています" ]
+@@ -913,7 +924,7 @@
+                else Printf.sprintf "第 %d 節は到達不能です(冗長)" (i + 1));
+             ])
+     all;
+-  !out
++  !out end
+ 
+ let drain () =
+   let entries = List.rev !pending in
+diff a/test/typecheck_m7.t b/test/typecheck_m7.t
+--- a/test/typecheck_m7.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/typecheck_m7.t	2026-10-17 06:15:47.339643681 +0900
+@@ -397,7 +397,8 @@
+ 
+ 関数の引数とラムダの引数に書いたコンストラクタパターンは、
+ コンストラクタが 1 つしかない型のものでも網羅性検査に掛ける。
+-フィールドの型に値が無いので、一致する値が無いと警告する:
++フィールドの型に値が無いので Absurd にも値が無く、引数に値が来ないので、警告は出ない
++(値の無い型を受けるパターンの扱いは uninhabited_pattern.t):
+ 
+   $ cat > v10h.kel <<'KEL'
+   > newtype Empt
+@@ -407,6 +408,4 @@
+   > KEL
+   $ diktor --type-check --no-prelude v10h.kel
+   f : (Absurd) => Int32
+-  ⚠ このパターンには一致する値がありません
+   g : (Absurd) => Int32
+-  ⚠ このパターンには一致する値がありません
+diff a/test/uninhabited_pattern.t b/test/uninhabited_pattern.t
+--- a/test/uninhabited_pattern.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/uninhabited_pattern.t	2026-10-17 06:15:47.339694407 +0900
+@@ -0,0 +1,108 @@
++値の無い型を受けるパターン(LangSpec §11.2)。関数の引数、ラムダの引数、let のパターン
++束縛、return 節、節が 1 つの match のように、パターンが 1 つだけの位置では、受ける型に
++値が無ければ、パターンの形によらず網羅性の警告を出さない。その位置には値が来ないので、
++照合が失敗することもない。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++関数の引数。変数、レコード、タプル、コンストラクタ、ヴァリアント、入れ子のどの形でも、
++Never や右辺を省いた newtype や、値の無い型をフィールドに持つ型を受けると、警告は出ない:
++
++  $ cat > params.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > let pv(n: Empt) = 1
++  > let pr({x}: {x: Empt}) = 2
++  > let pt((a, b): (Int32, Never)) = 3
++  > let pc(MkA(n)) = 4
++  > let pnest({x = MkA(n)}: {x: Absurd}) = 5
++  > let pvar(#V(n): #V(Never)) = 6
++  > let lc = fn(MkA(n)) => 7
++  > KEL
++  $ diktor --strict-exhaustive --type-check --no-prelude params.kel
++  pv : (Empt) => Int32
++  pr : ({x: Empt}) => Int32
++  pt : ((Int32, Never)) => Int32
++  pc : (Absurd) => Int32
++  pnest : ({x: Absurd}) => Int32
++  pvar : (#V(Never)) => Int32
++  lc : (Absurd) => Int32
++
++let のパターン束縛、節が 1 つの match、return 節も同じ:
++
++  $ cat > single.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > effect Fail = { throw: (String) => Never }
++  > effect Nop = { nop: () => Int32 }
++  > let bt(): Int32 @ Fail = { let (a, b): (Int32, Never) = (1, perform throw("y")); a }
++  > let bc(): Int32 @ Fail = { let MkA(n) = perform throw("z"); 2 }
++  > let mv(n: Never): Int32 = n match { case m => 1 }
++  > let mc(a: Absurd): Int32 = a match { case MkA(_) => 2 }
++  > let rc(t: () => Absurd @ Nop): Int32 = t() handle { case nop() => resume(1)  case return(MkA(n)) => 3 }
++  > KEL
++  $ diktor --strict-exhaustive --type-check --no-prelude single.kel
++  bt : () => Int32 @ {Fail}
++  bc : () => Int32 @ {Fail}
++  mv : (Never) => Int32
++  mc : (Absurd) => Int32
++  rc : (() => Absurd @ {Nop}) => Int32
++
++値の無いデータ型を、コンストラクタパターンで開いて消去できる。--strict-exhaustive でも
++実行する:
++
++  $ cat > elim.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > let elimA[A](MkA(n)): A = n match {}
++  > let elimB[A](a: Absurd): A = a match { case MkA(n) => n match {} }
++  > let pick(r: #Ok(Int32) | #Err(Absurd)): Int32 = r match {
++  >   case #Ok(n) => n
++  >   case #Err(a) => elimA(a)
++  > }
++  > echo(show(pick(#Ok(41)) + 1))
++  > KEL
++  $ diktor --strict-exhaustive elim.kel
++  42
++
++受ける型に値があれば、どの値にも一致しないパターンに警告を出す。Opt2[Empt] には Nn が
++あるので、Sm(x) には一致する値が無いと警告する。節が 2 つ以上の match では、値の無い型
++を照合する節を到達不能と報告する。ペイロードの型に値の無いケースの節も同じである。
++コンストラクタを持つ値の無い型には、節のない match {} は網羅的でない:
++
++  $ cat > keep.kel <<'KEL'
++  > newtype Empt
++  > newtype Absurd = MkA(Empt)
++  > newtype Opt2[A] = Sm(A) | Nn
++  > let k1(Sm(x): Opt2[Empt]) = 1
++  > let k2(n: Never): Int32 = n match { case a => 1  case b => 2 }
++  > let k3(o: #Ok(Int32) | #Err(Never)): Int32 = o match { case #Ok(n) => n  case #Err(e) => 0 }
++  > let k4[A](a: Absurd): A = a match {}
++  > KEL
++  $ diktor --type-check --no-prelude keep.kel
++  k1 : (Opt2[Empt]) => Int32
++  ⚠ match が非網羅的です。例えば Nn が漏れています
++  ⚠ このパターンには一致する値がありません
++  k2 : (Never) => Int32
++  ⚠ 第 1 節は到達不能です(冗長)
++  ⚠ 第 2 節は到達不能です(冗長)
++  k3 : (#Ok(Int32) | #Err(Never)) => Int32
++  ⚠ 第 2 節は到達不能です(冗長)
++  k4 : (Absurd) => A
++  ⚠ match が非網羅的です。例えば MkA(_) が漏れています
++
++再帰するデータ型は、同じ型に戻ったところで値があるとみなす。M[Never] には S(Z(1)) の
++値があるので、Z(x) の引数に警告を出す。値の無い L = C(L) を受ける C(x) にも、変数で受け
++る形と同じく警告は出ない:
++
++  $ cat > rec.kel <<'KEL'
++  > newtype M[A] = Z(A) | S(M[Int32])
++  > newtype L = C(L)
++  > let r1(Z(x): M[Never]) = 1
++  > let r2(C(x)) = 2
++  > KEL
++  $ diktor --type-check --no-prelude rec.kel
++  r1 : (M[Never]) => Int32
++  ⚠ match が非網羅的です。例えば S(_) が漏れています
++  ⚠ このパターンには一致する値がありません
++  r2 : (L) => Int32

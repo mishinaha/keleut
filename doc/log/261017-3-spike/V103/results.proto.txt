@@ -1,0 +1,37 @@
+===== a1.kel
+----- proto run
+2
+exit=0
+===== b1.kel
+----- proto run
+2
+exit=0
+===== c1.kel
+----- proto run
+! c1.kel:4:39: 型エラー: ラベル Print がありません(行は閉じています)
+exit=1
+===== d1.kel
+----- proto run
+5
+exit=0
+===== e1.kel
+----- proto run
+b
+true1
+a
+11
+5
+11
+11
+exit=0
+===== e2.kel
+----- proto run
+! e2.kel:3:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド show の本体がエフェクトを起こしています。元の報告: ラベル Print がありません(行は閉じています)
+exit=1
+===== e3.kel
+----- proto run
+exit=0
+===== ov.kel
+----- proto run
+! ov.kel:10:11: 型エラー: ラベル Ask がありません(行は閉じています)
+exit=1

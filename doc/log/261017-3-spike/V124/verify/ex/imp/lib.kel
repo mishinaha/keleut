@@ -1,0 +1,3 @@
+pub type C = A[{}]
+pub type A[E] = (Int32) => Unit @ E
+pub type D[E] = (E, Int32)

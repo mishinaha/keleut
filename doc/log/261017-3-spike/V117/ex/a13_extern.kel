@@ -1,0 +1,2 @@
+type F = (Int32) => Int32
+pub extern "C" let cb(f: F): Int32

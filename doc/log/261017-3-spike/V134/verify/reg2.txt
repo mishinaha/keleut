@@ -1,0 +1,80 @@
+####### <一時領域>/bin/diktor-head
+===  r11_void_helper.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r11_void_helper.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r11_void_helper.kel
+elim : (A) => B
+⚠ match が非網羅的です。例えば _ が漏れています
+use : (Void) => Int32
+_ : {}
+[exit 0]
+===  r12_void_inst.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r12_void_inst.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r12_void_inst.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r13_void_lambda.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r13_void_lambda.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r13_void_lambda.kel
+id : (A) => A
+h : (_A) => _B
+⚠ match が非網羅的です。例えば _ が漏れています
+k : (Void) => Int32
+_ : {}
+[exit 0]
+=== repl r14
+id : (A) => A = <fn>
+k : (_A) => _A = <fn>
+(_A) => B
+_ : Int32 = 3
+####### <一時領域>/items/V134/verify/diktor/_build/default/bin/main.exe
+===  r11_void_helper.kel
+! r11_void_helper.kel:3:32: 型エラー: 型が一致しません: Void と Never
+[exit 1]
+=== --strict-exhaustive r11_void_helper.kel
+! r11_void_helper.kel:3:32: 型エラー: 型が一致しません: Void と Never
+[exit 1]
+=== --type-check r11_void_helper.kel
+elim : (Never) => A
+! r11_void_helper.kel:3:32: 型エラー: 型が一致しません: Void と Never
+[exit 1]
+===  r12_void_inst.kel
+! r12_void_inst.kel:3:36: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Never と Void)
+[exit 1]
+=== --strict-exhaustive r12_void_inst.kel
+! r12_void_inst.kel:3:36: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Never と Void)
+[exit 1]
+=== --type-check r12_void_inst.kel
+! r12_void_inst.kel:3:36: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Never と Void)
+[exit 1]
+===  r13_void_lambda.kel
+! r13_void_lambda.kel:4:27: 型エラー: 型が一致しません: Void と Never
+[exit 1]
+=== --strict-exhaustive r13_void_lambda.kel
+! r13_void_lambda.kel:4:27: 型エラー: 型が一致しません: Void と Never
+[exit 1]
+=== --type-check r13_void_lambda.kel
+id : (A) => A
+h : (Never) => _A
+! r13_void_lambda.kel:4:27: 型エラー: 型が一致しません: Void と Never
+[exit 1]
+=== repl r14
+id : (A) => A = <fn>
+k : (_A) => _A = <fn>
+(Never) => A
+_ : Int32 = 3

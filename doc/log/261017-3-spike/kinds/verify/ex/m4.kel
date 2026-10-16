@@ -1,0 +1,2 @@
+newtype N = N(() => Unit @ {Log})
+type Log = Int32

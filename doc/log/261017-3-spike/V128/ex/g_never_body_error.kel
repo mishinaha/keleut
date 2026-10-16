@@ -1,0 +1,6 @@
+effect Fail = { throw: (String) => Never }
+let r = (perform throw("x") + 1) handle {
+  case throw(e) => 1 / 0
+  case cancel => echoln("cancel fail")
+}
+echoln(show(r))

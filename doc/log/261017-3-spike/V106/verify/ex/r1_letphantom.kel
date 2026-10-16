@@ -1,0 +1,3 @@
+type Const[X] = Int32
+let pp[B: Show](x: Int32, n: Const[B]): String = show(x) + show(n)
+echoln(pp(3i32, 4i32))

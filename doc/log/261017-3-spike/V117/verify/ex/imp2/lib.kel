@@ -1,0 +1,2 @@
+from "./g" import G
+pub type F = G

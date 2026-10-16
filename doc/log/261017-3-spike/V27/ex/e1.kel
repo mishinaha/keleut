@@ -1,0 +1,2 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+effect Reg[F] = { reg: (Callback[F[Int32]]) => Unit }

@@ -1,0 +1,144 @@
+== final differs from V22+V124:
+  V124/ex/g1.kel | H False M False V30 True C True
+    M: ! g1.kel:1:30: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V124/ex/g3.kel | H False M False V30 False C False
+    M: ! g3.kel:2:33: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: ! g3.kel:2:33: 型エラー: 未知のエフェクト: Nope / [exit 1]
+  V22/ex/efflater.kel | H False M False V30 True C True
+    M: ! efflater.kel:3:50: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: f : (A) => A / [exit 0]
+  V22/ex/v30.kel | H False M False V30 True C True
+    M: ! v30.kel:2:33: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V29/verify/ex/v30b.kel | H False M False V30 False C True
+    M: ! v30b.kel:2:43: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V29/verify/ex/v30.kel | H False M False V30 True C True
+    M: ! v30.kel:1:30: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/fwd.kel | H False M False V30 True C True
+    M: ! fwd.kel:1:36: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: call : (Cb) => {} @ {Log} / n : Int32 / _ : {} / [exit 0]
+  V30/ex/v_class.kel | H False M False V30 True C True
+    M: ! v_class.kel:1:40: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_effop.kel | H False M False V30 True C True
+    M: ! v_effop.kel:1:31: 型エラー: 未知のエフェクト: B / [exit 1]
+    C: [exit 0]
+  V30/ex/v_mod_outer.kel | H False M False V30 True C True
+    M: ! v_mod_outer.kel:1:43: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_newtype2.kel | H False M False V30 True C True
+    M: ! v_newtype2.kel:2:28: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_newtype_bare.kel | H False M False V30 True C True
+    M: ! v_newtype_bare.kel:1:28: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_newtype_ext.kel | H False M False V30 True C True
+    M: ! v_newtype_ext.kel:1:31: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_newtype.kel | H False M False V30 True C True
+    M: ! v_newtype.kel:1:28: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_newtype_sum.kel | H False M False V30 True C True
+    M: ! v_newtype_sum.kel:1:32: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/ex/v_order_dup.kel | H False M False V30 False C False
+    M: ! v_order_dup.kel:1:28: 型エラー: 未知のエフェクト: Nope / [exit 1]
+    C: ! v_order_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています / [exit 1]
+  V30/ex/v_order_std.kel | H False M False V30 False C False
+    M: ! v_order_std.kel:1:28: 型エラー: 未知のエフェクト: Nope / [exit 1]
+    C: ! v_order_std.kel:2:1: 型エラー: 標準環境の effect Console は再宣言できません / [exit 1]
+  V30/ex/v_params.kel | H False M False V30 False C False
+    M: ! v_params.kel:1:28: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: ! v_params.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9) / [exit 1]
+  V30/ex2/effalias.kel | H False M False V30 True C True
+    M: ! effalias.kel:1:21: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: f : (N1, N2) => N1 / [exit 0]
+  V30/ex2/effpos.kel | H False M False V30 True C True
+    M: ! effpos.kel:2:40: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: v : () => {} @ {Log} / w : (Row1[R1]) => {} @ {Log extends R1} / [exit 0]
+  V30/verify/ex/r07_op_shadow.kel | H False M False V30 True C True
+    M: ! r07_op_shadow.kel:2:29: 型エラー: 未知のエフェクト: L2 / [exit 1]
+    C: x : Int32 / _ : {} / [exit 0]
+  V30/verify/ex/r20_mod_rowalias.kel | H False M False V30 True C True
+    M: ! r20_mod_rowalias.kel:2:27: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/verify/ex/r21_v57_param.kel | H False M False V30 False C False
+    M: ! r21_v57_param.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください) / [exit 1]
+    C: ! r21_v57_param.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます / [exit 1]
+  V30/verify/ex/r22_mod_type_alias_same.kel | H False M False V30 True C True
+    M: ! r22_mod_type_alias_same.kel:3:34: 型エラー: エフェクト行に Type エイリアス Log は置けません(: EffectRow を付けてください) / [exit 1]
+    C: [exit 0]
+  V30/verify/ex/r24_rowalias_via_newtype.kel | H False M False V30 True C True
+    M: ! r24_rowalias_via_newtype.kel:1:21: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/verify/ex/r25_typealias_via_newtype.kel | H False M False V30 True C True
+    M: ! r25_typealias_via_newtype.kel:1:23: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/verify/ex/r26_typealias_via_effop.kel | H False M False V30 True C True
+    M: ! r26_typealias_via_effop.kel:1:23: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: [exit 0]
+  V30/verify/ex/t01_positions.kel | H False M False V30 True C True
+    M: ! t01_positions.kel:2:40: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: v : () => {} @ {Log} / w : (Row1[R1]) => {} @ {Log extends R1} / [exit 0]
+== rejects but some proto accepts:
+== accepts, HEAD rejects: 115
+== HEAD accepts, rejects: []
+== both accept, output differs from HEAD: []
+== both reject, diag differs from HEAD:
+   V124/ex/d3.kel
+    H: ! d3.kel:2:31: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! d3.kel:3:5: 型エラー: 注釈された返り値型を満たしません(ラベル Print がありません(行は閉じています)) / [exit 1]
+   V124/ex/d5.kel
+    H: ! d5.kel:2:30: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! d5.kel:2:14: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row / [exit 1]
+   V124/ex/g2.kel
+    H: ! g2.kel:2:45: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! g2.kel:2:31: 型エラー: 未知のエフェクト: Nope / [exit 1]
+   V124/ex/g3.kel
+    H: ! g3.kel:2:33: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: ! g3.kel:2:33: 型エラー: 未知のエフェクト: Nope / [exit 1]
+   V124/ex/g4.kel
+    H: ! g4.kel:3:42: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! g4.kel:3:31: 型エラー: 型 Q はエフェクトではありません(ここにはエフェクト行が要ります) / [exit 1]
+   V124/verify/ex/r16.kel
+    H: ! r16.kel:2:13: 型エラー: 型構成子ではない型に型引数が適用されています / [exit 1]
+    C: ! r16.kel:1:10: 型エラー: 型エイリアス A の型引数のカインドが一致しません: [_] Type を期待しましたが {} は Type です / [exit 1]
+   V124/verify/ex/r18.kel
+    H: ! r18.kel:2:45: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! r18.kel:2:32: 型エラー: 型 Log はエフェクトではありません(ここにはエフェクト行が要ります) / [exit 1]
+   V124/verify/ex/s08.kel
+    H: ! s08.kel:3:13: 型エラー: extends の右は行かレコード型でなければなりません / [exit 1]
+    C: ! s08.kel:2:12: 型エラー: エフェクト行にフィールド y は書けません / [exit 1]
+   V22/verify/ex/r12_diagmove2.kel
+    H: ! r12_diagmove2.kel:2:34: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! r12_diagmove2.kel:2:64: 型エラー: 型構成子 List の第1引数のカインドが一致しません: Type を期待しましたが R1 は Row です / [exit 1]
+   V22/verify/ex/r1_diagmove.kel
+    H: ! r1_diagmove.kel:3:34: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! r1_diagmove.kel:4:19: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります) / [exit 1]
+   V29/ex/neg1.kel
+    H: ! neg1.kel:1:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません / [exit 1]
+    C: h : H / ! neg1.kel:5:5: 型エラー: 注釈された型を満たしません(ラベル Print がありません(行は閉じています)) / [exit 1]
+   V29/verify/ex/d1.kel
+    H: ! d1.kel:1:27: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! d1.kel:2:20: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります) / [exit 1]
+   V29/verify/ex/d5.kel
+    H: ! d5.kel:2:20: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません / [exit 1]
+    C: ! d5.kel:2:20: 型エラー: 未知のエフェクト: Nope / [exit 1]
+   V29/verify/ex/d7.kel
+    H: ! d7.kel:3:27: 型エラー: 行カインドではない型パラメータです: E / [exit 1]
+    C: ! d7.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row / [exit 1]
+   V30/ex/v_order_dup.kel
+    H: ! v_order_dup.kel:1:28: 型エラー: 未知のエフェクト: Nope / [exit 1]
+    C: ! v_order_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています / [exit 1]
+   V30/ex/v_order_std.kel
+    H: ! v_order_std.kel:1:28: 型エラー: 未知のエフェクト: Nope / [exit 1]
+    C: ! v_order_std.kel:2:1: 型エラー: 標準環境の effect Console は再宣言できません / [exit 1]
+   V30/ex/v_params.kel
+    H: ! v_params.kel:1:28: 型エラー: 未知のエフェクト: Log / [exit 1]
+    C: ! v_params.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9) / [exit 1]
+   V30/verify/ex/r21_v57_param.kel
+    H: ! r21_v57_param.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください) / [exit 1]
+    C: ! r21_v57_param.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます / [exit 1]

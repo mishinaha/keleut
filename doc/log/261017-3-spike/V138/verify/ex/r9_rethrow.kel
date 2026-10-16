@@ -1,0 +1,11 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let rec go(n: Int32): Int32 =
+  (({ perform use(); perform throw("x" + show(n)) }) handle {
+    case use() => resume()
+    case cancel => { echoln("cancel " + show(n)); perform throw("c" + show(n)) }
+  }) handle {
+    case throw(e) => { echoln("inner " + e); if n == 0 then 0 else perform throw("re" + e) }
+  }
+let r = go(2) handle { case throw(e) => { echoln("outer " + e); 5 } }
+echoln(show(r))

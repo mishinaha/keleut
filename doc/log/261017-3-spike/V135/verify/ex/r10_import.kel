@@ -1,0 +1,3 @@
+from "./lib/desc" import {Fail, Describe}
+let f(): String @ Fail = describe(perform throw("x"))
+echoln(f() handle { case throw(m) => "caught " + m })

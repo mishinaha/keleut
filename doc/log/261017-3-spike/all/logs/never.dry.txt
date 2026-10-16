@@ -1,0 +1,14 @@
+checking file lib/elab.ml
+Hunk #1 succeeded at 3320 (offset 183 lines).
+Hunk #2 succeeded at 3333 (offset 183 lines).
+Hunk #3 succeeded at 3354 (offset 183 lines).
+Hunk #4 succeeded at 3599 (offset 183 lines).
+Hunk #5 succeeded at 5192 (offset 185 lines).
+Hunk #6 succeeded at 5791 (offset 204 lines).
+checking file lib/exhaust.ml
+Hunk #1 succeeded at 880 (offset 5 lines).
+Hunk #2 succeeded at 908 (offset 5 lines).
+Hunk #3 succeeded at 945 (offset 5 lines).
+Hunk #4 succeeded at 963 (offset 5 lines).
+checking file test/empty_match.t
+checking file test/never_ops.t

@@ -1,0 +1,2 @@
+let id[A](x: A): A = x
+let bad: Int32 = id("s")

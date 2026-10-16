@@ -1,0 +1,2 @@
+pub type Id[A] = A
+pub type Fn[E] = (Int32) => Int32 @ E

@@ -1,0 +1,6 @@
+let f = show
+let g = Ref.new
+let h2 = Array.get
+let k(x: Int32): Int32 = x + 1
+let n(x: Int32): Int32 = -x
+let e(x: Int32, y: Int32): Boolean = x == y

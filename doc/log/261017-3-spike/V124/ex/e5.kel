@@ -1,0 +1,4 @@
+type C = A[{}]
+type A[E] = B[E]
+newtype B[E] = MkB(() => Unit @ E)
+let f(c: C): Int32 = 0

@@ -1,0 +1,8 @@
+let strs = 1
+let rec join(x: Int32): Int32 = x + strs
+let fwd = "f"
+newtype P = P(v: Int32)
+type instance Show[P] {
+  let show(p) = p match { case P(v = v) => fwd + Show.show(join(v)) }
+}
+echoln(show(Cons(P(1), Cons(P(2), Cons(P(3), Cons(P(4), Cons(P(5), Nil)))))))

@@ -1,0 +1,3 @@
+from "./imp/lib2" import { D2 }
+let v: D2[{}] = ({}, 1)
+echoln("ok")

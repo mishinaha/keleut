@@ -1,0 +1,5 @@
+let two[A, E](body: (Int32, Int32) => A @ E): A @ E = body(5, 6)
+let b(): Int32 = {
+  with x = two()
+  2
+}

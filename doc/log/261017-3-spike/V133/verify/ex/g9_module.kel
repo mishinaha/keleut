@@ -1,0 +1,11 @@
+effect E = { e: (Int32) => Int32, stop: (String) => Never }
+module M {
+  pub let h(f: () => Int32 @ {E, Console}): Int32 @ {Console} = f() handle {
+    case e(n) if n > 0 => resume(n * 2)
+    case e(n) => resume(0)
+    case stop(s) => { echoln("stop " + s); 0 - 9 }
+    case return(x) => x + 1
+  }
+}
+echoln(show(M.h(fn() => perform e(4))))
+echoln(show(M.h(fn() => { perform stop("q"); 1 })))

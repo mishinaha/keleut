@@ -1,0 +1,135 @@
+diff a/lib/driver.ml b/lib/driver.ml
+--- a/lib/driver.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/driver.ml	2026-10-17 04:03:50.701436305 +0900
+@@ -811,7 +811,7 @@
+   in
+   if shows then
+     (* 型から Show の証拠を組み、辞書にしてメソッドを選ぶ。型の決まらない部分の辞書は DPending になる *)
+-    let env = { Value.globals = Hashtbl.create 1; locals = Value.SMap.empty; resume = None } in
++    let env = { Value.globals = Hashtbl.create 1; locals = Value.SMap.empty; dicts = Value.DMap.empty; resume = None } in
+     let d = Interp.eval_ev env (Unify.display_evidence (intern "Show") ty) in
+     match Interp.apply (Interp.select_method ~cls:(intern "Show") d "show" []) (Value.VRecord [ (l_item, v) ]) with
+     | Value.VText s -> s
+diff a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/interp.ml	2026-10-17 04:27:24.939513427 +0900
+@@ -83,18 +83,18 @@
+    要る表は、利用者が宣言したインスタンスの `instance_impls` と、
+    第13章の組み込みのメソッド表である。
+    型構成子は第1章のインターン表の oid で、型の側と同じ番号を使う。
+-   辞書パラメータは局所環境 `locals` に名前で置くので、
+-   閉包が辞書を字句的に捕まえる仕組みを別に持たない。 *)
++   辞書パラメータは環境の `dicts` に鍵 (型変数の vid, クラスの oid) で置く(第12章 §12.3)。
++   `dicts` は環境の一部なので、閉包は `c_env` とともに辞書を字句的に捕まえ、別の仕組みを持たない。
++   鍵を整数の組のまま比べるので、辞書を引くたびに名前の文字列を作らない。 *)
+ 
+ (* 利用者が宣言したインスタンスのメソッド。(クラス, 型構成子) → メソッド名 → 前提と
+    メソッド自身の辞書を受け取って実装を返す関数。exec_decl の DInstance だけが jreplace で書く *)
+ let instance_impls : (oid * oid, (oid * (Value.t list -> Value.t)) list) Hashtbl.t = Hashtbl.create 32
+ 
+-(* 辞書パラメータの鍵(型変数の vid, クラスの oid)を局所環境の名前にする。
+-   利用者の識別子は英字か _ で始まるので、$ で始まる名前とは衝突しない *)
++(* 辞書パラメータの鍵(型変数の vid, クラスの oid)を診断のために文字列にする *)
+ let dkey_name ((v, c) : Tree.dkey) = "$d" ^ string_of_int v ^ ":" ^ string_of_int c
+ 
+-let bind_dicts env ks ds = { env with locals = List.fold_left2 (fun l k d -> SMap.add (dkey_name k) d l) env.locals ks ds }
++let bind_dicts env ks ds = { env with dicts = List.fold_left2 (fun m k d -> DMap.add k d m) env.dicts ks ds }
+ 
+ (* 辞書パラメータを含まない証拠の辞書は、穴ごとに 1 回だけ作って覚える *)
+ let closed_cache : (oid, Value.t) Hashtbl.t = Hashtbl.create 64
+@@ -475,7 +475,7 @@
+ and eval_ev env (ev : Tree.evidence) =
+   match ev with
+   | Tree.EvParam k -> (
+-      match SMap.find_opt (dkey_name k) env.locals with Some d -> d | None -> bug ("辞書パラメータが束縛されていません: " ^ dkey_name k))
++      match DMap.find_opt k env.dicts with Some d -> d | None -> bug ("辞書パラメータが束縛されていません: " ^ dkey_name k))
+   | Tree.EvInst (c, n, subs) -> VDict (DInst (c, n, List.map (eval_ev env) subs, ref []))
+   | Tree.EvRecord fs -> VDict (DRecord (List.map (fun (l, e) -> (l, eval_ev env e)) fs))
+   | Tree.EvVariant fs -> VDict (DVariant (List.map (fun (l, e) -> (l, eval_ev env e)) fs))
+@@ -1445,7 +1445,7 @@
+   let globals = Hashtbl.create 512 in
+   register_builtin_values globals;
+   register_class_methods globals;
+-  { globals; locals = SMap.empty; resume = None }
++  { globals; locals = SMap.empty; dicts = DMap.empty; resume = None }
+ 
+ (* 単位 1 個の宣言を、前の単位までの大域の環境の上で実行する。
+    値の参照は型検査が木に書いた実体で引くので、単位をまたいでも名前は衝突しない *)
+@@ -1504,9 +1504,8 @@
+    辞書パラメータを含まない証拠の辞書は穴ごとに 1 回だけ作り、
+    辞書を受け取る値は直前に受け取った辞書の列と結果を覚えるので、
+    同じ呼び出し地点を繰り返しても辞書を作り直さない。
+-   制約付きの多相関数の再帰は、再帰のたびに辞書を局所環境から引いて渡すので、
+-   単相の関数より遅い。
+-   辞書パラメータを名前の文字列で引くことがその費用の中心である。
++   制約付きの多相関数の再帰は、再帰のたびに辞書パラメータを `dicts` から引いて渡し、
++   演算子の辞書からメソッドを選ぶので、その分だけ単相の関数より遅い。
+ 
+    最後に、本章で外すと気づかれずに壊れるものを並べる。
+ 
+diff a/lib/value.ml b/lib/value.ml
+--- a/lib/value.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/value.ml	2026-10-17 04:27:24.938986898 +0900
+@@ -33,6 +33,15 @@
+ module T = Tree.Tree
+ module SMap = Map.Make (String)
+ 
++(* 辞書パラメータの鍵(型変数の vid, クラスの oid)の Map *)
++module DMap = Map.Make (struct
++  type t = int * int
++
++  let compare ((v1, c1) : t) ((v2, c2) : t) =
++    let r = Int.compare v1 v2 in
++    if r <> 0 then r else Int.compare c1 c2
++end)
++
+ (* ## 12.1 値の一覧
+ 
+    | コンストラクタ | 表すもの |
+@@ -160,11 +169,17 @@
+ 
+    その代わり、局所束縛を 1 つ追加するたびに、Map への挿入に対数時間がかかる。
+    この 2 層の構成は、環境をハッシュ表 1 つにして push と pop で管理する実装と比べると、
+-   深い再帰ではわずかに遅いが、クロージャによる環境の捕獲を O(1) で正しく行える。 *)
++   深い再帰ではわずかに遅いが、クロージャによる環境の捕獲を O(1) で正しく行える。
++
++   型クラスの辞書パラメータは局所の層に属し、`locals` と別の不変の Map `dicts` に、
++   鍵 (型変数の vid, クラスの oid) で置く(第14章 §14.1)。
++   利用者の名前と鍵の空間が分かれるので衝突せず、整数の組で比べるので引くのが安い。
++   `locals` と同じく不変なので、クロージャは `c_env` に持つだけで辞書も捕まえる。 *)
+ 
+ and env = {
+   globals : (Tree.gref, t) Hashtbl.t;
+   locals : t SMap.t;
++  dicts : t DMap.t;
+   resume : resume option;
+ }
+ 
+@@ -183,7 +198,7 @@
+    `resume` をレコードや配列に入れたり、関数から返したりできてしまう。
+    `t` にそのコンストラクタが無いので、継続を値としてどこかへ運ぶことはできない。
+ 
+-   その代わり、継続は環境の 3 つ目のフィールド `resume` に入れて運ぶ。
++   その代わり、継続は環境のフィールド `resume` に入れて運ぶ。
+    このフィールドは、操作節の本体を評価するあいだだけ `Some` になる。
+    第14章はハンドラの `effc` で `{ env with locals; resume = Some r }` を作り、
+    `return` 節、`cancel` 節、ガード式では `resume = None` にする。
+diff a/test/dictionary_passing.t b/test/dictionary_passing.t
+--- a/test/dictionary_passing.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/dictionary_passing.t	2026-10-17 04:27:24.939636210 +0900
+@@ -419,3 +419,15 @@
+   $ diktor negremf.kel
+   ! negremf.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
+   [1]
++
++mkshow が返すラムダは、mkshow の外で呼んでも、作った位置の型の show を使う。
++f は Int32 の show、g は Bool の show を使い、f を後でもう一度呼んでも変わらない:
++
++  $ cat > capdict.kel <<'KEL'
++  > let mkshow[A: Show](x: A): () => String = fn() => show(x) + "!"
++  > let f = mkshow(1)
++  > let g = mkshow(true)
++  > echoln(f() + g() + f())
++  > KEL
++  $ diktor capdict.kel
++  1!true!1!

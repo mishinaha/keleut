@@ -1,0 +1,28 @@
+File "test/run_exit.t", line 1, characters 0-0:
+diff --git a/_build/default/test/run_exit.t b/_build/default/test/run_exit.t.corrected
+index 3ddaf16..4f68916 100644
+--- a/_build/default/test/run_exit.t
++++ b/_build/default/test/run_exit.t.corrected
+@@ -60,7 +60,7 @@ import の誤りも 1:
+   $ diktor exitutf8.kel 2> /dev/null; echo "exit: $?"
+   exit: 2
+   $ diktor exitutf8.kel > /dev/null; echo "exit: $?"
+-  exitutf8.kel: 字句エラー: 不正な UTF-8 バイト列です
++  exitutf8.kel:2:10: 字句エラー: 不正な UTF-8 バイト列です
+   exit: 2
+ 
+ 実行時エラーは 3。止まるまでに標準出力へ書いた内容は残り、診断は標準エラーに出る:
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index 2ecf87b..22d8d97 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -342,7 +342,7 @@ let rec の非関数右辺を型検査で拒否:
+ 
+   $ printf 'let x = 1\n// \xff\xfe\n' > badutf8.kel
+   $ diktor badutf8.kel
+-  badutf8.kel: 字句エラー: 不正な UTF-8 バイト列です
++  badutf8.kel:2:4: 字句エラー: 不正な UTF-8 バイト列です
+   [2]
+ 
+   $ printf 'echoln(show(1i999999999999999999999))\n' > hugesuf.kel

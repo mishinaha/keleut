@@ -1,0 +1,2 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+type class C[F] { val m: (Callback[F[Int32]]) => Int32 }

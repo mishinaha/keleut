@@ -1,0 +1,1 @@
+let f[A: Ord](xs: List[A]): String = show(xs)

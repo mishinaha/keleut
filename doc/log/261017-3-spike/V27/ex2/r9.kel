@@ -1,0 +1,5 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[F, E] = Callback[F[E]]
+let f[F, E](c: Cb[F, E]): Int32 = 3
+let main(): Unit @ Console = with_stdout(fn() => println(show(f(Callback(fn() => {})))))
+main()

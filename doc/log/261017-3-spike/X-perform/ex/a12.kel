@@ -1,0 +1,3 @@
+type Unit = {}
+effect P = { put: ((Int32) => Unit) => Unit }
+let bad(): Unit @ P = perform put(fn(x: String) => {})

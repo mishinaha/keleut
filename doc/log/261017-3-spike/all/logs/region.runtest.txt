@@ -1,0 +1,14 @@
+File "test/region.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/region.t b/dev/shm/claude-0c9c47ee-all-build/default/test/region.t.corrected
+index ea867d1..a080270 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/region.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/region.t.corrected
+@@ -187,7 +187,7 @@ unbox では h、現れない size では A と出る:
+   two : (Ref[h, A], MutableArray[h1, Int32]) => A @ {Heap[h], Heap[h1]}
+   both : (h, Ref[h, Int32]) => Int32
+   id : (A) => A
+-  w : (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1}
++  w : (_A) => Ref[_h, _A] @ {Heap[_h]}
+   unbox : (Box[h]) => Ref[h, Int32]
+   size : (Box[A]) => Int32
+   $ printf 'let main(): Int32 = run h { let r = Ref.new(1); r }\n' > regionshow2.kel

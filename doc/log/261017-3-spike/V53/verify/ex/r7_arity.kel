@@ -1,0 +1,5 @@
+effect P = { pair: (Int32, Int32) => Int32 }
+let r = perform pair(1, 2) handle {
+  case pair(1) if true => resume(1)
+  case return(x) => x
+}

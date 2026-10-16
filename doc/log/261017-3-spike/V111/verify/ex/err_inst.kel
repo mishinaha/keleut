@@ -1,0 +1,11 @@
+type class C[A] { val cm: (A) => Int32 @ {}; val aux: (A) => Int32 @ {} }
+type instance C[Int32] {
+  let rec cm(x: Int32): Int32 = aux(x)
+  and aux(y) = { let k = y; 0i32 }
+}
+type class D[A] { val dm: (A) => Int32 @ {}; val dx: (A) => Int32 @ {} }
+type instance D[String] {
+  let rec dm(x: String): Int32 = 0i32
+  and dx(y: String): Int32 = { let rec u[A](a: A): Int32 = w(a) and w[B](b: B): Int32 = 0i32; 0i32 }
+}
+echoln(show(cm(5i32)))

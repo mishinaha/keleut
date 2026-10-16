@@ -1,0 +1,136 @@
+== a1.kel diktor-head
+f : () => Int32 @ {Heap[Int32]}
+! a1.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== a1.kel main.exe
+f : () => Int32 @ {Heap[Int32]}
+! a1.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== a2.kel diktor-head
+! a2.kel:3:19: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[1]
+== a2.kel main.exe
+! a2.kel:3:19: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[1]
+== a3.kel diktor-head
+f : () => Int32 @ {Heap[A]}
+g : () => Int32
+[0]
+== a3.kel main.exe
+f : () => Int32 @ {Heap[A]}
+g : () => Int32
+[0]
+== a4.kel diktor-head
+f : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+g : () => Int32
+[0]
+== a4.kel main.exe
+f : (Ref[A, Int32]) => Int32 @ {Heap[A]}
+g : () => Int32
+[0]
+== a5.kel diktor-head
+f : () => Int32 @ {Heap[String]}
+! a5.kel:2:34: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: String と ς1)
+[1]
+== a5.kel main.exe
+f : () => Int32 @ {Heap[String]}
+! a5.kel:2:34: 型エラー: Heap の引数 String はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== a6.kel diktor-head
+! a6.kel:1:28: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== a6.kel main.exe
+! a6.kel:1:28: 型エラー: 注釈された型を満たしません(Ref の第 1 引数 Int32 はリージョンではありません。Ref の第 1 引数には run のリージョン変数か型パラメータを書きます)
+[1]
+== a7.kel diktor-head
+g : (A) => Int32
+f : (A) => Int32 @ {Heap[A]}
+! a7.kel:3:35: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[1]
+== a7.kel main.exe
+g : (A) => Int32
+f : (A) => Int32 @ {Heap[A]}
+! a7.kel:3:35: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[1]
+== a8.kel diktor-head
+f : () => Int32 @ {Heap[Int32]}
+! a8.kel:2:26: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== a8.kel main.exe
+f : () => Int32 @ {Heap[Int32]}
+! a8.kel:2:26: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== b1.kel diktor-head
+! b1.kel:1:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== b1.kel main.exe
+! b1.kel:1:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== b2.kel diktor-head
+! b2.kel:1:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: ς1 と Int32)
+[1]
+== b2.kel main.exe
+! b2.kel:1:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: ς1 と Int32)
+[1]
+== b3.kel diktor-head
+! b3.kel:1:18: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[1]
+== b3.kel main.exe
+! b3.kel:1:18: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[1]
+== c1.kel diktor-head
+! c1.kel:1:53: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+[1]
+== c1.kel main.exe
+! c1.kel:1:53: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+[1]
+== c2.kel diktor-head
+f : () => Int32 @ {Heap[Int32]}
+! c2.kel:2:33: 型エラー: 別の run スコープのヒープを使おうとしています(型が一致しません: Int32 と String)
+[1]
+== c2.kel main.exe
+f : () => Int32 @ {Heap[Int32]}
+! c2.kel:2:33: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== c3.kel diktor-head
+f : () => Int32 @ {Heap[Int32]}
+g : () => Int32
+[0]
+== c3.kel main.exe
+f : () => Int32 @ {Heap[Int32]}
+g : () => Int32
+[0]
+== c4.kel diktor-head
+c4.kel:1:29: パースエラー(付近のトークンを確認してください)
+[2]
+== c4.kel main.exe
+c4.kel:1:29: パースエラー(付近のトークンを確認してください)
+[2]
+== d1.kel diktor-head
+! d1.kel:1:28: 型エラー: 注釈された型を満たしません(スコープ付きの型が一致しません: String と ς1)
+[1]
+== d1.kel main.exe
+! d1.kel:1:28: 型エラー: 注釈された型を満たしません(MutableArray の第 1 引数 String はリージョンではありません。MutableArray の第 1 引数には run のリージョン変数か型パラメータを書きます)
+[1]
+== d2.kel diktor-head
+f : () => Int32 @ {Heap[Int32]}
+! d2.kel:2:36: 型エラー: 別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: Int32 と ς1)
+[1]
+== d2.kel main.exe
+f : () => Int32 @ {Heap[Int32]}
+! d2.kel:2:36: 型エラー: Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます
+[1]
+== d3.kel diktor-head
+! d3.kel:1:28: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[1]
+== d3.kel main.exe
+! d3.kel:1:28: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[1]
+== d4.kel diktor-head
+f : () => Int32 @ {Heap[Int32]}
+! d4.kel:2:30: 型エラー: 注釈された型を満たしません(別の run スコープのヒープを使おうとしています(スコープ付きの型が一致しません: ς1 と Int32))
+[1]
+== d4.kel main.exe
+f : () => Int32 @ {Heap[Int32]}
+! d4.kel:2:30: 型エラー: 注釈された型を満たしません(Heap の引数 Int32 はリージョンではありません。Heap の引数には run のリージョン変数か型パラメータを書きます)
+[1]

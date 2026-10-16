@@ -1,0 +1,10 @@
+let pr[A: Show](x: A) = show(x)
+let both[A: Show, B: Show](a: A, b: B): (Int32) => String = {
+  let inner[C: Show](c: C): String = show(a) + show(c) + show(b)
+  fn(n: Int32) => inner(n) + inner(true)
+}
+let h = both("x", 1.5)
+let hs = Cons(h, Cons(both(1, 2), Nil))
+let rec go(xs: List[(Int32) => String], k: Int32): String = xs match { case Nil => "" case Cons(f, t) => f(k) + "/" + go(t, k + 1) }
+echoln(go(hs, 5))
+echoln(pr(Cons(1, Nil)))

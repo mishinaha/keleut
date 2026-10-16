@@ -1,0 +1,304 @@
+diff -ruN -x _build ../cmpw/diktor-v124/lib/elab.ml diktor/lib/elab.ml
+--- ../cmpw/diktor-v124/lib/elab.ml	2026-10-17 04:31:06.771160197 +0900
++++ b/lib/elab.ml	2026-10-17 04:30:45.621939020 +0900
+@@ -507,9 +507,17 @@
+ (* newtype とエイリアスの本体の投機(§11.31、§11.39)の最中だけ真。
+    型引数の読み分け(elab_con_args と expand_alias)がこれを見て、
+    型としても行としても読める字面をパラメータとの照合に使わない。
+-   エフェクト行の精緻化(elab_eff)は、effect の宣言で名前だけが登録済みのラベルを読む *)
++   ラベルの判定(is_effect_name)は、effect の宣言で名前だけが登録済みのラベルを数える *)
+ let speculating = ref false
+ 
++(* 名前 e がエフェクトラベルとして引けるかを判定する。
++   effect の操作の登録は 1b なので、1b より前の投機の時点では、
++   利用者が宣言した effect はまだ宣言表に無い。
++   そこで投機の間だけ、1a が型の名前空間に effect として主張した名前も数える。
++   投機は読んだ型を捨て、カインドの張りだけを残すので、操作の型が要らない *)
++let is_effect_name e =
++  Hashtbl.mem Decls.effects e || (!speculating && Hashtbl.find_opt Decls.type_namespace e = Some "effect")
++
+ let rec elab_type env level ~expanding ?(outer = false) (((_, te) as t) : T.type_exp) : ty =
+   (* 内部の再帰にも at_node を掛ける。入口だけを包むと、入れ子の注釈のどこで落ちても、
+      注釈全体の先頭が診断の位置になってしまう *)
+@@ -916,7 +924,7 @@
+   let found =
+     match find_row_alias n with
+     | Some _ as r -> r
+-    | None when Hashtbl.mem Decls.effects (Decls.resolve_unit c) -> None
++    | None when is_effect_name (Decls.resolve_unit c) -> None
+     | None ->
+         List.find_map
+           (fun oid -> Option.map (fun info -> (oid, info)) (Hashtbl.find_opt Decls.aliases oid))
+@@ -1194,7 +1202,7 @@
+       | None ->
+           (* @ Print = @ {Print} の略記 *)
+           let e = Decls.resolve_unit (intern n) in
+-          if Hashtbl.mem Decls.effects e then TRowExtend (e, t_unit, TRowEmpty) else type_error (unknown_effect n))
++          if is_effect_name e then TRowExtend (e, t_unit, TRowEmpty) else type_error (unknown_effect n))
+   | T.EApply ((_, T.EIdent (LongId [ n ])), args)
+     when (not (SMap.mem n env.types)) && Option.is_some (find_row_alias n) ->
+       (* EffectRow エイリアスの適用(@ W[E])。波括弧の中の要素と同じく find_row_alias で引き、
+@@ -1203,7 +1211,7 @@
+       let oid, info = Option.get (find_row_alias n) in
+       Decls.check_con_visible oid;
+       expand_alias env level ~expanding info args
+-  | T.EApply ((_, T.EIdent (LongId [ n ])), args) when Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) ->
++  | T.EApply ((_, T.EIdent (LongId [ n ])), args) when is_effect_name (Decls.resolve_unit (intern n)) ->
+       (* @ Heap[h] = @ {Heap[h]} の略記。sample.kel:469 の略記の規則は、
+          引数つきのラベルを除外していない *)
+       TRowExtend
+@@ -1243,7 +1251,7 @@
+                        引数つきのときに env.types を見ないのは、型パラメータへの適用が
+                        行の要素になれないからである *)
+                     type_error ("行変数 " ^ n ^ " は extends の位置にのみ書けます")
+-                  else if Hashtbl.mem Decls.effects (Decls.resolve_unit (intern n)) then
++                  else if is_effect_name (Decls.resolve_unit (intern n)) then
+                     TRowExtend
+                       ( Decls.resolve_unit (intern n),
+                         (match args with
+@@ -1251,14 +1259,6 @@
+                         | [ a ] -> elab_type env level ~expanding a
+                         | _ -> type_error "エフェクトラベルの引数は1個までです"),
+                         acc )
+-                  else if
+-                    (* 投機の間は、effect の宣言で名前だけが登録済みのラベルを、引数の無いラベルとして読む。
+-                       操作の登録は 1b なので、投機の時点では利用者が宣言した effect が表に無い。
+-                       ここで落とすと、同じ型の中でこのラベルより左にある型パラメータが、
+-                       カインドを決める手がかりにならない *)
+-                    !speculating && args = []
+-                    && Hashtbl.find_opt Decls.type_namespace (Decls.resolve_unit (intern n)) = Some "effect"
+-                  then TRowExtend (Decls.resolve_unit (intern n), t_unit, acc)
+                   else type_error (unknown_effect n))
+           | T.BField (l, _) -> type_error ("エフェクト行にフィールド " ^ l ^ " は書けません"))
+         elems tail
+@@ -3599,7 +3599,7 @@
+    1b に着いた時点で `B` のパラメータが行だと分かっているので、読み分けは `{…}` を行として読む。
+    `test/kinds.t` の fwdrow / fwdrow2 が両方の宣言順を確かめ、
+    fwdrow3 と fwdrowmod / fwdrowmod2 が連鎖と module の中の形を確かめる。
+-   投機は宣言順に 1 周するだけだが、連鎖にも届く。
++   連鎖の多くは、宣言順の 1 周で届く。
+    `same_kind` はカインドのセルどうしを張るので、連鎖の末端で行が決まれば、
+    手前まで一度に伝わるからである。
+ 
+@@ -3613,16 +3613,18 @@
+    `same_kind` が `X` を `Type` ではなく `Row` に張る。
+    そのあと `BLabel` の分岐が落ち、投機は診断を捨てるが、`X` に残った張りは正しい。
+ 
+-   投機には手当てが 3 つ要る。
++   投機には手当てが 4 つ要る。
+    どれも、投機が 1b より前に走ることに由来する。
+ 
+    1 つ目の手当てとして、effect の宣言で名前だけが登録済みのラベルを、投機の中では読む。
+    effect の操作の登録は 1b なので、投機の時点では、利用者が宣言した effect は表に無い。
+    名前は 1a が型の名前空間に登録している(`Decls.claim_type_name`)。
+-   そこで投機の間だけ、`elab_eff` はその名前を引数の無いラベルとして読む。
++   そこで投機の間だけ、§11.3 の `is_effect_name` はその名前もエフェクトラベルとして数える。
++   `elab_eff` の波括弧の中の要素、略記の `@ Log` と `@ Heap[h]`、`find_alias` の判定が、
++   どれもこの関数で引く。
+    読まずに落とすと、タプルやレコードの要素は右から読むので、
+    `MkB((() => Unit @ E, () => Unit @ {Log}))` は右端の `{Log}` で落ち、`E` に届かない
+-   (`test/kinds.t` の specinner / specunit2 / speclab)。
++   (`test/kinds.t` の specinner / specunit2 / speclab / specbare)。
+    effect でない名前と宣言の無い名前は、投機の外と同じく落ちる。
+ 
+    2 つ目の手当てとして、例外をフィールドごとに握り潰す。
+@@ -3647,6 +3649,19 @@
+    そこで `expand_alias` は、カインドのセルをパラメータと共有する新しい型変数を渡す
+    (`test/kinds.t` の aliasunit3)。
+ 
++   4 つ目の手当てとして、決まったパラメータのカインドの数が増えなくなるまで、投機を繰り返す。
++   1 周では届かない形があるからである。
++   `MkB((() => Unit @ E, C[{Log}]))` の `B` を `C` より前に置くと、
++   `B` を読む時点で `C` のパラメータのカインドが未確定なので、`{Log}` を型として読んで落ち、
++   `E` に届かない。
++   次の周では、`C` のパラメータが前の周で `Row` に決まっているので、`{Log}` を行として読める
++   (`test/kinds.t` の specfix)。
++   数えるのは newtype とエイリアスの両方のパラメータである。
++   エイリアスのカインドだけが増えた周の後にも、
++   そのエイリアスを読む newtype が前の周で落ちていることがある
++   (`test/kinds.t` の specalias)。
++   数はパラメータの総数を超えないので、繰り返しは止まる。
++
+    右辺を省いた `newtype T` は、コンストラクタが 0 個のデータ型として登録する。
+    値の無い型になるので、`match {}` は網羅的で、`case _` には一致する値が無い。
+ 
+@@ -3713,7 +3728,7 @@
+   in
+   (params, { env with types })
+ 
+-(* newtype の本体を 1b より前に一度だけ投機的に読み、パラメータのカインドだけを決める(§11.31)。
++(* newtype の本体を 1b より前に投機的に読み、パラメータのカインドだけを決める(§11.31)。
+    型エイリアスの投機(§11.39)と同じ道具を使い、コンストラクタの登録も pub の注釈検査も
+    generalize もせず、elab_type の副作用であるカインドの張りだけを残す。
+    診断は捨てる(握り潰す節として 4 つの例外だけを捕まえ、Panic は捕まえない)。
+@@ -4632,8 +4647,8 @@
+    プレリュードの型の頭が利用者の宣言で書き換わることはない。
+ 
+    **1a の後始末**：newtype とエイリアスの本体を投機する。
+-   1a が終わった直後に宣言列をもう一度なめ、newtype とエイリアスの本体を、
+-   宣言順に一度ずつ投機的に精緻化する。
++   1a が終わった直後に宣言列をなめ、newtype とエイリアスの本体を宣言順に投機的に精緻化する。
++   決まったパラメータのカインドの数が増えなくなるまで、これを繰り返す(§11.31)。
+    目的は、パラメータのカインドを宣言順に依存せずに決めることだけで、
+    `speculate_newtype` と `speculate_alias` は型を `elab_type` に渡すほかは何もしない。
+    1b の `register_newtype` と違って、コンストラクタを登録しない。
+@@ -4642,7 +4657,7 @@
+    走っている間だけ `speculating` を立てる。
+    §11.3 と §11.5 の読み分けがそれを見て、
+    型としても行としても読める字面(要素なしの波括弧)をパラメータとの照合に使わない(§11.31)。
+-   §11.6 の `elab_eff` もそれを見て、effect の宣言で名前だけが登録済みのラベルを読む。
++   §11.3 の `is_effect_name` もそれを見て、effect の宣言で名前だけが登録済みのラベルを数える。
+    操作の登録は 1b なので、ラベルを読めないと、
+    同じ型の中でラベルより左にあるパラメータへ投機が届かない。
+ 
+@@ -4818,14 +4833,41 @@
+       | T.DEffect e -> Decls.claim_type_name "effect" (intern e.T.ef_name)
+       | _ -> ())
+     decls;
+-  (* パス 1a の後始末: newtype の本体の投機。宣言順に依存せずにパラメータのカインドを
+-     決めるため、登録の前に本体を一度読んで捨てる *)
+-  List.iter
+-    (fun ((_, d) as node : T.decl) ->
+-      at_node node @@ fun () ->
+-      with_decl_module node @@ fun () ->
+-      match d with T.DNewtype n -> speculate_newtype env n | T.DType t -> speculate_alias env t | _ -> ())
+-    decls;
++  (* パス 1a の後始末: newtype とエイリアスの本体の投機。宣言順に依存せずにパラメータの
++     カインドを決めるため、登録の前に本体を読んで捨てる。1 周で決まったカインドが、前の
++     周で落ちた本体を読めるようにすることがあるので、決まったパラメータの数が増えなく
++     なるまで繰り返す。数はパラメータの総数を超えないので、繰り返しは止まる *)
++  let speculate_all () =
++    List.iter
++      (fun ((_, d) as node : T.decl) ->
++        at_node node @@ fun () ->
++        with_decl_module node @@ fun () ->
++        match d with T.DNewtype n -> speculate_newtype env n | T.DType t -> speculate_alias env t | _ -> ())
++      decls
++  in
++  let settled () =
++    let known k = match kind_repr k with KVar _ -> 0 | _ -> 1 in
++    let rec count k = match kind_repr k with KArrow (a, r) -> known a + count r | _ -> 0 in
++    List.fold_left
++      (fun acc ((_, d) as node : T.decl) ->
++        match d with
++        | T.DNewtype n ->
++            with_decl_module node @@ fun () ->
++            acc + count (Decls.con_kind (intern n.T.nt_name) (List.length n.T.nt_params))
++        | T.DType t -> (
++            with_decl_module node @@ fun () ->
++            match Hashtbl.find_opt Decls.aliases (intern t.T.ta_name) with
++            | Some info -> List.fold_left (fun acc k -> acc + known k) acc info.Decls.al_kinds
++            | None -> acc)
++        | _ -> acc)
++      0 decls
++  in
++  let rec speculate_until_stable prev =
++    speculate_all ();
++    let now = settled () in
++    if now > prev then speculate_until_stable now
++  in
++  speculate_until_stable (settled ());
+   (* パス 1b: newtype のコンストラクタ、effect、type class の登録(相互再帰と前方参照を許す) *)
+   let env =
+     List.fold_left
+diff -ruN -x _build ../cmpw/diktor-v124/test/kinds.t diktor/test/kinds.t
+--- ../cmpw/diktor-v124/test/kinds.t	2026-10-17 04:31:06.772136901 +0900
++++ b/test/kinds.t	2026-10-17 04:31:32.294107319 +0900
+@@ -161,7 +161,7 @@
+ 行カインドのパラメータへ具体的な行を前方参照つきで渡す形も、相手の本体の投機が
+ そのパラメータのカインドに届く限り宣言順に依存しない(D132。1b の前に newtype の
+ 本体を投機的に読んでカインドだけ決めるので、読み分けが {…} を行として読める。
+-かつては B4 を先に置かないと落ちた。届かない形は下の speclab):
++かつては B4 を先に置かないと落ちた):
+ 
+   $ cat > fwdrow.kel <<'EOF'
+   > type Unit = {}
+@@ -321,6 +321,88 @@
+   $ diktor --type-check --no-prelude speclab2.kel
+   f : (A18[R1]) => A18[R1]
+ 
++ラベルを略記(@ Log)で書いても、module の中に置いても同じである:
++
++  $ cat > specbare.kel <<'EOF'
++  > type Unit = {}
++  > effect Log = { log: (String) => Unit }
++  > newtype A = MkA(B[{}])
++  > newtype B[E] = MkB((() => Unit @ E, () => Unit @ Log))
++  > let f(x: A): A = x
++  > EOF
++  $ diktor --type-check --no-prelude specbare.kel
++  f : (A) => A
++  $ cat > specmod.kel <<'EOF'
++  > type Unit = {}
++  > effect Log = { log: (String) => Unit }
++  > module M {
++  >   pub newtype A = MkA(B[{}])
++  >   pub newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
++  > }
++  > let f(x: M.A): M.A = x
++  > EOF
++  $ diktor --type-check --no-prelude specmod.kel
++  f : (M.A) => M.A
++
++相手の本体が、さらに後ろの newtype にラベルつきの行を渡す形。1 周目の投機は
++C[{Log}] を読む時点で C のパラメータのカインドを知らずに落ちるが、決まった
++カインドが増えなくなるまで投機を繰り返すので、2 周目に読める:
++
++  $ cat > specfix.kel <<'EOF'
++  > type Unit = {}
++  > effect Log = { log: (String) => Unit }
++  > newtype A = MkA(B[{}])
++  > newtype B[E] = MkB((() => Unit @ E, C[{Log}]))
++  > newtype C[F] = MkC(() => Unit @ F)
++  > let f(x: A): A = x
++  > EOF
++  $ diktor --type-check --no-prelude specfix.kel
++  f : (A) => A
++
++同じ繰り返しは、型エイリアスのパラメータのカインドが決まったことも数える。
++ここでは Al1 のカインドが Al2 から決まった後の周で、B の E に届く:
++
++  $ cat > specalias.kel <<'EOF'
++  > type Unit = {}
++  > effect Log = { log: (String) => Unit }
++  > newtype A = MkA(B[{}])
++  > newtype B[E] = MkB((() => Unit @ E, Al1[{Log}]))
++  > type Al1[F] = Al2[F]
++  > type Al2[G] = () => Unit @ G
++  > let f(x: A): A = x
++  > EOF
++  $ diktor --type-check --no-prelude specalias.kel
++  f : (A) => A
++
++投機がラベルとして読むのは effect として宣言した名前だけで、綴りの誤りは
++従来どおり未知のエフェクトとして報告される:
++
++  $ cat > spectypo.kel <<'EOF'
++  > type Unit = {}
++  > effect Log = { log: (String) => Unit }
++  > newtype A = MkA(B[{}])
++  > newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Lgo}))
++  > EOF
++  $ diktor --type-check --no-prelude spectypo.kel
++  ! spectypo.kel:4:50: 型エラー: 未知のエフェクト: Lgo
++  [1]
++
++前方参照で {} を渡した値を作り、実行できる:
++
++  $ cat > specrun.kel <<'EOF'
++  > effect Log = { log: (String) => Unit }
++  > newtype A = MkA(B[{}])
++  > newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
++  > let main() = {
++  >   let a = MkA(MkB((fn() => {}, fn() => perform log("x"))))
++  >   a match { case MkA(MkB((g, _))) => g() }
++  >   echoln("ok")
++  > }
++  > main()
++  > EOF
++  $ diktor specrun.kel
++  ok
++
+ 型エイリアスの型引数も、パラメータのカインドが決まる前に読む位置がある。後ろで
+ 宣言するエイリアスに {} を渡しても、エイリアスを先に宣言した形と同じ型になる。
+ {} はエイリアスの本体が E を使う位置(ここでは @ の右)で空のエフェクト行と読む:

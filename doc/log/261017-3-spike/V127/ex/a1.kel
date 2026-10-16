@@ -1,0 +1,5 @@
+let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
+let b(): Int32 = {
+  with _ = one()
+  2
+}

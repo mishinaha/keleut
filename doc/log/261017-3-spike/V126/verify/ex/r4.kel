@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+effect Tell = { tell: (Int32) => Unit }
+type class Get[A] { val get: (A) => Int32 @ {Ask, Tell} }
+type instance Get[Int32] {
+  let get(n: Int32): Int32 @ {Ask, Tell} = { perform tell(n); n + perform ask() }
+}
+let r = { { get(1i32) } handle { case ask() => resume(10i32) case return(v) => v + 100i32 } } handle { case tell(x) => resume(()) case return(v) => v + 1000i32 }
+with_stdout(fn() => println(show(r)))

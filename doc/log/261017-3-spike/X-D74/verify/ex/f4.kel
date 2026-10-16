@@ -1,0 +1,2 @@
+let g[h](c: (Ref[h, Int32]) => Int32): Int32 = 0
+let f[A, B](x: Ref[A, Int32]): Ref[B, Int32] = x

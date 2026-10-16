@@ -1,0 +1,7 @@
+module M {
+  pub type W: EffectRow = {Print}
+  pub type WE[E]: EffectRow = {Print extends E}
+  pub let a(s: String): Unit @ W = perform print(s)
+  pub let c[E](s: String): Unit @ {WE[E]} = perform print(s)
+}
+with_stdout(fn() => { M.a("a\n"); M.c("c\n") })

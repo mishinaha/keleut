@@ -1,0 +1,6 @@
+effect Console = { write: (Int32) => {} }
+let r = { perform write(3); 4 } handle {
+  case write(n) => resume(())
+  case return(v) => v
+}
+r

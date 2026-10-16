@@ -1,0 +1,3 @@
+--dump-ast big.kel: HEAD 683.1 ms / 合成 849.0 ms (7 回の最小)
+--type-check big.kel: HEAD 820.9 ms / 合成 1030.3 ms (7 回の最小)
+tiny.kel の実行: HEAD 3.0 ms / 合成 2.9 ms (7 回の最小)

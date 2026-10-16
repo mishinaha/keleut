@@ -1,0 +1,6 @@
+type W: EffectRow = {Print}
+let outer[W](x: W): W = {
+  let inner(u: Unit): Unit @ {W} = println("local")
+  x
+}
+with_stdout(fn() => { outer(1); println("done") })

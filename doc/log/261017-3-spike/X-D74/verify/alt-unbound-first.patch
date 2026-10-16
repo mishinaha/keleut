@@ -1,0 +1,11 @@
+diff -ruN -x _build diktor/lib/unify.ml alt/lib/unify.ml
+--- diktor/lib/unify.ml	2026-10-17 04:17:47.916061574 +0900
++++ alt/lib/unify.ml	2026-10-17 04:22:12.825242220 +0900
+@@ -656,6 +656,7 @@
+   let shape =
+     match (repr r1, repr r2) with
+     | TVar { contents = Rigid _ }, TVar { contents = Rigid _ } -> `Rigids
++    | TVar { contents = Unbound _ }, _ | _, TVar { contents = Unbound _ } -> `Vars
+     | TVar _, TVar _ -> `Vars
+     | TVar _, t | t, _ -> `Non_region t
+   in

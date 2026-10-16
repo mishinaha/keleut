@@ -1,0 +1,4 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+type Cb[F, E] = Callback[F[E]]
+let main(): Unit @ Console = with_stdout(fn() => println("unused alias"))
+main()

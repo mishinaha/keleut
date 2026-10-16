@@ -1,0 +1,48 @@
+File "test/kinds.t", line 1, characters 0-0:
+diff --git a/_build/default/test/kinds.t b/_build/default/test/kinds.t.corrected
+index 57ceb8c..6e35e49 100644
+--- a/_build/default/test/kinds.t
++++ b/_build/default/test/kinds.t.corrected
+@@ -772,6 +772,8 @@ f に閉じた行の Callback を渡した使用点で「型が一致しませ
+   > let g(c: Callback[{}]): Int32 = f(c)
+   > EOF
+   $ diktor --type-check hktrow.kel
++  ! hktrow.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
++  [1]
+ 
+ newtype の本体と EffectRow エイリアスへの型引数も同じ:
+ 
+@@ -780,11 +782,15 @@ newtype の本体と EffectRow エイリアスへの型引数も同じ:
+   > newtype Holder[F, E] = Holder(Callback[F[E]])
+   > EOF
+   $ diktor --type-check hktrow2.kel
++  ! hktrow2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
++  [1]
+   $ cat > hktrow3.kel <<'EOF'
+   > type W[E]: EffectRow = {Print extends E}
+   > let f[F, E](x: Int32): Int32 @ W[F[E]] = x
+   > EOF
+   $ diktor --type-check hktrow3.kel
++  ! hktrow3.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
++  [1]
+ 
+ Callback を後ろで宣言すると、Holder の本体を読む時点では Callback の
+ パラメータのカインドが未確定なので、その場では落とせない。カインドが
+@@ -796,6 +802,8 @@ Callback を後ろで宣言すると、Holder の本体を読む時点では Cal
+   > newtype Callback[E] = Callback(() => Unit @ E)
+   > EOF
+   $ diktor --type-check hktrow4.kel
++  ! hktrow4.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
++  [1]
+ 
+ 落とすのは型変数への適用だけである。エイリアスの展開結果が型パラメータ
+ そのものになる形は、行変数のカインドの推論として Row に決まって通る。
+@@ -810,6 +818,8 @@ Callback を後ろで宣言すると、Holder の本体を読む時点では Cal
+   > let g[F](x: T[F[String]], y: F[String, Int32]): Int32 = 0
+   > EOF
+   $ diktor --type-check hktrowok.kel
++  f : (N[{Print}]) => Int32
++  g : (T[F[String]], F[String, Int32]) => Int32
+ 
+ EffectRow エイリアスの適用はこの枝を通って正しく行になる(枝ごと落とさずに
+ 照合だけを足した理由。module 修飾でもパラメータつきでも同じ):

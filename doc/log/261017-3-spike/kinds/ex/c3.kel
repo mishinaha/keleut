@@ -1,0 +1,2 @@
+type Cb[F, E] = Callback[F[E]]
+newtype Callback[E] = Callback(() => Unit @ E)

@@ -1,0 +1,3 @@
+from "./big" import { x }
+echoln("before")
+echoln(show(x))

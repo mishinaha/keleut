@@ -1,0 +1,73 @@
+## lib/aux.ml
+[lib/aux.ml] code: 一致(78 トークン) / marker: 0 件
+[exit 0]
+## lib/decls.ml
+[lib/decls.ml] code: 不一致(先頭から 1435 トークン目) / marker: 0 件
+  旧: (oid, oid list) Hashtbl.t = Hashtbl.create 64 let add_effect info = if Hashtbl.mem reserved_type_names info.ef_name &&
+  新: (oid, oid list) Hashtbl.t = Hashtbl.create 64 let declare_effect name = if Hashtbl.mem reserved_type_names name &&
+[exit 1]
+## lib/driver.ml
+[lib/driver.ml] code: 不一致(先頭から 477 トークン目) / marker: 0 件
+  旧: Location.show_pos let dump_tokens_file file = let tokens = try with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file))
+  新: Location.show_pos let dump_tokens_file file = let tokens = with_input (fun () -> Lexer'.all_tokens (Lexer'.from_filename file)) in
+[exit 1]
+## lib/dune
+[lib/dune] code: 不一致(先頭から 32 トークン目) / marker: 0 件
+  旧: prelude_embed driver) (preprocess (pps sedlex.ppx))) (menhir (flags --explain --strict) (modules parser)) ; プレリュードを文字列として埋め込む(--prelude PATH で差し替えられる) (rule
+  新: prelude_embed driver) (preprocess (pps sedlex.ppx))) (menhir (flags --explain --strict --table) (modules parser)) ; プレリュードを文字列として埋め込む(--prelude PATH で差し替えられる)
+[exit 1]
+## lib/elab.ml
+[lib/elab.ml] code: 不一致(先頭から 16 トークン目) / marker: 0 件
+  旧: = Tree.Tree module SMap = Map.Make (String) type env = { values : ty SMap.t; types
+  新: = Tree.Tree module SMap = Map.Make (String) type no_resume = No_never_clause of oid | No_guard |
+[exit 1]
+## lib/exhaust.ml
+[lib/exhaust.ml] code: 不一致(先頭から 1766 トークン目) / marker: 0 件
+  旧: rows; qe_ty = ty } :: !pending let check_entry { qe_rows; qe_ty } = let out
+  新: rows; qe_ty = ty } :: !pending let empty_open_scrutinee { qe_rows; qe_ty } = if qe_rows
+[exit 1]
+## lib/interp.ml
+[lib/interp.ml] code: 不一致(先頭から 52 トークン目) / marker: 0 件
+  旧: bind_dicts env ks ds = { env with locals = List.fold_left2 (fun l k d ->
+  新: bind_dicts env ks ds = { env with dicts = List.fold_left2 (fun m k d ->
+[exit 1]
+## lib/lexer.ml
+[lib/lexer.ml] code: 不一致(先頭から 9 トークン目) / marker: 0 件
+  旧: Syntax exception Lex_error of string * Lexing.position let parse_number text = let len = String.length text
+  新: Syntax exception Lex_error of string * Lexing.position let unterminated_text_msg = "文字列リテラルが閉じていません" let unterminated_comment_msg = "ブロックコメントが閉じていません" let
+[exit 1]
+## lib/parser.mly
+[lib/parser.mly] code: 不一致(先頭から 31 トークン目) / marker: 0 件
+  旧: = sp; Location.finish = ep }, x) let is_upper s = s <> "" && s.[0]
+  新: = sp; Location.finish = ep }, x) let start_of (d, _) = (Data.loc d).Location.start let syntax_error_at
+[exit 1]
+## lib/prelude.kel
+[lib/prelude.kel] code: 不一致(先頭から 471 トークン目) / marker: 0 件
+  旧: Show[List[_]] { let show(xs) = { let rec go(ys) = ys match { case Nil =>
+  新: Show[List[_]] { let show(xs) = { let rec strs(ys, acc) = ys match { case Cons(a,
+[exit 1]
+## lib/show.ml
+[lib/show.ml] code: 不一致(先頭から 67 トークン目) / marker: 0 件
+  旧: Hashtbl.replace seen d (n :: prev) in let rec collect t = match repr t with
+  新: Hashtbl.replace seen d (n :: prev) in let regions : (oid, unit) Hashtbl.t = Hashtbl.create 8
+[exit 1]
+## lib/syntax.ml
+[lib/syntax.ml] code: 不一致(先頭から 9 トークン目) / marker: 0 件
+  旧: Aux type long_id = LongId of string list exception Syntax_error of string type import_name = {
+  新: Aux type long_id = LongId of string list type import_name = { in_path : string list;
+[exit 1]
+## lib/tree.ml
+[lib/tree.ml] code: 不一致(先頭から 199 トークン目) / marker: 0 件
+  旧: None; resolved = None; dict = DNone } end module Tree = Syntax.Make (ElabData) let data
+  新: None; resolved = None; dict = DNone } let loc d = d.loc end module Tree
+[exit 1]
+## lib/unify.ml
+[lib/unify.ml] code: 不一致(先頭から 184 トークン目) / marker: 0 件
+  旧: show2 a b = !show2_ref a b let rec occurs_adjust tv lvl t = match repr
+  新: show2 a b = !show2_ref a b let show_pair_ref : (ty -> ty -> string *
+[exit 1]
+## lib/value.ml
+[lib/value.ml] code: 不一致(先頭から 13 トークン目) / marker: 0 件
+  旧: T = Tree.Tree module SMap = Map.Make (String) type t = | VBool of bool |
+  新: T = Tree.Tree module SMap = Map.Make (String) module DMap = Map.Make (struct type t =
+[exit 1]

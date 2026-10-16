@@ -1,0 +1,4 @@
+let ident[T](x: T): T = x
+let g = ident(fn(y) => y % y)
+let a = 0
+let k = g(1.5)

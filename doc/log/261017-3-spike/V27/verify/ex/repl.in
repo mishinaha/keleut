@@ -1,0 +1,3 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F, E](c: Callback[F[E]]): Int32 = 42
+f(Callback(fn() => {}))

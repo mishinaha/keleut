@@ -1,0 +1,6 @@
+newtype Box[A] = Box(A)
+type instance[A: Show] Show[Box[_]] { let show(b) = b match { case Box(x) => "Box(" + show(x) + ")" } }
+newtype Pair[A, B] = Pair(A, B)
+type instance[A: Show, B: Show] Show[Pair[_, _]] { let show(p) = p match { case Pair(x, y) => "(" + show(y) + "," + show(x) + ")" } }
+echo(show(Box(3i32)))
+echo(show(Pair(Box(1i32), "z")))

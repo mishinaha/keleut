@@ -1,0 +1,6 @@
+=== --repl < repl.in
+(A) => B
+(String) => A @ {Fail extends R1}
+=== --repl < repl.in
+(Never) => A
+(String) => A @ {Fail extends R1}

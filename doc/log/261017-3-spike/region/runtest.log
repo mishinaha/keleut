@@ -1,0 +1,56 @@
+分野 region の合成後の dune runtest の分類(HEAD の期待値との比較)
+
+最終の合成(region.patch を当てた写し)で dune runtest の差分は 0 行(promote 済み)。
+各段の実測: V122 だけ 0 行、V122+X-D74 0 行、+X-regionshow で region.t の 4 コマンドが落ち(下の C)、promote 後 0 行、定数の共有の手直し後も 0 行。
+
+A. 新しく落ちるブロック(期待値の更新で説明できないもの): 無い。
+
+B. 期待値が変わる HEAD の既存ブロック(10 ファイル、19 ブロック)
+  V122(2 ブロック、kinds.t):
+    kinds.t refkind3(前書き 848-849 行も改める)、refkind5
+  X-D74(6 ブロック):
+    region.t bump、pardet、pubpure
+    trailing_block.t run2
+    typecheck_m6.t stbad3
+    verify_fixes.t nestrun
+  X-regionshow(11 ブロック、12 コマンド、14 行。名前だけの置き換え):
+    trailing_comma.t:30、region.t honest(:37)、maannot(:168、前書き :164 も改める)
+    nonfeatures.t case7c(:97、前書き 83〜84 行の文に 1 文添える。差分は 84〜87 行の折り返しの組み直し)
+    typecheck.t effshort(:286)、typecheck_m6.t st(:328)
+    visibility.t visrow7(:252)、visrow10 / visrow10b(前書き共有で 1 ブロック)、visbi4(:498)
+    kinds.t refkind(:845)、annot_rows.t recfwdheap(:1012)
+  ファイルの重なり: kinds.t(V122 と X-regionshow)、region.t(X-D74 と X-regionshow)、typecheck_m6.t(X-D74 と X-regionshow)。ブロックの重なりは無い。
+
+C. 分野の中で後の項目が期待値を変える、前の項目が足したブロック
+  X-D74 が足す refkind9(kinds.t): 期待値と前書きを X-D74 が改める(V122 の試作の期待値から)。
+  X-D74 が足す region.t の 2 ブロック(regesc/regheapesc の組、regoccurs/regescref の組)の 4 コマンド 4 行:
+    mk : (A) => Ref[A, Int32] → mk : (h) => Ref[h, Int32](regesc、regescref)
+    mk : (A) => () => Int32 @ {Heap[A]} → mk : (h) => () => Int32 @ {Heap[h]}(regheapesc)
+    g : (Ref[A, Int32], Ref[Ref[A, Int32], Int32]) => {} → g : (Ref[h, Int32], Ref[Ref[h, Int32], Int32]) => {}(regoccurs)
+  これは X-regionshow の final.md の数(8 ファイル 11 ブロック)に含まれていない。合成では X-regionshow の期待値の更新のコミットに入れる。
+  合計: X-regionshow が期待値を変えるのは 8 ファイル 13 ブロック、16 コマンド、18 行(ファイルは増えない。region.t の中のブロックが 2 つ増える)。
+
+D. 新しいブロック(9)
+  V122: kinds.t refkind6、refkind7、refkind8、refkind9(4)
+  X-D74: region.t regswap、regannot、regesc+regheapesc、regoccurs+regescref(前書き 4、プログラム 6、コマンド 12)
+  X-regionshow: region.t regionshow(プログラム 2、コマンド 4)
+
+E. 変わらないもの
+  annot_rows.t recrejtpflow(剛定数どうし、リージョンの位置でない)ほか、上に無いすべてのブロック。
+
+F. 各項目の主張との照合(ex/ を合成のビルドで --type-check で走らせ直した。rerun/)
+  V122: results.new.txt と、a2、c1 の文言(X-D74 が予告したとおり)と a3、a4、a7 の型の表示名(X-regionshow)のほかは一致。
+  X-D74: results.new.txt と、e6、u6、u7、u9 の型の表示名(X-regionshow)のほかは一致。u1、u5〜u8 の診断は HEAD と同じ。
+  X-regionshow: results.new.txt(r1〜r9)と results.extra.txt(r10〜r13)と一致。
+
+G. 分野の外との確認(参考)
+  合成に V111.patch を重ねると(v111try/)、当たる(unify.ml は offset 6)。
+  runtest は rec_tparam_note.t の region.kel が X-D74 の文言に変わり(「ほかのリージョンの MutableArray を使おうとしています(…)」)、annot_rows.t の recrejtpflow に V111 の注記が付く(V111 自身の変化)。
+  X-D74 の verify/ex/f1.kel は V111 の注記が付く(包んだ文言の後ろ)。f2.kel(Heap 版)には付かない。
+
+H. 段ごとの差分の再現(最終稿のために作り直した)
+  region-1-V122.patch(HEAD → V122)、region-2-X-D74.patch(→ V122+X-D74。X-D74-adjusted.patch と本体が同じ)、region-3-X-regionshow.patch(→ 合成の最終)。
+  見出しはどれも a/ b/ の形で、patch -p1 で当たる。region.patch の見出しも a/ b/ の形に改めた(本体は変えていない)。
+  HEAD の写しに 1、2、3 を順に当てた結果は、region.patch を当てた結果と一致した(diff -r で差分なし)。
+  各段で dune build が通り、dune runtest の差分は 0 行(3 段とも実測)。
+  V122 だけの段で X-D74 の ex/u9.kel は「別の run スコープのヒープを使おうとしています(スコープ付きの型 ς1 がスコープの外に漏れています)」、u7.kel は「スコープ付きの型 ς1 がスコープの外に漏れています」(実測。HEAD と同じ)。

@@ -1,0 +1,109 @@
+=== V57/ex/b0.kel
+! b0.kel:2:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b10.kel
+M.f : (Int32) => Int32 @ {Print extends R1}
+[exit 0]
+=== V57/ex/b11.kel
+M.f : (Int32) => Int32 @ {Print}
+[exit 0]
+=== V57/ex/b12.kel
+! b12.kel:1:33: 型エラー: 行変数 Print は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b13.kel
+! b13.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b14.kel
+! b14.kel:3:26: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b15.kel
+! b15.kel:3:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b16.kel
+! b16.kel:4:29: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V57/ex/b17.kel
+! b17.kel:3:31: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V57/ex/b18.kel
+! b18.kel:4:29: 型エラー: 型 W.W は module W の外からは参照できません(pub を付けてください)
+[exit 1]
+=== V57/ex/b1.kel
+! b1.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b2.kel
+! b2.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b3.kel
+! b3.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b4.kel
+! b4.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b5.kel
+! b5.kel:4:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b6.kel
+! b6.kel:2:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b7.kel
+! b7.kel:1:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b8.kel
+! b8.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/ex/b9.kel
+M.f : (Int32) => Int32
+[exit 0]
+=== V57/verify/ex/p9.kel
+__int32_add : (Int32, Int32) => Int32
+__int32_sub : (Int32, Int32) => Int32
+__int32_mul : (Int32, Int32) => Int32
+__int32_div : (Int32, Int32) => Int32
+[exit 0]
+=== V57/verify/ex/q1.kel
+! q1.kel:1:29: 型エラー: 未知のエフェクト: E
+[exit 1]
+=== V57/verify/ex/q2.kel
+f : (Int32) => Int32 @ {Print}
+g : (Int32) => Int32
+[exit 0]
+=== V57/verify/ex/r1.kel
+M.f : (Int32) => Int32 @ {Print, Console}
+_ : {}
+[exit 0]
+=== V57/verify/ex/r2.kel
+g : (() => Int32 @ {Ask extends R1}) => Int32
+v : Int32
+_ : {}
+[exit 0]
+=== V57/verify/ex/r3.kel
+f : (Int32) => Int32 @ {Print, Console}
+_ : {}
+[exit 0]
+=== V57/verify/ex/r4.kel
+f : (Int32) => Int32 @ {Console extends R1}
+g : (Int32) => Int32 @ {Print}
+y : Int32
+_ : {}
+[exit 0]
+=== V57/verify/ex/r5.kel
+M.go : (M.N[R1]) => {} @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V57/verify/ex/r6.kel
+tl : (Int32, () => {} @ {Tick extends R1}) => {} @ {Tick extends R1}
+c : Int32
+_ : {}
+[exit 0]
+=== V57/verify/ex/r7.kel
+M.f : (Int32) => Int32 @ {Print}
+g : (Int32) => Int32 @ {Print, Console}
+_ : {}
+[exit 0]
+=== V57/verify/ex/r9b.kel
+! r9b.kel:1:29: 型エラー: 行変数 E は extends の位置にのみ書けます
+[exit 1]
+=== V57/verify/ex/r9.kel
+! r9.kel:1:29: 型エラー: 未知のエフェクト: RR
+[exit 1]

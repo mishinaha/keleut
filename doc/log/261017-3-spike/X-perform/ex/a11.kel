@@ -1,0 +1,4 @@
+type Unit = {}
+effect P = { put: ({x: Int32}) => Unit }
+let take(r: {x: Int32}): Unit = {}
+let bad(): Unit = take({y = 1})

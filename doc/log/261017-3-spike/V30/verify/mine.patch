@@ -1,0 +1,411 @@
+diff a/lib/decls.ml b/lib/decls.ml
+--- a/lib/decls.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/decls.ml	2026-10-17 04:20:30.627730645 +0900
+@@ -695,26 +695,40 @@
+    非修飾の操作名 → その操作を持つエフェクトの、宣言順の列 *)
+ let op_index : (oid, oid list) Hashtbl.t = Hashtbl.create 64
+ 
+-let add_effect info =
++(* エフェクトの登録は 2 段に分かれる。
++   `declare_effect` は名前だけを表に置き、操作を持たない項目を作る。
++   `set_effect_ops` は操作のスキーマを書き込み、操作の索引に足す。
++   第11章のパス 1a が前者を、パス 1b が後者を呼ぶ。
++   型の本体に書いたエフェクトラベルは、表に名前があるかどうかだけを見るので、
++   1b の newtype のフィールドや effect の操作の型が、後ろで宣言されたエフェクトを参照できる。
++   名前の重複と予約の検査は、名前を置く `declare_effect` が行う。 *)
++let declare_effect name =
+   (* 組み込みスカラーの名前は effect でも奪えない(add_alias と同じ検査)。型名の
+      名前空間も newtype やエイリアスと共有する(effect List は List の再宣言になる。
+      §6.1 の後の type_namespace) *)
+-  if Hashtbl.mem reserved_type_names info.ef_name && not !in_prelude then
+-    type_error ("組み込み型 " ^ Type.display_of info.ef_name ^ " は effect で再宣言できません")
+-  else check_std_type_twin "effect" info.ef_name;
+-  claim_type_name "effect" info.ef_name;
+-  if Hashtbl.mem effects info.ef_name then
+-    if prelude_owned "effect" info.ef_name then
+-      type_error ("標準環境の effect " ^ Type.display_of info.ef_name ^ " は再宣言できません")
+-    else type_error ("effect " ^ Type.display_of info.ef_name ^ " が二重に宣言されています")
++  if Hashtbl.mem reserved_type_names name && not !in_prelude then
++    type_error ("組み込み型 " ^ Type.display_of name ^ " は effect で再宣言できません")
++  else check_std_type_twin "effect" name;
++  claim_type_name "effect" name;
++  if Hashtbl.mem effects name then
++    if prelude_owned "effect" name then
++      type_error ("標準環境の effect " ^ Type.display_of name ^ " は再宣言できません")
++    else type_error ("effect " ^ Type.display_of name ^ " が二重に宣言されています")
+   else (
+-    Hashtbl.add effects info.ef_name info;
+-    mark "effect" info.ef_name;
+-    List.iter
+-      (fun (op, _) ->
+-        let prev = Option.value ~default:[] (Hashtbl.find_opt op_index op) in
+-        Hashtbl.replace op_index op (prev @ [ info.ef_name ]))
+-      info.ef_ops)
++    Hashtbl.add effects name { ef_name = name; ef_ops = [] };
++    mark "effect" name)
++
++let set_effect_ops info =
++  Hashtbl.replace effects info.ef_name info;
++  List.iter
++    (fun (op, _) ->
++      let prev = Option.value ~default:[] (Hashtbl.find_opt op_index op) in
++      Hashtbl.replace op_index op (prev @ [ info.ef_name ]))
++    info.ef_ops
++
++let add_effect info =
++  declare_effect info.ef_name;
++  set_effect_ops info
+ 
+ let find_effect e = Hashtbl.find_opt effects e
+ 
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:20:30.628525582 +0900
+@@ -33,9 +33,9 @@
+ 
+    | パス | 登録するもの | 独立のパスにする理由 |
+    |---|---|---|
+-   | 1a | エイリアスの表、newtype の頭(名前とカインド) | 型の本体を書く前に、すべての型構成子のカインドを引けるようにする |
++   | 1a | エイリアスの表、newtype の頭(名前とカインド)、effect の名前 | 型の本体を書く前に、すべての型構成子のカインドとエフェクトの名前を引けるようにする |
+    | 1a′ | (登録しない)newtype の本体の投機 | パラメータのカインドを宣言順に依存せず決める |
+-   | 1b | newtype のコンストラクタ、effect の操作、class のメソッド | 型の本体を書くのでカインドの表が要る。投機が相手のパラメータのカインドを決められない形(§11.31)を除き、宣言順に依存しない |
++   | 1b | newtype のコンストラクタ、effect の操作、class のメソッド | 型の本体を書くのでカインドの表とエフェクトの名前が要る。投機が相手のパラメータのカインドを決められない形(§11.31)を除き、宣言順に依存しない |
+    | 1c | インスタンスの頭、前方参照できる let の署名 | 頭の検査にクラス表が要る。署名は前方参照に使う |
+    | 2 | let / let rec / 式 / extern / インスタンス本体 | 本体を宣言順に推論し、順に型を印字する |
+ 
+@@ -3587,54 +3587,34 @@
+    `same_kind` が `X` を `Type` ではなく `Row` に張る。
+    そのあと `BLabel` の分岐が落ち、投機は診断を捨てるが、`X` に残った張りは正しい。
+ 
+-   投機には手当てが 2 つ要る。
+-   どちらも、effect の操作の登録が 1b で行われることに由来する。
+-   投機の時点では、利用者が宣言したエフェクトラベルはすべて未知である。
+-   そのため、`() => Unit @ {Log}` のような普通のフィールドが、
+-   投機の中では「未知のエフェクト: Log」で落ちる。
++   投機の時点で、利用者が宣言したエフェクトの名前はすでに宣言表にある。
++   パス 1a が名前だけを置き、操作を 1b で書き込むからである(§11.32、§11.39)。
++   そのため、`() => Unit @ {Log}` のような普通のフィールドも、投機の中で読める。
+ 
+-   1 つ目の手当てとして、例外をフィールドごとに握り潰す。
++   投機には手当てが 2 つある。
++   1 つ目は、例外をフィールドごとに握り潰すことである。
+    本体全体を 1 つの `try` で包むと、
+-   たとえば newtype `B` のフィールドが 1 つ落ちただけで、`B` の残りのフィールドが読まれず、
+-   `B` のパラメータ `E` のカインドが `KVar` のまま 1b に入る。
+-   このとき、`B` より前に置いた宣言が `B[{}]` を渡すと、
+-   1b でその宣言を読む時点で `elab_con_args` の照合が `E` を `Type` に張り、
+-   `B` 自身が「行カインドではない型パラメータです: E」で落ちる。
++   あるフィールドの読みが落ちたとき、後続のフィールドが読まれず、
++   そのフィールドが決めるはずのカインドが `KVar` のまま 1b に入る。
+    フィールドごとに握り潰せば、手前のフィールドが落ちても、後続のフィールドがカインドを決める
+-   (`test/kinds.t` の specfield / specfield2)。
+-   前方参照の連鎖(specfwd)でも、後続のフィールドが連鎖でカインドを決める。
++   (`test/kinds.t` の specfield / specfield2 と、前方参照の連鎖の specfwd)。
+ 
+-   1 つ目の手当てでは救えない形もある。
+-   1 つのフィールドの中で先にラベルへ当たる形である。
+-   タプルやレコードの要素は右から読むので、
+-   `MkB((() => Unit @ E, () => Unit @ {Log}))` は右端の `{Log}` で落ち、`E` に届かない。
+-   `E` が `KVar` のまま残るので、別の宣言が `B[{}]` を渡すと、その宣言の投機が `{}` を型として読み、
+-   `elab_con_args` の照合が `E` を `Type` に張ってしまう。
+-   張るのが投機の中なので、`B` を先に宣言した形でも落ちる。
+-   そこで 2 つ目の手当てとして、投機の間だけ、
+-   要素なしの波括弧(`{}` と `{extends R}` の 2 つの形)を読まずに飛ばす。
++   2 つ目は、投機の間だけ、
++   要素なしの波括弧(`{}` と `{extends R}` の 2 つの形)を読まずに飛ばすことである。
+    飛ばすのは、カインドが未確定のパラメータへ渡したものに限る。
++   `newtype A[X] = MkA(B[{}], () => Unit @ X)` を `B` より前に置くと、
++   `A` の投機の時点では `B` のパラメータのカインドが `KVar` のままである。
++   ここで `{}` を型として読むと、`elab_con_args` の照合が `B` のパラメータを `Type` に張り、
++   `B` 自身が「行カインドではない型パラメータです: E」で落ちる。
+    飛ばす対象をこの 2 つの形に限るのは、型としても行としても読めるのがこれだけだからである。
+    ラベルが 1 つでもあれば型として読むほうが失敗するので、張りは残らない。
+    飛ばしても失うものは無い。
+    相手のカインドが決まった状態で、
+-   1b が同じ字面をもう一度読むからである(`test/kinds.t` の specinner / specinner2)。
++   1b が同じ字面をもう一度読むからである(`test/kinds.t` の specunit / specunit2)。
+ 
+-   `newtype A[X] = MkA(B[{}], () => Unit @ X)` を `B` より前に置く形も、
+-   この 2 つの手当てで通る(`test/kinds.t` の specunit)。
+-   要素なしの波括弧を前方参照で渡す形が通らないのは、
+-   相手の投機がそのパラメータのカインドを決められない場合だけである。
+-   飛ばすのは投機の間だけなので、相手のカインドが `KVar` のまま 1b に入ると、
+-   1b では `{}` を空レコードとして読むことに成功してしまい、
+-   `elab_con_args` の照合が相手のパラメータを `Type` に張る(`test/kinds.t` の specunit2)。
+-
+-   型引数にラベルを 1 つでも書けばどちらの順でも通る、というわけではない。
+-   投機が相手のパラメータに届かない形では、
+-   `B[{Log extends X}]` と書いても宣言順に依存する(`test/kinds.t` の speclab / speclab2)。
+-   ラベルの有無が決めるのは失敗した読みが張りを残すかどうかだけで、
+-   相手のカインドが決まるかどうかとは関係しない。
+-   これらの形も通すには、投機の中だけ `elab_con_args` の `same_kind` を止めて、
+-   投機を張らない読みにする必要がある。
++   1 つのフィールドの中で行変数とラベルが並ぶ形
++   (`MkB((() => Unit @ E, () => Unit @ {Log}))`)も、投機がフィールド全体を読むので、
++   どちらの宣言順でも `E` のカインドが決まる(`test/kinds.t` の specinner / specinner2 と speclab / speclab2)。
+ 
+    右辺を省いた `newtype T` は、コンストラクタが 0 個のデータ型として登録する。
+    値の無い型になるので、`match {}` は網羅的で、`case _` には一致する値が無い。
+@@ -3714,10 +3694,8 @@
+   match n.T.nt_rhs with
+   | T.NtCtors ctors ->
+       let _, env' = newtype_param_env env n in
+-      (* 例外はフィールドごとに握り潰す。effect の操作の登録は 1b なので、投機の時点では
+-         利用者が宣言したエフェクトラベルがすべて未知で、() => Unit @ {Log} のような
+-         普通のフィールドが落ちる。本体全体を 1 つの try で包むと、後続のフィールドの
+-         張りまで失う *)
++      (* 例外はフィールドごとに握り潰す。本体全体を 1 つの try で包むと、
++         1 つのフィールドが落ちたときに後続のフィールドの張りまで失う *)
+       let speculate (f : T.field_decl) =
+         try ignore (elab_type env' 1 f.T.fd_ty)
+         with Type_error _ | Type_error_at _ | NotImplemented _ | NotImplemented_at _ -> ()
+@@ -3782,6 +3760,14 @@
+    操作の型の頭の矢印で省略した `@` も `TRowEmpty` になる。
+    ただし、`perform` も `handle` も操作のスキーマの行を捨てるので、この行は観測されない。
+ 
++   登録は 2 段に分かれる。
++   パス 1a が `Decls.declare_effect` で名前だけを宣言表に置き、
++   `register_effect` は 1b で操作のスキーマを書き込む(`Decls.set_effect_ops`)。
++   型の本体に書いたエフェクトラベルは、宣言表に名前があるかどうかだけで読むので、
++   newtype のフィールド、effect の操作の型、クラスのメソッドの型は、
++   後ろで宣言する effect のラベルを書ける
++   (`test/effect_order.t`)。
++
+    同じエフェクトの中での操作名の重複は拒否する。
+    別のエフェクトとの重複は許す。
+    §11.20 の非修飾の操作名の解決は、
+@@ -3818,7 +3804,7 @@
+     | (op, _) :: rest -> if List.mem_assoc op rest then type_error ("操作 " ^ display_of op ^ " が二重に宣言されています") else dup rest
+   in
+   dup ops;
+-  Decls.add_effect { Decls.ef_name = intern e.T.ef_name; ef_ops = ops }
++  Decls.set_effect_ops { Decls.ef_name = intern e.T.ef_name; ef_ops = ops }
+ 
+ let binding_name (b : T.let_binding') = match snd b.T.lb_name with T.PVar x -> Some x | _ -> None
+ 
+@@ -4595,9 +4581,12 @@
+    `process_decls` が、章の冒頭の表を実装する。
+    ここでは、パスの順序の理由をコードに即して述べる。
+ 
+-   **1a**：エイリアスと newtype の頭を登録する。
++   **1a**：エイリアスと newtype の頭と、effect の名前を登録する。
+    型の本体を精緻化するには、その中に出てくるすべての型構成子のカインドが引けなければならない。
+    そこで、名前とカインドだけを先に登録する。
++   エフェクトラベルも同じで、型の本体に書いたラベルは、宣言表に名前があるかどうかだけで読む。
++   そこで effect は名前だけを先に置き、操作は 1b で書き込む。
++   名前の重複と標準環境の名前の再宣言は、名前を置くこの時点で拒否する。
+    プレリュードが持っている名前の newtype は、ここで標準環境の名前の再宣言として拒否する。
+    頭のカインドを登録する前に拒否するので、
+    プレリュードの型の頭が利用者の宣言で書き換わることはない。
+@@ -4621,8 +4610,7 @@
+    1b の読み分けが相手のパラメータのカインドを見るので、それより前に済ませる必要がある(§11.31)。
+    2 つ目は握り潰す単位で、newtype の投機はフィールドごとに握り潰す。
+    エイリアスは本体が 1 つなので差が出ないが、newtype で本体全体を 1 つの `try` に包むと、
+-   投機の時点では未知のエフェクトラベルを含むフィールドで例外が飛び、
+-   後続のフィールドの張りまで失う(§11.31)。
++   1 つのフィールドで例外が飛んだときに、後続のフィールドの張りまで失う(§11.31)。
+    投機と既定化は、newtype の投機(1a の後)、1b、エイリアスの投機(1b の後始末の 1 周目)、
+    既定化(2 周目)の順に並ぶ。
+ 
+@@ -4636,7 +4624,8 @@
+    **1b**：コンストラクタ、操作、メソッドを登録する。
+    型の本体を精緻化して宣言表に登録するのは、このパスである。
+    1a とその後始末が終わっているので、原則として宣言の順序に依存しない。
+-   newtype どうしが互いを参照しても、effect が後ろの newtype を使っても通る。
++   newtype どうしが互いを参照しても、effect が後ろの newtype を使っても、
++   newtype や effect が後ろの effect のラベルを書いても通る。
+    例外は、§11.31 で述べた、投機が相手のパラメータのカインドを決められない形へ、
+    波括弧で書いた行を前方参照で渡す場合である。
+    クラスのメソッドは、非修飾名(`map`)と修飾名(`Functor.map`)の両方で値環境に登録する。
+@@ -4768,8 +4757,8 @@
+             }
+       | T.DNewtype n ->
+           no_param_constraints ("newtype " ^ Type.display n.T.nt_name) n.T.nt_params;
+-          (* 型の名前空間の主張はここ(宣言順)で行う。add_data も add_effect も 1b なので、
+-             種別の交差の検出を各 add に任せると、1a の add_alias が常に先回りし、後に
++          (* 型の名前空間の主張はここ(宣言順)で行う。add_data は 1b なので、
++             種別の交差の検出を add_data に任せると、1a の add_alias が常に先回りし、後に
+              書かれたエイリアスが、先に書かれた newtype を再宣言として逆向きに咎める *)
+           Decls.claim_type_name "newtype" (intern n.T.nt_name);
+           register_companion n.T.nt_name;
+@@ -4782,7 +4771,10 @@
+             (List.fold_right
+                (fun (tp : type_param) acc -> KArrow ((if tp.tp_arity > 0 then k_arrow tp.tp_arity else new_kind_var ()), acc))
+                n.T.nt_params KStar)
+-      | T.DEffect e -> Decls.claim_type_name "effect" (intern e.T.ef_name)
++      | T.DEffect e ->
++          (* エフェクトの名前はここで表に置き、操作は 1b で書き込む。1b の newtype の
++             フィールドと effect の操作の型が、後ろで宣言されたエフェクトのラベルを読めるようにする *)
++          Decls.declare_effect (intern e.T.ef_name)
+       | _ -> ())
+     decls;
+   (* パス 1a の後始末: newtype の本体の投機。宣言順に依存せずにパラメータのカインドを
+diff a/test/effect_order.t b/test/effect_order.t
+--- a/test/effect_order.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/effect_order.t	2026-10-17 04:20:42.454385743 +0900
+@@ -0,0 +1,81 @@
++エフェクトの名前の前方参照(LangSpec §6.4)。
++型の本体(newtype のフィールド、effect の操作の型、型クラスのメソッドの型)は、
++後ろで宣言するエフェクトのラベルを書ける。
++エフェクトの名前は宣言表に先に置き、操作はそのあとで書き込むので、
++宣言の順序は受理を変えない。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++newtype のフィールドが後ろの effect を参照し、実行もできる(effnt):
++
++  $ cat > effnt.kel <<'EOF'
++  > newtype Cb = Cb((String) => Unit @ {Log})
++  > effect Log = { log: (String) => Unit }
++  > let call(c: Cb): Unit @ {Log} = c match { case Cb(g) => g("hi") }
++  > let n: Int32 = {
++  >   call(Cb(fn(s) => perform log(s))) handle { case log(s) => resume(()) }
++  >   42
++  > }
++  > echoln(show(n))
++  > EOF
++  $ diktor effnt.kel
++  42
++
++略記の @ Log、extends つきの行、和の後ろのコンストラクタのフィールドでも同じである(effntforms):
++
++  $ cat > effntforms.kel <<'EOF'
++  > newtype N1 = N1(() => Unit @ Log)
++  > newtype N2[E] = N2(() => Unit @ {Log extends E})
++  > newtype N3 = A3 | B3(() => Unit @ {Log})
++  > effect Log = { log: (String) => Unit }
++  > let f[E](x: N2[E]): N2[E] = x
++  > EOF
++  $ diktor --type-check effntforms.kel
++  f : (N2[R1]) => N2[R1]
++
++effect の操作の型と、型クラスのメソッドの型も、後ろの effect を参照できる(effop):
++
++  $ cat > effop.kel <<'EOF'
++  > effect A = { a: (() => Unit @ {B}) => Unit }
++  > type class C[T] { val m: (T) => Unit @ {B} }
++  > effect B = { b: () => Unit }
++  > let g(): Unit @ {A} = perform a(fn() => {})
++  > EOF
++  $ diktor --type-check effop.kel
++  g : () => {} @ {A}
++
++どこにも宣言していないラベルは、これまでどおり未知のエフェクトである(effunknown):
++
++  $ printf 'newtype N = N(() => Unit @ {Nope})\neffect Log = { log: (String) => Unit }\n' > effunknown.kel
++  $ diktor --type-check effunknown.kel
++  ! effunknown.kel:1:28: 型エラー: 未知のエフェクト: Nope
++  [1]
++
++名前の検査(重複、標準環境の名前)は名前を置く時点で行うので、本体の誤りより先に報告する。
++型パラメータを付けた effect は、参照する側ではなく effect の宣言のほうで落ちる(effname):
++
++  $ printf 'newtype N = N(() => Unit @ {Nope})\neffect Log = { log: (String) => Unit }\neffect Log = { log: (String) => Unit }\n' > effdup.kel
++  $ diktor --type-check effdup.kel
++  ! effdup.kel:3:1: 型エラー: effect Log が二重に宣言されています
++  [1]
++  $ printf 'newtype N = N(() => Unit @ {Nope})\neffect Console = { w: (String) => Unit }\n' > effstd.kel
++  $ diktor --type-check effstd.kel
++  ! effstd.kel:2:1: 型エラー: 標準環境の effect Console は再宣言できません
++  [1]
++  $ printf 'newtype N = N(() => Unit @ {Log})\neffect Log[A] = { log: (String) => Unit }\n' > effparams.kel
++  $ diktor --type-check effparams.kel
++  ! effparams.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
++  [1]
++
++対話的な実行では、前方参照は 1 つの入力の中に限る(LangSpec §6.6)。
++受理しなかった入力の effect の名前は後の入力から見えず、同じ effect を宣言し直せる(effrepl):
++
++  $ diktor --repl <<'EOF2'
++  > effect Log = { log: (String) => Unit }; newtype N = N(() => Unit @ {Nope})
++  > effect Log = { log: (String) => Unit }
++  > newtype P = P(() => Unit @ {Later})
++  > effect Later = { later: () => Unit }
++  > newtype P = P(() => Unit @ {Later}); newtype Q = Q(() => Unit @ {Later2}); effect Later2 = { l2: () => Unit }
++  > EOF2
++  ! <stdin>:1:68: 型エラー: 未知のエフェクト: Nope
++  ! <stdin>:3:28: 型エラー: 未知のエフェクト: Later
+diff a/test/kinds.t b/test/kinds.t
+--- a/test/kinds.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/kinds.t	2026-10-17 04:20:42.453632905 +0900
+@@ -219,11 +219,9 @@
+   $ diktor --type-check fwdrowmod2.kel
+   f : (M.A9[R1]) => M.A9[R1]
+ 
+-投機は effect の操作の登録(1b)より前に走るので、同じ宣言群のエフェクトラベルは
+-投機の時点ではすべて未知で、() => Unit @ {Log} のようなフィールドは投機の中で
+-落ちる。例外をフィールドごとに握り潰すので、手前のフィールドが落ちても後続の
+-フィールドがパラメータのカインドを決める(M29 の検証。コンストラクタが 2 つに
+-分かれていても同じ):
++effect の名前は投機より前(1a)に宣言表に置くので、() => Unit @ {Log} のような
++フィールドも投機の中で読め、後続のフィールドがパラメータのカインドを決める
++(コンストラクタが 2 つに分かれていても同じ):
+ 
+   $ cat > specfield.kel <<'EOF'
+   > type Unit = {}
+@@ -244,11 +242,8 @@
+   $ diktor --type-check --no-prelude specfield2.kel
+   f : (A11) => A11
+ 
+-1 つのフィールドの中で投機が先にラベルへ当たる形では、そのフィールドは丸ごと
+-落ちる(タプルやレコードの要素は右から読むので、右端の {Log} で落ちて左の E に
+-届かない)。それでも通るのは、投機の間だけ、カインドが未確定のパラメータへ渡した
+-要素なしの波括弧 — {} と {extends X} — を読まずに飛ばすからで、1b が相手の
+-カインドの決まった状態でもう一度読む:
++1 つのフィールドの中で行変数とラベルが並ぶ形も、投機がフィールド全体を読む
++(タプルやレコードの要素は右から読むが、右端の {Log} で落ちない):
+ 
+   $ cat > specinner.kel <<'EOF'
+   > type Unit = {}
+@@ -269,9 +264,9 @@
+   $ diktor --type-check --no-prelude specinner2.kel
+   f : (A13[R1]) => A13[R1]
+ 
+-前方参照でも同じで、相手の手前のフィールドが投機で落ちても、後続のフィールドから
+-連鎖でカインドが決まれば通る(B14 の第 1 フィールドは投機で落ちるが、第 2 の
+-C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそれを行にする):
++前方参照でも同じで、後続のフィールドから連鎖でカインドが決まれば通る(B14 の
++第 2 フィールドの C14[Y] が Y を C14 のパラメータのセルに張り、C14 の投機がそれを
++行にする):
+ 
+   $ cat > specfwd.kel <<'EOF'
+   > type Unit = {}
+@@ -284,10 +279,10 @@
+   $ diktor --type-check --no-prelude specfwd.kel
+   f : (A14[R1]) => A14[R1]
+ 
+-前方参照の型引数が {}(空の波括弧)の形も、飛ばす読みで通る(台帳 V22 の主たる
+-形)。残るのは、相手の投機がそのパラメータのカインドを決められず、かつ型引数が
+-要素なしの波括弧のときだけ — このとき {} は空レコードとして読めてしまい、
+-照合が相手のパラメータを Type に張る(台帳 V22 の残り):
++前方参照の型引数が {}(空の波括弧)の形も通る。投機の間だけ、カインドが未確定の
++パラメータへ渡した要素なしの波括弧 — {} と {extends X} — を読まずに飛ばし、1b が
++相手のカインドの決まった状態でもう一度読むからである。相手の本体がラベルを含む
++フィールドでパラメータを使う形(specunit2)も、相手の投機がカインドを決めるので通る:
+ 
+   $ cat > specunit.kel <<'EOF'
+   > type Unit = {}
+@@ -304,12 +299,8 @@
+   > newtype B16[E] = MkB16((() => Unit @ E, () => Unit @ {Log}))
+   > EOF
+   $ diktor --type-check --no-prelude specunit2.kel
+-  ! specunit2.kel:4:38: 型エラー: 行カインドではない型パラメータです: E
+-  [1]
+ 
+-投機がパラメータに届かない形では、型引数にラベルを書いても宣言順に依存する。
+-同じ 2 つの宣言を入れ替えれば通るので、効いているのは型引数の字面ではなく、
+-投機が相手のパラメータのカインドを決められたかどうかである:
++型引数にラベルを書く形も、宣言順によらず通る(speclab / speclab2):
+ 
+   $ cat > speclab.kel <<'EOF'
+   > type Unit = {}
+@@ -319,8 +310,7 @@
+   > let f[E](x: A17[E]): A17[E] = x
+   > EOF
+   $ diktor --type-check --no-prelude speclab.kel
+-  ! speclab.kel:3:28: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+-  [1]
++  f : (A17[R1]) => A17[R1]
+   $ cat > speclab2.kel <<'EOF'
+   > type Unit = {}
+   > effect Log = { log: (String) => Unit }

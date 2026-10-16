@@ -1,0 +1,4 @@
+let f[A](x: A): Int32 = run h { let r = Ref.new(x); 1 }
+let g[A](x: A): A = run h { let r = Ref.new(x); Ref.get(r) }
+let main(): Unit @ {Console} = echoln(show(f(1) + g(2)))
+main()

@@ -1,0 +1,2 @@
+let f[A](g: (Int32) => A): A = g(1)
+let a = f { x: Int32 }

@@ -1,0 +1,3 @@
+pub newtype Box = Box(Int32)
+pub type class Sizer[T] { val size: (T) => Int32 }
+type instance Sizer[Box] { let size(b: Box): Int32 @ {} = b match { case Box(x) => x * 2 } }

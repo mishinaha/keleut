@@ -1,0 +1,3 @@
+module W { pub type W: EffectRow = {Print} }
+let f[W](x: Int32): Int32 @ {W, Console} = { println("w"); echoln("c"); x }
+echoln(show(f(5) handle { case print(s) => { echoln("P:" + s); resume() } case return(x) => x }))

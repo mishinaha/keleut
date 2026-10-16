@@ -1,0 +1,5 @@
+let bad = fn(y) => {
+  let rec f[A](x: A): A = { y(x); g(x) }
+  and g(x: Int32): Int32 = x
+  f
+}

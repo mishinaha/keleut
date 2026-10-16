@@ -1,0 +1,50 @@
+--- a/lib/parser.mly	2026-10-17 04:23:59.897144915 +0900
++++ b/lib/parser.mly	2026-10-17 04:33:33.443263630 +0900
+@@ -301,21 +301,33 @@
+    `with` より後ろの `pub let` もここで拒否される。
+    黙って受理すると、公開したつもりの宣言が import できない理由を利用者が探すことになる。
+    位置は最後の分岐と同じく、パーサが最後に読んだトークンになる。 *)
+-let rec block_of_items sloc items =
+-  match items with
++let block_of_items sloc items =
++  List.iter
++    (function
++      | (_, DExp _) -> ()
++      | (_, DLet (_, b)) when b.lb_pub ->
++          raise (Syntax_error "ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)")
++      | (_, DLetRec bs) when List.exists (fun (_, b) -> b.lb_pub) bs ->
++          raise (Syntax_error "ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)")
++      | (_, DLet _) | (_, DLetRec _) -> ()
++      | _ -> raise (Syntax_error "この宣言はブロック内では使えません(let / let rec / 式のみ)"))
++    items;
++  match List.rev items with
+   | [] -> mk sloc RecordEmpty
+-  | [ (_, DExp e) ] -> e
+-  | (_, DExp e) :: rest -> (
+-      match block_of_items sloc rest with
+-      | (_, Seq es) -> mk sloc (Seq (e :: es))
+-      | r -> mk sloc (Seq [ e; r ]))
+-  | (_, DLet (_, b)) :: _ when b.lb_pub ->
+-      raise (Syntax_error "ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)")
+-  | (_, DLetRec bs) :: _ when List.exists (fun (_, b) -> b.lb_pub) bs ->
+-      raise (Syntax_error "ブロックの中の let rec には pub を付けられません(with より後ろの宣言は公開できません)")
+-  | (d, DLet b) :: rest -> (d, Let (b, block_of_items sloc rest))
+-  | (d, DLetRec bs) :: rest -> (d, LetRec (bs, block_of_items sloc rest))
+-  | _ :: _ -> raise (Syntax_error "この宣言はブロック内では使えません(let / let rec / 式のみ)")
++  | last :: before ->
++      let init = match last with
++        | (_, DExp e) -> e
++        | (d, DLet b) -> (d, Let (b, mk sloc RecordEmpty))
++        | (d, DLetRec bs) -> (d, LetRec (bs, mk sloc RecordEmpty))
++        | _ -> assert false in
++      List.fold_left
++        (fun r item ->
++          match item with
++          | (_, DExp e) -> (match r with (_, Seq es) -> mk sloc (Seq (e :: es)) | r -> mk sloc (Seq [ e; r ]))
++          | (d, DLet b) -> (d, Let (b, r))
++          | (d, DLetRec bs) -> (d, LetRec (bs, r))
++          | _ -> assert false)
++        init before
+ 
+ (* ## 3.8 `with_splice` で継続を引数の末尾に差し込む
+ 

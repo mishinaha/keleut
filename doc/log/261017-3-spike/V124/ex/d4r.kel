@@ -1,0 +1,4 @@
+type A[E] = (Int32) => Unit @ E
+type C[R] = A[{extends R}]
+let f[R](g: C[R]): Unit @ R = g(1)
+let k(g: C[{Print}]): Unit @ {Print} = g(2)

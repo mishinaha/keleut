@@ -1,0 +1,4 @@
+type Unit = {}
+effect Console = { write: (String) => Unit }
+let prog(): Int32 @ Console = { perform write("a"); 1 }
+let h(): Int32 = prog() handle { case Console.write(s) => resume(()) }

@@ -1,0 +1,12 @@
+module M {
+  pub let f(x: Int32): Int32 = x match {
+    case 1if x == 1 => 2
+    case 0x0f => 15
+    case _ => 0
+  }
+}
+{
+  echoln(show(M.f(1)))
+  echoln(show(M.f(15)))
+  echoln(show(M.f(3)))
+}

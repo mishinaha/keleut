@@ -1,0 +1,3 @@
+newtype Cb[R] = Cb(() => Int32 @ R)
+newtype P[A] = P(A, A)
+let x = P(Cb(fn() => 1), 3)

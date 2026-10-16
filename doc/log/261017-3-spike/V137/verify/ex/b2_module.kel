@@ -1,0 +1,19 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+type Boom = Never
+effect Stop = { stop: () => Boom }
+module M {
+  pub let rec go[A](n: Int32, x: A, f: (A) => String @ {}): Int32 @ {Fail, Console} =
+    if n == 0 then 0 else
+    ({ perform use(); perform stop(); 1 }) handle {
+      case use() => resume()
+      case cancel => perform throw(f(x) + show(n))
+    } handle {
+      case stop() if n > 1 => go(n - 1, x, f)
+      case stop() => { echoln("last"); 100 }
+    }
+}
+let r = M.go(3, 42, show) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+}
+echoln(show(r))

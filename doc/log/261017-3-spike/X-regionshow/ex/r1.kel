@@ -1,0 +1,6 @@
+let get[h](r: Ref[h, Int32]): Int32 @ Heap[h] = Ref.get(r)
+let first[h, A](a: MutableArray[h, A]): A @ Heap[h] = MutableArray.get(a, 0)
+let both[h, A, B](r: Ref[h, B], a: MutableArray[h, A]): B @ Heap[h] = Ref.get(r)
+let poly = fn(u) => Ref.new(0)
+let two[h, k](r: Ref[h, Int32], s: Ref[k, Int32]): Int32 @ {Heap[h], Heap[k]} = 0
+let pair[h](r: Ref[h, Int32]): (Ref[h, Int32], Int32) = (r, 0)

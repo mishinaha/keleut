@@ -1,0 +1,7 @@
+let f() = {
+  pub let x = 1
+  x
+}
+
+// c
+let b = 2

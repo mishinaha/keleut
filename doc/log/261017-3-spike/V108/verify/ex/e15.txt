@@ -1,0 +1,5 @@
+let x = (show, 1)
+let y = x match { case (f, n) => f(n) }
+y
+let q = (show, ???)
+let u = q match { case (f, _) => f(1) }

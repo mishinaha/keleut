@@ -1,0 +1,3 @@
+type W: EffectRow = {Print}
+let f[W, E](g: () => Unit @ {W extends E}): Unit @ {W extends E} = g()
+with_stdout(fn() => f(fn() => println("ext")))

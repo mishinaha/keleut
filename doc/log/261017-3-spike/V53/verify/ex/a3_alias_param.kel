@@ -1,0 +1,10 @@
+effect Ask = { ask: (Option[Int32]) => Int32 }
+type W: EffectRow = {Ask}
+let go[A](f: () => A @ W): A =
+  f() handle {
+    case ask(Some(n)) if n > 0 => resume(n)
+    case ask(o) => resume(-1)
+    case return(x) => x
+  }
+echoln(show(go(fn() => perform ask(Some(5)))))
+echoln(show(go(fn() => perform ask(None))))

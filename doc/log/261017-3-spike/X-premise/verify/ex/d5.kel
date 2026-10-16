@@ -1,0 +1,5 @@
+newtype Opaque = MkOpaque(Int32)
+type class Same[A] { val same: (A, A) => Boolean }
+type instance Same[Int32] { let same(a, b) = a == b }
+type instance[A: Eq] Same[List[_]] { let same(a, b) = a == b }
+let ng = same(Cons(Cons(MkOpaque(1i32), Nil), Nil), Nil)

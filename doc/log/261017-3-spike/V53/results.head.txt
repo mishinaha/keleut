@@ -1,0 +1,83 @@
+=== guard.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r = perform ask(1) handle {
+     3	  case ask(n) if n == 1 => resume(100)
+     4	  case return(x) => x
+     5	}
+     6	echoln(show(r))
+--- $ diktor-head guard.kel
+! guard.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+[exit 1]
+=== lit.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r = perform ask(1) handle {
+     3	  case ask(1) => resume(100)
+     4	  case return(x) => x
+     5	}
+     6	echoln(show(r))
+--- $ diktor-head lit.kel
+! lit.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+[exit 1]
+=== cover.kel
+     1	effect Ask = { ask: (Option[Int32]) => Int32 }
+     2	let r = perform ask(Some(1)) handle {
+     3	  case ask(Some(n)) => resume(n)
+     4	  case ask(None) => resume(0)
+     5	  case return(x) => x
+     6	}
+     7	echoln(show(r))
+--- $ diktor-head cover.kel
+! cover.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+[exit 1]
+=== zero.kel
+     1	effect Ask = { ask: () => Int32 }
+     2	let flag = true
+     3	let r = perform ask() handle {
+     4	  case ask() if flag => resume(1)
+     5	  case return(x) => x
+     6	}
+     7	echoln(show(r))
+--- $ diktor-head zero.kel
+! zero.kel:3:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+[exit 1]
+=== qual.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r = perform Ask.ask(1) handle {
+     3	  case Ask.ask(1) => resume(100)
+     4	  case return(x) => x
+     5	}
+     6	echoln(show(r))
+--- $ diktor-head qual.kel
+! qual.kel:2:9: 型エラー: 操作 ask の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case ask(...) を最後に置いてください
+[exit 1]
+=== never.kel
+     1	effect Fail = { fail: (Int32) => Never }
+     2	let r = perform fail(1) handle {
+     3	  case fail(0) => 0
+     4	  case return(x) => x
+     5	}
+     6	echoln(show(r))
+--- $ diktor-head never.kel
+! never.kel:2:9: 型エラー: 操作 fail の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case fail(...) を最後に置いてください
+[exit 1]
+=== ok.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r = perform ask(1) handle {
+     3	  case ask(1) => resume(100)
+     4	  case ask(n) => resume(n)
+     5	  case return(x) => x
+     6	}
+     7	echoln(show(r))
+--- $ diktor-head ok.kel
+100
+[exit 0]
+=== two.kel
+     1	effect Pair = { pair: (Int32, Boolean) => Int32 }
+     2	let r = perform pair(1, true) handle {
+     3	  case pair(n, true) => resume(n)
+     4	  case return(x) => x
+     5	}
+     6	echoln(show(r))
+--- $ diktor-head two.kel
+! two.kel:2:9: 型エラー: 操作 pair の節が取りこぼします(ガードや絞り込みパターンだけの節は v0 では後送りできません)。変数パターンでガードの無い case pair(...) を最後に置いてください
+[exit 1]

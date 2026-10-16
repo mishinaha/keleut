@@ -1,0 +1,10 @@
+--- $S/bin/diktor-head
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! tworow.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Two のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+--- $S/items/V102/diktor/_build/default/bin/main.exe
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! tworow.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]

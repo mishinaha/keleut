@@ -1,0 +1,133 @@
++   ただし `Parser'.Error` の直前で数値が隙間なく別のトークンに割れていたときは(第2章 §2.13)、
++   `parse_error_message` が数値の開始位置を指し、数値とその直後に続く綴りを名指す。
++let parse_error_message lx =
++  match Lexer'.glued_number lx with
++  | Some (n, sp, next) ->
++      Printf.sprintf "%s: パースエラー: 数値リテラル %s の直後に %s が続いています(数値リテラルの綴りを確認してください)"
++        (show_pos sp) (Lexer.show_number n) next
++  | None -> Printf.sprintf "%s: パースエラー(付近のトークンを確認してください)" (show_pos lx.Lexer'.last_sp)
++
++  | Parser'.Error -> raise (Parse_error (parse_error_message lexer))
++      else Failed (parse_error_message lx)
++   - `recent`：直前に渡したトークンから遡って高々 3 個(新しいものが先頭)。
++     §2.13 が、パースエラーの直前で数値が別のトークンに割れたかを調べるのに使う
++    mutable recent : entry list; (* 直前に消費者へ渡したトークンから遡って高々 3 個(§2.13) *)
++      recent = [];
++   `read` がその関数で、あわせて直前に渡したトークンの開始位置と終了位置と、
++   直近の 3 個のトークンを状態に控える
++   (開始位置を構文エラーの報告に使うのは第16章(driver.ml)である)。
++    t.recent <- (match t.recent with a :: b :: _ -> [ e; a; b ] | l -> e :: l);
++
++(* ## 2.13 数値の綴り間違いが割ったトークン
++
++   §2.2 の規則は最も長く一致する綴りで切るので、数値の綴り間違いは字句エラーにならない。
++   `0b102` は `0b10` と `2` に、`1x` と `0x` は数値と識別子に、
++   `1.2.3` は `1.2` と `.` と `3` に切れる。
++   どれも続きのトークンで文法に合わなくなり、パースエラーになる。
++   そのとき menhir が詰まるのは続きのトークンなので、`last_sp` は数値の後ろの位置を指し、
++   利用者は数値を書き間違えたことを読み取りにくい。
++
++   `glued_number` は、パースエラーのときに直近のトークンを見て、この形を見分ける。
++   見分けるのは次の 2 つの形で、どちらも数値とその直後のトークンの間に隙間が無い。
++
++   - 詰まったトークンの直前が数値で、詰まったトークンが英数字か `_` か `.` で始まる
++   - 詰まったトークンが数値で、1 つ前が `.`、2 つ前が数値である(`1.2.3` の `3` で詰まる形)
++
++   2 つ目の形で詰まったトークンを数値に限るのは、浮動小数の後ろの `.` が、
++   `1.2.foo` のようにフィールド選択として文法に合うからである。
++   `.` の後ろで詰まるのは数値か予約語のときで、
++   `1.2.match` のような予約語の形は数値の綴りの誤りではない。
++   2 つ目の形では、`.` とその後ろの数値をつなげて、
++   数値の直後に続く綴りとして返す(`1.2.3` なら `.3`)。
++
++   英数字で始まるかどうかは `show_token` の表記の先頭の文字で判定する。
++   予約語と識別子と数値は綴りのまま表示し、`<NL>` や文字列は記号で始まるからである。
++   返すのは、数値、その開始位置、数値の直後に続く綴りの 3 つである。
++   この判定は診断の文面と位置を変えるだけで、字句の切り方も受理するプログラムも変えない。
++   `1else` のように数値に予約語が隙間なく続いても文法に合う入力は、従来どおり受理する。 *)
++
++  let glued_number t =
++    let touches a b = a.ep.Lexing.pos_cnum = b.sp.Lexing.pos_cnum in
++    let wordlike tok =
++      let s = show_token tok in
++      s <> ""
++      && match s.[0] with 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' -> true | _ -> false
++    in
++    match t.recent with
++    | ({ tok = NUMBER m; _ } as e) :: ({ tok = DOT; _ } as d) :: ({ tok = NUMBER n; _ } as p) :: _
++      when touches p d && touches d e ->
++        Some (n, p.sp, "." ^ show_number m)
++    | e :: ({ tok = NUMBER n; _ } as p) :: _ when touches p e && wordlike e.tok -> Some (n, p.sp, show_token e.tok)
++    | _ -> None
++数値の綴り間違いも最長一致で割れ、字句エラーにはならない(LangSpec 付録 A.2)。
++割れた続きのトークンでパースが詰まったとき、診断は数値の先頭を指し、
++数値とその直後のトークンを名指す。終了コードはパースエラーの 2 のまま:
++
++  $ printf 'let a = 0b102\n' > glued1.kel
++  $ diktor --type-check glued1.kel
++  glued1.kel:1:9: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 0x\n' > glued2.kel
++  $ diktor --type-check glued2.kel
++  glued2.kel:1:9: パースエラー: 数値リテラル 0 の直後に x が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 1u\n' > glued3.kel
++  $ diktor --type-check glued3.kel
++  glued3.kel:1:9: パースエラー: 数値リテラル 1 の直後に u が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 1.2.3\n' > glued4.kel
++  $ diktor --type-check glued4.kel
++  glued4.kel:1:9: パースエラー: 数値リテラル 1.2 の直後に .3 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ diktor --type-check projnum.kel
++  projnum.kel:1:9: パースエラー: 数値リテラル 1. の直後に _0 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++
++詰まる位置が式の途中でもパターンでも、負の数値リテラルでも同じ。REPL は同じ文面を出して続く:
++
++  $ cat > gluedpos.kel <<'KEL'
++  > let g(x: Int32, y: Int32): Int32 = x
++  > let a = g(1, 2x)
++  > KEL
++  $ diktor --type-check gluedpos.kel
++  gluedpos.kel:2:14: パースエラー: 数値リテラル 2 の直後に x が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ cat > gluedpat.kel <<'KEL'
++  > let f(x: Int32): Int32 = x match {
++  >   case 0b102 => 1
++  >   case _ => 0
++  > }
++  > KEL
++  $ diktor --type-check gluedpat.kel
++  gluedpat.kel:2:8: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = -0b102\n' > gluedneg.kel
++  $ diktor --type-check gluedneg.kel
++  gluedneg.kel:1:10: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  [2]
++  $ printf 'let a = 0b102\n1 + 1\n' | diktor --repl
++  <stdin>:1:9: パースエラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)
++  _ : Int32 = 2
++
++数値と続きのトークンの間に空白がある形と、続きが英数字でも . でもない形は、
++従来の文面のまま。浮動小数の後ろの . はフィールド選択として文法に合うので、
++その後ろの予約語で詰まる形も従来の文面のまま。数値に予約語が隙間なく続いても
++文法に合えば受理する:
++
++  $ printf 'let a = 1 x\n' > gluedsp.kel
++  $ diktor --type-check gluedsp.kel
++  gluedsp.kel:1:11: パースエラー(付近のトークンを確認してください)
++  [2]
++  $ printf 'let a = 1"s"\n' > gluedtext.kel
++  $ diktor --type-check gluedtext.kel
++  gluedtext.kel:1:10: パースエラー(付近のトークンを確認してください)
++  [2]
++  $ printf 'let a = 1.2.match { case _ => 1 }\n' > gluedkw.kel
++  $ diktor --type-check gluedkw.kel
++  gluedkw.kel:1:13: パースエラー(付近のトークンを確認してください)
++  [2]
++  $ printf 'let c = true\nlet a = if c then 1else 2\n' > gluedelse.kel
++  $ diktor --type-check gluedelse.kel
++  c : Boolean
++  a : Int32
++

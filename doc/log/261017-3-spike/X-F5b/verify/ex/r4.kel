@@ -1,0 +1,2 @@
+from "./lib/a" import { k, z }
+echoln(show(k + z))

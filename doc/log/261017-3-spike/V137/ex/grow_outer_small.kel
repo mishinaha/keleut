@@ -1,0 +1,16 @@
+effect Fail = { throw: (String) => Never }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32): Int32 =
+  if n == 0 then 0 else
+  ({ perform use(); perform stop(); 1 }) handle {
+    case use() => resume()
+    case cancel => { echoln("cancel " + show(n)); perform throw("from cancel") }
+  } handle {
+    case stop() => { echoln("stop " + show(n)); loop(n - 1) }
+  }
+let r = loop(3) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+  case return(x) => { echoln("return " + show(x)); x }
+}
+echoln(show(r))

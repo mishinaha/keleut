@@ -1,0 +1,11 @@
+effect A = { a: (Int32) => Int32 }
+effect B = { b: (Int32) => Int32, c: ((Int32) => Int32 @ {A}) => Int32 }
+let f(): Int32 @ {A, B} = perform b(perform a(1)) + perform c(fn(x: Int32) => perform a(x))
+let r = (f() handle {
+  case b(x) => resume(x * 10)
+  case c(g) => resume(g(5))
+  case return(v) => v + 1000
+}) handle {
+  case a(x) => resume(x + 1)
+}
+echoln(show(r))

@@ -1,0 +1,8 @@
+module M {
+  pub let id[A](x: A): A = x
+  let rec ev(n: Int32): Boolean = if n == 0 then true else od(n - 1)
+  and od(n: Int32): Boolean = if n == 0 then false else ev(n - 1)
+  pub let even(n: Int32): Boolean = ev(n)
+}
+echoln(show(M.id(3)))
+echoln(show(M.even(10)))

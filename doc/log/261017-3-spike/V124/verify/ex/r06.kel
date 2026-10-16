@@ -1,0 +1,4 @@
+type R[E] = {x: Int32 extends E}
+type C = R[{}]
+let r: C = {x: 1}
+echoln(show(r.x))

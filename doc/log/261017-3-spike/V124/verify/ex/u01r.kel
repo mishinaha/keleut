@@ -1,0 +1,5 @@
+type Th[E] = () => Unit @ E
+newtype B[E] = MkB((() => Unit @ E, Th[{Print}]))
+newtype A = MkA(B[{}])
+let f(a: A): Int32 = 0
+echoln("ok")

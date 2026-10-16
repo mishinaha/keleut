@@ -1,0 +1,4 @@
+let outer = fn(y) => {
+  let f[A](x: A) = { let _ = y(x); x }
+  f
+}

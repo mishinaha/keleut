@@ -1,0 +1,37 @@
+== w1pureperf.kel
+[diktor-head]
+! w1pureperf.kel:3:32: 型エラー: ラベル Get がありません(行は閉じています)
+exit=1
+[main.exe]
+! w1pureperf.kel:3:52: 型エラー: エフェクト Get をここでは実行できません(ラベル Get がありません(行は閉じています))
+exit=1
+== w2pubeff.kel
+[diktor-head]
+! w2pubeff.kel:3:32: 型エラー: ラベル Get がありません(行は閉じています)
+exit=1
+[main.exe]
+! w2pubeff.kel:3:52: 型エラー: エフェクト Get をここでは実行できません(ラベル Get がありません(行は閉じています))
+exit=1
+== w3pubeff2.kel
+[diktor-head]
+! w3pubeff2.kel:2:36: 型エラー: ラベル Console がありません(行は閉じています)
+exit=1
+[main.exe]
+! w3pubeff2.kel:2:56: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+exit=1
+== w4pubfn.kel
+[diktor-head]
+! w4pubfn.kel:3:23: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください)
+exit=1
+[main.exe]
+! w4pubfn.kel:3:23: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください)
+exit=1
+== w5callpure.kel
+[diktor-head]
+reg : (() => {} @ {}) => {}
+! w5callpure.kel:3:39: 型エラー: エフェクト Get をここでは実行できません(ラベル Get がありません(行は閉じています))
+exit=1
+[main.exe]
+reg : (() => {} @ {}) => {}
+! w5callpure.kel:3:39: 型エラー: エフェクト Get をここでは実行できません(ラベル Get がありません(行は閉じています))
+exit=1

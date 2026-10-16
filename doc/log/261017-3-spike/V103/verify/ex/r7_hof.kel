@@ -1,0 +1,14 @@
+let apply[A, B, E](f: (A) => B @ E, x: A): B @ E = f(x)
+let id[T](x: T): T = x
+let main(): Unit @ Console = {
+  let n = run h {
+    let r = Ref.new(7)
+    let m = MutableArray.new(2, 1)
+    apply(Ref.get, r) + apply(MutableArray.length, m) + apply(id(Ref.get), r)
+  }
+  echoln(apply(Show.show, n))
+  echoln(apply(id(Show.show), n + 1))
+  let xs = run h { MutableArray.freeze(MutableArray.new(3, 0)) }
+  echoln(show(apply(id(Array.length), xs)))
+}
+main()

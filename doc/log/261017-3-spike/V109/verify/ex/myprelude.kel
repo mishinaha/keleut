@@ -1,0 +1,2 @@
+type Unit = {}
+type class Tw[A] { val tw: (A) => A }

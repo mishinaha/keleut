@@ -1,0 +1,3 @@
+type W: EffectRow = Wr[{}]
+type Wr[E]: EffectRow = {Console extends E}
+let f(): Int32 @ W = 0

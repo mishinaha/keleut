@@ -1,0 +1,10 @@
+effect St = { get: () => Int32, put: (Int32) => Unit }
+effect Ev = { on: ((Int32) => Unit @ {St}) => Unit }
+let run_st[A, E](init: Int32, body: () => A @ {St extends E}): A @ E = {
+  let r = Ref.new(init)
+  body() handle {
+    case get() => resume(Ref.get(r))
+    case put(v) => { Ref.set(r, v); resume() }
+    case return(x) => x
+  }
+}

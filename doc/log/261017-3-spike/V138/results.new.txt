@@ -1,0 +1,34 @@
+# 試作(V138.patch)での実測。OCAMLRUNPARAM=l=100k
+nontail_resume.tmpl: 7946
+retryresumepath.tmpl: 7944
+$ OCAMLRUNPARAM=l=100k main.exe nontail5405.kel
+ok
+[exit 0]
+$ OCAMLRUNPARAM=l=100k main.exe nontail7946.kel
+ok
+[exit 0]
+$ OCAMLRUNPARAM=l=100k main.exe nontail7947.kel
+実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+[exit 3]
+$ OCAMLRUNPARAM=l=100k main.exe retrypath6432.kel
+ok
+[exit 0]
+## 時間(3 回ずつ、ミリ秒)
+nontail5000 diktor-head 968ms out=1000000
+nontail5000 diktor-head 747ms out=1000000
+nontail5000 diktor-head 731ms out=1000000
+nontail5000 main.exe 705ms out=1000000
+nontail5000 main.exe 945ms out=1000000
+nontail5000 main.exe 718ms out=1000000
+retry1m diktor-head 467ms out=0
+retry1m diktor-head 467ms out=0
+retry1m diktor-head 472ms out=0
+retry1m main.exe 463ms out=0
+retry1m main.exe 468ms out=0
+retry1m main.exe 469ms out=0
+ticks1m diktor-head 599ms out=ok
+ticks1m diktor-head 628ms out=ok
+ticks1m diktor-head 640ms out=ok
+ticks1m main.exe 604ms out=ok
+ticks1m main.exe 595ms out=ok
+ticks1m main.exe 587ms out=ok

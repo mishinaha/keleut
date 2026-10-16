@@ -1,0 +1,118 @@
+### head r1_nested.kel
+3
+[exit 0]
+### new r1_nested.kel
+3
+[exit 0]
+### head r2_guard.kel
+a
+pos
+a
+neg
+[exit 0]
+### new r2_guard.kel
+a
+pos
+a
+neg
+[exit 0]
+### head r5_module.kel
+! r5_module.kel:1:12: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+### new r5_module.kel
+! r5_module.kel:1:12: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+### head r6_return_cancel.kel
+6
+[exit 0]
+### new r6_return_cancel.kel
+6
+[exit 0]
+### head r7_alias.kel
+! r7_alias.kel:3:18: 型エラー: 未知のエフェクト: AA
+[exit 1]
+### new r7_alias.kel
+! r7_alias.kel:3:18: 型エラー: 未知のエフェクト: AA
+[exit 1]
+### head r8_never.kel
+0
+[exit 0]
+### new r8_never.kel
+0
+[exit 0]
+### head --no-prelude --type-check r4_noprelude_console.kel
+prog : () => Int32 @ {Console}
+h : () => Int32
+[exit 0]
+### new --no-prelude --type-check r4_noprelude_console.kel
+prog : () => Int32 @ {Console}
+h : () => Int32
+[exit 0]
+### head r3_import.kel
+x
+3
+h:y
+4
+[exit 0]
+### new r3_import.kel
+x
+3
+h:y
+4
+[exit 0]
+### head repl
+_ : Int32 = 5
+! <stdin>:3:1: 型エラー: ハンドラが操作を網羅していません: Ask の tell が漏れています
+_ : Int32 = 5
+[exit 0]
+### new repl
+_ : Int32 = 5
+! <stdin>:3:1: 型エラー: 操作 print はエフェクト Ask に属しません
+_ : Int32 = 5
+[exit 0]
+### head --type-check ../../ex/prelude5.kel
+! ../../ex/prelude5.kel:2:19: 型エラー: ハンドラが操作を網羅していません: Ask の tell が漏れています
+[exit 1]
+### new --type-check ../../ex/prelude5.kel
+! ../../ex/prelude5.kel:2:19: 型エラー: 操作 print はエフェクト Ask に属しません
+[exit 1]
+### head --type-check --no-prelude ../../ex/qual5b.kel
+prog : () => String @ {File}
+! ../../ex/qual5b.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+### new --type-check --no-prelude ../../ex/qual5b.kel
+prog : () => String @ {File}
+! ../../ex/qual5b.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
+[exit 1]
+### head --type-check --no-prelude ../../ex/qual5c.kel
+prog : () => String @ {File}
+! ../../ex/qual5c.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+### new --type-check --no-prelude ../../ex/qual5c.kel
+prog : () => String @ {File}
+! ../../ex/qual5c.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
+[exit 1]
+### head --type-check --no-prelude ../../ex/qual5.kel
+prog : () => String @ {File}
+! ../../ex/qual5.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+### new --type-check --no-prelude ../../ex/qual5.kel
+prog : () => String @ {File}
+! ../../ex/qual5.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
+[exit 1]
+### head --type-check --no-prelude ../../ex/qual5w.kel
+prog : () => String @ {File}
+! ../../ex/qual5w.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+### new --type-check --no-prelude ../../ex/qual5w.kel
+prog : () => String @ {File}
+! ../../ex/qual5w.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+[exit 1]
+### head --type-check --no-prelude ../../ex/unq.kel
+prog : () => String @ {File}
+! ../../ex/unq.kel:5:19: 型エラー: この操作の組を宣言するエフェクトがありません: read, flush
+[exit 1]
+### new --type-check --no-prelude ../../ex/unq.kel
+prog : () => String @ {File}
+! ../../ex/unq.kel:5:19: 型エラー: この操作の組を宣言するエフェクトがありません: read, flush
+[exit 1]

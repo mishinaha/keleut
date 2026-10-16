@@ -1,0 +1,4 @@
+effect P = { p: (() => Unit) => Unit }
+let f(): Unit = { perform p(fn() => {}) } handle { case p(g) => { g(); resume() } case return(x) => x }
+f()
+echoln("ok")

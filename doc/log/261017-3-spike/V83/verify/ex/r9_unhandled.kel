@@ -1,0 +1,2 @@
+let g[A](body: () => A @ {Print}): A = body()
+echoln("x")

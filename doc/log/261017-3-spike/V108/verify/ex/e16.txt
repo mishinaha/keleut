@@ -1,0 +1,8 @@
+let z1 = { let a = 1; (show, a) }
+let z2 = { let a = println("x"); (show, 1) }
+let z3 = { let a = 1 / 0; (show, a) }
+let z4 = { let f = fn(x) => x; (show, f) }
+let z5 = { let a = ???; (show, 1) }
+(show, -1)
+let z6 = (show, "a${1}")
+let z7 = (show, [1, 2])

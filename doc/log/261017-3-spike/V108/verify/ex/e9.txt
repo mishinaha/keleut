@@ -1,0 +1,7 @@
+let p = (show, 1)
+p match { case (f, n) => f(n) }
+let g = fn(x) => p match { case (f, n) => f(x) }
+g(true)
+p
+let idf[A](x: A): A = x
+let u = idf(p)

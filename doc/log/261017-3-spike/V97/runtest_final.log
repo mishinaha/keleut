@@ -1,0 +1,11 @@
+File "test/inst_init_pure.t", line 1, characters 0-0:
+diff --git a/_build/default/test/inst_init_pure.t b/_build/default/test/inst_init_pure.t.corrected
+index 8126787..3f284d8 100644
+--- a/_build/default/test/inst_init_pure.t
++++ b/_build/default/test/inst_init_pure.t.corrected
+@@ -108,3 +108,5 @@
+   > echoln(sh(Foo))
+   > KEL
+   $ diktor iniweak.kel
++  ! iniweak.kel:7:39: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
++  [1]

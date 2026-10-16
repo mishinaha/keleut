@@ -1,0 +1,9 @@
+newtype Void
+effect Ab = { ab: (Void) => Int32, ok: () => Int32 }
+let r = perform ok() handle {
+  case ab(v) if true => resume(1)
+  case ab(_) => resume(0)
+  case ok() => resume(7)
+  case return(x) => x
+}
+echoln(show(r))

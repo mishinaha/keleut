@@ -1,0 +1,2 @@
+pub effect Tick = { tick: () => Unit }
+pub let ticker(): Unit @ {Tick} = perform tick()

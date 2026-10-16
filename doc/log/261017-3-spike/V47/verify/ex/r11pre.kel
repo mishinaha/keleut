@@ -1,0 +1,3 @@
+effect Console = { write: (String) => {} }
+type CW[E]: EffectRow = {Console extends E}
+let echoln(message: String): {} @ CW[{}] = perform write(message + "\n")

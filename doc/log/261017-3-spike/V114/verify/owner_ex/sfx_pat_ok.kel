@@ -1,0 +1,5 @@
+let f(n: Int64): Int32 = n match {
+  case 1i64 => 0
+  case _ => 1
+}
+echoln(show(f(1i64)))

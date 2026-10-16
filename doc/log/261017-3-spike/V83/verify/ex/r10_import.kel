@@ -1,0 +1,3 @@
+from "./r10_import_lib" import { shout, eqs }
+let main(): Unit @ {Console} = with_stdout(fn() => shout(show(eqs(Cons(1, Nil), Cons(1, Nil)))))
+main()

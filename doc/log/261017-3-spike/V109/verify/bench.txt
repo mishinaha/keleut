@@ -1,0 +1,10 @@
+file	pre	head	A	B
+b1_ops.kel	1.07	0.65	0.64	0.64
+b2_poly.kel	0.45	0.83	0.56	0.42
+b2a_mono.kel	0.45	0.38	0.38	0.38
+b2b_add.kel	0.46	0.66	0.48	0.40
+b2c_nolist.kel	0.77	0.77	0.58	0.51
+b2e_tail.kel	0.44	0.38	0.36	0.36
+b3_showlist.kel	0.33	0.35	0.32	0.31
+b4_eqrec.kel	0.40	0.24	0.24	0.24
+b5_noops.kel	0.46	0.45	0.46	0.47

@@ -1,0 +1,2 @@
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let use(r: {go: () => Unit @ {}}): Unit @ Reg = perform reg(r.go)

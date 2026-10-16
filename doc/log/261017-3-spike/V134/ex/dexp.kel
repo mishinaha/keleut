@@ -1,0 +1,2 @@
+effect Fail = { throw: (String) => Never }
+{ let r: Int32 = { if true then perform throw("x") match {} else (); let b = 1; b }; echoln(show(r)) } handle { case throw(e) => echoln(e) }

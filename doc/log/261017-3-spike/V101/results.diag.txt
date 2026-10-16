@@ -1,0 +1,44 @@
+== p8.kel [../../../bin/diktor-head]
+effect File = { write: (String) => Unit }
+effect Reg = { reg: (() => Unit @ File) => Unit }
+let main(): Unit @ Console = {
+  perform reg(fn() => perform write("x"))
+} handle {
+  case reg(f) => {
+    { f() } handle { case write(s) => { echoln(s); resume() } }
+    resume()
+  }
+}
+main()
+! p8.kel:4:23: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+== p8.kel [../diktor/_build/default/bin/main.exe]
+effect File = { write: (String) => Unit }
+effect Reg = { reg: (() => Unit @ File) => Unit }
+let main(): Unit @ Console = {
+  perform reg(fn() => perform write("x"))
+} handle {
+  case reg(f) => {
+    { f() } handle { case write(s) => { echoln(s); resume() } }
+    resume()
+  }
+}
+main()
+x
+exit=0
+== c2.kel
+effect File = { write: (String) => Unit }
+let reg(f: () => Unit @ File): Unit = ()
+let use(): Unit @ Console = reg(fn() => perform write("x"))
+reg : (() => {} @ {File}) => {}
+use : () => {} @ {Console}
+exit=0
+== c3.kel
+effect File = { write: (String) => Unit }
+let reg(f: () => Unit @ File, n: Int32): Unit = ()
+let use(): Unit @ Console = reg(fn() => perform write("x"), 1)
+let use2(): Unit @ Console = { let g = fn() => perform write("x"); reg(g, 1) }
+reg : (() => {} @ {File}, Int32) => {}
+use : () => {} @ {Console}
+! c3.kel:4:48: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1

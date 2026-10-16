@@ -1,0 +1,5 @@
+let f(x: Int32): Int32 = x match {
+  case 4294967295i8 => 1
+  case _ => 2
+}
+echoln(show(f(1)))

@@ -1,0 +1,3 @@
+effect Ev = { on: (Cb[{Print}]) => Unit }
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)

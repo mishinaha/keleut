@@ -1,0 +1,67 @@
+===== fwd.kel
+42
+[exit 0]
+===== bwd.kel
+42
+[exit 0]
+===== v_alias.kel
+f : (() => {} @ {Log}) => {} @ {Log}
+[exit 0]
+===== v_class.kel
+[exit 0]
+===== v_comp1.kel
+! v_comp1.kel:2:14: 型エラー: module Foo のコンパニオン型 Foo は既存の型 Foo と同名です(module 内の型とトップレベルの型は同名にできません)
+[exit 1]
+===== v_comp2.kel
+! v_comp2.kel:1:14: 型エラー: module Foo のコンパニオン型 Foo は既存の型 Foo と同名です(module 内の型とトップレベルの型は同名にできません)
+[exit 1]
+===== v_dup.kel
+! v_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています
+[exit 1]
+===== v_effop.kel
+[exit 0]
+===== v_fun.kel
+f : () => {} @ {Log}
+[exit 0]
+===== v_mod_inner.kel
+! v_mod_inner.kel:3:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+===== v_mod_outer.kel
+[exit 0]
+===== v_mod_qual.kel
+! v_mod_qual.kel:2:12: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+===== v_newtype2.kel
+[exit 0]
+===== v_newtype_bare.kel
+[exit 0]
+===== v_newtype_ext.kel
+[exit 0]
+===== v_newtype.kel
+[exit 0]
+===== v_newtype_sum.kel
+[exit 0]
+===== v_nolabel.kel
+[exit 0]
+===== v_notlabel.kel
+! v_notlabel.kel:1:28: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+===== v_order_dup.kel
+! v_order_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています
+[exit 1]
+===== v_order_std.kel
+! v_order_std.kel:2:1: 型エラー: 標準環境の effect Console は再宣言できません
+[exit 1]
+===== v_params.kel
+! v_params.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+===== v_rowalias.kel
+f : () => {} @ {Log}
+[exit 0]
+===== v_unknown.kel
+! v_unknown.kel:1:28: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+===== repl.in
+! <stdin>:1:68: 型エラー: 未知のエフェクト: Nope
+! <stdin>:3:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+! <stdin>:5:28: 型エラー: 未知のエフェクト: Later

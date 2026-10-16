@@ -1,0 +1,2 @@
+pub let h(f: Cb): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))

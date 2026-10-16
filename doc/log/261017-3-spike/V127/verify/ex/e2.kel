@@ -1,0 +1,5 @@
+module M {
+  pub let f(x: Int32, y: Int32): Int32 @ {} = x * y
+  pub let z(): Int32 @ {} = 7
+}
+echoln(show(M.f(2, 3) + M.z()))

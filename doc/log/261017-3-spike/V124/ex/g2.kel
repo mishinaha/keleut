@@ -1,0 +1,2 @@
+type C = A[{}]
+type A[E] = (Int32) => Unit @ {Nope extends E}

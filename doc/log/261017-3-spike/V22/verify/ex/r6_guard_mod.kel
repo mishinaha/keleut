@@ -1,0 +1,13 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub newtype A = MkA(B[{}])
+  pub newtype B[E] = MkB(() => Int32 @ E)
+  pub let mk(): A = MkA(MkB(fn() => 7))
+}
+let main() = {
+  M.mk() match {
+    case M.MkA(M.MkB(g)) if g() > 5 => echoln("big")
+    case _ => echoln("small")
+  }
+}
+main()

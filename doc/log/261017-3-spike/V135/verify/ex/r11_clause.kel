@@ -1,0 +1,7 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+let g(): String @ {Ask, Fail} = if perform ask() > 0 then "pos" else { let v: Never = perform throw("neg"); describe(v) }
+let r = (g() handle { case ask() => resume(0 - 1) }) handle { case throw(m) => "caught " + m }
+echoln(r)

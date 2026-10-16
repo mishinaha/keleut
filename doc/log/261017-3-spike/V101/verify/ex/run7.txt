@@ -1,0 +1,22 @@
+== y8calltuple.kel
+[diktor-head]
+reg : ((() => {} @ {File}, Int32)) => {}
+reg2 : (() => (() => {} @ {File}) @ {}) => {}
+use : () => {} @ {Console}
+! y8calltuple.kel:5:39: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+reg : ((() => {} @ {File}, Int32)) => {}
+reg2 : (() => (() => {} @ {File}) @ {}) => {}
+use : () => {} @ {Console}
+! y8calltuple.kel:5:39: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+== y9generic.kel
+[diktor-head]
+app : (A) => {}
+! y9generic.kel:3:41: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1
+[main.exe]
+app : (A) => {}
+! y9generic.kel:3:41: 型エラー: 操作 write は複数のエフェクト(Console, File)に属します。Console.write のように修飾してください
+exit=1

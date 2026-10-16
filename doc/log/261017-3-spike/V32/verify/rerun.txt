@@ -1,0 +1,76 @@
+### p01_both_val.kel
+f : (Int32) => Int32 @ {Console}
+g : (Int32) => Int32 @ {Console}
+[exit 0]
+### p02_both_fn.kel
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### p03_fwd_val.kel
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### p04_fwd_fn.kel
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+[exit 0]
+### p05_fwd_diff.kel
+b : (Int32) => Int32 @ {Console, Print}
+a : (Int32) => Int32 @ {Console}
+[exit 0]
+### p06_mutual_diff.kel
+! p06_mutual_diff.kel:2:81: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+### p07_mutual_diff_rev.kel
+! p07_mutual_diff_rev.kel:1:85: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+### p08_both_run.kel
+f : (Int32) => Int32 @ {Console}
+g : (Int32) => Int32 @ {Console}
+use : () => Int32 @ {Console, Print}
+_ : Int32
+[exit 0]
+### p09_extends_both.kel
+! p09_extends_both.kel:1:55: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p10_extends_fwd.kel
+! p10_extends_fwd.kel:1:55: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p11_three.kel
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {Console}
+c : (Int32) => Int32 @ {Console}
+[exit 0]
+### p12_pure_fwd.kel
+a : (Int32) => Int32 @ {Console}
+b : (Int32) => Int32 @ {}
+[exit 0]
+### p13_fwd_wider.kel
+! p13_fwd_wider.kel:1:40: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+### p14_tpflow.kel
+! p14_tpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p15_extends_rev.kel
+b : (Int32) => Int32 @ {Console extends R1}
+a : (Int32) => Int32 @ {Console extends R1}
+[exit 0]
+### p16_extends_mutual_rev.kel
+! p16_extends_mutual_rev.kel:1:87: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p17_extends_one.kel
+a : (Int32) => Int32 @ {Console extends R1}
+b : (Int32) => Int32 @ {Console extends R1}
+use : () => Int32 @ {Console, Print}
+[exit 0]
+### p18_extends_one_rev.kel
+b : (Int32) => Int32 @ {Console extends R1}
+a : (Int32) => Int32 @ {Console extends R1}
+use : () => Int32 @ {Console, Print}
+[exit 0]
+### p19_tp_mutual.kel
+! p19_tp_mutual.kel:2:23: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]
+### p21_three_mid.kel
+! p21_three_mid.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
+[exit 1]

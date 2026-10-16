@@ -1,0 +1,42 @@
+合成後の dune runtest(promote 前)。全文は runtest.raw.log。
+
+新しく落ちるブロック: 無し
+  (新しいファイル ctor_field_row.t、rec_tparam_note.t、rigid_empty_row.t、decl_pos.t と、
+   classes.t の V33 の 3 ブロック、premise.t の X-premise の pr21〜pr27 はすべて通る)
+
+期待値が変わるブロック: 13 ブロック、14 コマンド、7 ファイル
+  (ブロックは空行で区切られた cram のブロックで数える)
+  V24 (6 ブロック 6 コマンド、位置だけ)
+    test/pub.t           pubnt        1:12 -> 1:43
+    test/verify_fixes.t  opres        1:1 -> 1:22
+    test/verify_fixes.t  opres2       1:1 -> 1:23(前書きは opres と共有するが、647 行の空行で別のブロック)
+    test/verify_fixes.t  opus         1:1 -> 1:21
+    test/typecheck_m7.t  c15          1:1 -> 2:9
+    test/dictionary_passing.t nooccur 1:1 -> 1:26
+  X-premise (5 ブロック 6 コマンド、末尾に 1 文が付く)
+    test/premise.t  pr2、pr3、pr17 と pr18(空行を挟まない 1 ブロック)、pr19
+    test/classes.t  pshowop
+  V102 (1 ブロック)
+    test/annot_rows.t nonnamelist  newtype のフィールドの言い換えが消える
+  V111 (1 ブロック)
+    test/annot_rows.t recrejtpflow 再帰群の型パラメータの事実が付く
+
+変わらないブロック: 上以外のすべて。V33 と V34 は既存の期待値を変えない(各項目の主張どおり)。
+
+各項目の主張との照合:
+  V102: nonnamelist の 1 行だけ   -> 一致
+  V111: recrejtpflow の 1 行だけ  -> 一致
+  V33 : 既存の期待値の変更なし     -> 一致
+  V34 : 既存の期待値の変更なし     -> 一致
+  X-premise: 5 ブロック 6 コマンド -> 一致
+  V24 : 6 ブロック 6 コマンド       -> 一致
+
+promote 後の dune runtest: 差分 0(runtest.after-promote.log は空)。
+
+項目の例(各項目の ex/、ex2/、verify/ex/)を項目単独の試作と合成後で比べた結果(cmp.txt):
+  違いは V33 の h2、h2b、h2c、h2z の 4 本だけで、元の報告の文言が V34 の「空の行と一致させられません」になる。
+  名指しの有無と V33 の言い分け(h2、h2b は注釈の文言、h2c は本体の文言)、位置、終了状態は変わらない。
+  h2z の §11.12 の言い換えも付いたまま(row_failure が V34 の後も「は注釈で固定された行変数」で真になる)。
+
+litcheck(写しを git にして実行): marker 0 件。code の不一致は elab.ml、unify.ml、show.ml だけ(コードを変えたため)。
+litwrap: 3 ファイルとも変更なし(警告は HEAD からある表の幅の行だけ)。

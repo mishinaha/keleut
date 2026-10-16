@@ -1,0 +1,3 @@
+effect File = { write: (String) => Unit }
+effect Reg = { reg: ((() => Unit @ File, Int32)) => Unit }
+let use(): Unit @ {Reg, Console} = perform reg((fn() => perform write("x"), 1i32))

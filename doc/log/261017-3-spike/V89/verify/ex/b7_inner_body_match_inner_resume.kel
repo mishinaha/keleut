@@ -1,0 +1,11 @@
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => {
+    let ok = (perform Ask.ask() > 0) handle {
+      case ask() => 1 match { case _ if resume(4) => true case _ => false }
+    }
+    resume(ok)
+  }
+}
+echoln(show(r))

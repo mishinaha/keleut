@@ -1,0 +1,2 @@
+let f(): Int32 @ Heap[String] = 0
+let g(): Int32 = run h { run k { f() } }

@@ -1,0 +1,24 @@
+分野 region(リージョンの診断と表示)の合成の順と手直し
+
+基点: snap/diktor(diktor 39d4091)
+
+1. V122: items/V122/V122.patch を patch -p1 でそのまま当てた(--dry-run で 3 ファイルとも当たる)。
+   この段で dune build、dune runtest の差分 0 行(runtest.stage1.log、stage1/ の写しで実測)。
+2. X-D74: items/X-D74/X-D74-over-V122.patch を当てた。
+   lib/unify.ml の hunk 3(§8.8 の記事の箇条書き)が当たらなかった。
+   原因: この差分は V122 の改める前の記事(「ここに来る型変数は剛定数で…」「不一致は、別の run のスコープのヒープを…」の 2 行)の上に作られている。
+   手直し: hunk 3 の削除行 2 行を、V122.patch の現行の 2 行(「元の文言を、別の run のスコープのヒープを使おうとしている、という言葉で包む。」「片方が注釈の型パラメータのリージョンでも、文言は同じである。」)に差し替えた(X-D74-adjusted.patch)。
+   追加行は変えていない(X-D74 の 3 通りの箇条書きで置き換わる)。
+   この段で dune build、dune runtest の差分 0 行(runtest.stage2.log)。
+3. X-regionshow: items/X-regionshow/X-regionshow.patch をそのまま当てた。
+   test/kinds.t の hunk が fuzz 1 で当たった(前書きの行を V122 が改めたため。対象の refkind の行は正しい)。
+   dune runtest は region.t の 4 コマンドで落ちた(runtest.stage3.log)。
+   いずれも X-D74 が足した cram(regesc、regheapesc、regoccurs、regescref)の型の表示行で、A が h になるだけ。
+   promote した(X-regionshow の期待値の更新に含める)。
+4. 手直し(設計の整理): X-regionshow の lib/show.ml の局所定数 ref_oid / marr_oid を消し、V122 が lib/syntax.ml の Type に足す ty_ref / ty_mutable_array を使うようにした。
+   syntax.ml の定数のコメントに第9章の用途を 1 行足した。
+   dune build、dune runtest の差分 0 行。litcheck(show.ml、syntax.ml、unify.ml)は code の不一致だけで marker 0 件、litwrap は HEAD からある unify.ml:26 の表の幅だけ。
+
+合成差分: region.patch(snap/diktor との diff -ruN -x _build)
+
+最終稿での整理: 段ごとの差分を region-1-V122.patch、region-2-X-D74.patch、region-3-X-regionshow.patch として作り直した(a/ b/ の見出し、patch -p1)。X-D74-adjusted.patch は region-2-X-D74.patch と同じ内容に置き換えた。region.patch は見出しだけ a/ b/ に改めた。

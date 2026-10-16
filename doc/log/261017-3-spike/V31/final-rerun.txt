@@ -1,0 +1,347 @@
+== ex/a1.kel
+-- HEAD
+[rc=0]
+-- NEW
+! a1.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/a2.kel
+-- HEAD
+! a2.kel:4:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! a2.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/a3.kel
+-- HEAD
+! a3.kel:4:10: 型エラー: 型注釈のカインドが Type ではありません: {Log} :: Row
+[rc=1]
+-- NEW
+! a3.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/a4.kel
+-- HEAD
+! a4.kel:4:26: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! a4.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/a5.kel
+-- HEAD
+! a5.kel:5:19: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! a5.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/a6.kel
+-- HEAD
+! a6.kel:4:42: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! a6.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/b1.kel
+-- HEAD
+! b1.kel:1:21: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[rc=1]
+-- NEW
+! b1.kel:1:21: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[rc=1]
+== ex/b2.kel
+-- HEAD
+! b2.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[rc=1]
+-- NEW
+! b2.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[rc=1]
+== ex/b3.kel
+-- HEAD
+[rc=0]
+-- NEW
+! b3.kel:3:16: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/b4.kel
+-- HEAD
+[rc=0]
+-- NEW
+! b4.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/b5.kel
+-- HEAD
+[rc=0]
+-- NEW
+! b5.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/b6.kel
+-- HEAD
+[rc=0]
+-- NEW
+! b6.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/b7.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== ex/b8.kel
+-- HEAD
+! b8.kel:3:11: 型エラー: タプルの要素の型のカインドが Type ではありません: {Log} :: Row
+[rc=1]
+-- NEW
+! b8.kel:3:11: 型エラー: タプルの要素の型のカインドが Type ではありません: {Log} :: Row
+[rc=1]
+== ex/b9.kel
+-- HEAD
+! b9.kel:3:14: 型エラー: レコードのフィールド a の型のカインドが Type ではありません: {Log} :: Row
+[rc=1]
+-- NEW
+! b9.kel:3:14: 型エラー: レコードのフィールド a の型のカインドが Type ではありません: {Log} :: Row
+[rc=1]
+== ex/c1.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== ex/c2.kel
+-- HEAD
+! c2.kel:4:21: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! c2.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/c3.kel
+-- HEAD
+! c3.kel:4:21: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! c3.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/c4.kel
+-- HEAD
+! c4.kel:4:29: 型エラー: エフェクト行に Type エイリアス Q は置けません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! c4.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/c5.kel
+-- HEAD
+! c5.kel:4:13: 型エラー: 型注釈のカインドが Type ではありません: {Log extends ς1} :: Row
+[rc=1]
+-- NEW
+! c5.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/c6.kel
+-- HEAD
+[rc=0]
+-- NEW
+! c6.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/c7.kel
+-- HEAD
+! c7.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[rc=1]
+-- NEW
+! c7.kel:2:10: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[rc=1]
+== ex/c8.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== ex/c9.kel
+-- HEAD
+! c9.kel:2:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: {extends ς1} :: Type
+[rc=1]
+-- NEW
+! c9.kel:2:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: {extends ς1} :: Type
+[rc=1]
+== ex/d1.kel
+-- HEAD
+[rc=0]
+-- NEW
+! d1.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/d2.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== ex/d3.kel
+-- HEAD
+[rc=0]
+-- NEW
+! d3.kel:3:14: 型エラー: Type エイリアス M.Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== ex/d4.kel
+-- HEAD
+! d4.kel:2:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! d4.kel:2:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+[rc=1]
+== ex/d5.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== ex/d6.kel
+-- HEAD
+! d6.kel:3:10: 型エラー: 型構成子 Callback には型引数が必要です
+[rc=1]
+-- NEW
+! d6.kel:3:10: 型エラー: 型構成子 Callback には型引数が必要です
+[rc=1]
+== verify/ex/h3.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== verify/ex/h4.kel
+-- HEAD
+h4.kel:3:16: パースエラー(付近のトークンを確認してください)
+[rc=2]
+-- NEW
+h4.kel:3:16: パースエラー(付近のトークンを確認してください)
+[rc=2]
+== verify/ex/h5.kel
+-- HEAD
+[rc=0]
+-- NEW
+[rc=0]
+== verify/ex/h6.kel
+-- HEAD
+3
+[rc=0]
+-- NEW
+3
+[rc=0]
+== verify/ex/h7.kel
+-- HEAD
+5
+[rc=0]
+-- NEW
+5
+[rc=0]
+== verify/ex/r10.kel
+-- HEAD
+1
+[rc=0]
+-- NEW
+! r10.kel:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/r11.kel
+-- HEAD
+! r11.kel:4:12: 型エラー: 型構成子 Option には型引数が必要です
+[rc=1]
+-- NEW
+! r11.kel:4:12: 型エラー: 型構成子 Option には型引数が必要です
+[rc=1]
+== verify/ex/r12.kel
+-- HEAD
+re:in
+7
+[rc=0]
+-- NEW
+! r12.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/r1.kel
+-- HEAD
+hi
+42
+[rc=0]
+-- NEW
+! r1.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/r3.kel
+-- HEAD
+cb
+[rc=0]
+-- NEW
+! r3.kel:3:13: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/r4.kel
+-- HEAD
+ok
+[rc=0]
+-- NEW
+ok
+[rc=0]
+== verify/ex/r5.kel
+-- HEAD
+42
+[rc=0]
+-- NEW
+! r5.kel:4:19: 型エラー: Type エイリアス M.Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/r6.kel
+-- HEAD
+5
+[rc=0]
+-- NEW
+5
+[rc=0]
+== verify/ex/r8.kel
+-- HEAD
+3
+[rc=0]
+-- NEW
+3
+[rc=0]
+== verify/ex/r9.kel
+-- HEAD
+! r9.kel:4:29: 型エラー: エフェクト行に Type エイリアス Wrap は置けません(: EffectRow を付けてください)
+[rc=1]
+-- NEW
+! r9.kel:3:16: 型エラー: Type エイリアス Wrap の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/imp/main2.kel
+-- HEAD
+2
+[rc=0]
+-- NEW
+2
+[rc=0]
+== verify/ex/imp/main3.kel
+-- HEAD
+! lib3.kel:1:18: 型エラー: 型エイリアス R が再帰しています(エイリアスは非再帰)
+[rc=1]
+-- NEW
+! lib3.kel:1:18: 型エラー: 型エイリアス R が再帰しています(エイリアスは非再帰)
+[rc=1]
+== verify/ex/imp/main4.kel
+-- HEAD
+! lib4.kel:1:14: 型エラー: 型構成子 Option には型引数が必要です
+[rc=1]
+-- NEW
+! lib4.kel:1:14: 型エラー: 型構成子 Option には型引数が必要です
+[rc=1]
+== verify/ex/imp/main.kel
+-- HEAD
+4
+[rc=0]
+-- NEW
+! lib.kel:3:17: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log extends ς1} :: Row(行に名前を付けるには : EffectRow を付けてください)
+[rc=1]
+== verify/ex/repl2.in
+-- HEAD
+! <stdin>:4:1: 型エラー: 型エイリアス Q が二重に宣言されています
+! <stdin>:5:8: 型エラー: 型注釈のカインドが Type ではありません: {Log} :: Row
+! <stdin>:6:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+-- NEW
+! <stdin>:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+x : Int32 = 1
+! <stdin>:6:26: 型エラー: エフェクト位置に Type エイリアス Q は使えません(: EffectRow を付けてください)
+== verify/ex/repl3.in
+-- HEAD
+! <stdin>:1:14: 型エラー: 型エイリアス R が再帰しています(エイリアスは非再帰)
+x : Int32 = 1
+-- NEW
+! <stdin>:1:14: 型エラー: 型エイリアス R が再帰しています(エイリアスは非再帰)
+x : Int32 = 1
+== verify/ex/repl.in
+-- HEAD
+x : Int32 = 1
+_ : Int32 = 1
+-- NEW
+! <stdin>:3:10: 型エラー: Type エイリアス Q の本体のカインドが Type ではありません: {Log} :: Row(行に名前を付けるには : EffectRow を付けてください)
+x : Int32 = 1
+_ : Int32 = 1

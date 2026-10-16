@@ -1,0 +1,13 @@
+:type Array.length
+:type Show.show
+:type Ref.get
+:type fn(x: Int32) => x + 1
+let id[T](x: T): T = x
+let g = id(Show.show)
+println(g(1))
+echo(g(2) + "\n")
+let w = id(fn(x: Int32) => x + 1)
+println(show(w(1)))
+echo(show(w(2)))
+:type w
+:type g

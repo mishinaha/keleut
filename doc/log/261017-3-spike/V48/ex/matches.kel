@@ -1,0 +1,8 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let mv(n: Never): Int32 = n match { case m => 1 }
+let mw(n: Never): Int32 = n match { case _ => 2 }
+let mc(a: Absurd): Int32 = a match { case MkA(_) => 3 }
+let me(n: Never): Int32 = n match {}
+let mt(p: (Int32, Never)): Int32 = p match { case (a, b) => 4 }
+let mr(p: {x: Never}): Int32 = p match { case {x} => 5 }

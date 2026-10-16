@@ -1,0 +1,2 @@
+type class Conv[A] { val conv[B]: (A, B) => String }
+type instance Conv[Int32] { let conv(a, b) = show(b + 1) }

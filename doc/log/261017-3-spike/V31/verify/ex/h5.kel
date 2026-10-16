@@ -1,0 +1,4 @@
+type App[G[_]] = G[Int32]
+type class Fx[F[_]] {
+  val fx: (App[F]) => Int32
+}

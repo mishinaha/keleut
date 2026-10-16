@@ -1,0 +1,2 @@
+from "./imp/lib" import { Sz, Foo }
+echoln(show(sz(Foo)))

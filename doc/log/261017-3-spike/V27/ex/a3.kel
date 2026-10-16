@@ -1,0 +1,2 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+let run[F, E](c: Callback[F[E]]): Unit @ F[E] = c match { case Callback(g) => g() }

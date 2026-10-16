@@ -1,0 +1,11 @@
+newtype Box[A] = Box(A)
+type class Desc[A] { val desc: (A) => String }
+type instance Desc[Int32] { let desc(x) = "i" + show(x) }
+type instance[A: Desc] Desc[Box[_]] { let desc(b) = b match { case Box(x) => "box(" + desc(x) + ")" } }
+module M {
+  pub let rec dl[A: Desc](xs: List[A]): String = xs match { case Nil => "" case Cons(h, t) => desc(h) + "," + dl(t) }
+  pub let wrap[A: Desc](x: A): () => String @ {} = fn() => dl(Cons(x, Cons(x, Nil)))
+}
+let f = M.wrap(Box(Box(3)))
+let g = M.wrap(7)
+echoln(f() + ";" + g() + ";" + f())

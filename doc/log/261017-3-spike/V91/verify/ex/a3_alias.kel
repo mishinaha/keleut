@@ -1,0 +1,9 @@
+type F = Float64
+type I = Int32
+let f(x: F): F = x * 2.0
+let g(x: I): I = x % 4
+echoln(show(f(1.5)))
+echoln(show(g(10)))
+let z = { let k = 3
+  k % 2 }
+echoln(show(z))

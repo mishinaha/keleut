@@ -1,0 +1,6 @@
+module M { pub let p = (show, 7) }
+M.p
+let pp = M.p
+type Al[A] = (A, Int32)
+let w: [A: Show] Al[(A) => String] = (show, 3)
+w

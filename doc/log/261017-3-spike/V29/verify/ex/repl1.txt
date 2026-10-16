@@ -1,0 +1,6 @@
+type Cb[E] = () => Unit @ E
+newtype H = MkH(Cb[{Print}])
+type C = A[{}]
+type A[E] = (Int32) => Unit @ E
+let q = 1
+q

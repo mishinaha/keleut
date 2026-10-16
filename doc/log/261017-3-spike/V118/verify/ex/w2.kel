@@ -1,0 +1,5 @@
+let f() = {
+  with x = 1
+  newtype U = U(Int32)
+  x
+}

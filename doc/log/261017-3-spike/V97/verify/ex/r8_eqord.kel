@@ -1,0 +1,10 @@
+let idf[A](x: A): A = x
+let lt = idf(fn(a: Int32, b: Int32) => a < b)
+let eqf = idf(fn(a: String, b: String) => a == b)
+let p(): Unit @ Console = echoln(show(lt(1, 2)) + show(eqf("a", "a")))
+let q(): Unit @ Print = println(show(lt(3, 2)))
+p()
+with_stdout(q)
+let h = idf(Array.get)
+let arr: Array[Int32] = run hh { MutableArray.freeze(MutableArray.new(2, 4)) }
+echoln(show(h(arr, 1)))

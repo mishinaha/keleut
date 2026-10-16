@@ -1,0 +1,4 @@
+type S = String
+type class Pp[A] { val pp[B: Show]: (A) => S }
+type instance Pp[Bool] { let pp(b) = if b then "t" else "f" }
+echoln(pp(true))

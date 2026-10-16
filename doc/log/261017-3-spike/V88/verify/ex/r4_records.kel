@@ -1,0 +1,8 @@
+let r = {a = 1, b = 2}
+let s = {r with b = 3}
+let {a, b} = s
+let t = {x = a,}
+let f(g: (Int32) => Int32): Int32 = g(1)
+let u = f { y => y + t.x }
+let v = f { it => it * b }
+echoln(show(u) + " " + show(v))

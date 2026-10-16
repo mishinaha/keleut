@@ -1,0 +1,2 @@
+let q(x: Int16): Int16 = x * 2
+echoln(show(q(21)))

@@ -1,0 +1,113 @@
+=== nnlist.kel
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let xs = Cons(mkp(), Cons(b, Nil))
+--- $ diktor-head --type-check nnlist.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! nnlist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== pairtp.kel
+newtype Pair[A] = Pair(A, A)
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let p = Pair(mkp(), b)
+--- $ diktor-head --type-check pairtp.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! pairtp.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Pair のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== nestedname.kel
+let b(): Int32 @ Console = { echo("b"); 2 }
+let ys: List[() => Int32] = Nil
+let xs = Cons(b, ys)
+--- $ diktor-head --type-check nestedname.kel
+b : () => Int32 @ {Console}
+ys : List[() => Int32 @ {}]
+! nestedname.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== box.kel
+newtype Box = Box(() => Int32)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = Box(b)
+--- $ diktor-head --type-check box.kel
+b : () => Int32 @ {Console}
+! box.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== alias.kel
+type F = () => Int32
+newtype Box = Box(F)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = Box(b)
+--- $ diktor-head --type-check alias.kel
+b : () => Int32 @ {Console}
+! alias.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== nestedfield.kel
+newtype L = L(List[() => Int32])
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = L(Cons(b, Nil))
+--- $ diktor-head --type-check nestedfield.kel
+b : () => Int32 @ {Console}
+! nestedfield.kel:3:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ L のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== rowparam.kel
+newtype Cb[R] = Cb(() => Int32 @ R)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let mkp(): () => Int32 = fn() => 1
+let x = Cons(Cb(b), Cons(Cb(mkp()), Nil))
+--- $ diktor-head --type-check rowparam.kel
+b : () => Int32 @ {Console}
+mkp : () => () => Int32 @ {}
+! rowparam.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== mixed.kel
+newtype P[A] = P(f: () => Int32, x: A, y: A)
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let p = P(f = fn() => 1, x = mkp(), y = b)
+--- $ diktor-head --type-check mixed.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+! mixed.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ P のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+=== mixed2.kel
+newtype Q[A] = Q(List[(A) => Int32])
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let k(g: () => Int32): Int32 = 0
+let q = Q(Cons(fn(x) => { x(); 0 }, Nil))
+let q2 = Q(Cons(k, Nil))
+--- $ diktor-head --type-check mixed2.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+k : (() => Int32 @ {}) => Int32
+q : Q[() => A @ {}]
+q2 : Q[() => Int32 @ {}]
+[exit 0]
+=== nonrow.kel
+let xs = Cons(1, Cons(true, Nil))
+--- $ diktor-head --type-check nonrow.kel
+! nonrow.kel:1:10: 型エラー: Boolean は Integral のインスタンスではありません
+[exit 1]
+=== pa2.kel
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let pick[A](c: Boolean, x: A, y: A): A = c match { case true => x case false => y }
+let use(): Int32 @ Console = pick(true, mkp(), b)()
+--- $ diktor-head --type-check pa2.kel
+mkp : () => () => Int32 @ {}
+b : () => Int32 @ {Console}
+pick : (Boolean, A, A) => A
+! pa2.kel:4:48: 型エラー: ラベル Console がありません(行は閉じています)
+[exit 1]
+=== mixed3.kel
+newtype Q[A] = Q(List[(A) => Int32], List[(A) => Int32])
+let k(g: () => Int32): Int32 = 0
+let k2(g: () => Int32 @ Console): Int32 = 0
+let q = Q(Cons(k, Nil), Cons(k2, Nil))
+--- $ diktor-head --type-check mixed3.kel
+k : (() => Int32 @ {}) => Int32
+k2 : (() => Int32 @ {Console}) => Int32
+! mixed3.kel:4:9: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Q のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]

@@ -1,0 +1,9 @@
+type Id[A] = A
+type Id2[A] = Id[A]
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype N[X] = MkN(Callback[Id[X]])
+let f(n: N[{Print}]): Int32 = 0
+newtype N2[X] = MkN2(Callback[Id2[X]])
+let f2(n: N2[{Print}]): Int32 = 0
+newtype T[G] = MkT(G[Int32])
+let g[F](x: T[F[String]], y: F[String, Int32]): Int32 = 0

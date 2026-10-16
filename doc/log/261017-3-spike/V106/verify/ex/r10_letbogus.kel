@@ -1,0 +1,1 @@
+let f[B: Bogus](x: Int32): Int32 = x

@@ -1,0 +1,4 @@
+type F = (Int32, Int32) => Int32
+let add: F = fn(a, b) => a + b
+let app2(f: F, x: Int32): Int32 = f(x, x)
+echoln(show(app2(add, 3)))

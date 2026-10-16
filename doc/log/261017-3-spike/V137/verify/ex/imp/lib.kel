@@ -1,0 +1,12 @@
+pub effect Fail = { throw: (String) => Never }
+pub effect Res = { use: () => Unit }
+pub type Boom = Never
+pub effect Stop = { stop: () => Boom }
+pub let rec loop(n: Int32): Int32 @ {Fail} =
+  if n == 0 then 0 else
+  ({ perform use(); perform stop(); 1 }) handle {
+    case use() => resume()
+    case cancel => perform throw("from cancel " + show(n))
+  } handle {
+    case stop() => loop(n - 1)
+  }

@@ -1,0 +1,3 @@
+type W: EffectRow = {Print}
+newtype N[W] = N(() => Unit @ {W})
+let n: N[{Console}] = N(fn() => println("a"))

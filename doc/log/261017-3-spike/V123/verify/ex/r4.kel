@@ -1,0 +1,4 @@
+let s = "/* not a comment"
+echoln(s)
+let c = 1 /* "unterminated */ + 1
+echoln(show(c))

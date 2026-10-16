@@ -1,0 +1,6 @@
+effect E = { e: () => Int32 }
+newtype N[E] = N(() => Int32 @ E)
+newtype M = M(N[{E}])
+let use(m: M): Int32 @ {E} = m match { case M(N(g)) => g() }
+let v: Int32 = use(M(N(fn() => perform e()))) handle { case e() => resume(9) }
+echoln(show(v))

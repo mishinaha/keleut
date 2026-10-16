@@ -1,0 +1,2 @@
+pub let twice(x: Int32): Int32 = x * 2
+pub newtype Box[A] = Box(A)

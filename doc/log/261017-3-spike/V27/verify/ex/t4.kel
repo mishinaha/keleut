@@ -1,0 +1,1 @@
+let f[G](r: [A(Int32) extends G[Int32]]): Int32 = 0

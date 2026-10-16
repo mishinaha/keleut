@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+effect Stop = { stop: () => Int32 }
+let r = ((perform ask() + 1) handle {
+  case ask() => { echoln("ask clause"); 1 / 0 }
+  case cancel => { echoln("cancel ask start"); perform stop(); echoln("cancel ask end") }
+}) handle {
+  case stop() => { echoln("stop: no resume"); 7 }
+}
+echoln(show(r))

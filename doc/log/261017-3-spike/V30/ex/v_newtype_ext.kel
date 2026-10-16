@@ -1,0 +1,2 @@
+newtype N[E] = N(() => Unit @ {Log extends E})
+effect Log = { log: (String) => Unit }

@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+effect Log = { log: (String) => {} }
+let f(): Int32 @ {Ask, Log} = { perform log("a"); perform ask() + perform ask() }
+let r = (f() handle { case ask() => resume(20) }) handle { case log(s) => { echoln("log " + s); resume({}) } }
+echoln(show(r))

@@ -1,0 +1,9 @@
+newtype Opaque = MkOpaque(Int32)
+let ng(o: Opaque): Boolean = {
+  let k = fn(x) => {
+    let b = show(Cons(x, Nil))
+    let a = Cons(x, Nil) == Nil
+    a
+  }
+  k(o)
+}

@@ -1,0 +1,5 @@
+type class Mapper[F[_]] { val fmap[X, Y, E]: (F[X], (X) => Y @ E) => F[Y] @ E }
+newtype Box[A] = Box(A)
+type instance Mapper[Box[_]] { let fmap(b, f) = b match { case Box(x) => Box(f(x)) } }
+let r = fmap(Box(1i32), fn(x) => { echo("in"); x + 1 })
+r match { case Box(v) => echo(show(v)) }

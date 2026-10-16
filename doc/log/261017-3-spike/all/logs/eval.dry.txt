@@ -1,0 +1,14 @@
+checking file lib/driver.ml
+Hunk #1 succeeded at 851 (offset 122 lines).
+Hunk #2 succeeded at 928 (offset 122 lines).
+Hunk #3 succeeded at 952 (offset 122 lines).
+checking file lib/interp.ml
+checking file lib/prelude.kel
+Hunk #1 succeeded at 414 (offset 3 lines).
+Hunk #2 succeeded at 451 (offset 3 lines).
+checking file lib/value.ml
+checking file test/classes.t
+checking file test/dictionary_passing.t
+Hunk #1 succeeded at 419 with fuzz 2.
+checking file test/repl.t
+checking file test/tail_calls.t

@@ -1,0 +1,93 @@
+== p1.kel
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg(mk())
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+use : () => {} @ {Reg}
+exit=0
+== p2.kel
+effect File = { write: (String) => Unit }
+effect Reg = { reg: (() => Unit @ File) => Unit }
+let use(): Unit @ {Reg, Console} = perform reg(fn() => perform write("x"))
+-- --type-check
+use : () => {} @ {Reg, Console}
+exit=0
+== p3.kel
+effect Reg = { reg: (() => Unit @ {}) => Unit }
+let use(): Unit @ {Reg, Console} = perform reg(fn() => echoln("x"))
+-- --type-check
+! p3.kel:2:56: 型エラー: ラベル Console がありません(行は閉じています)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+exit=1
+== p4.kel
+effect Reg = { reg: ((() => Unit @ Console, Int32)) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg((mk(), 1))
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+use : () => {} @ {Reg}
+exit=0
+== p5.kel
+effect Reg = { reg: (() => Unit @ Console, Int32) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg(mk(), 1)
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+use : () => {} @ {Reg}
+exit=0
+== p6.kel
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let use(r: {go: () => Unit @ {}}): Unit @ Reg = perform reg(r.go)
+-- --type-check
+use : ({go: () => {} @ {}}) => {} @ {Reg}
+exit=0
+== p7.kel
+effect Reg = { reg: (() => Unit @ Console) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ {Console} = {
+  perform reg(mk())
+  echoln("after")
+} handle {
+  case reg(f) => { f(); resume() }
+}
+use()
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+use : () => {} @ {Console}
+_ : {}
+exit=0
+== r1.kel
+effect Get = { get: () => () => Unit @ Console }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Console = {
+  let g = perform get()
+  g()
+} handle {
+  case get() => resume(mk())
+}
+-- --type-check
+a : () => {} @ {}
+mk : () => () => {} @ {}
+use : () => {} @ {Console}
+exit=0
+== r2.kel
+effect File = { write: (String) => Unit }
+effect Get = { get: () => () => Unit @ File }
+let use(): Unit @ {File, Console} = {
+  let g = perform get()
+  g()
+} handle {
+  case get() => resume(fn() => perform write("x"))
+}
+-- --type-check
+use : () => {} @ {File, Console}
+exit=0

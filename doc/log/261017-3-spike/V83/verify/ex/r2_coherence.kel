@@ -1,0 +1,4 @@
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = "L"
+}
+echoln(show(Cons(1, Nil)))

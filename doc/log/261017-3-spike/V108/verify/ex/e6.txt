@@ -1,0 +1,9 @@
+let p = (show, 1)
+let p2 = (p, ???)
+p2
+let p3 = (p, 2)
+p3
+let pe = (eq, (x) => x == x, 1)
+pe
+let n = (x) => show(x)
+n

@@ -1,0 +1,38 @@
+合成後(V137 + V109 + V108 + X-B11 + V37)の dune runtest: 出力 0 バイト(終了 0)。
+  新しく落ちるブロック: 0
+  期待値が変わる既存のブロック: 0
+  新しいブロック(すべて合成後に緑): 
+    test/tail_calls.t   2 ブロック(retrycancel, retrycancelvia, retrycancelsame / retcancelret)  V137
+    test/dictionary_passing.t 1 ブロック(capdict)                                                V109
+    test/repl.t          2 ブロック(制約付きの値の表示 / newtype の Show の経路)                  V108
+    test/classes.t       1 ブロック(pshowsplit)                                                   V37
+    X-B11 は cram なし。
+
+対照: 合成後の test/*.t を HEAD の実装の写しで走らせた結果(新しいブロックが HEAD で落ちるか)
+  test/tail_calls.t: 落ちる。retrycancel と retrycancelvia は記録が 66229 行の Stack overflow と 33771 行の正常な記録に分かれる。
+                     retcancelret は標準出力なしで [3]、正常な記録 33761 行とスタックオーバーフローの 1 行。retrycancelsame は通る。
+                     (V137 の final.md (5) の主張と一致)
+  test/repl.t:       落ちる。1 つ目のブロックは p,_,k,m,v,_,_ が <fn>、t と h が <prim Show.show>、q と _ が <fn>。
+                     2 つ目は let x = W(show) が実行時エラーで取り消され、z が U!。
+                     (V108 の final.md (2)(3) の主張と一致)
+  test/dictionary_passing.t: 通る(V109 の capdict は HEAD でも同じ出力。主張と一致)
+  test/classes.t:    通る(V37 の pshowsplit は HEAD の出力と同一。主張と一致)
+各項目の期待値の変化の主張(既存のブロックは変わらない)は合成後も成り立つ。食い違いなし。
+
+[最終稿での追記]
+eval.patch の見出しを a/、b/ の相対の形に作り直した(本体は同一)。HEAD の写しに patch -p1 で当て、合成の写しと diff -r で一致、dune build の Warning 2 件(parser.mly、HEAD と同じ)、dune runtest 0 バイト。
+
+ほかの分野の合成差分との組み合わせ(HEAD + eval.patch + <分野>.patch):
+  syntax   : fuzz なし、runtest 0 バイト
+  numeric  : test/dictionary_passing.t の 1 塊が fuzz 2、runtest 0 バイト
+  region   : fuzz なし、runtest 0 バイト
+  effects  : fuzz なし、runtest は 5 ファイル 7 ブロックで、effects だけの木の差分と同一
+  never    : fuzz なし、runtest 0 バイト
+  kinds    : fuzz なし、runtest 0 バイト
+  spec     : fuzz なし、runtest 0 バイト
+  diagtext : fuzz なし、runtest 0 バイト
+  classes  : fuzz なし、runtest は test/repl.t の 1 ブロック(V108 の 1 つ目)の 1 行
+             t : (Int32) => String @ {Console, Blocking, Print} = <fn>  ->  @ {} = <fn>
+             V97 単独、V103 単独、classes の合成の処理系のどれでも @ {} になる(V110、V136 では変わらない)
+逆の順: classes / diagtext を先に当てると eval の test/classes.t の塊は offset 45 / 39 行で当たり、同じ木になる。
+        numeric を先に当てると eval の test/dictionary_passing.t の塊が fuzz 2。

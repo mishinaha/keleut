@@ -1,0 +1,4 @@
+newtype P[A] = P(f: () => Int32, x: A, y: A)
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let p = P(f = fn() => 1, x = mkp(), y = b)

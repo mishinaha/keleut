@@ -1,0 +1,2 @@
+newtype Opaque = MkOpaque(Int32)
+let ng(o: Opaque) = fn(y) => Cons({a = o, b = y}, Nil) == Nil

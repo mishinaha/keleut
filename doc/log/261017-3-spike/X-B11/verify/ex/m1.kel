@@ -1,0 +1,8 @@
+module A {
+  pub type T = Int32
+  pub let f(x: T): T = if x > 0 then x else 0 - x
+}
+module B {
+  pub let g(x: Int32): Int32 = A.f(x) * 2
+}
+echoln(show(B.g(0 - 5)))

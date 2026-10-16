@@ -1,0 +1,7 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+let mkf[E](k: () => Unit @ E): (Foo) => Int32 @ E = fn(x) => { k(); 1i32 }
+type instance Sz[Foo] {
+  let sz = mkf(fn() => ())
+}
+echoln(show(sz(Foo)))

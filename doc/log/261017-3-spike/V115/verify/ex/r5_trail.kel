@@ -1,0 +1,2 @@
+let f(k: () => Int32): Int32 = k()
+echoln(show(f { 7 }))

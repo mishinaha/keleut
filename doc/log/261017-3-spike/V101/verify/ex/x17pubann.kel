@@ -1,0 +1,4 @@
+effect Reg = { reg: (() => Unit) => Unit }
+pub let go(): Unit @ Reg = perform reg(fn() => ())
+let main(): Unit @ Console = { go() } handle { case reg(f) => { f(); echoln("ok"); resume() } }
+main()

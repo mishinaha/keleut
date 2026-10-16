@@ -1,0 +1,7 @@
+let v: () => Unit @ {Log} = fn() => perform log("v")
+type class K[T] { val k: (T) => Unit @ {Log} }
+type instance K[Int32] { let k(x) = perform log(show(x)) }
+newtype Row1[E] = Row1(() => Unit @ {Log extends E})
+let w[E](r: Row1[E]): Unit @ {Log extends E} = r match { case Row1(g) => g() }
+effect Log = { log: (String) => Unit }
+let _ = { v(); k(3); w(Row1(fn() => perform log("w"))) } handle { case log(s) => { echoln(s); resume(()) } }

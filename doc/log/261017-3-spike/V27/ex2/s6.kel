@@ -1,0 +1,3 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype A[F, E] = MkA(B[F, E])
+newtype B[F, E] = MkB(Callback[F[E]])

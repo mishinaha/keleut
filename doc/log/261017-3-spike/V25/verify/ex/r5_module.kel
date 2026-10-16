@@ -1,0 +1,3 @@
+module M { pub effect Ask = { ask: () => Int32, tell: (Int32) => {} } }
+let g(): Int32 = ({ perform M.Ask.tell(1); perform M.Ask.ask() }) handle { case M.Ask.ask() => resume(5) case M.Ask.tell(n) => resume({}) }
+echoln(show(g()))

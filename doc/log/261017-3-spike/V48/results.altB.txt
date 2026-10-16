@@ -1,0 +1,26 @@
+$ diktor --type-check params.kel
+pv : (Empt) => Int32
+⚠ このパターンには一致する値がありません
+pn : (Never) => Int32
+⚠ このパターンには一致する値がありません
+pw : (Never) => Int32
+⚠ このパターンには一致する値がありません
+pr : ({x: Empt}) => Int32
+⚠ このパターンには一致する値がありません
+pt : ((Int32, Never)) => Int32
+⚠ このパターンには一致する値がありません
+pc : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+pc2 : (Absurd) => Int32
+⚠ このパターンには一致する値がありません
+pa : (Absurd) => Int32
+pnest : ({x: Absurd}) => Int32
+⚠ このパターンには一致する値がありません
+pvar : (#V(Never)) => Int32
+⚠ このパターンには一致する値がありません
+$ diktor --type-check absurd.kel
+absurd : (Never) => A
+⚠ このパターンには一致する値がありません
+elim : (Empt) => A
+⚠ このパターンには一致する値がありません
+main : () => {} @ {Print extends R1}

@@ -1,0 +1,4 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype Holder[F, E] = Holder(Callback[F[E]])
+let f[G, X](h: Holder[G, X]): Int32 = 0
+let g(c: Callback[{}]): Int32 = f(Holder(c))

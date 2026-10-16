@@ -1,0 +1,23 @@
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t b/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t.corrected
+index 18b2ae3..1bf9cc7 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t.corrected
+@@ -148,7 +148,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   [1]
+   $ printf 'type F = (Int32) => Int32\npub newtype Box = Box(F)\n' > pubaliasnt.kel
+   $ diktor --type-check pubaliasnt.kel
+-  ! pubaliasnt.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
++  ! pubaliasnt.kel:2:23: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+   [1]
+ 
+ エイリアスの型引数に書いた矢印は、注釈に直接書いた矢印として扱う。本体の矢印が @ を
+@@ -167,7 +167,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   [1]
+   $ printf 'type K[A] = Int32\npub newtype Box = Box(K[(Int32) => Int32])\n' > pubaliasarg4.kel
+   $ diktor --type-check pubaliasarg4.kel
+-  ! pubaliasarg4.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! pubaliasarg4.kel:2:23: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+ 
+ エイリアスの本体の名前は、エイリアスを宣言した位置で読む(§15.1)。module の中の

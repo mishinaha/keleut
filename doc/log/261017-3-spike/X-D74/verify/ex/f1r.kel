@@ -1,0 +1,2 @@
+let rec g[k](s: Ref[k, Int32]): Int32 = 0
+and f[h](r: Ref[h, Int32]): Int32 = g(r)

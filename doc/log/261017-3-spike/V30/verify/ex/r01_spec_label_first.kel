@@ -1,0 +1,15 @@
+effect Log = { log: (String) => Unit }
+newtype A[X] = MkA(() => Unit @ {Log extends X}, B[X])
+newtype B[Y] = MkB(() => Unit @ Y)
+let f[E](x: A[E]): A[E] = x
+let runit(): Int32 = {
+  let a: A[{}] = MkA(fn() => perform log("x"), MkB(fn() => ()))
+  a match {
+    case MkA(g, MkB(h)) => {
+      g() handle { case log(s) => { echoln(s); resume(()) } }
+      h()
+      7
+    }
+  }
+}
+echoln(show(runit()))

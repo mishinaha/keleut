@@ -1,0 +1,2 @@
+from "./mod/lib" import { Fail, safe }
+echoln(show(safe(fn() => perform throw("boom"))))

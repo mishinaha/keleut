@@ -1,0 +1,113 @@
+=== r11_prelude_shadow.kel
+type Cb = (Int32) => Int32
+pub let h(f: Cb): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))
+--- $ diktor(final) r11_prelude_shadow.kel
+! r11_prelude_shadow.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス Cb の本体の矢印に @ がありません)
+[exit 1]
+=== r12_prelude_alias.kel
+pub let h(f: Cb): Int32 = f(1)
+echoln(show(h(fn(x) => x + 1)))
+--- $ diktor(final) r12_prelude_alias.kel
+! r12_prelude_alias.kel:1:14: 型エラー: 未知の型: Cb
+[exit 1]
+=== r13_order.kel
+type F = (Int32) => Int32
+pub let h(f: F, x: Foo): Int32 = f(1)
+--- $ diktor(final) r13_order.kel
+! r13_order.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+[exit 1]
+=== r14_rowalias_phantom.kel
+type W[A]: EffectRow = {Console}
+pub let h(f: () => Unit @ W[(Int32) => Int32]): Unit @ {Console} = f()
+h(fn() => echoln("ok"))
+--- $ diktor(final) r14_rowalias_phantom.kel
+ok
+[exit 0]
+=== r15_nt_phantom.kel
+type K[A] = Int32
+pub newtype Box = Box(K[(Int32) => Int32])
+echoln("ok")
+--- $ diktor(final) r15_nt_phantom.kel
+! r15_nt_phantom.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== r16_tuple_ok.kel
+type P[A] = (A, Int32)
+pub let h(x: P[(Int32) => Int32 @ {}]): Int32 = x.1
+echoln(show(h((fn(y) => y, 3))))
+--- $ diktor(final) r16_tuple_ok.kel
+r16_tuple_ok.kel:2:51: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== r1_instvar.kel
+type A = (Int32) => Int32
+type class Desc[T] { val desc: (T) => String }
+type instance[A: Show] Desc[List[_]] {
+  pub let desc(x: List[A]): String = show(x)
+}
+echoln(desc(Cons(1i32, Nil)))
+--- $ diktor(final) r1_instvar.kel
+[1]
+[exit 0]
+=== r2_phantom.kel
+type K[A] = Int32
+pub let h(x: K[(Int32) => Int32]): Int32 = x + 1
+echoln(show(h(1)))
+--- $ diktor(final) r2_phantom.kel
+! r2_phantom.kel:2:9: 型エラー: pub な宣言には完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+[exit 1]
+=== r3_ntparam_shadow.kel
+type A = (Int32) => Int32
+pub newtype Box[A] = Box(A)
+echoln(show(Box(1i32) match { case Box(n) => n }))
+--- $ diktor(final) r3_ntparam_shadow.kel
+1
+[exit 0]
+=== r4_rowalias_arg.kel
+type W[E: EffectRow]: EffectRow = {Console extends E}
+pub let h[E: EffectRow](f: () => Unit @ W[E]): Unit @ W[E] = f()
+h(fn() => echoln("ok"))
+--- $ diktor(final) r4_rowalias_arg.kel
+! r4_rowalias_arg.kel:1:1: 型エラー: 型エイリアス W の型パラメータ E には型クラスの制約を書けません
+[exit 1]
+=== r5_valtparam.kel
+type A = (Int32) => Int32
+pub let idf[A](x: A): A = x
+echoln(show(idf(3)))
+--- $ diktor(final) r5_valtparam.kel
+3
+[exit 0]
+=== r6_modshadow.kel
+type F = (Int32) => Int32
+module M {
+  pub newtype F = F(Int32)
+  pub let h(f: F): Int32 = f match { case F(n) => n }
+}
+echoln(show(M.h(M.F(5))))
+--- $ diktor(final) r6_modshadow.kel
+5
+[exit 0]
+=== r7_variant.kel
+type F = (Int32) => Int32 @ {}
+type U = #A(F) | #B
+pub let h(u: U): Int32 = u match { case #A(f) => f(1)
+  case #B => 0 }
+echoln(show(h(#A(fn(x) => x + 1))))
+--- $ diktor(final) r7_variant.kel
+2
+[exit 0]
+=== r8_effectop.kel
+type F = (Int32) => Int32
+effect E = { get: () => F }
+pub let h(g: () => Int32 @ {E}): Int32 @ {E} = g()
+echoln(show(h(fn() => 1) handle { case get(), k => resume(fn(x) => x) }))
+--- $ diktor(final) r8_effectop.kel
+r8_effectop.kel:4:45: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== r9_tparam_hk.kel
+type F = (Int32) => Int32
+pub let h[F[_]](x: F[Int32], g: (F[Int32]) => Int32 @ {}): Int32 = g(x)
+echoln(show(h(Some(1i32), fn(o) => o match { case Some(n) => n
+  case None => 0 })))
+--- $ diktor(final) r9_tparam_hk.kel
+1
+[exit 0]

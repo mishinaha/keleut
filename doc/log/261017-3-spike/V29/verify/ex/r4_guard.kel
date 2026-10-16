@@ -1,0 +1,9 @@
+type Pair[A] = (A, A)
+newtype Q = MkQ(Pair[Int32])
+type R = {}
+newtype U = MkU(R, Pair[{}])
+let classify(q: Q): String = q match {
+  case MkQ((a, b)) if a > b => "gt"
+  case MkQ((a, b)) => "le"
+}
+with_stdout(fn() => { println(classify(MkQ((2, 1)))); println(classify(MkQ((1, 2)))) })

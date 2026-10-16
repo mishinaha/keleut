@@ -1,0 +1,3 @@
+newtype Callback[E] = MkCb(() => Unit @ E)
+type Cb[E] = Callback[E]
+newtype N = MkN(Cb[{Print}])

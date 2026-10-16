@@ -1,0 +1,1260 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:50:37.766922516 +0900
+@@ -97,9 +97,11 @@
+    Generic を含む型がそのまま型スキーマの役を果たし、型スキーマ専用のデータ型は持たない。
+    `types` は型パラメータの束縛を持ち、リージョン変数 `h` もここに載る。
+    `resume_ty` は、操作節の中でだけ Some になる 2 つ組である。
+-   `never_clause` は、再開しない操作(返り値の型が `Never` の操作)の節の中でだけ Some になり、
+-   その操作名を持つ。
+-   その節に `resume` を書いたときの診断に使う(§11.16)。
++   `no_resume` は、`resume` を書けない位置を表し、
++   その位置に `resume` を書いたときの診断に使う(§11.16)。
++   位置は、再開しない操作(返り値の型が `Never` の操作)の節、操作節のガード、
++   `return` 節、`cancel` 節の 4 種類で、再開しない操作の節はその操作名を持つ。
++   操作節の外では `None` である。
+    `tops` は、`values` のうちトップレベルの実体を指す名前から、その実体(`Tree.gref`)を引く。
+    局所の束縛は `add_local` が `tops` から取り除くので、局所の名前が同名のトップレベルの実体を覆う。
+    変数参照は、`tops` に名前があれば、その実体を木に書く(§11.11)。
+@@ -117,11 +119,13 @@
+    関数適用(§11.12)の引数の個数の不一致は、すべてこの閉じた行の単一化が検出する。
+    適用の引数を数える専用の検査はない。 *)
+ 
++type no_resume = No_never_clause of oid | No_guard | No_return_clause | No_cancel_clause
++
+ type env = {
+   values : ty SMap.t;
+   types : ty SMap.t; (* 型パラメータの束縛(リージョン変数 h を含む) *)
+   resume_ty : (ty * ty) option; (* (操作の返り値型, handle 式全体の型)。操作節の中でだけ Some *)
+-  never_clause : oid option; (* 再開しない操作の節の中でだけ Some(その操作名)。resume の診断に使う *)
++  no_resume : no_resume option; (* resume を書けない位置。resume の診断に使う *)
+   tops : Tree.gref SMap.t; (* values のうちトップレベルの実体を指す名前 → 実体。局所束縛は取り除く *)
+ }
+ 
+@@ -281,6 +285,31 @@
+   in
+   has "行型ではありません" msg || has "スコープ付きの型" msg || has "ラベル " msg || has "は注釈で固定された行変数" msg
+ 
++(* 呼び出しの実引数の並び(_item の RecordExtend の連なり)の個数。
++   ラベル付きの引数を含むときは None *)
++let rec args_arity ((_, e) : T.exp) =
++  match e with
++  | T.RecordEmpty -> Some 0
++  | T.RecordExtend (rest, l, _) when l = "_item" -> Option.map succ (args_arity rest)
++  | _ -> None
++
++(* 実引数の並びと仮引数の行がどちらも _item だけで、個数が違えば、
++   実引数を精緻化する前に個数の不一致として報告する。
++   実引数の中に別の誤りがあっても、個数の不一致が先に報告される *)
++let check_call_arity what arg params =
++  match (args_arity arg, Unify.item_arity params) with
++  | Some n, Some m when n <> m ->
++      type_error
++        ("引数の個数が一致しません: " ^ what ^ " " ^ string_of_int m ^ " 個の引数を取りますが、" ^ string_of_int n
++       ^ " 個を渡しています")
++  | _ -> ()
++
++(* perform の引数と resume の引数で、期待型の矢印の行が空のときに、行の不一致に添える文言(§11.19)。
++   操作の型は型パラメータを持たないので、その空の行は操作の型に書いた @ {} か @ の省略から来る *)
++let op_row_note what =
++  "(" ^ what
++  ^ "が求める関数の行は空 = 純粋です。操作の型の矢印は書いたとおりに読み、@ の省略は @ {} と読みます。エフェクトを起こす関数を通すなら、操作の型のその矢印に @ で行を書いてください。§9)"
++
+ (* 最外の行が閉じた矢印の尾部を、新しい行変数で開く(使用時の開き。§11.26)。
+    名前で参照した関数の型(§11.11)と、呼び出し先の関数の型(§11.12)に掛ける。
+    開いてから単一化すると、閉じた行のラベルを含むどの行の下からでも使える。
+@@ -1583,8 +1612,7 @@
+ 
+    開く場面を呼び出し(§11.12)と関数型を要求する位置(§11.19)に限ると、
+    期待型を押し込まずに単一化する位置に名前を置いたとき、閉じた行のまま単一化される。
+-   コンストラクタの引数、レコードのフィールド、タプルの要素、`match` の節の値、
+-   `perform` の引数がそうである。
++   コンストラクタの引数、レコードのフィールド、タプルの要素、`match` の節の値がそうである。
+    たとえば `a` が `@ {}`、`b` が `@ Console` の関数なら、
+    `Cons(a, Cons(b, Nil))` は 2 つの要素の行が `{}` と `{Console}` で一致せずに落ちる。
+    名前の参照で開けば、置く位置によらず、`a` の型は `b` の型と単一化できる。
+@@ -1711,7 +1739,17 @@
+    この位置の行が空(注釈の `@ {}` か、高階の引数の行が `@ {}`)である形では、
+    仕様 §9 の、入れ子の矢印で省略した `@` を `@ {}`(純粋)と読む規則を案内する。
+    言い換えるのは行に由来する失敗だけで、その判定を `row_failure` が行う。
+-   引数の型の不一致は言い換えない。 *)
++   引数の型の不一致は言い換えない。
++
++   引数を検査する前に、`check_call_arity` が実引数の個数と仮引数の個数を比べる。
++   実引数の並びが `_item` だけでできていて、仮引数の行が閉じた `_item` 行のときに限り、
++   個数が違えば、引数の個数の不一致として報告する。
++   この検査が無くても、閉じた行どうしの単一化は失敗する。
++   しかし、その報告は行の途中で尽きたラベル `_item` を名指すだけで、個数の違いに読み替えにくい。
++   ラベル付きの引数を含む呼び出しと、仮引数の型がまだ決まっていない呼び出しは比べず、
++   単一化に任せる。
++   実引数を精緻化する前に比べるので、実引数の中に別の誤りがあっても、個数の不一致を先に報告する。
++   perform の引数(§11.15)も同じ検査を通す。 *)
+ 
+   | T.Apply (f, arg) ->
+       let tf = elab_exp env level eff f in
+@@ -1733,6 +1771,7 @@
+              (msg
+             ^ "(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)")
+          else type_error msg);
++      check_call_arity "呼び出す関数は" arg pvar;
+       elab_check env level eff arg pvar;
+       tr
+ (* ## 11.13 演算子とレコードの 4 操作
+@@ -1870,7 +1909,7 @@
+ (* ## 11.15 perform と行の単一化
+ 
+    操作の呼び出しは 4 つの手順で型付けする。
+-   名前を解決し(§11.20)、完全名を木に書き、引数を操作スキーマの引数行と単一化し、
++   名前を解決し(§11.20)、完全名を木に書き、引数を操作スキーマの引数行を期待型として検査し(§11.19)、
+    最後に次の単一化を行う。
+ 
+    ```
+@@ -1890,6 +1929,26 @@
+    木に書き込む解決結果は、完全名 `Effect.op` の oid である。
+    評価器は名前解決をやり直さず、この oid でハンドラを探す(第14章)。
+ 
++   引数を検査モードに通すのは、関数呼び出しの引数(§11.12)と同じ扱いにするためである。
++   引数に直接書いた無名関数の本体は、操作の型に書いた行の下で推論されるので、
++   その中の修飾しない操作名は、その行に見えているエフェクトで解決できる。
++   `mk()` のような名前の参照でない式は、操作の型の対応する部分が関数型なら、
++   閉じた行を開いてから単一化する。
++
++   引数の矢印の行が、操作の型が求める空の行と一致しないときは、
++   `elab_check` に渡した文言(`op_row_note`)を添えて、操作の型の矢印は書いたとおりに読み、
++   `@` の省略は `@ {}` と読むこと(仕様 §9)を案内する。
++   操作の型は型パラメータを持たないので、期待型の空の行は、
++   操作の型に書いた `@ {}` か `@` の省略から来る。
++   引数の型の不一致には添えない(§11.19)。
++
++   perform の位置の行が閉じた空の行で、エフェクトを足せずに落ちたときは、
++   関数呼び出し(§11.12)と同じく、この位置の行が空 = 純粋であることを添える。
++   `@ {}` と注釈した関数とインスタンスメソッドの本体、その中の handle の節の本体、
++   操作の型の矢印や `@ {}` の矢印を期待する位置に書いた無名関数の本体で、
++   操作を起こす形がそうである。
++   トップレベル、`pub` で `@` を省略した宣言、行変数を注釈した本体は、この分岐に入らない。
++
+    ### 再開しない操作の perform の型
+ 
+    返り値の型が `Never` の操作は再開しない操作である。
+@@ -1911,7 +1970,8 @@
+         | TArrow (a, r, _) -> (a, r)
+         | _ -> bug "操作スキーマが矢印型ではありません"
+       in
+-      Unify.unify (elab_exp env level eff arg) args_row;
++      check_call_arity ("操作 " ^ display_of op ^ " は") arg args_row;
++      elab_check ~row_note:(op_row_note ("操作 " ^ display_of op ^ " の引数の型")) env level eff arg args_row;
+       (try Unify.unify eff (TRowExtend (eff_name, t_unit, new_row_var level))
+        with Type_error msg ->
+          (* pub で @ を省略した宣言の本体の行は、純粋を表す印のセルである(§11.26)。その行と
+@@ -1919,6 +1979,10 @@
+             「行型ではありません: ς1」では原因に結びつかない) *)
+          let pub_pure = is_pub_pure_row eff in
+          if pub_pure then type_error "pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください)"
++         else if repr eff = TRowEmpty then
++           type_error
++             ("エフェクト " ^ display_of eff_name ^ " をここでは実行できません(" ^ msg
++            ^ ")(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)")
+          else type_error ("エフェクト " ^ display_of eff_name ^ " をここでは実行できません(" ^ msg ^ ")"));
+       (* 再開しない操作(返り値の型が Never)の perform 式は、穴と同じく周囲が要求する型になる *)
+       if is_never op_ret then new_var level else op_ret
+@@ -1929,7 +1993,8 @@
+    環境の形だけで保証される。
+ 
+    2 つ組の中身は、操作の返り値型と handle 式全体の型である。
+-   `resume(v)` は `v` を操作の返り値型と単一化し、handle 式全体の型を返す。
++   `resume(v)` は、操作の返り値型を期待型として `v` を検査し(§11.19)、handle 式全体の型を返す。
++   行の不一致に添える文言は、perform の引数と同じである(§11.15)。
+    これは深いハンドラの型付けそのものである。
+    resume を呼ぶと残りの計算が同じハンドラの下で最後まで走り、その最終結果が返ってくることを、
+    この型が表している。
+@@ -1944,24 +2009,36 @@
+    環境の形だけでは防げない閉包への閉じ込めは、§11.21 の 2 段の検査で扱う。
+ 
+    再開しない操作(§11.15)の節では、`resume_ty` を `None` のままにし、
+-   代わりに `never_clause` にその操作名を置く。
+-   `resume` に出会ったとき `never_clause` が `Some` なら、
++   代わりに `no_resume` にその操作名を置く。
++   `resume` に出会ったとき `no_resume` がその操作名なら、
+    再開しない操作の節であることを名指しした診断を出す。
+    閉包の本体の `resume` も、`resume_ty` が `None` の環境で推論されるので、この分岐で落ちる。
+    節の中に書いた入れ子の `handle` の本体の `resume` も、外側の節の継続を指すので同じ診断になる。
+    入れ子の `handle` の操作節の `resume` は、その節が `resume_ty` を置き直すので通る。
+-   そのため、再開しない操作の節では §11.21 の静的な検査は要らない。 *)
++   そのため、再開しない操作の節では §11.21 の静的な検査は要らない。
++
++   操作節のガード、`return` 節、`cancel` 節でも、`resume_ty` を `None` にし、
++   `no_resume` にその位置を置く。
++   `resume` に出会ったとき `no_resume` が `Some` なら、その位置を名指しした診断を出す。
++   位置は最も内側のものを使う。
++   例えば、再開しない操作の節の中の入れ子の `handle` の `return` 節では、`return` 節の診断になる。
++   `resume_ty` と `no_resume` がどちらも `None` なのは操作節の外だけなので、
++   そこで出す診断は、操作節の中でだけ使えることを述べる。 *)
+ 
+   | T.Handle (body, clauses) -> elab_handle env level eff clauses body
+   | T.Resume arg -> (
+       match env.resume_ty with
+       | None -> (
+-          match env.never_clause with
+-          | Some op -> type_error ("再開しない操作 " ^ display_of op ^ " の節には resume を書けません(操作の返り値の型が Never です)")
++          match env.no_resume with
++          | Some (No_never_clause op) ->
++              type_error ("再開しない操作 " ^ display_of op ^ " の節には resume を書けません(操作の返り値の型が Never です)")
++          | Some No_guard -> type_error "操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)"
++          | Some No_return_clause -> type_error "return 節には resume を書けません(再開する継続がありません)"
++          | Some No_cancel_clause -> type_error "cancel 節には resume を書けません(再開する継続がありません)"
+           | None -> type_error "resume は操作節の中でのみ使えます")
+       | Some (op_ret, tres) ->
+           (match arg with
+-          | Some e -> Unify.unify (elab_exp env level eff e) op_ret
++          | Some e -> elab_check ~row_note:(op_row_note "操作の返り値の型") env level eff e op_ret
+           | None ->
+               (* 引数省略は操作の返り値型が Unit のときだけ(sample.kel:549) *)
+               Unify.unify t_unit op_ret);
+@@ -2152,13 +2229,37 @@
+    その期待型が矢印なら `fallback` で開く。
+    入れ子になっていても同じである。
+ 
++   `row_note` は、行の不一致に添える文言である。
++   perform の引数と resume の引数(§11.15、§11.16)だけが渡す。
++   `fallback` は、文言があり、推論した型と期待型がどちらも矢印で、期待型の行が閉じた空の行のときに、
++   引数、返り値、行の順に単一化し、最後の行の単一化の失敗にだけ文言を添える。
++   `Unify.unify` の矢印の分岐と同じ順序なので、受理と拒否は変わらない。
++   引数の型の不一致は行の単一化より先に報告されるので、文言は付かない。
++   エラーの文字列で行の失敗を見分ける `row_failure` を使わないのは、
++   レコードのフィールドの誤り(`ラベル y がありません`)のような行の不一致でない誤りも、
++   行の失敗と同じ文字列になるからである。
++   関数呼び出しの引数には渡さない。
++   仮引数の型が型変数のとき、期待型の空の行は先の引数から決まったものかもしれず、
++   @ の省略を案内すると原因を取り違えるからである。
++
+    検査に成功したノードにも、`set_ty` で型を書く。
+    期待型を押し込んだノードは `elab_exp` を通らないので、ここで書かないと、
+    木に型の無いノードが残る。 *)
+ 
+-and elab_check env level eff ((_, e) as node : T.exp) expected =
++and elab_check ?row_note env level eff ((_, e) as node : T.exp) expected =
+   at_node node @@ fun () ->
+-  let fallback () = Unify.unify (subsume_closed level (elab_exp env level eff node) expected) expected in
++  let fallback () =
++    let ty = subsume_closed level (elab_exp env level eff node) expected in
++    match (row_note, repr ty, repr expected) with
++    | Some note, TArrow (p1, r1, e1), TArrow (p2, r2, e2) when repr e2 = TRowEmpty -> (
++        (* 引数の個数、引数、返り値を先に調べ、最後の行の単一化の失敗だけを言い換える。
++           Unify.unify の矢印の分岐と同じ順序なので、受理と拒否は変わらない *)
++        Unify.check_arity ty expected p1 p2;
++        Unify.unify p1 p2;
++        Unify.unify r1 r2;
++        try Unify.unify e1 e2 with Type_error msg -> type_error (msg ^ note))
++    | _ -> Unify.unify ty expected
++  in
+   match (e, repr expected) with
+   | T.Lambda { l_params; l_body }, TArrow (pexp, rexp, eexp) -> (
+       match repr pexp with
+@@ -2172,7 +2273,7 @@
+             let seen = ref [] in
+             let env2 = List.fold_left2 (fun env p (_, t) -> elab_pat env level seen t p) env l_params fields in
+             Tree.set_ty node expected;
+-            elab_check env2 level eexp l_body rexp;
++            elab_check ?row_note env2 level eexp l_body rexp;
+             (* 検査モードのラムダも、引数パターンを網羅性検査のキューに積む。注釈の
+                ある高階関数の引数に渡したラムダはこちらを通るので、推論側だけで積むと、
+                最も普通のラムダが検査を素通りする。本体の後に積むのは、本体の中の
+@@ -2184,8 +2285,8 @@
+       match Unify.rewrite_row row (intern l) with
+       | fty, rest_row ->
+           Tree.set_ty node expected;
+-          elab_check env level eff v fty;
+-          elab_check env level eff rest (TRecord rest_row)
++          elab_check ?row_note env level eff v fty;
++          elab_check ?row_note env level eff rest (TRecord rest_row)
+       | exception Type_error _ -> fallback ())
+   | _ -> fallback ()
+ 
+@@ -2401,10 +2502,20 @@
+    同じ操作の節を書くと、その節には到達しないので、警告を出す(§11.24)。
+ 
+    分類の結果は、`set_resolved` で木に書く。
+-   評価器が節の種別を判定し直さないようにするためで、§11.8 と同じ方針である。 *)
++   評価器が節の種別を判定し直さないようにするためで、§11.8 と同じ方針である。
++
++   1 つの節だけで決まる誤りは、その節の位置で報告する。
++   節の頭の形の誤り、2 つ目の return 節と cancel 節、対象エフェクトに属さない操作、
++   操作節の引数の個数とラベルの誤りは、節のパターン(`case` の直後)を指す。
++   return 節と cancel 節のガードの誤りは、ガードの式を指す。
++   handle 式全体の位置で報告すると、どの節の誤りかを位置から読めないからである。
++   対象エフェクトの決定(§11.23)で起きる誤りと、操作節が 1 つも無い誤りは、
++   特定の 1 節に帰せないので、handle 式の位置で報告する。
++   `test/handle_clause_loc.t` が、それぞれの位置を確かめる。 *)
+ 
+ and elab_handle env level eff clauses body =
+   let classify ((_, c) as cnode : T.clause) =
++    at_node c.T.cl_pat @@ fun () ->
+     match snd c.T.cl_pat with
+     | T.PVar "cancel" -> `Cancel cnode
+     | T.PCtor (LongId comps, args) -> (
+@@ -2433,8 +2544,12 @@
+   let ops = List.filter_map (function `Op (op, q, args, cnode) -> Some (op, q, args, cnode) | _ -> None) classified in
+   let rets = List.filter_map (function `Return (p, cnode) -> Some (p, cnode) | _ -> None) classified in
+   let cancels = List.filter_map (function `Cancel cnode -> Some cnode | _ -> None) classified in
+-  (if List.length rets > 1 then type_error "return 節は1つまでです");
+-  (if List.length cancels > 1 then type_error "cancel 節は1つまでです");
++  (match rets with
++  | _ :: (_, (_, c)) :: _ -> at_node c.T.cl_pat (fun () -> type_error "return 節は1つまでです")
++  | _ -> ());
++  (match cancels with
++  | _ :: (_, c) :: _ -> at_node c.T.cl_pat (fun () -> type_error "cancel 節は1つまでです")
++  | _ -> ());
+   (if ops = [] then type_error "handle には少なくとも1つの操作節が必要です");
+ (* ## 11.23 対象エフェクトの決定
+ 
+@@ -2486,9 +2601,14 @@
+    型エラーとして報告すべきものが OCaml の例外としてそのまま外に出る。
+ 
+    対象が決まったら、逆向きの検査を 2 つ行う。
+-   対象の全操作が節にあるかどうかと、すべての節が対象に属するかどうかである。
++   すべての節が対象に属するかどうかと、対象の全操作が節にあるかどうかである。
+    網羅を要求するのは、handle 式の行から対象エフェクトを除く型付けにしているからである(§11.24)。
+-   網羅を先に調べるので、両方の誤りを含む入力では網羅漏れを報告する。
++   所属を先に調べるので、両方の誤りを含む入力では所属違反を報告する。
++   所属違反は書かれた節を名指しし、網羅漏れは書かれていない操作を名指しする。
++   書かれた節の誤りを先に示すほうが、どこを直せばよいかが入力から読める。
++   所属違反を直すと、網羅漏れが残っていればそれが次に報告される。
++   この 2 つの検査が働くのは、対象を修飾から決めたときだけである。
++   修飾の無い handle では、対象を決める段で両方の条件を満たす候補だけを残すので、ここでは落ちない。
+    `test/typecheck_m6.t` の qual5 が、この順序を確かめる。 *)
+ 
+   (* 対象エフェクトは、全節が属し全操作が網羅される候補として一意に決まらなければならない *)
+@@ -2554,17 +2674,18 @@
+              ^ ")。" ^ display_of (List.hd es) ^ "." ^ display_of (List.hd op_names) ^ " のように修飾してください"))
+   in
+   let target_info = Option.get (Decls.find_effect target) in
+-  (* 対象が決まったら、全操作の網羅と、全節の所属を調べる *)
++  (* 対象が決まったら、全節の所属と、全操作の網羅を調べる *)
++  List.iter
++    (fun (op, _, _, ((_, c) : T.clause)) ->
++      if not (List.mem_assoc op target_info.Decls.ef_ops) then
++        at_node c.T.cl_pat (fun () ->
++            type_error ("操作 " ^ display_of op ^ " はエフェクト " ^ display_of target ^ " に属しません")))
++    ops;
+   List.iter
+     (fun (op, _) ->
+       if not (List.mem op op_names) then
+         type_error ("ハンドラが操作を網羅していません: " ^ display_of target ^ " の " ^ display_of op ^ " が漏れています"))
+     target_info.Decls.ef_ops;
+-  List.iter
+-    (fun (op, _, _, _) ->
+-      if not (List.mem_assoc op target_info.Decls.ef_ops) then
+-        type_error ("操作 " ^ display_of op ^ " はエフェクト " ^ display_of target ^ " に属しません"))
+-    ops;
+   (* 操作節の引数パターンを型付ける。
+      総和性の検査は引数の型を見て判定するので、パターンだけを先にここで型付ける。
+      本体、return 節、cancel 節、操作節のガードと本体は、この後で推論する(§11.24)。
+@@ -2581,11 +2702,12 @@
+         let full = intern (name_of target ^ "." ^ name_of op) in
+         Tree.set_resolved cnode (if is_never op_ret then Tree.RNeverOp full else Tree.ROp full);
+         let param_tys = match repr args_row with TRecord row -> List.map snd (fst (row_fields row)) | _ -> [] in
+-        if List.length args <> List.length param_tys then
+-          type_error
+-            (Printf.sprintf "操作 %s は %d 引数です(節には %d 個書かれています)" (display_of op) (List.length param_tys)
+-               (List.length args));
+-        List.iter (fun (a : T.ctor_arg_pat) -> if a.T.cap_label <> None then type_error "操作節の引数にラベルは書けません") args;
++        (at_node c.T.cl_pat @@ fun () ->
++         if List.length args <> List.length param_tys then
++           type_error
++             (Printf.sprintf "操作 %s は %d 引数です(節には %d 個書かれています)" (display_of op) (List.length param_tys)
++                (List.length args));
++         List.iter (fun (a : T.ctor_arg_pat) -> if a.T.cap_label <> None then type_error "操作節の引数にラベルは書けません") args);
+         let seen = ref [] in
+         let env2 =
+           List.fold_left2
+@@ -2655,7 +2777,8 @@
+ 
+    - resume の型は「操作の返り値型 → handle 式全体の型」である。
+      これを `resume_ty` に入れて節の本体を推論する(§11.16)。
+-     return 節と cancel 節では `None` に戻す。そこに継続は存在しない。
++     return 節と cancel 節では `None` に戻し、
++     `no_resume` にその節の種類を置く。そこに継続は存在しない。
+    - cancel 節の値は捨てられるので、Unit と単一化する。
+    - 操作節の引数はラベルで書けず、位置引数だけである。
+      操作の引数は宣言の並びで意味が決まるので、並べ替えを許す理由がない。
+@@ -2666,10 +2789,10 @@
+      型検査を通ったガードの式が実行時に黙って無視される。
+      `case return(x) if c => a` と書きたいときは、節の本体で `c` を match すれば同じことを書ける。
+    - 再開しない操作(返り値の型が `Never`。§11.15)の節では、`resume_ty` を `None`、
+-     `never_clause` を操作名にして本体を推論する(§11.16)。
++     `no_resume` を操作名にして本体を推論する(§11.16)。
+      `check_resume_static` は呼ばない。
+      閉包の本体の `resume` も、`resume_ty` が `None` なら推論の時点で落ちるからである。
+-   - 操作節のガードは受理するが、`resume` の無い環境で推論する。
++   - 操作節のガードは受理するが、`resume` の無い環境で推論し、`no_resume` にガードであることを置く。
+      第14章はガードを resume の無い環境で評価するので、ここで resume を許すと、
+      型は付くのに実行時に落ちるプログラムを通してしまう。
+      §11.21 の静的な検査は節の本体しか走査しないので、ガードの resume はここで防ぐ。
+@@ -2699,9 +2822,9 @@
+   (match rets with
+   | [ (p, ((_, c) as cnode)) ] ->
+       Tree.set_resolved cnode Tree.RReturnClause;
+-      if c.T.cl_guard <> None then type_error "return 節にガードは書けません";
++      Option.iter (fun g -> at_node g (fun () -> type_error "return 節にガードは書けません")) c.T.cl_guard;
+       let seen = ref [] in
+-      let env2 = elab_pat { env with resume_ty = None; never_clause = None } level seen body_ty p in
++      let env2 = elab_pat { env with resume_ty = None; no_resume = Some No_return_clause } level seen body_ty p in
+       Unify.unify (elab_exp env2 level eff c.T.cl_body) tres;
+       (* return 節の反駁可能なパターンも、節の本体を推論した後で網羅性検査のキューに
+          積む。先に積むと、節の本体の中の let の drain に食われて行が早く閉じる *)
+@@ -2710,8 +2833,8 @@
+   (match cancels with
+   | [ ((_, c) as cnode) ] ->
+       Tree.set_resolved cnode Tree.RCancelClause;
+-      if c.T.cl_guard <> None then type_error "cancel 節にガードは書けません";
+-      let env2 = { env with resume_ty = None; never_clause = None } in
++      Option.iter (fun g -> at_node g (fun () -> type_error "cancel 節にガードは書けません")) c.T.cl_guard;
++      let env2 = { env with resume_ty = None; no_resume = Some No_cancel_clause } in
+       (* cancel 節の値は捨てられるので、Unit と単一化する *)
+       Unify.unify (elab_exp env2 level eff c.T.cl_body) t_unit
+   | _ -> ());
+@@ -2723,13 +2846,13 @@
+          プログラムを通してしまう。§11.21 の静的な検査は本体しか走査しないので、
+          ガードの resume はここで防ぐ *)
+       (match c.T.cl_guard with
+-      | Some g -> Unify.unify (elab_exp { env2 with resume_ty = None; never_clause = None } level eff g) t_boolean
++      | Some g -> Unify.unify (elab_exp { env2 with resume_ty = None; no_resume = Some No_guard } level eff g) t_boolean
+       | None -> ());
+       (* 操作節では resume が使える。本体は外側の eff で推論する。再開しない操作の節では
+-         resume_ty を None のままにし、never_clause に操作名を置いて診断に使う *)
++         resume_ty を None のままにし、no_resume に操作名を置いて診断に使う *)
+       let env2 =
+-        if is_never op_ret then { env2 with resume_ty = None; never_clause = Some op }
+-        else { env2 with resume_ty = Some (op_ret, tres); never_clause = None }
++        if is_never op_ret then { env2 with resume_ty = None; no_resume = Some (No_never_clause op) }
++        else { env2 with resume_ty = Some (op_ret, tres); no_resume = None }
+       in
+       if not (is_never op_ret) then check_resume_static c.T.cl_body;
+       Unify.unify (elab_exp env2 level eff c.T.cl_body) tres)
+@@ -2843,14 +2966,15 @@
+ 
+    関数型を要求する位置は、仮引数の型が関数型である実引数、
+    返り値の注釈が関数型である関数束縛の本体、注釈が関数型である値束縛の初期化式である。
++   `perform` の実引数と `resume` の引数も、操作の型の対応する部分が関数型なら、
++   この位置にあたる(§11.15、§11.16)。
+    検査モードは、実引数に直接書いた無名関数の本体と、
+    実引数に直接書いたレコード式のフィールドやタプル式の要素にも期待型を運ぶので、
+    そこに置いた式も、期待型が矢印なら開く(§11.19)。
+    名前の参照は、どの位置に置いても参照の時点で開いている。
+    そのため、残りの 2 つの場面が効くのは、`mk()` のような呼び出しの結果や、
+    `r.go` のようなフィールドの選択である。
+-   そうした式を、コンストラクタの引数、レコードのフィールド、`match` の節の値、
+-   `perform` の引数のように、
++   そうした式を、コンストラクタの引数、レコードのフィールド、`match` の節の値のように、
+    関数型を要求しない位置に置いたときは開かない(LangSpec §13.2 の制限の 1 つ目)。
+ 
+    開いてよい理由は、閉じた行が本体の上限だからである。
+@@ -3516,7 +3640,7 @@
+     values = List.fold_left (fun m (n, t, _) -> SMap.add n t m) SMap.empty refs;
+     types = SMap.empty;
+     resume_ty = None;
+-    never_clause = None;
++    no_resume = None;
+     tops = List.fold_left (fun m (n, _, g) -> SMap.add n g m) SMap.empty refs;
+   }
+ 
+@@ -4543,6 +4667,8 @@
+        実装できないメソッドが生じる *)
+     match (repr inf, repr skol) with
+     | TArrow (ia, ir, ie), TArrow (sa, sr, se) ->
++        (* 引数の行どうしを単一化する前に、矢印どうしの単一化と同じく個数を比べる *)
++        wrap (fun () -> Unify.check_arity inf skol ia sa);
+         wrap (fun () -> Unify.unify ia sa);
+         wrap (fun () -> Unify.unify ir sr);
+         (* 実装の最外の行が閉じていれば、使用時の開きと同じく尾部を開いてから宣言の行と一致させる。
+diff a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/interp.ml	2026-10-17 04:46:22.888699557 +0900
+@@ -693,6 +693,10 @@
+    `effc` からの素の `raise` は親のスタック上を伝播するので、自分の `exnc` を通らない。
+    回帰テストは `test/eval.t` の holecancel.kel で、
+    節本体が `???` でも内側の cancel 節が走ることを確かめる。
++   仕様(LangSpec.md §13.6)は、`resume` を呼ぶ前に節が脱出したとき、継続はまだ生きているので、
++   そのハンドラ自身の `cancel` 節を実行すると定めている。
++   `resume` が戻った後の脱出では、継続は消費済みなので、自分の `cancel` 節は走らない。
++   回帰テストは `test/eval.t` の clauseerr、clauseresumed、clausestop である。
+ 
+    この規約は、§13.6 の最も外側のハンドラ(`with_runtime` の `Console.write`)にも当てはまる。
+ 
+diff a/lib/parser.mly b/lib/parser.mly
+--- a/lib/parser.mly	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/parser.mly	2026-10-17 04:45:38.805989031 +0900
+@@ -187,6 +187,7 @@
+    この表現から得られるものが 2 つある。
+    1 つ目は、**arity の検査がただの単一化になる**ことである。
+    引数の個数が違えば、閉じた行どうしの単一化が失敗する。
++   失敗の報告は、第8章 §8.7 と第11章 §11.12 が引数の個数の不一致として述べ直す。
+    2 つ目は、`fst[A, R](t: {_item: A extends R})` のような、タプルの先頭を取る前置多相の関数を、
+    同じ仕組みでそのまま書けることである。
+    タプルと引数リストが同じ表現だからである。
+diff a/lib/unify.ml b/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/unify.ml	2026-10-17 04:45:38.806092428 +0900
+@@ -497,7 +497,11 @@
+    関数を呼ぶ側の行と呼ばれる側の行がここで結ばれることで、エフェクトが型に乗る。
+    Keleut の引数は閉じた `_item` 行のレコードなので、
+    関数適用の引数の個数の不一致は行の単一化から検出される。
+-   関数適用(第11章 §11.12)には、引数の個数を数える専用のコードがない。
++   ただし、行の単一化が報告するのは、片方の行で尽きたラベル `_item` だけである。
++   そこで、2 つの矢印の引数の行がどちらも閉じた `_item` 行で個数が違うときは、
++   行に入る前に `check_arity` が両方の矢印と個数を示して報告する。
++   どちらかの行が開いているか、`_item` 以外のラベルを含むときは、そのまま行を単一化する。
++   呼び出しの実引数の並びと仮引数の行の個数は、第11章 §11.12 の `check_call_arity` が比べる。
+ 
+    ### 型適用(高階カインド)
+ 
+@@ -534,6 +538,13 @@
+    行が注釈で固定されていることを述べるメッセージを出す。
+    「{} と ς1」が一致しないとだけ伝えても、利用者は原因を読み取りにくいからである。 *)
+ 
++let item_arity t =
++  match repr t with
++  | TRecord row ->
++      let fields, tail = row_fields row in
++      if repr tail = TRowEmpty && List.for_all (fun (l, _) -> l = l_item) fields then Some (List.length fields) else None
++  | _ -> None
++
+ let rec unify a b =
+   let t1 = repr a in
+   let t2 = repr b in
+@@ -559,6 +570,7 @@
+             unify (TCon (n, init)) f;
+             unify last x
+         | TArrow (p1, r1, e1), TArrow (p2, r2, e2) ->
++            check_arity t1 t2 p1 p2;
+             unify p1 p2;
+             unify r1 r2;
+             unify e1 e2
+@@ -577,6 +589,16 @@
+         | (TVar _, _ | _, TVar _) -> type_error ("スコープ付きの型が一致しません: " ^ show2 t1 t2)
+         | _ -> type_error ("型が一致しません: " ^ show2 t1 t2))
+ 
++(* 引数の行がどちらも閉じた _item 行で、個数が違えば、行の単一化に入る前に
++   個数の不一致として報告する *)
++and check_arity t1 t2 p1 p2 =
++  match (item_arity p1, item_arity p2) with
++  | Some n1, Some n2 when n1 <> n2 ->
++      let strs = show2 t1 t2 in
++      type_error
++        ("引数の個数が一致しません: " ^ strs ^ "(引数は " ^ string_of_int n1 ^ " 個と " ^ string_of_int n2 ^ " 個です)")
++  | _ -> ()
++
+ and split_last = function
+   | [] -> bug "split_last: empty"
+   | xs ->
+diff a/test/arity.t b/test/arity.t
+--- a/test/arity.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/arity.t	2026-10-17 04:45:38.806183370 +0900
+@@ -0,0 +1,135 @@
++引数の個数の不一致は、関数の呼び出し、perform、関数型どうしの単一化の
++どれでも「引数の個数が一致しません」と報告する(LangSpec §3.4)。
++
++呼び出しの実引数が仮引数より少ないときと多いとき。呼び出す関数の
++仮引数の個数と渡した個数を述べる:
++
++  $ cat > call0.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f()
++  > KEL
++  $ diktor --type-check call0.kel
++  f : (Int32) => Int32
++  ! call0.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数は 1 個の引数を取りますが、0 個を渡しています
++  [1]
++  $ cat > call2.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f(1, 2)
++  > KEL
++  $ diktor --type-check call2.kel
++  f : (Int32) => Int32
++  ! call2.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数は 1 個の引数を取りますが、2 個を渡しています
++  [1]
++
++perform の引数の個数も同じく調べる:
++
++  $ cat > perf0.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let f(): Int32 @ Ask = perform ask()
++  > KEL
++  $ diktor --type-check perf0.kel
++  ! perf0.kel:2:24: 型エラー: 引数の個数が一致しません: 操作 ask は 1 個の引数を取りますが、0 個を渡しています
++  [1]
++
++1 引数の関数を求める位置に 0 引数のラムダを渡す形。with _ は引数のない
++無名関数を渡す(LangSpec §6.5)ので同じ報告になり、2 つの矢印と個数を述べる:
++
++  $ cat > lam.kel <<'KEL'
++  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
++  > let b(): Int32 = one(fn() => 2)
++  > KEL
++  $ diktor --type-check lam.kel
++  one : ((Int32) => A) => A
++  ! lam.kel:2:22: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
++  [1]
++  $ cat > withw.kel <<'KEL'
++  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
++  > let b(): Int32 = {
++  >   with _ = one()
++  >   2
++  > }
++  > KEL
++  $ diktor --type-check withw.kel
++  one : ((Int32) => A) => A
++  ! withw.kel:3:3: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
++  [1]
++
++注釈の矢印と初期化式の矢印の個数が違う形:
++
++  $ cat > ann.kel <<'KEL'
++  > let g: (Int32) => Int32 = fn() => 2
++  > KEL
++  $ diktor --type-check ann.kel
++  ! ann.kel:1:5: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 と () => _A(引数は 1 個と 0 個です))
++  [1]
++
++ラベル付きの引数を含む呼び出しは個数を比べず、従来どおりラベルの
++有無を報告する:
++
++  $ cat > label.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f(x = 1)
++  > KEL
++  $ diktor --type-check label.kel
++  f : (Int32) => Int32
++  ! label.kel:2:18: 型エラー: ラベル x がありません(行は閉じています)
++  [1]
++
++newtype のコンストラクタの関数のフィールド、pub の値束縛の注釈、
++インスタンスメソッドとクラス宣言の型でも、2 つの矢印と個数を述べる:
++
++  $ cat > ctor.kel <<'KEL'
++  > newtype Fn1 = Fn1((Int32) => Int32)
++  > let v = Fn1(fn() => 1)
++  > KEL
++  $ diktor --type-check ctor.kel
++  ! ctor.kel:2:9: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => Int32 @ {}(引数は 0 個と 1 個です)
++  [1]
++  $ cat > pubv.kel <<'KEL'
++  > pub let h: (Int32) => Int32 = fn() => 1
++  > KEL
++  $ diktor --type-check pubv.kel
++  ! pubv.kel:1:9: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 @ {} と () => _A(引数は 1 個と 0 個です))
++  [1]
++  $ cat > inst.kel <<'KEL'
++  > type class Sh[A] {
++  >   val sh: (A) => Int32
++  > }
++  > type instance Sh[Int32] {
++  >   let sh() = 1
++  > }
++  > KEL
++  $ diktor --type-check inst.kel
++  ! inst.kel:5:7: 型エラー: インスタンスメソッド sh がクラス宣言の型を満たしません(引数の個数が一致しません: () => Int32 と (Int32) => Int32 @ {}(引数は 0 個と 1 個です))
++  [1]
++
++呼び出しの個数は実引数を調べる前に比べる。実引数の中に別の誤りが
++あっても、個数の不一致を呼び出しの位置で先に報告する:
++
++  $ cat > first.kel <<'KEL'
++  > let f(x: Int32): Int32 = x
++  > let b(): Int32 = f(nosuch, 2)
++  > KEL
++  $ diktor --type-check first.kel
++  f : (Int32) => Int32
++  ! first.kel:2:18: 型エラー: 引数の個数が一致しません: 呼び出す関数は 1 個の引数を取りますが、2 個を渡しています
++  [1]
++
++個数が合う呼び出しは通る:
++
++  $ cat > ok.kel <<'KEL'
++  > let zero[A, E](body: () => A @ E): A @ E = body()
++  > let one[A, E](body: (Int32) => A @ E): A @ E = body(5)
++  > let f(x: Int32, y: Int32): Int32 = x + y
++  > let a(): Int32 = {
++  >   with _ = zero()
++  >   1
++  > }
++  > let b(): Int32 = {
++  >   with x = one()
++  >   x
++  > }
++  > echoln(show(a() + b() + f(1, 2)))
++  > KEL
++  $ diktor ok.kel
++  9
+diff a/test/blocking_top.t b/test/blocking_top.t
+--- a/test/blocking_top.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/blocking_top.t	2026-10-17 04:45:38.802909397 +0900
+@@ -46,7 +46,7 @@
+   >   }
+   > KEL
+   $ diktor --type-check bh.kel
+-  ! bh.kel:2:3: 型エラー: 操作 nope はエフェクト Blocking に属しません
++  ! bh.kel:3:10: 型エラー: 操作 nope はエフェクト Blocking に属しません
+   [1]
+ 
+ Blocking に操作を足す宣言は拒否する(標準環境の名前なので再宣言できない):
+diff a/test/eval.t b/test/eval.t
+--- a/test/eval.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/eval.t	2026-10-17 04:46:22.888836507 +0900
+@@ -348,6 +348,72 @@
+   実行時エラー: ??? に到達しました
+   [3]
+ 
++再開する操作の節が resume を呼ぶ前に実行時エラーで脱出すると、継続はまだ生きているので、
++捨てた継続の中の cancel 節を内側から順に走らせた後、その節のハンドラ自身の cancel 節も
++走る(§13.6):
++
++  $ cat > clauseerr.kel <<'EOF2'
++  > effect Res = { use: () => Unit }
++  > effect Ask = { ask: () => Int32 }
++  > let r = ({ perform use(); perform ask() + 1 }) handle {
++  >   case use() => resume()
++  >   case cancel => echoln("cancel res")
++  > } handle {
++  >   case ask() => { echoln("ask clause"); 1 / 0 }
++  >   case cancel => echoln("cancel ask")
++  > }
++  > echoln(show(r))
++  > EOF2
++  $ diktor clauseerr.kel
++  ask clause
++  cancel res
++  cancel ask
++  実行時エラー: ゼロ除算です
++  [3]
++
++resume が戻った後の脱出では、継続は消費済みなので、ハンドラ自身の cancel 節は走らない。
++再開した計算の中のハンドラは return 節で正常に終わっている:
++
++  $ cat > clauseresumed.kel <<'EOF2'
++  > effect Res = { use: () => Unit }
++  > effect Ask = { ask: () => Int32 }
++  > let r = ({ perform use(); perform ask() + 1 }) handle {
++  >   case use() => resume()
++  >   case return(x) => { echoln("close res"); x }
++  >   case cancel => echoln("cancel res")
++  > } handle {
++  >   case ask() => { let v = resume(1); echoln("resumed " + show(v)); v / 0 }
++  >   case cancel => echoln("cancel ask")
++  > }
++  > echoln(show(r))
++  > EOF2
++  $ diktor clauseresumed.kel
++  close res
++  resumed 2
++  実行時エラー: ゼロ除算です
++  [3]
++
++resume を呼ぶ前に節の本体から操作を起こし、外側のハンドラが resume せずに継続を捨てた
++場合も、ハンドラ自身の cancel 節が走る。外側の節は再開する操作の節なので、破棄はその節の
++値が決まった後に起き、cancel 節はその後に走る:
++
++  $ cat > clausestop.kel <<'EOF2'
++  > effect Ask = { ask: () => Int32 }
++  > effect Stop = { stop: () => Int32 }
++  > let r = (perform ask() + 1) handle {
++  >   case ask() => { echoln("ask clause"); perform stop() }
++  >   case cancel => echoln("cancel ask")
++  > } handle {
++  >   case stop() => { echoln("stop: no resume"); 7 }
++  > }
++  > echoln(show(r))
++  > EOF2
++  $ diktor clausestop.kel
++  ask clause
++  stop: no resume
++  cancel ask
++  7
++
+ ガード付き操作節は同じハンドラの次の節へ落ちる(B2 / D28。match と同じ規則):
+ 
+   $ cat > guardop.kel <<'EOF2'
+diff a/test/handle_clause_loc.t b/test/handle_clause_loc.t
+--- a/test/handle_clause_loc.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/handle_clause_loc.t	2026-10-17 04:45:38.802940586 +0900
+@@ -0,0 +1,224 @@
++handle の 1 つの節だけで決まる誤りは、その節の位置で報告する。
++節の頭の誤り(引数の個数、ラベル、所属、形、修飾)は節のパターンを、
++return 節と cancel 節のガードの誤りはガードの式を指す。
++
++  $ export PATH="$TESTDIR/../_build/install/default/bin:$PATH"
++
++操作節の引数が多すぎる形は、その節のパターン(4:8)を指す。
++handle 式の先頭(3:9)ではない:
++
++  $ cat > arity2.kel <<'KEL'
++  > newtype Box = MkBox(Int32)
++  > effect Ask = { ask: (Box) => Int32 }
++  > let r = perform ask(MkBox(3)) handle {
++  >   case ask(MkBox(n), m) => resume(n)
++  >   case return(x) => x
++  > }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check arity2.kel
++  ! arity2.kel:4:8: 型エラー: 操作 ask は 1 引数です(節には 2 個書かれています)
++  [1]
++
++引数が足りない形と、同じ操作の 2 つ目の節だけが誤っている形も、その節を指す:
++
++  $ cat > arity0.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case return(x) => x
++  >     case ask() => resume(0)
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check arity0.kel
++  ! arity0.kel:5:10: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
++  [1]
++
++  $ cat > aritysecond.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(1) => resume(0)
++  >     case ask(n, m) => resume(n)
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check aritysecond.kel
++  ! aritysecond.kel:5:10: 型エラー: 操作 ask は 1 引数です(節には 2 個書かれています)
++  [1]
++
++操作節の引数にラベルを書いた形も、その節のパターンを指す:
++
++  $ cat > label.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case return(v) => v
++  >     case ask(x = a) => resume(a)
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check label.kel
++  ! label.kel:5:10: 型エラー: 操作節の引数にラベルは書けません
++  [1]
++
++節の本体の中の handle の誤りは、内側の節(6:14)を指す:
++
++  $ cat > inner.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) =>
++  >       resume(perform ask(n) handle {
++  >         case ask() => resume(0)
++  >       })
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check inner.kel
++  ! inner.kel:6:14: 型エラー: 操作 ask は 1 引数です(節には 0 個書かれています)
++  [1]
++
++節の頭の形の誤りと 2 つ目の return 節も、その節を指す:
++
++  $ cat > retshape.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) => resume(n)
++  >     case return(a, b) => a
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check retshape.kel
++  ! retshape.kel:5:10: 型エラー: return 節は case return(x) の形で書いてください
++  [1]
++
++  $ cat > badhead.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) => resume(n)
++  >     case 3 => 4
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check badhead.kel
++  ! badhead.kel:5:10: 型エラー: handle の節は操作名 / return / cancel で始めてください
++  [1]
++
++  $ cat > tworet.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) => resume(n)
++  >     case return(v) => v
++  >     case return(w) => w
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check tworet.kel
++  ! tworet.kel:6:10: 型エラー: return 節は1つまでです
++  [1]
++
++2 つ目の cancel 節も、2 つ目の節(6:10)を指す:
++
++  $ cat > twocancel.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) => resume(n)
++  >     case cancel => ()
++  >     case cancel => ()
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check twocancel.kel
++  ! twocancel.kel:6:10: 型エラー: cancel 節は1つまでです
++  [1]
++
++  $ cat > cancelarg.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) => resume(n)
++  >     case cancel(x) => ()
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check cancelarg.kel
++  ! cancelarg.kel:5:10: 未実装: cancel(reason)(v0 は case cancel のみ)
++  [4]
++
++修飾した操作節が決めた対象に属さない操作の節は、その節を指す:
++
++  $ cat > notbelong.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > effect Tell = { tell: (Int32) => Unit }
++  > let r =
++  >   perform Ask.ask(1) handle {
++  >     case Ask.ask(n) => resume(n)
++  >     case tell(x) => resume(())
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check notbelong.kel
++  ! notbelong.kel:6:10: 型エラー: 操作 tell はエフェクト Ask に属しません
++  [1]
++
++return 節のガードは、ガードの式(5:23)を指す:
++
++  $ cat > retguard.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case ask(n) => resume(n)
++  >     case return(v) if true => v
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check retguard.kel
++  ! retguard.kel:5:23: 型エラー: return 節にガードは書けません
++  [1]
++
++対象エフェクトの決定の誤りは、特定の 1 節に帰せないので、handle 式の位置(3:3)を指す:
++
++  $ cat > missing.kel <<'KEL'
++  > effect Two = { one: () => Int32, two: () => Int32 }
++  > let r =
++  >   perform one() handle {
++  >     case return(v) => v
++  >     case one() => resume(1)
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check missing.kel
++  ! missing.kel:3:3: 型エラー: ハンドラが操作を網羅していません: Two の two が漏れています
++  [1]
++
++  $ cat > unknownqual.kel <<'KEL'
++  > effect Ask = { ask: (Int32) => Int32 }
++  > let r =
++  >   perform ask(1) handle {
++  >     case return(v) => v
++  >     case Nope.ask(n) => resume(n)
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check unknownqual.kel
++  ! unknownqual.kel:3:3: 型エラー: 未知のエフェクト: Nope
++  [1]
++
++操作節が 1 つも無い誤りも、節の不在から決まるので、handle 式の位置(2:3)を指す:
++
++  $ cat > noop.kel <<'KEL'
++  > let r =
++  >   1 handle {
++  >     case return(v) => v
++  >   }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check noop.kel
++  ! noop.kel:2:3: 型エラー: handle には少なくとも1つの操作節が必要です
++  [1]
+diff a/test/resume_guard.t b/test/resume_guard.t
+--- a/test/resume_guard.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/resume_guard.t	2026-10-17 04:46:22.887014605 +0900
+@@ -0,0 +1,75 @@
++操作節の本体の中に書いた match の節のガードは本体の一部なので、再開する
++操作の節では resume を書ける。再開した計算の値をガードで使える:
++
++  $ cat > matchguard.kel <<'KEL'
++  > effect Test = { test: () => Int32 }
++  > let r = { let a = perform test(); a + 1 } handle {
++  >   case test() => 0 match { case _ if resume(10) > 5 => 100 case _ => 0 }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check matchguard.kel
++  r : Int32
++  _ : {}
++  $ diktor matchguard.kel
++  100
++
++条件式の条件も本体の一部なので、resume を書ける:
++
++  $ cat > ifcond.kel <<'KEL'
++  > effect Test = { test: () => Boolean }
++  > let r = perform test() handle { case test() => if resume(true) then true else false }
++  > echoln(show(r))
++  > KEL
++  $ diktor ifcond.kel
++  true
++
++本体の中の 2 つのガードで resume を呼ぶ形は型検査を通り、2 回目の再開が
++実行時エラーになる:
++
++  $ cat > matchguard2.kel <<'KEL'
++  > effect Test = { test: () => Boolean }
++  > let r = perform test() handle {
++  >   case test() => 1 match { case _ if resume(false) => true case _ if resume(true) => true case _ => false }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check matchguard2.kel
++  r : Boolean
++  _ : {}
++  $ diktor matchguard2.kel
++  実行時エラー: resume は高々1回しか呼べません(アフィン)
++  [3]
++
++節の中に書いた入れ子の handle の操作節のガードには、外側の節の resume を
++書けない:
++
++  $ cat > innerguard.kel <<'KEL'
++  > effect Test = { test: () => Boolean }
++  > effect Ask = { ask: () => Int32 }
++  > let r = perform test() handle {
++  >   case test() => perform Ask.ask() handle {
++  >     case ask() if resume(true) => false
++  >     case ask() => true
++  >   }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ diktor --type-check innerguard.kel
++  ! innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます
++  [1]
++
++操作節のガードの中に書いた別の handle の操作節の resume は、内側の節の
++継続を再開するものなので、書ける:
++
++  $ cat > guardhandle.kel <<'KEL'
++  > effect Test = { test: () => Boolean }
++  > effect Ask = { ask: () => Int32 }
++  > let r = perform test() handle {
++  >   case test() if (perform Ask.ask() handle { case ask() => resume(1) }) > 0 => resume(true)
++  >   case test() => false
++  > }
++  > echoln(show(r))
++  > KEL
++  $ diktor guardhandle.kel
++  true
+diff a/test/resume_sites.t b/test/resume_sites.t
+--- a/test/resume_sites.t	1970-01-01 09:00:00.000000000 +0900
++++ b/test/resume_sites.t	2026-10-17 04:46:19.149231285 +0900
+@@ -0,0 +1,67 @@
++resume を書けない位置(仕様 §13.5)。操作節のガード、return 節、cancel 節に書いた
++resume は型検査で拒否し、診断は最も内側の位置を名指しする。
++操作節の外に書いた resume は、操作節の中でだけ使えることを述べる。
++再開しない操作の節の本体に書いた resume の診断は never_ops.t で見張る。
++
++操作節のガード。再開する操作の節でも再開しない操作の節でも同じ診断になる:
++
++  $ cat > guard.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > let r = perform ask() handle { case ask() if resume(1) > 0 => resume(1)  case ask() => resume(2) }
++  > KEL
++  $ diktor --type-check guard.kel
++  ! guard.kel:2:46: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
++  [1]
++  $ cat > neverguard.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > let r = { perform throw("x"); 1 } handle { case throw(e) if resume(???) => 0  case throw(e) => 1 }
++  > KEL
++  $ diktor --type-check neverguard.kel
++  ! neverguard.kel:2:61: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
++  [1]
++
++自分のハンドラの return 節と cancel 節:
++
++  $ cat > ownreturn.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > let r = perform ask() handle { case ask() => resume(1)  case return(x) => resume(x) }
++  > KEL
++  $ diktor --type-check ownreturn.kel
++  ! ownreturn.kel:2:75: 型エラー: return 節には resume を書けません(再開する継続がありません)
++  [1]
++  $ cat > owncancel.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > let r = perform ask() handle { case ask() => resume(1)  case cancel => { resume(1); () } }
++  > KEL
++  $ diktor --type-check owncancel.kel
++  ! owncancel.kel:2:74: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
++  [1]
++
++操作節の中に書いた入れ子の handle の return 節と cancel 節では、外側の節が再開する
++操作の節でも再開しない操作の節でも、内側の節の診断になる:
++
++  $ cat > nestedreturn.kel <<'KEL'
++  > effect Ask = { ask: () => Int32 }
++  > effect Ask2 = { ask2: () => Int32 }
++  > let r = perform ask() handle { case ask() => 2 handle { case ask2() => resume(1)  case return(x) => resume(x) } }
++  > KEL
++  $ diktor --type-check nestedreturn.kel
++  ! nestedreturn.kel:3:101: 型エラー: return 節には resume を書けません(再開する継続がありません)
++  [1]
++  $ cat > nevernestedcancel.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Ask = { ask: () => Int32 }
++  > let r = { perform throw("x"); 1 } handle { case throw(e) => 2 handle { case ask() => resume(1)  case cancel => { resume(???); () } } }
++  > KEL
++  $ diktor --type-check nevernestedcancel.kel
++  ! nevernestedcancel.kel:3:114: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
++  [1]
++
++操作節の外:
++
++  $ cat > outside.kel <<'KEL'
++  > let bad = resume(1)
++  > KEL
++  $ diktor --type-check outside.kel
++  ! outside.kel:1:11: 型エラー: resume は操作節の中でのみ使えます
++  [1]
+diff a/test/typecheck_m6.t b/test/typecheck_m6.t
+--- a/test/typecheck_m6.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/typecheck_m6.t	2026-10-17 04:45:38.803008355 +0900
+@@ -200,7 +200,7 @@
+   > EOF
+   $ diktor --type-check --no-prelude qual4.kel
+   prog : () => String @ {File}
+-  ! qual4.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
++  ! qual4.kel:8:8: 型エラー: 操作 flush はエフェクト File に属しません
+   [1]
+ 
+   $ cat > qual4b.kel <<'EOF'
+@@ -220,8 +220,8 @@
+   [1]
+ 
+ qual4 から case write(s) を落とすと、File の write の網羅漏れと flush の
+-所属違反が同時に成り立つ。対象確定後の検査は網羅を先に見るので、網羅漏れが
+-報告される:
++所属違反が同時に成り立つ。対象確定後の検査は所属を先に見るので、書かれた
++節 flush の所属違反が報告される:
+ 
+   $ cat > qual5.kel <<'EOF'
+   > type Unit = {}
+@@ -235,7 +235,24 @@
+   > EOF
+   $ diktor --type-check --no-prelude qual5.kel
+   prog : () => String @ {File}
+-  ! qual5.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
++  ! qual5.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
++  [1]
++
++qual5 から flush の節を落とすと、残る誤りは網羅漏れだけになり、それが
++報告される:
++
++  $ cat > qual5w.kel <<'EOF'
++  > type Unit = {}
++  > effect File = { read: () => String, write: (String) => Unit }
++  > effect Sink = { write: (String) => Unit, flush: () => Unit }
++  > let prog(): String @ File = perform read()
++  > let h(): String = prog() handle {
++  >   case File.read() => resume("x")
++  > }
++  > EOF
++  $ diktor --type-check --no-prelude qual5w.kel
++  prog : () => String @ {File}
++  ! qual5w.kel:5:19: 型エラー: ハンドラが操作を網羅していません: File の write が漏れています
+   [1]
+ 
+ 修飾できるのは操作節だけで、return 節と cancel 節は修飾できない
+@@ -255,7 +272,7 @@
+   > EOF
+   $ diktor --type-check --no-prelude qualret.kel
+   prog : () => String @ {File}
+-  ! qualret.kel:4:19: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
++  ! qualret.kel:7:8: 型エラー: return 節は修飾できません(return は操作名ではなく handle の節の名前です。修飾を外してください)
+   [1]
+ 
+   $ cat > qualcancel.kel <<'EOF'
+@@ -270,7 +287,7 @@
+   > EOF
+   $ diktor --type-check --no-prelude qualcancel.kel
+   prog : () => String @ {File}
+-  ! qualcancel.kel:4:19: 型エラー: cancel 節は修飾できません(cancel は操作名ではなく handle の節の名前です。修飾を外してください)
++  ! qualcancel.kel:7:8: 型エラー: cancel 節は修飾できません(cancel は操作名ではなく handle の節の名前です。修飾を外してください)
+   [1]
+ 
+ 未処理エフェクト・網羅性・resume の誤用のエラー:
+diff a/test/verify_fixes.t b/test/verify_fixes.t
+--- a/test/verify_fixes.t	2026-10-17 03:33:52.000000000 +0900
++++ b/test/verify_fixes.t	2026-10-17 04:46:19.149278424 +0900
+@@ -429,7 +429,7 @@
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check retguard.kel
+-  ! retguard.kel:2:9: 型エラー: return 節にガードは書けません
++  ! retguard.kel:4:21: 型エラー: return 節にガードは書けません
+   [1]
+ 
+   $ cat > cancelguard.kel <<'KEL'
+@@ -442,7 +442,7 @@
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check cancelguard.kel
+-  ! cancelguard.kel:2:9: 型エラー: cancel 節にガードは書けません
++  ! cancelguard.kel:5:18: 型エラー: cancel 節にガードは書けません
+   [1]
+ 
+ 同名メソッドを持つ型クラスの重複宣言を拒否(非修飾名の勝者が elab
+@@ -477,7 +477,7 @@
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check gresume.kel
+-  ! gresume.kel:3:17: 型エラー: resume は操作節の中でのみ使えます
++  ! gresume.kel:3:17: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
+   [1]
+ 
+ クロージャに包んでも同じ(§11.21 の迂回にならない):
+@@ -492,7 +492,7 @@
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check gresume2.kel
+-  ! gresume2.kel:3:33: 型エラー: resume は操作節の中でのみ使えます
++  ! gresume2.kel:3:33: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
+   [1]
+ 
+ 操作節の中の関数束縛の本体に書いた resume は、その関数を節の中で呼ぶだけでも

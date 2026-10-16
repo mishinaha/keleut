@@ -1,0 +1,32 @@
+# 試作で既存の cram だけを走らせた結果(新しいブロックを除く)
+Entering directory '<一時領域>/items/V108/t2'
+Leaving directory '<一時領域>/items/V108/t2'
+rc=0
+
+# 新しいブロックの期待値を空にして走らせた結果(dune promote の前の差分)
+Entering directory '<一時領域>/items/V108/t2'
+File "test/repl.t", line 1, characters 0-0:
+diff --git a/_build/default/test/repl.t b/_build/default/test/repl.t.corrected
+index eee6134..8311617 100644
+--- a/_build/default/test/repl.t
++++ b/_build/default/test/repl.t.corrected
+@@ -295,6 +295,17 @@ Show のインスタンスを持つ newtype の値は Show.show で表示し、
+   > let q = (show, ???)
+   > q
+   > EOF2
++  p : [A: Show] ((A) => String, Int32) = (<fn>, 1)
++  _ : [A: Show, B: Eq] ((A) => String, (B, B) => Boolean, Int32) = (<fn>, <fn>, 3)
++  k : [A: Show] {f: (A) => String, n: Int32} = {f = <fn>, n = 1}
++  m : [A: Show] Option[(A) => String] = Some(<fn>)
++  v : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
++  idf : (A) => A = <fn>
++  t : (Int32) => String @ {Console, Blocking, Print} = <fn>
++  _ : String = "2"
++  h : (Int32) => String = <fn>
++  q : [A: Show] ((A) => String, B) = <unevaluated>
++  _ : [A: Show] ((A) => String, B) = <unevaluated>
+ 
+ 型エラーと曖昧性エラーで失敗した入力の中で宣言したインスタンスは、後の入力から見えない:
+ 
+Leaving directory '<一時領域>/items/V108/t2'
+rc=1

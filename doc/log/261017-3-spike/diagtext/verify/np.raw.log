@@ -1,0 +1,155 @@
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/_build/default/test/pub.t b/_build/default/test/pub.t.corrected
+index b11be01..10f3068 100644
+--- a/_build/default/test/pub.t
++++ b/_build/default/test/pub.t.corrected
+@@ -130,7 +130,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+ 
+   $ printf 'module P { pub newtype Parser[A] = Parser((String) => Option[A]) }\n' > pubnt.kel
+   $ diktor --type-check pubnt.kel
+-  ! pubnt.kel:1:12: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! pubnt.kel:1:43: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+   $ printf 'module P { pub newtype Parser[A] = Parser((String) => Option[A] @ {}) }\n' > pubnt2.kel
+   $ diktor --type-check pubnt2.kel
+File "test/premise.t", line 1, characters 0-0:
+diff --git a/_build/default/test/premise.t b/_build/default/test/premise.t.corrected
+index 9f44ce6..20654b9 100644
+--- a/_build/default/test/premise.t
++++ b/_build/default/test/premise.t.corrected
+@@ -35,7 +35,7 @@
+   > let ng = Cons(MkOpaque(1i32), Nil) == Cons(MkOpaque(1i32), Nil)
+   > EOF
+   $ diktor --type-check --no-prelude pr2.kel
+-  ! pr2.kel:10:10: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr2.kel:10:10: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+   [1]
+ 
+ 前提が構造的導出の先へも届く(レコードのフィールドが List[Opaque]):
+@@ -55,7 +55,7 @@
+   > EOF
+   $ diktor --type-check --no-prelude pr3.kel
+   ok : ({xs: List[Int32]}, {xs: List[Int32]}) => Boolean
+-  ! pr3.kel:11:65: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr3.kel:11:65: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+   [1]
+ 
+ 束縛子を書かないと頭のカインドが合わない(Eq は Type のクラス):
+@@ -303,12 +303,12 @@ module 越しの前提つきインスタンス(頭は修飾名 M.L[_]):
+   > EOF
+   $ diktor --type-check --no-prelude pr17.kel
+   ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean
+-  ! pr17.kel:9:68: 型エラー: Opaque は Sh のインスタンスではありません
++  ! pr17.kel:9:68: 型エラー: Opaque は Sh のインスタンスではありません。Pair[Int32, Opaque] が Eq であるための前提として要求されました
+   [1]
+   $ sed 's/Pair\[Int32, Opaque\]/Pair[Opaque, Int32]/g; s/ng1/ng2/' pr17.kel > pr18.kel
+   $ diktor --type-check --no-prelude pr18.kel
+   ok : (Pair[Int32, Int32], Pair[Int32, Int32]) => Boolean
+-  ! pr18.kel:9:68: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr18.kel:9:68: 型エラー: Opaque は Eq のインスタンスではありません。Pair[Opaque, Int32] が Eq であるための前提として要求されました
+   [1]
+ 
+ 束縛子が穴より少ない形(部分適用の頭に前提が載る唯一の組み合わせ — 頭は
+@@ -326,7 +326,7 @@ module 越しの前提つきインスタンス(頭は修飾名 M.L[_]):
+   > EOF
+   $ diktor --type-check --no-prelude pr19.kel
+   use1 : (P2[Int32, Int32]) => P2[Int32, Int32]
+-  ! pr19.kel:8:57: 型エラー: Opaque は Eq のインスタンスではありません
++  ! pr19.kel:8:57: 型エラー: Opaque は Eq のインスタンスではありません。P2[Opaque] が Functor であるための前提として要求されました
+   [1]
+ 
+ 前提をたどって届いた要求が満たされないとき、診断はたどり始めた型とクラスを
+File "test/classes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/classes.t b/_build/default/test/classes.t.corrected
+index 637550a..16739b9 100644
+--- a/_build/default/test/classes.t
++++ b/_build/default/test/classes.t.corrected
+@@ -333,7 +333,7 @@ instance 本体にも宣言終端の掃き出しが掛かる(M17 検証)。値
+   > echoln(show(Cons(Op(1), Nil)))
+   > KEL
+   $ diktor --type-check pshowop.kel
+-  ! pshowop.kel:2:13: 型エラー: Opaque は Show のインスタンスではありません
++  ! pshowop.kel:2:13: 型エラー: Opaque は Show のインスタンスではありません。List[Opaque] が Show であるための前提として要求されました
+   [1]
+ 
+ 同梱プレリュードの下でユーザが同じ頭をもう一度宣言すると、コヒーレンス違反に
+File "test/dictionary_passing.t", line 1, characters 0-0:
+diff --git a/_build/default/test/dictionary_passing.t b/_build/default/test/dictionary_passing.t.corrected
+index 79d7714..db192ef 100644
+--- a/_build/default/test/dictionary_passing.t
++++ b/_build/default/test/dictionary_passing.t.corrected
+@@ -289,7 +289,7 @@ module の中の非修飾名も、再帰群の参照として記録する。制
+   > type class C[A] { val f: (Int32) => Int32 }
+   > KEL
+   $ diktor nooccur.kel
+-  ! nooccur.kel:1:1: 型エラー: メソッド f の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)
++  ! nooccur.kel:1:26: 型エラー: メソッド f の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)
+   [1]
+ 
+ 弱い型変数を持つ s の Show の辞書は、後ろの g で Foo に決まる。Foo のインスタンスが
+File "test/typecheck_m7.t", line 1, characters 0-0:
+diff --git a/_build/default/test/typecheck_m7.t b/_build/default/test/typecheck_m7.t.corrected
+index 4d7271b..86bcace 100644
+--- a/_build/default/test/typecheck_m7.t
++++ b/_build/default/test/typecheck_m7.t.corrected
+@@ -178,7 +178,7 @@ test/dictionary_passing.t の pure と pureamb):
+   >  val f: (A) => String }
+   > KEL
+   $ diktor --type-check --no-prelude c15.kel
+-  ! c15.kel:1:1: 型エラー: メソッド f が二重に宣言されています
++  ! c15.kel:2:9: 型エラー: メソッド f が二重に宣言されています
+   [1]
+ 
+ module 内 let の相互参照と自己再帰(C5a / D39。値の同義語のフォール
+File "test/verify_fixes.t", line 1, characters 0-0:
+diff --git a/_build/default/test/verify_fixes.t b/_build/default/test/verify_fixes.t.corrected
+index 2ecf87b..70d4ab7 100644
+--- a/_build/default/test/verify_fixes.t
++++ b/_build/default/test/verify_fixes.t.corrected
+@@ -642,12 +642,12 @@ return / cancel は操作名として予約(D68。handle の節分類が名前
+ 
+   $ printf 'effect E = { cancel: () => Int32 }\n' > opres.kel
+   $ diktor --type-check opres.kel
+-  ! opres.kel:1:1: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
++  ! opres.kel:1:22: 型エラー: 操作名 cancel は予約されています(handle の cancel 節と衝突するため宣言できません)
+   [1]
+ 
+   $ printf 'effect E2 = { return: () => Int32 }\n' > opres2.kel
+   $ diktor --type-check opres2.kel
+-  ! opres2.kel:1:1: 型エラー: 操作名 return は予約されています(handle の return 節と衝突するため宣言できません)
++  ! opres2.kel:1:23: 型エラー: 操作名 return は予約されています(handle の return 節と衝突するため宣言できません)
+   [1]
+ 
+ 終了は必ず safe_exit を通る(260829-5 M13 検証修正。exit の at_exit が
+@@ -688,7 +688,7 @@ SIGPIPE は無視して出力エラー 74 に落とす(D33。既定のままだ
+ 
+   $ printf 'effect E3 = { _foo: (Int32) => Int32 }\n' > opus.kel
+   $ diktor --type-check opus.kel
+-  ! opus.kel:1:1: 型エラー: 操作名 _foo は英小文字で始めてください(handle の節が操作名として読めません)
++  ! opus.kel:1:21: 型エラー: 操作名 _foo は英小文字で始めてください(handle の節が操作名として読めません)
+   [1]
+ 
+ Run モードの診断は stderr(D54。stdout はプログラム出力専用):
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/_build/default/test/annot_rows.t b/_build/default/test/annot_rows.t.corrected
+index 1413192..7d4dda8 100644
+--- a/_build/default/test/annot_rows.t
++++ b/_build/default/test/annot_rows.t.corrected
+@@ -953,7 +953,7 @@ pub で @ を省略した関数は @ {} と読み、宣言より前から参照
+   $ diktor --type-check nonnamelist.kel
+   mkp : () => () => Int32 @ {}
+   b : () => Int32 @ {Console}
+-  ! nonnamelist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)(コンストラクタ Cons のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! nonnamelist.kel:3:10: 型エラー: ラベル Console がありません(行は閉じています)
+   [1]
+ 
+ 無名関数で包めば通る(制限の 1 つ目の回避)。mkp()() は呼び出しなので尾部を開き、
+@@ -1048,7 +1048,7 @@ rectpflowrev):
+   > with_stdout(fn() => f(1))
+   > KEL
+   $ diktor --type-check recrejtpflow.kel
+-  ! recrejtpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! recrejtpflow.kel:2:5: 型エラー: スコープ付きの型が一致しません: ς1 と ς2(再帰群の中で、前にある束縛から後ろにある束縛への参照は単相です。f の型パラメータ A が g の型に入り込んでいます。前にある束縛の本体が後ろの束縛の型パラメータを何かの型に決める形は、型検査に通りません。§6.3)
+   [1]
+   $ cat > rectpflowrev.kel <<'KEL'
+   > let rec g[A](x: A): Unit @ {} = ()

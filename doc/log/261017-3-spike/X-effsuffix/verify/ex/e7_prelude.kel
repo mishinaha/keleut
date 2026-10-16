@@ -1,0 +1,3 @@
+let a = pid
+let b(x: Int32): Int32 @ {} = pid(x)
+let c(x: Int32) = pid(x)

@@ -1,0 +1,6 @@
+type Unit = {}
+effect St[S] = { get: () => S }
+newtype A[T] = MkA(B[{}, T])
+newtype B[E, T] = MkB((() => T @ E, () => T @ {St[T]}))
+pub newtype P[T] = MkP(B[{St[T]}, T])
+let f[T](x: P[T]): P[T] = x

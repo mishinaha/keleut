@@ -1,0 +1,3 @@
+newtype H = MkH(Ph[{}])
+type Ph[E] = Int32
+let h: H = MkH(1)

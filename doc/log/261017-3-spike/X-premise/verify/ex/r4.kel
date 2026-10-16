@@ -1,0 +1,16 @@
+effect Ask = { ask: () => List[Option[Int32]] }
+effect Log = { log: (String) => Unit }
+let run_both() = {
+  let inner() = {
+    let xs = perform ask()
+    perform log(show(xs))
+    xs == Cons(Some(1i32), Nil)
+  }
+  let r = (inner() handle {
+    case ask() => resume(Cons(Some(1i32), Nil))
+  }) handle {
+    case log(s) => { echoln("log " + s); resume(()) }
+  }
+  r
+}
+echoln(show(run_both()))

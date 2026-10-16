@@ -1,0 +1,10 @@
+let idf[A](x: A): A = x
+let g = idf(fn(x: Int32) => x + 1)
+g(1)
+echoln(show(g(2)))
+newtype Foo = Foo
+type class Sh[A] { val sh: (A) => String }
+let w = idf(fn(x: Int32) => x)
+echoln(show(w(1)))
+type instance Sh[Foo] { let sh: (Foo) => String = { let n = w(2); fn(x) => "foo" } }
+echoln(sh(Foo))

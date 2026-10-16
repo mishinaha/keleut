@@ -1,0 +1,4 @@
+let f(n: Int32): Int32 = n match {
+  case 1i8 => 0
+  case _ => 1
+}

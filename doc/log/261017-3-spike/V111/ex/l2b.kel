@@ -1,0 +1,3 @@
+let rec f[A: Eq](x: A, y: A): Boolean = x == y
+and g[B: Eq](x: B, y: B): Boolean = x == y || f(x, y)
+echoln(show(f(1, 2)))

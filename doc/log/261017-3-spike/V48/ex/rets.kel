@@ -1,0 +1,7 @@
+effect Nop = { nop: () => Int32 }
+newtype Empt
+newtype Absurd = MkA(Empt)
+let rv(t: () => Never @ Nop): Int32 = t() handle { case nop() => resume(1)  case return(n) => 1 }
+let rc(t: () => Absurd @ Nop): Int32 = t() handle { case nop() => resume(1)  case return(MkA(n)) => 2 }
+let rec rr(n: Never): Int32 = 1
+and rr2(MkA(n)) = 2

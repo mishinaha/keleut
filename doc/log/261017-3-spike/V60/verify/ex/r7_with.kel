@@ -1,0 +1,6 @@
+let each[E](f: (Int32) => Unit @ E): Unit @ E = { f(1); f(2) }
+let main(): Unit = {
+  with x = each()
+  echoln(show(x))
+}
+main()

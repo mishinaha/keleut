@@ -1,0 +1,17 @@
+effect Fail = { throw: (String) => Never }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let r = ((({ perform use(); perform stop(); 1 }) handle {
+    case use() => resume()
+    case cancel => { echoln("cancel res"); perform throw("from cancel") }
+  } handle {
+    case stop() => { echoln("stop clause"); perform throw("after stop") }
+    case cancel => echoln("stop cancel")
+  }) handle {
+    case use() => resume()
+    case cancel => echoln("mid cancel")
+  }) handle {
+  case throw(e) => { echoln("caught " + e); 7 }
+  case cancel => echoln("top cancel")
+}
+echoln(show(r))

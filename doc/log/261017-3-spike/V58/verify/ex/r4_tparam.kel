@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+let withask[A](k: Int32, body: () => A @ {Ask}): A =
+  body() handle {
+    case ask() => resume(k)
+    case return(x) => x
+  }
+let r = withask(41, fn() => perform ask() + 1)
+echoln(show(r))
+echoln(withask(2, fn() => show(perform ask())))

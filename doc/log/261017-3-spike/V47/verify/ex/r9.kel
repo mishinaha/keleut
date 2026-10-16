@@ -1,0 +1,7 @@
+effect Log = { log: (String) => Unit }
+module M {
+  pub type Log[E]: EffectRow = {Print extends E}
+  pub let say(s: String): Unit @ Log[{}] = perform print(s + "\n")
+}
+let f(s: String): Unit @ Log = perform log(s)
+with_stdout(fn() => { M.say("m"); f("t") handle { case log(x) => resume(println(x)) } })

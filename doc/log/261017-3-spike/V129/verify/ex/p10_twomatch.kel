@@ -1,0 +1,3 @@
+let f(x, y) = { let a: Int32 = x match {}; let b: Int32 = y match {}; 0i32 }
+let g(x) = x match { }
+echoln("ok")

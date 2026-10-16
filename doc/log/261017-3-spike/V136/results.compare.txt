@@ -1,0 +1,209 @@
+== a.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n) = n match {} }
+-- head --strict-exhaustive
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 1
+-- proto --strict-exhaustive
+exit 0
+== b.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(n: Never) = n match {} }
+-- head --strict-exhaustive
+exit 0
+-- proto --strict-exhaustive
+exit 0
+== f.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe = fn(n) => n match {} }
+-- head --strict-exhaustive
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 1
+-- proto --strict-exhaustive
+exit 0
+== g.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let rec describe(n) = n match {} }
+-- head --strict-exhaustive
+⚠ match が非網羅的です。例えば _ が漏れています
+exit 1
+-- proto --strict-exhaustive
+exit 0
+== h.kel
+type class Fmt[A] { val fmt[B: Show]: (A, B) => String }
+type instance Fmt[Int32] { let fmt(a, b) = show(a) ++ show(b) }
+echo(fmt(1i32, true))
+-- head --strict-exhaustive
+h.kel:2:53: パースエラー(付近のトークンを確認してください)
+exit 2
+-- proto --strict-exhaustive
+h.kel:2:53: パースエラー(付近のトークンを確認してください)
+exit 2
+== i.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[String] { let describe(n: Int32) = "x" }
+-- head --strict-exhaustive
+! i.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と String)
+exit 1
+-- proto --strict-exhaustive
+! i.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と String)
+exit 1
+== j.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[String] { let describe(a, b) = "x" }
+-- head --strict-exhaustive
+! j.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(ラベル _item がありません(行は閉じています))
+exit 1
+-- proto --strict-exhaustive
+! j.kel:2:38: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(ラベル _item がありません(行は閉じています))
+exit 1
+== k.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe(n) = n ++ "x" }
+-- head --strict-exhaustive
+k.kel:2:54: パースエラー(付近のトークンを確認してください)
+exit 2
+-- proto --strict-exhaustive
+k.kel:2:54: パースエラー(付近のトークンを確認してください)
+exit 2
+== l.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int64] { let describe(n) = if n == 0 then "zero" else show(n + 1) }
+echo(describe(0i64))
+echo(describe(4i64))
+-- head --strict-exhaustive
+! l.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+exit 1
+-- proto --strict-exhaustive
+zero5exit 0
+== m.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe(n) = { echo("eff"); "x" } }
+-- head --strict-exhaustive
+! m.kel:2:37: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド describe の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+exit 1
+-- proto --strict-exhaustive
+! m.kel:2:37: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド describe の本体がエフェクトを起こしています。元の報告: ラベル Console がありません(行は閉じています)
+exit 1
+== n.kel
+newtype Box[A] = Box(A)
+type instance[A: Show] Show[Box[_]] { let show(b) = b match { case Box(x) => "Box(" ++ show(x) ++ ")" } }
+echo(show(Box(3i32)))
+-- head --strict-exhaustive
+n.kel:2:86: パースエラー(付近のトークンを確認してください)
+exit 2
+-- proto --strict-exhaustive
+n.kel:2:86: パースエラー(付近のトークンを確認してください)
+exit 2
+== o.kel
+newtype Box[A] = Box(A)
+type instance[A] Show[Box[_]] { let show(b) = b match { case Box(x) => "Box(" ++ show(x) ++ ")" } }
+-- head --strict-exhaustive
+o.kel:2:80: パースエラー(付近のトークンを確認してください)
+exit 2
+-- proto --strict-exhaustive
+o.kel:2:80: パースエラー(付近のトークンを確認してください)
+exit 2
+== p.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe = fn(n) => n ++ "x" }
+-- head --strict-exhaustive
+p.kel:2:60: パースエラー(付近のトークンを確認してください)
+exit 2
+-- proto --strict-exhaustive
+p.kel:2:60: パースエラー(付近のトークンを確認してください)
+exit 2
+== q.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Never] { let describe(_) = "never" }
+type instance Describe[Int32] { let describe((x)) = show(x) }
+echo(describe(3i32))
+-- head --strict-exhaustive
+3exit 0
+-- proto --strict-exhaustive
+3exit 0
+== r.kel
+type class Mapper[F[_]] { val fmap[X, Y, E]: (F[X], (X) => Y @ E) => F[Y] @ E }
+newtype Box[A] = Box(A)
+type instance Mapper[Box[_]] { let fmap(b, f) = b match { case Box(x) => Box(f(x)) } }
+let r = fmap(Box(1i32), fn(x) => { echo("in"); x + 1 })
+r match { case Box(v) => echo(show(v)) }
+-- head --strict-exhaustive
+in2exit 0
+-- proto --strict-exhaustive
+in2exit 0
+== s.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe(n) = __string_concat(n, "x") }
+-- head --strict-exhaustive
+! s.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: String と Int32)
+exit 1
+-- proto --strict-exhaustive
+! s.kel:2:67: 型エラー: 型が一致しません: Int32 と String
+exit 1
+== t.kel
+type class Sz[A] { val size: (A) => Int64 }
+type instance Sz[String] { let size(s) = 0 }
+echo(show(size("a")))
+-- head --strict-exhaustive
+! t.kel:2:32: 型エラー: インスタンスメソッド size がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+exit 1
+-- proto --strict-exhaustive
+! t.kel:2:32: 型エラー: インスタンスメソッド size がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+exit 1
+== u.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] { let describe = fn(n) => __string_concat(n, "x") }
+-- head --strict-exhaustive
+! u.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: String と Int32)
+exit 1
+-- proto --strict-exhaustive
+! u.kel:2:73: 型エラー: 型が一致しません: Int32 と String
+exit 1
+== v.kel
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Int32] {
+  let rec describe(n) = if n == 0 then "" else __string_concat("x", describe(n - 1))
+}
+echo(describe(3))
+-- head --strict-exhaustive
+xxxexit 0
+-- proto --strict-exhaustive
+xxxexit 0
+== w.kel
+type class Pick[A] { val pick: (A, A) => A }
+type instance Pick[Int64] { let pick(a, b) = if a > 10 then a else b }
+echo(show(pick(3i64, 20i64)))
+-- head --strict-exhaustive
+! w.kel:2:33: 型エラー: インスタンスメソッド pick がクラス宣言の型を満たしません(型が一致しません: Int32 と Int64)
+exit 1
+-- proto --strict-exhaustive
+20exit 0
+== x.kel
+type class Lv[A] { val lv: (A, #Lo | #Hi) => String }
+type instance Lv[Int32] { let lv(n, l) = l match { case #Lo => "lo" } }
+echo(lv(1, #Lo))
+-- head --strict-exhaustive
+! x.kel:2:31: 型エラー: インスタンスメソッド lv がクラス宣言の型を満たしません(ラベル Hi がありません(行は閉じています))
+ exit 1
+-- proto --strict-exhaustive
+⚠ match が非網羅的です。例えば #Hi(_) が漏れています
+ exit 1
+== y.kel
+type class Lv[A] { val lv: (A, #Lo | #Hi) => String }
+type instance Lv[Int32] { let lv(n, l) = l match { case #Lo => "lo" case #Hi => "hi" } }
+echo(lv(1, #Hi))
+-- head --strict-exhaustive
+hi exit 0
+-- proto --strict-exhaustive
+hi exit 0
+== z.kel
+type class Lv[A] { val lv: (A, #Lo | #Hi) => String }
+type instance Lv[Int32] { let lv(n, l) = l match { case #Lo => "lo" case #Hi => "hi" case #Mid => "mid" } }
+echo(lv(1, #Hi))
+-- head --strict-exhaustive
+! z.kel:2:31: 型エラー: インスタンスメソッド lv がクラス宣言の型を満たしません(ラベル Mid がありません(行は閉じています))
+ exit 1
+-- proto --strict-exhaustive
+! z.kel:2:91: 型エラー: ラベル Mid がありません(行は閉じています)
+ exit 1

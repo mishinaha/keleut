@@ -1,0 +1,2 @@
+let rec a[E](n: Int32): Int32 @ E = b(n)
+and b[F](n: Int32): Int32 @ F = n

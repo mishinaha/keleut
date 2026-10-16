@@ -1,0 +1,2 @@
+type class Integral[A] { val f: (A) => A }
+echoln("x")

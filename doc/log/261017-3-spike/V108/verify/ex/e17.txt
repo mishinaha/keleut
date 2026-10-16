@@ -1,0 +1,6 @@
+let v = 1
+let w2 = (show, -v)
+let w3 = (show, !true)
+let w4 = (show, fn(x) => -x)
+w4
+let w5 = (show, 2147483647 + 0)

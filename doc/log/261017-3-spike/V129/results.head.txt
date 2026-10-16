@@ -1,0 +1,104 @@
+=== absurd.kel
+effect Fail = { throw: (String) => Never }
+let get(o: Option[Int32]): Int32 @ Fail = o match {
+  case Some(v) => v
+  case None => perform throw("none") match {}
+}
+let r2 = get(None) handle { case throw(e) => 0 - 1 }
+echoln(show(r2))
+--- $ diktor absurd.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+-1
+[exit 0]
+=== helper.kel
+effect Fail = { throw: (String) => Never }
+let fail(m: String) = perform throw(m)
+let get(o: Option[Int32]): Int32 @ Fail = o match {
+  case Some(v) => v
+  case None => fail("none") match {}
+}
+echoln(show(get(None) handle { case throw(e) => 0 - 1 }))
+--- $ diktor helper.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+-1
+[exit 0]
+=== param.kel
+let f(x) = x match {}
+echoln("ok")
+--- $ diktor param.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== rigid.kel
+let f[A](x: A): Int32 = x match {}
+echoln("ok")
+--- $ diktor rigid.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== int.kel
+let f(x: Int32): Int32 = x match {}
+echoln("ok")
+--- $ diktor int.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== lit.kel
+let f(): Int32 = 1 match {}
+echoln("ok")
+--- $ diktor lit.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== never.kel
+let absurd[A](n: Never): A = n match {}
+echoln("ok")
+--- $ diktor never.kel
+ok
+[exit 0]
+=== guard.kel
+let f(x, b: Boolean): Int32 = x match { case y if b => 1 }
+echoln("ok")
+--- $ diktor guard.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== openvar.kel
+let f(x) = x match { case #A => 1 }
+let g(x: Int32) = x match { case 1 => 1 }
+echoln("ok")
+--- $ diktor openvar.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+ok
+[exit 0]
+=== fnlit.kel
+let h = fn(x) => x match {}
+echoln("ok")
+--- $ diktor fnlit.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== emptyrec.kel
+let f(x: {}): Int32 = x match {}
+echoln("ok")
+--- $ diktor emptyrec.kel
+⚠ match が非網羅的です。例えば () が漏れています
+ok
+[exit 0]
+=== strict.kel
+effect Fail = { throw: (String) => Never }
+let g(): Int32 @ Fail = perform throw("x") match {}
+echoln("ok")
+--- $ diktor strict.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== strict.kel --strict-exhaustive
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== absurd.kel --type-check
+get : (Option[Int32]) => Int32 @ {Fail}
+⚠ match が非網羅的です。例えば _ が漏れています
+r2 : Int32
+_ : {}
+[exit 0]

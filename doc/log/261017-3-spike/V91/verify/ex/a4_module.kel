@@ -1,0 +1,6 @@
+module M {
+  pub let half(x: Float64): Float64 = x / 2.0
+  pub let r(x: Int32): Int32 = x % 3
+}
+echoln(show(M.half(3.0)))
+echoln(show(M.r(10)))

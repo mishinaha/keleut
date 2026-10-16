@@ -1,0 +1,7 @@
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let xs = Cons(mkp(), Cons(b, Nil))
+newtype Box = Box(() => Int32)
+let y = Box(b)
+let z = 1
+z

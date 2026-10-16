@@ -1,0 +1,6 @@
+type class Sz[A] { val size: (A) => Int32 }
+type instance Sz[Int32] { let size(x) = x }
+type class Sz2[A] { val size2: (A) => Int32 @ {} }
+type class Sz3[A] { val size3[E]: (A) => Int32 @ E }
+let s = size
+let t(x: Int32) = size(x)

@@ -1,0 +1,6 @@
+newtype N = N(Int32)
+pub type instance Show[N] {
+  let show(x) = "n"
+}
+
+let b = 2

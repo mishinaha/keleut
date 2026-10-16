@@ -1,0 +1,860 @@
+=== V124/ex/a1.kel
+
+[exit 0]
+=== V124/ex/a2.kel
+
+[exit 0]
+=== V124/ex/a3.kel
+
+[exit 0]
+=== V124/ex/a4.kel
+
+[exit 0]
+=== V124/ex/a5.kel
+! a5.kel:1:21: 型エラー: 未知のエフェクト: R
+[exit 1]
+=== V124/ex/a6.kel
+
+[exit 0]
+=== V124/ex/a7.kel
+
+[exit 0]
+=== V124/ex/a8.kel
+
+[exit 0]
+=== V124/ex/a9.kel
+
+[exit 0]
+=== V124/ex/b1.kel
+
+[exit 0]
+=== V124/ex/c1.kel
+
+[exit 0]
+=== V124/ex/c2.kel
+
+[exit 0]
+=== V124/ex/d1.kel
+f : ((Int32) => {} @ {}) => {}
+h : () => (Int32) => {} @ {}
+[exit 0]
+=== V124/ex/d1r.kel
+f : ((Int32) => {} @ {}) => {}
+h : () => (Int32) => {} @ {}
+[exit 0]
+=== V124/ex/d2.kel
+v : ({}, Int32)
+[exit 0]
+=== V124/ex/d3.kel
+! d3.kel:3:5: 型エラー: 注釈された返り値型を満たしません(ラベル Print がありません(行は閉じています))
+[exit 1]
+=== V124/ex/d4.kel
+f : ((Int32) => {}) => {}
+k : ((Int32) => {} @ {Print}) => {} @ {Print}
+[exit 0]
+=== V124/ex/d4r.kel
+f : ((Int32) => {}) => {}
+k : ((Int32) => {} @ {Print}) => {} @ {Print}
+[exit 0]
+=== V124/ex/d5.kel
+! d5.kel:2:14: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row
+[exit 1]
+=== V124/ex/d5r.kel
+! d5r.kel:1:14: 型エラー: タプルの要素の型のカインドが Type ではありません: ς1 :: Row
+[exit 1]
+=== V124/ex/d6.kel
+v : Int32
+[exit 0]
+=== V124/ex/e1.kel
+f : ((() => {} @ {}, () => {} @ {Log})) => Int32
+[exit 0]
+=== V124/ex/e2.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== V124/ex/e3.kel
+f : (N) => Int32
+[exit 0]
+=== V124/ex/e4.kel
+f : () => Int32 @ {Console}
+[exit 0]
+=== V124/ex/e5.kel
+f : (B[{}]) => Int32
+[exit 0]
+=== V124/ex/e6.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== V124/ex/f1.kel
+
+[exit 0]
+=== V124/ex/f2.kel
+
+[exit 0]
+=== V124/ex/f3.kel
+
+[exit 0]
+=== V124/ex/f4.kel
+
+[exit 0]
+=== V124/ex/f5.kel
+
+[exit 0]
+=== V124/ex/g1.kel
+
+[exit 0]
+=== V124/ex/g2.kel
+! g2.kel:2:31: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V124/ex/g3.kel
+! g3.kel:2:33: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V124/ex/g4.kel
+! g4.kel:3:31: 型エラー: 型 Q はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V124/ex/h1.kel
+f : (M.N) => Int32
+[exit 0]
+=== V124/ex/h2.kel
+! h2.kel:3:30: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V124/ex/inv_b.kel
+u : (Int32) => {} @ {}
+_ : {}
+_ : {}
+[exit 0]
+=== V124/ex/k1.kel
+! k1.kel:3:10: 型エラー: エフェクト行にフィールド x は書けません
+[exit 1]
+=== V124/ex/k2.kel
+! k2.kel:3:10: 型エラー: エフェクト行にフィールド x は書けません
+[exit 1]
+=== V124/ex/k3.kel
+v : Int32
+[exit 0]
+=== V124/ex/v29a.kel
+
+[exit 0]
+=== V124/ex/v29b.kel
+
+[exit 0]
+=== V124/ex/v29c.kel
+
+[exit 0]
+=== V124/verify/ex/pre.kel
+
+[exit 0]
+=== V124/verify/ex/r01.kel
+! r01.kel:1:10: 型エラー: 型エイリアス B が再帰しています(エイリアスは非再帰)
+[exit 1]
+=== V124/verify/ex/r02.kel
+v : B[{}]
+_ : {}
+[exit 0]
+=== V124/verify/ex/r03.kel
+r03.kel:4:22: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V124/verify/ex/r04.kel
+! r04.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V124/verify/ex/r05.kel
+f : ((() => {} @ {}, Int32)) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/r06.kel
+r06.kel:3:12: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V124/verify/ex/r07.kel
+r07.kel:3:12: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V124/verify/ex/r08.kel
+v : Option[{}]
+_ : {}
+[exit 0]
+=== V124/verify/ex/r09.kel
+! r09.kel:3:21: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+=== V124/verify/ex/r10.kel
+r10.kel:5:21: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V124/verify/ex/r11b.kel
+v : ({}, Int32)
+_ : {}
+[exit 0]
+=== V124/verify/ex/r11.kel
+f : ((Int32) => {} @ {}) => {}
+v : ({}, Int32)
+w : (Int32) => {} @ {}
+_ : {}
+[exit 0]
+=== V124/verify/ex/r12.kel
+go : ((Int32) => Int32 @ {Log}) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/r13.kel
+go : ((Int32) => Int32 @ {Log}) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/r14.kel
+! r14.kel:3:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V124/verify/ex/r15.kel
+! r15.kel:4:1: 型エラー: インスタンス頭 Option のカインドがクラス Sz のパラメータと一致しません
+[exit 1]
+=== V124/verify/ex/r16b.kel
+
+[exit 0]
+=== V124/verify/ex/r16.kel
+! r16.kel:1:10: 型エラー: 型エイリアス A の型引数のカインドが一致しません: [_] Type を期待しましたが {} は Type です
+[exit 1]
+=== V124/verify/ex/r17.kel
+n : N
+_ : {}
+[exit 0]
+=== V124/verify/ex/r18.kel
+! r18.kel:2:32: 型エラー: 型 Log はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V124/verify/ex/r19.kel
+! r19.kel:2:30: 型エラー: 未知の型: Log
+[exit 1]
+=== V124/verify/ex/r20.kel
+! r20.kel:5:1: 型エラー: インスタンス頭の型引数は _ だけです(List[_] の形)
+[exit 1]
+=== V124/verify/ex/r21.kel
+k : (() => {} @ {Console}) => {} @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/r22.kel
+! r22.kel:1:10: 型エラー: 未知の型: P
+[exit 1]
+=== V124/verify/ex/s01.kel
+f : (() => Int32) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/s02.kel
+f : (() => Int32) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/s03.kel
+f : ((() => {} @ {Console}, Int32)) => {} @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/s04.kel
+go : (() => Int32 @ {Ask, Log}) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/s05.kel
+go : (() => Int32 @ {Ask, Log}) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/s06.kel
+v : ({}, M.Q[{}])
+_ : {}
+[exit 0]
+=== V124/verify/ex/s07.kel
+! s07.kel:2:10: 型エラー: エフェクト行にフィールド y は書けません
+[exit 1]
+=== V124/verify/ex/s08.kel
+! s08.kel:2:12: 型エラー: エフェクト行にフィールド y は書けません
+[exit 1]
+=== V124/verify/ex/s09.kel
+s09.kel:2:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V124/verify/ex/s10.kel
+safe : ((Int32) => Int32 @ {Fail}, Int32) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/s11.kel
+safe : ((Int32) => Int32 @ {Fail}, Int32) => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V124/verify/ex/t01.kel
+f : (A) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/t02.kel
+f : ((() => {} @ {}, () => {} @ {Log})) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/t03.kel
+f : (A) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/u01.kel
+f : (A) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/u01r.kel
+f : (A) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/u01x.kel
+f : (A) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/u02.kel
+f : (H) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/u02r.kel
+f : (H) => Int32
+_ : {}
+[exit 0]
+=== V124/verify/ex/u02x.kel
+f : (H) => Int32
+_ : {}
+[exit 0]
+=== V22/ex/bare.kel
+f : (A) => A
+[exit 0]
+=== V22/ex/efflater.kel
+f : (A) => A
+[exit 0]
+=== V22/ex/modfwd.kel
+f : (M.A) => M.A
+[exit 0]
+=== V22/ex/residual2.kel
+f : (A) => A
+[exit 0]
+=== V22/ex/residual.kel
+f : (A) => A
+[exit 0]
+=== V22/ex/rowalias.kel
+f : (A) => A
+[exit 0]
+=== V22/ex/run.kel
+ok
+[exit 0]
+=== V22/ex/speclab.kel
+f : (A17[R1]) => A17[R1]
+[exit 0]
+=== V22/ex/specunit2.kel
+
+[exit 0]
+=== V22/ex/typealias.kel
+! typealias.kel:4:50: 型エラー: エフェクト行に Type エイリアス Log は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V22/ex/typo.kel
+! typo.kel:4:50: 型エラー: 未知のエフェクト: Lgo
+[exit 1]
+=== V22/ex/v30.kel
+
+[exit 0]
+=== V22/ex2/effop2.kel
+! effop2.kel:3:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V22/ex2/effop.kel
+! effop.kel:4:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V22/ex2/gap2.kel
+f : (M) => M
+[exit 0]
+=== V22/ex2/gap.kel
+f : (M) => M
+[exit 0]
+=== V22/verify/ex/r10_chain.kel
+
+[exit 0]
+=== V22/verify/ex/r11_link.kel
+
+[exit 0]
+=== V22/verify/ex/r12_diagmove2.kel
+! r12_diagmove2.kel:2:64: 型エラー: 型構成子 List の第1引数のカインドが一致しません: Type を期待しましたが R1 は Row です
+[exit 1]
+=== V22/verify/ex/r13_nolabel.kel
+! r13_nolabel.kel:1:61: 型エラー: 型構成子 List の第1引数のカインドが一致しません: Type を期待しましたが R1 は Row です
+[exit 1]
+=== V22/verify/ex/r1_diagmove.kel
+! r1_diagmove.kel:4:19: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V22/verify/ex/r2_alias_gap.kel
+f : (Z) => Z
+[exit 0]
+=== V22/verify/ex/r3b_run_nested_rev.kel
+pos
+k
+[exit 0]
+=== V22/verify/ex/r3_run_nested.kel
+pos
+k
+[exit 0]
+=== V22/verify/ex/r4_effparam.kel
+! r4_effparam.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V22/verify/ex/r4_pubparam.kel
+f : (A[A]) => A[A]
+g : (P[A, R1]) => P[A, R1]
+[exit 0]
+=== V22/verify/ex/r5_modshadow.kel
+f : (M.A) => M.A
+[exit 0]
+=== V22/verify/ex/r6_guard_mod.kel
+big
+[exit 0]
+=== V22/verify/ex/r7_import.kel
+imp
+[exit 0]
+=== V22/verify/ex/r8_main.kel
+
+[exit 0]
+=== V29/ex/a10.kel
+
+[exit 0]
+=== V29/ex/a1.kel
+
+[exit 0]
+=== V29/ex/a2.kel
+
+[exit 0]
+=== V29/ex/a3b.kel
+g : (Callback[{Print}]) => Int32
+[exit 0]
+=== V29/ex/a3.kel
+
+[exit 0]
+=== V29/ex/a4.kel
+
+[exit 0]
+=== V29/ex/a5.kel
+g : (Callback[{Print}]) => Int32
+[exit 0]
+=== V29/ex/a6.kel
+
+[exit 0]
+=== V29/ex/a7.kel
+mk : () => H
+[exit 0]
+=== V29/ex/a8.kel
+a8.kel:5:6: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== V29/ex/a9.kel
+
+[exit 0]
+=== V29/ex/ar3.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== V29/ex/ch1.kel
+
+[exit 0]
+=== V29/ex/ch2.kel
+
+[exit 0]
+=== V29/ex/ch3.kel
+
+[exit 0]
+=== V29/ex/ch4.kel
+
+[exit 0]
+=== V29/ex/chain.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== V29/ex/effop.kel
+
+[exit 0]
+=== V29/ex/id.kel
+! id.kel:2:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: A
+[exit 1]
+=== V29/ex/lab1.kel
+
+[exit 0]
+=== V29/ex/lab2.kel
+f : ((() => {} @ {}, () => {} @ {Log})) => Int32
+[exit 0]
+=== V29/ex/lab3.kel
+
+[exit 0]
+=== V29/ex/mix.kel
+h : H
+[exit 0]
+=== V29/ex/mod1.kel
+
+[exit 0]
+=== V29/ex/neg1.kel
+h : H
+! neg1.kel:5:5: 型エラー: 注釈された型を満たしません(ラベル Print がありません(行は閉じています))
+[exit 1]
+=== V29/ex/neg2.kel
+! neg2.kel:3:45: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+=== V29/ex/neg3.kel
+! neg3.kel:4:12: 型エラー: {} は Integral のインスタンスではありません
+[exit 1]
+=== V29/ex/ph.kel
+h : H
+[exit 0]
+=== V29/ex/pos3.kel
+h : H
+[exit 0]
+=== V29/ex/post1.kel
+
+[exit 0]
+=== V29/ex/pre1.kel
+
+[exit 0]
+=== V29/ex/run1.kel
+fire : (H) => {} @ {Print}
+h : H
+_ : {}
+[exit 0]
+=== V29/ex/run2.kel
+j : J
+_ : {}
+[exit 0]
+=== V29/ex/v124b.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== V29/ex/v124c.kel
+
+[exit 0]
+=== V29/ex/v124.kel
+f : ((Int32) => {} @ {}) => Int32
+[exit 0]
+=== V29/ex/v22a.kel
+
+[exit 0]
+=== V29/ex/v22b.kel
+
+[exit 0]
+=== V29/ex/w1.kel
+
+[exit 0]
+=== V29/ex/w2.kel
+f : (Int32) => Int32 @ {Print}
+[exit 0]
+=== V29/ex/w3.kel
+
+[exit 0]
+=== V29/verify/ex/d1.kel
+! d1.kel:2:20: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V29/verify/ex/d2.kel
+! d2.kel:2:27: 型エラー: 行カインドではない型パラメータです: E
+[exit 1]
+=== V29/verify/ex/d3.kel
+! d3.kel:2:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+=== V29/verify/ex/d4.kel
+! d4.kel:1:19: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+=== V29/verify/ex/d5.kel
+! d5.kel:2:20: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V29/verify/ex/d6.kel
+! d6.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: ς1 :: Row
+[exit 1]
+=== V29/verify/ex/d7.kel
+! d7.kel:2:16: 型エラー: タプルの要素の型のカインドが Type ではありません: {} :: Row
+[exit 1]
+=== V29/verify/ex/l1d.kel
+
+[exit 0]
+=== V29/verify/ex/l1e.kel
+
+[exit 0]
+=== V29/verify/ex/l1p2.kel
+
+[exit 0]
+=== V29/verify/ex/l1p.kel
+
+[exit 0]
+=== V29/verify/ex/l1r.kel
+
+[exit 0]
+=== V29/verify/ex/l1w.kel
+
+[exit 0]
+=== V29/verify/ex/myprelude.kel
+
+[exit 0]
+=== V29/verify/ex/q1d.kel
+! q1d.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V29/verify/ex/q1.kel
+! q1.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V29/verify/ex/q2.kel
+! q2.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V29/verify/ex/q3.kel
+! q3.kel:2:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V29/verify/ex/q4.kel
+
+[exit 0]
+=== V29/verify/ex/q5d.kel
+! q5d.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V29/verify/ex/q5.kel
+! q5.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V29/verify/ex/r10_v31.kel
+! r10_v31.kel:1:13: 型エラー: エフェクトラベルはこの位置(レコード型)では使えません
+[exit 1]
+=== V29/verify/ex/r11_v28.kel
+M.g : () => {} @ {Print}
+_ : {}
+[exit 0]
+=== V29/verify/ex/r12_v56.kel
+n : M.N
+_ : {}
+[exit 0]
+=== V29/verify/ex/r13_rec.kel
+z : Z
+_ : {}
+[exit 0]
+=== V29/verify/ex/r14_import.kel
+h : H
+_ : {}
+[exit 0]
+=== V29/verify/ex/r15_imp2.kel
+f : (Callback[{}]) => Int32
+_ : {}
+[exit 0]
+=== V29/verify/ex/r16_prel.kel
+! r16_prel.kel:1:17: 型エラー: 未知の型: Cb
+[exit 1]
+=== V29/verify/ex/r1_mod.kel
+M.fire : (M.H) => {} @ {Print}
+h : M.H
+_ : {}
+[exit 0]
+=== V29/verify/ex/r2_hk.kel
+! r2_hk.kel:3:21: 型エラー: 型構成子 Box には型引数が必要です
+[exit 1]
+=== V29/verify/ex/r3_handler.kel
+runjob : (Job) => {} @ {Print}
+j : Job
+_ : {}
+[exit 0]
+=== V29/verify/ex/r4_guard.kel
+classify : (Q) => String
+_ : {}
+[exit 0]
+=== V29/verify/ex/r5_effop.kel
+go : () => {} @ {Ev, Print}
+_ : {}
+[exit 0]
+=== V29/verify/ex/r6_class.kel
+h : Hold
+_ : {}
+[exit 0]
+=== V29/verify/ex/r7_phantom.kel
+g : G
+_ : {}
+[exit 0]
+=== V29/verify/ex/r8_pubann.kel
+mk : () => H @ {}
+_ : {}
+[exit 0]
+=== V29/verify/ex/r9_nested.kel
+t : Two
+r : Int32
+_ : {}
+[exit 0]
+=== V29/verify/ex/v30b.kel
+
+[exit 0]
+=== V29/verify/ex/v30.kel
+
+[exit 0]
+=== V30/ex/bwd.kel
+call : (Cb) => {} @ {Log}
+n : Int32
+_ : {}
+[exit 0]
+=== V30/ex/fwd.kel
+call : (Cb) => {} @ {Log}
+n : Int32
+_ : {}
+[exit 0]
+=== V30/ex/v22_alias1.kel
+
+[exit 0]
+=== V30/ex/v22_alias2.kel
+
+[exit 0]
+=== V30/ex/v_alias.kel
+f : (() => {} @ {Log}) => {} @ {Log}
+[exit 0]
+=== V30/ex/v_class.kel
+
+[exit 0]
+=== V30/ex/v_comp1.kel
+! v_comp1.kel:2:14: 型エラー: module Foo のコンパニオン型 Foo は既存の型 Foo と同名です(module 内の型とトップレベルの型は同名にできません)
+[exit 1]
+=== V30/ex/v_comp2.kel
+! v_comp2.kel:1:14: 型エラー: module Foo のコンパニオン型 Foo は既存の型 Foo と同名です(module 内の型とトップレベルの型は同名にできません)
+[exit 1]
+=== V30/ex/v_dup.kel
+! v_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています
+[exit 1]
+=== V30/ex/v_effop.kel
+
+[exit 0]
+=== V30/ex/v_fun.kel
+f : () => {} @ {Log}
+[exit 0]
+=== V30/ex/v_mod_inner.kel
+! v_mod_inner.kel:3:3: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V30/ex/v_mod_outer.kel
+
+[exit 0]
+=== V30/ex/v_mod_qual.kel
+! v_mod_qual.kel:2:12: 未実装: module 内の effect 宣言(M10): module M
+[exit 4]
+=== V30/ex/v_newtype2.kel
+
+[exit 0]
+=== V30/ex/v_newtype_bare.kel
+
+[exit 0]
+=== V30/ex/v_newtype_ext.kel
+
+[exit 0]
+=== V30/ex/v_newtype.kel
+
+[exit 0]
+=== V30/ex/v_newtype_sum.kel
+
+[exit 0]
+=== V30/ex/v_nolabel.kel
+
+[exit 0]
+=== V30/ex/v_notlabel.kel
+! v_notlabel.kel:1:28: 型エラー: 型 Int32 はエフェクトではありません(ここにはエフェクト行が要ります)
+[exit 1]
+=== V30/ex/v_order_dup.kel
+! v_order_dup.kel:3:1: 型エラー: effect Log が二重に宣言されています
+[exit 1]
+=== V30/ex/v_order_std.kel
+! v_order_std.kel:2:1: 型エラー: 標準環境の effect Console は再宣言できません
+[exit 1]
+=== V30/ex/v_params.kel
+! v_params.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+=== V30/ex/v_rowalias.kel
+f : () => {} @ {Log}
+[exit 0]
+=== V30/ex/v_unknown.kel
+! v_unknown.kel:1:28: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V30/ex2/effalias.kel
+f : (N1, N2) => N1
+[exit 0]
+=== V30/ex2/effpos.kel
+v : () => {} @ {Log}
+w : (Row1[R1]) => {} @ {Log extends R1}
+[exit 0]
+=== V30/ex2/pn.kel
+! pn.kel:1:28: 型エラー: 未知のエフェクト: Nope
+[exit 1]
+=== V30/ex2/specres.kel
+f : (A19) => A19
+[exit 0]
+=== V30/verify/ex/prel.kel
+__int32_add : (Int32, Int32) => Int32
+__int32_sub : (Int32, Int32) => Int32
+__int32_mul : (Int32, Int32) => Int32
+__int32_div : (Int32, Int32) => Int32
+[exit 0]
+=== V30/verify/ex/r01_spec_label_first.kel
+f : (A[R1]) => A[R1]
+runit : () => Int32 @ {Console extends R1}
+_ : {}
+[exit 0]
+=== V30/verify/ex/r02_mod_alias_same_name.kel
+M.mk : () => M.N @ {}
+n : Int32
+_ : {}
+[exit 0]
+=== V30/verify/ex/r03_nested_handlers.kel
+both : () => Int32 @ {A, B}
+r : Int32
+_ : {}
+[exit 0]
+=== V30/verify/ex/r04_class_effect_order.kel
+
+[exit 0]
+=== V30/verify/ex/r05_alias_row.kel
+go : (N) => Int32 @ {Log, Two}
+v : Int32
+_ : {}
+[exit 0]
+=== V30/verify/ex/r06_unused_param_phantom.kel
+f : (A) => A
+[exit 0]
+=== V30/verify/ex/r07_op_shadow.kel
+x : Int32
+_ : {}
+[exit 0]
+=== V30/verify/ex/r08_import.kel
+
+[exit 0]
+=== V30/verify/ex/r09_tuple_inner.kel
+f : (A) => A
+[exit 0]
+=== V30/verify/ex/r10_dup_with_type_first.kel
+! r10_dup_with_type_first.kel:2:1: 型エラー: Log は既に 型エイリアス として宣言されています(effect では再宣言できません)
+[exit 1]
+=== V30/verify/ex/r11_effect_first_alias.kel
+! r11_effect_first_alias.kel:2:1: 型エラー: Log は既に effect として宣言されています(型エイリアス では再宣言できません)
+[exit 1]
+=== V30/verify/ex/r12_class_named_like_effect.kel
+
+[exit 0]
+=== V30/verify/ex/r13_param_named_effect.kel
+use : (M) => Int32 @ {E}
+v : Int32
+_ : {}
+[exit 0]
+=== V30/verify/ex/r14_specfield_run.kel
+x : A10
+[exit 0]
+=== V30/verify/ex/r15_specinner_mixed.kel
+f : (A12[R1]) => A12[R1]
+g : (C12) => C12
+[exit 0]
+=== V30/verify/ex/r16_guard_effect_after.kel
+pick : (Int32) => Int32 @ {Ask}
+r : Int32
+_ : {}
+[exit 0]
+=== V30/verify/ex/r17_pub_mod_newtype.kel
+M.mk : () => M.H[{}] @ {}
+[exit 0]
+=== V30/verify/ex/r18_kvar_callback.kel
+! r18_kvar_callback.kel:4:17: 型エラー: 型構成子 Box には型引数が必要です
+[exit 1]
+=== V30/verify/ex/r20_mod_rowalias.kel
+
+[exit 0]
+=== V30/verify/ex/r21_v57_param.kel
+! r21_v57_param.kel:3:31: 型エラー: エフェクト行に Type エイリアス E は置けません(: EffectRow を付けてください)
+[exit 1]
+=== V30/verify/ex/r22_mod_type_alias_same.kel
+
+[exit 0]
+=== V30/verify/ex/r23_mod_type_alias_same_b.kel
+
+[exit 0]
+=== V30/verify/ex/r24_rowalias_via_newtype.kel
+
+[exit 0]
+=== V30/verify/ex/r25_typealias_via_newtype.kel
+
+[exit 0]
+=== V30/verify/ex/r26_typealias_via_effop.kel
+
+[exit 0]
+=== V30/verify/ex/s01_resid_alias.kel
+f : (A) => A
+[exit 0]
+=== V30/verify/ex/s02_resid_alias_rev.kel
+f : (A) => A
+[exit 0]
+=== V30/verify/ex/s03_resid_chain3.kel
+f : (A) => A
+[exit 0]
+=== V30/verify/ex/t01_positions.kel
+v : () => {} @ {Log}
+w : (Row1[R1]) => {} @ {Log extends R1}
+[exit 0]

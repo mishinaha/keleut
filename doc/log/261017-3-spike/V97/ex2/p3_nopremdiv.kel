@@ -1,0 +1,4 @@
+type class Sz[A] { val sz: (A) => Int32 }
+echoln("a")
+type instance Sz[Int32] { let sz: (Int32) => Int32 = { let q = 1 / 0; fn(x) => x + q } }
+echoln("b")

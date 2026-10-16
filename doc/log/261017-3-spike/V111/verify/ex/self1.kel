@@ -1,0 +1,2 @@
+let rec g[B](y: B): Int32 = g(1i32)
+echoln(show(g("a")))

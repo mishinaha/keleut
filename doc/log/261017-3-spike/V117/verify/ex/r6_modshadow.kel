@@ -1,0 +1,6 @@
+type F = (Int32) => Int32
+module M {
+  pub newtype F = F(Int32)
+  pub let h(f: F): Int32 = f match { case F(n) => n }
+}
+echoln(show(M.h(M.F(5))))

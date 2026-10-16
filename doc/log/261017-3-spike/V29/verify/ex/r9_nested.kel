@@ -1,0 +1,7 @@
+effect A = { a: () => Int32 }
+effect B = { b: () => Int32 }
+type Th[E] = () => Int32 @ E
+newtype Two = MkTwo(Th[{A, B}])
+let t = MkTwo(fn() => perform a() + perform b())
+let r = t match { case MkTwo(f) => (f() handle { case a() => resume(1) }) handle { case b() => resume(10) } }
+with_stdout(fn() => println(show(r)))

@@ -1,0 +1,9 @@
+effect Fail = { throw: (String) => Never }
+effect Reg = { reg: (() => Int32 @ Fail) => Int32 }
+let main(): Unit @ Console = {
+  let r = { perform reg(fn() => perform throw("e")) } handle {
+    case reg(f) => resume({ f() } handle { case throw(m) => { echoln(m); 7i32 } })
+  }
+  echoln(show(r))
+}
+main()

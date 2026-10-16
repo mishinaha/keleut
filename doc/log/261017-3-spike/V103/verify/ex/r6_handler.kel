@@ -1,0 +1,18 @@
+effect Ask = { ask: () => Int32 }
+let f(): Int32 @ Ask = perform ask() + 1
+let v = f() handle {
+  case ask() => resume(10 * 2)
+  case return(x) => x - 1
+}
+let w = (f() handle {
+  case ask() => resume(perform ask() + 100)
+  case return(x) => -x
+}) handle {
+  case ask() => resume(3)
+  case return(x) => x % 7
+}
+let z = Cons(1, Cons(2, Nil)) match {
+  case Cons(a, _) if a + 1 == 2 => a * 10
+  case _ => 0
+}
+echoln(show(v) + " " + show(w) + " " + show(z))

@@ -1,0 +1,5 @@
+newtype Two[R] = Two(() => Int32 @ R, () => Int32 @ R)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let t = Two(b, fn() => 1)
+let x = t match { case Two(f, g) if true => f() + g() case _ => 0 }
+echoln(show(x))

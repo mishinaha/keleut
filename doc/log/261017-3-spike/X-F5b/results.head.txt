@@ -1,0 +1,144 @@
+=== lit1.kel: let a = 1x (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 x <NL> let b = 2 <EOF> 
+lit1.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit2.kel: let a = 1.2.3 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1.2 . 3 <NL> let b = 2 <EOF> 
+lit2.kel:1:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit3.kel: let a = 0x (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 x <NL> let b = 2 <EOF> 
+lit3.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit4.kel: let a = 0x_1 (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 x_1 <NL> let b = 2 <EOF> 
+lit4.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit5.kel: let a = 0xg (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 xg <NL> let b = 2 <EOF> 
+lit5.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit6.kel: let a = 0b102 (2 行目 let b = 2)
+$ --dump-tokens: let a = 0b10 2 <NL> let b = 2 <EOF> 
+lit6.kel:1:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit7.kel: let a = 0b2 (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 b2 <NL> let b = 2 <EOF> 
+lit7.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit8.kel: let a = 0o8 (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 o8 <NL> let b = 2 <EOF> 
+lit8.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit9.kel: let a = 0o (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 o <NL> let b = 2 <EOF> 
+lit9.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit10.kel: let a = 1i (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 i <NL> let b = 2 <EOF> 
+lit10.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit11.kel: let a = 1e (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 e <NL> let b = 2 <EOF> 
+lit11.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit12.kel: let a = 1e+ (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 e + let b = 2 <EOF> 
+lit12.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit13.kel: let a = 1abc (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 abc <NL> let b = 2 <EOF> 
+lit13.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit14.kel: let a = 1_ (2 行目 let b = 2)
+$ --dump-tokens: let a = 1_ <NL> let b = 2 <EOF> 
+a : Int32
+b : Int32
+[exit 0]
+=== lit15.kel: let a = 0xff_ (2 行目 let b = 2)
+$ --dump-tokens: let a = 0xff_ <NL> let b = 2 <EOF> 
+a : Int32
+b : Int32
+[exit 0]
+=== lit16.kel: let a = 1. (2 行目 let b = 2)
+$ --dump-tokens: let a = 1. <NL> let b = 2 <EOF> 
+a : Float64
+b : Int32
+[exit 0]
+=== lit17.kel: let a = 1.5.3 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1.5 . 3 <NL> let b = 2 <EOF> 
+lit17.kel:1:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit18.kel: let a = 1._1 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1. _1 <NL> let b = 2 <EOF> 
+lit18.kel:1:11: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit19.kel: let a = 1.foo (2 行目 let b = 2)
+$ --dump-tokens: let a = 1. foo <NL> let b = 2 <EOF> 
+lit19.kel:1:11: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit20.kel: let a = 1u8x (2 行目 let b = 2)
+$ --dump-tokens: let a = 1u8 x <NL> let b = 2 <EOF> 
+lit20.kel:1:12: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit21.kel: let a = 1i32x (2 行目 let b = 2)
+$ --dump-tokens: let a = 1i32 x <NL> let b = 2 <EOF> 
+lit21.kel:1:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit22.kel: let a = 0xffz (2 行目 let b = 2)
+$ --dump-tokens: let a = 0xff z <NL> let b = 2 <EOF> 
+lit22.kel:1:13: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit23.kel: let a = 1f (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 f <NL> let b = 2 <EOF> 
+lit23.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit24.kel: let a = 1.5e (2 行目 let b = 2)
+$ --dump-tokens: let a = 1.5 e <NL> let b = 2 <EOF> 
+lit24.kel:1:12: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit25.kel: let a = 2abc (2 行目 let b = 2)
+$ --dump-tokens: let a = 2 abc <NL> let b = 2 <EOF> 
+lit25.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit26.kel: let a = 1E (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 E <NL> let b = 2 <EOF> 
+lit26.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit27.kel: let a = 1u (2 行目 let b = 2)
+$ --dump-tokens: let a = 1 u <NL> let b = 2 <EOF> 
+lit27.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit28.kel: let a = 0b (2 行目 let b = 2)
+$ --dump-tokens: let a = 0 b <NL> let b = 2 <EOF> 
+lit28.kel:1:10: パースエラー(付近のトークンを確認してください)
+[exit 2]
+=== lit29.kel: let a = 1i64 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1i64 <NL> let b = 2 <EOF> 
+a : Int64
+b : Int32
+[exit 0]
+=== lit30.kel: let a = 0xff (2 行目 let b = 2)
+$ --dump-tokens: let a = 0xff <NL> let b = 2 <EOF> 
+a : Int32
+b : Int32
+[exit 0]
+=== lit31.kel: let a = 1e5 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1e5 <NL> let b = 2 <EOF> 
+a : Float64
+b : Int32
+[exit 0]
+=== lit32.kel: let a = 1.e5 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1.e5 <NL> let b = 2 <EOF> 
+a : Float64
+b : Int32
+[exit 0]
+=== lit33.kel: let a = 1__2 (2 行目 let b = 2)
+$ --dump-tokens: let a = 1__2 <NL> let b = 2 <EOF> 
+a : Int32
+b : Int32
+[exit 0]
+=== lit34.kel: let a = 0xffi8 (2 行目 let b = 2)
+$ --dump-tokens: let a = 0xffi8 <NL> let b = 2 <EOF> 
+! lit34.kel:1:9: 未実装: 数値接尾辞 0xffi8(v0 は i32/i64/f64 のみ)
+[exit 4]

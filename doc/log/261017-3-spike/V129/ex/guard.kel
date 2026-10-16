@@ -1,0 +1,2 @@
+let f(x, b: Boolean): Int32 = x match { case y if b => 1 }
+echoln("ok")

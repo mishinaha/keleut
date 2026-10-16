@@ -1,0 +1,4 @@
+module M {
+  pub type T = Int32
+}
+let f(): Int32 @ {M.T} = 1

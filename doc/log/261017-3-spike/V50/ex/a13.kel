@@ -1,0 +1,2 @@
+type W: EffectRow = {Print}
+let run_it[W](g: () => Unit @ {W}): Unit @ {W} = g()

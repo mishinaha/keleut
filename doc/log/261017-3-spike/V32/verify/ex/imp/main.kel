@@ -1,0 +1,2 @@
+from "./lib" import { a }
+echoln(show(a(4)))

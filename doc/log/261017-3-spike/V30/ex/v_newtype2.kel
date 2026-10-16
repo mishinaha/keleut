@@ -1,0 +1,3 @@
+newtype N = N(Int32)
+newtype M = M(() => Unit @ {Log})
+effect Log = { log: (String) => Unit }

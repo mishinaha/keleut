@@ -1,0 +1,1 @@
+extern "c" let pub(x: Int32): Int32

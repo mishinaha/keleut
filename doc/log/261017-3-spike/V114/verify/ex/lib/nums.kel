@@ -1,0 +1,2 @@
+pub newtype Int8 = Int8(Int32)
+pub let val8(x: Int8): Int32 = x match { case Int8(n) => n }

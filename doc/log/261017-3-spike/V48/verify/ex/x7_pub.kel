@@ -1,0 +1,6 @@
+newtype Empt
+pub newtype Absurd = MkA(Empt)
+pub let f(MkA(n): Absurd): Int32 = 1
+pub let g(o: Option[Absurd]): Int32 = o match { case Some(MkA(n)) => 1 }
+pub let h(o: (Int32, Absurd)): Int32 = o match { case (_, MkA(n)) => 1 }
+echo("ok")

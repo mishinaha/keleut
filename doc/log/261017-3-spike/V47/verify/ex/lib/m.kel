@@ -1,0 +1,5 @@
+pub module M {
+  pub type W[E]: EffectRow = {Print extends E}
+  pub let say(s: String): Unit @ W[{}] = perform print(s + "\n")
+}
+pub type W2[E]: EffectRow = {Print extends E}

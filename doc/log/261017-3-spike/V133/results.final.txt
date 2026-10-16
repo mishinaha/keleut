@@ -1,0 +1,36 @@
+== ex/m_guard.kel
+r : Int32
+[0]
+== ex/n_cancel.kel
+! ex/n_cancel.kel:3:113: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
+[1]
+== ex/n_cancellam.kel
+! ex/n_cancellam.kel:3:116: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
+[1]
+== ex/n_guard.kel
+! ex/n_guard.kel:2:61: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
+[1]
+== ex/n_innerlam.kel
+! ex/n_innerlam.kel:3:104: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[1]
+== ex/n_qual.kel
+! ex/n_qual.kel:2:71: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[1]
+== ex/n_ret.kel
+! ex/n_ret.kel:3:114: 型エラー: return 節には resume を書けません(再開する継続がありません)
+[1]
+== ex/r_cancel.kel
+! ex/r_cancel.kel:3:99: 型エラー: cancel 節には resume を書けません(再開する継続がありません)
+[1]
+== ex/r_guard.kel
+! ex/r_guard.kel:2:46: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
+[1]
+== ex/r_ownret.kel
+! ex/r_ownret.kel:2:74: 型エラー: return 節には resume を書けません(再開する継続がありません)
+[1]
+== ex/r_ret.kel
+! ex/r_ret.kel:3:100: 型エラー: return 節には resume を書けません(再開する継続がありません)
+[1]
+== ex/top.kel
+! ex/top.kel:1:11: 型エラー: resume は操作節の中でのみ使えます
+[1]

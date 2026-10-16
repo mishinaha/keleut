@@ -1,0 +1,469 @@
+===  abort.kel
+-1
+[exit 0]
+=== --strict-exhaustive abort.kel
+-1
+[exit 0]
+=== --type-check abort.kel
+abort : (String) => A @ {Fail}
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  annotated.kel
+-1
+[exit 0]
+=== --strict-exhaustive annotated.kel
+-1
+[exit 0]
+=== --type-check annotated.kel
+fail : (String) => Never @ {Fail}
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  dexp.kel
+x
+[exit 0]
+=== --strict-exhaustive dexp.kel
+x
+[exit 0]
+=== --type-check dexp.kel
+_ : {}
+[exit 0]
+===  direct.kel
+-1
+[exit 0]
+=== --strict-exhaustive direct.kel
+-1
+[exit 0]
+=== --type-check direct.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  handlerclause.kel
+5
+[exit 0]
+=== --strict-exhaustive handlerclause.kel
+5
+[exit 0]
+=== --type-check handlerclause.kel
+go : () => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  helper.kel
+-1
+[exit 0]
+=== --strict-exhaustive helper.kel
+-1
+[exit 0]
+=== --type-check helper.kel
+fail : (String) => A @ {Fail extends R1}
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  lamdefer.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive lamdefer.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check lamdefer.kel
+h : (A) => Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  laterint.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive laterint.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check laterint.kel
+g : (Int32) => Int32
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  laterlet2.kel
+-1
+[exit 0]
+=== --strict-exhaustive laterlet2.kel
+-1
+[exit 0]
+=== --type-check laterlet2.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  laterlet.kel
+-1
+[exit 0]
+=== --strict-exhaustive laterlet.kel
+-1
+[exit 0]
+=== --type-check laterlet.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  mutual.kel
+-1
+[exit 0]
+=== --strict-exhaustive mutual.kel
+-1
+[exit 0]
+=== --type-check mutual.kel
+f : (Int32) => Int32 @ {Fail}
+g : (Int32) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  numvar.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive numvar.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check numvar.kel
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  okarmann.kel
+⚠ 第 1 節は到達不能です(冗長)
+3
+[exit 0]
+=== --strict-exhaustive okarmann.kel
+⚠ 第 1 節は到達不能です(冗長)
+[exit 1]
+=== --type-check okarmann.kel
+mk : (Boolean) => #Ok(Never) | #Err(Int32) @ {Fail}
+go : (Boolean) => Int32 @ {Fail}
+⚠ 第 1 節は到達不能です(冗長)
+_ : {}
+[exit 0]
+===  okarm.kel
+⚠ 第 1 節は到達不能です(冗長)
+3
+-1
+[exit 0]
+=== --strict-exhaustive okarm.kel
+⚠ 第 1 節は到達不能です(冗長)
+[exit 1]
+=== --type-check okarm.kel
+mk : (Boolean) => #Ok(A) | #Err(Int32) | R1 @ {Fail extends R2}
+go : (Boolean) => Int32 @ {Fail}
+⚠ 第 1 節は到達不能です(冗長)
+_ : {}
+_ : {}
+[exit 0]
+===  optnever.kel
+⚠ 第 1 節は到達不能です(冗長)
+0
+[exit 0]
+=== --strict-exhaustive optnever.kel
+⚠ 第 1 節は到達不能です(冗長)
+[exit 1]
+=== --type-check optnever.kel
+f : (Option[Never]) => Int32
+⚠ 第 1 節は到達不能です(冗長)
+_ : {}
+[exit 0]
+===  r11_void_helper.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive r11_void_helper.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r11_void_helper.kel
+elim : (A) => B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+use : (Void) => Int32
+_ : {}
+[exit 0]
+===  r12_void_inst.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive r12_void_inst.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r12_void_inst.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  r13_void_lambda.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive r13_void_lambda.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r13_void_lambda.kel
+id : (A) => A
+h : (_A) => _B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+k : (Void) => Int32
+_ : {}
+[exit 0]
+===  r1_nongen_top.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+0
+[exit 0]
+=== --strict-exhaustive r1_nongen_top.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r1_nongen_top.kel
+id : (A) => A
+h : (_A) => _B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+k : (Boolean) => Int32
+_ : {}
+[exit 0]
+===  r2_weak_dexp.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+3
+[exit 0]
+=== --strict-exhaustive r2_weak_dexp.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r2_weak_dexp.kel
+id : (A) => A
+k : (_A) => _A
+_ : (_A) => _B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  r3_inst_int.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive r3_inst_int.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r3_inst_int.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  r4_order.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r4_order.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r4_order.kel
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r5_local_nongen.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+0
+[exit 0]
+=== --strict-exhaustive r5_local_nongen.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r5_local_nongen.kel
+id : (A) => A
+g : (Boolean) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r6_module.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+1
+[exit 0]
+=== --strict-exhaustive r6_module.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r6_module.kel
+M.f : (Int32) => Int32 @ {}
+M.g : (A) => B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+M.h : (Boolean) => Int32 @ {}
+_ : {}
+[exit 0]
+===  r7_alias.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive r7_alias.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r7_alias.kel
+f : (A) => Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+=== --strict-exhaustive r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+=== --type-check r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+===  r9_inst_generic.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive r9_inst_generic.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check r9_inst_generic.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  rigid.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive rigid.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check rigid.kel
+f : (A) => B
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  rowkind.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+1
+[exit 0]
+=== --strict-exhaustive rowkind.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check rowkind.kel
+f : (A) => Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  showlist.kel
+! showlist.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== --strict-exhaustive showlist.kel
+! showlist.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+=== --type-check showlist.kel
+! showlist.kel:2:5: 型エラー: 曖昧な制約: Show を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+===  toplevelstmt.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+x
+[exit 0]
+=== --strict-exhaustive toplevelstmt.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check toplevelstmt.kel
+_ : {}
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 0]
+===  unannparam_call.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+before
+実行時エラー: match のどの節にも一致しません: 3
+[exit 3]
+=== --strict-exhaustive unannparam_call.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check unannparam_call.kel
+f : (A) => B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+y : Int32
+_ : {}
+[exit 0]
+===  unannparam.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive unannparam.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check unannparam.kel
+f : (A) => B
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  v136.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+ok
+[exit 0]
+=== --strict-exhaustive v136.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check v136.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  valbind.kel
+-1
+[exit 0]
+=== --strict-exhaustive valbind.kel
+-1
+[exit 0]
+=== --type-check valbind.kel
+get : (Option[Int32]) => Int32 @ {Fail}
+_ : {}
+[exit 0]
+===  w1.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+3
+[exit 0]
+=== --strict-exhaustive w1.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check w1.kel
+id : (A) => A
+p : (_A) => _A
+_ : (Int32) => Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  w2.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+3
+[exit 0]
+=== --strict-exhaustive w2.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check w2.kel
+id : (A) => A
+p : (_A) => _A
+_ : Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  w3.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+3
+[exit 0]
+=== --strict-exhaustive w3.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check w3.kel
+id : (A) => A
+p : (_A) => _A
+q : Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]
+===  w4.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+3
+[exit 0]
+=== --strict-exhaustive w4.kel
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+[exit 1]
+=== --type-check w4.kel
+id : (A) => A
+p : (_A) => _A
+q : (Int32) => Int32
+⚠ match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)
+_ : {}
+[exit 0]

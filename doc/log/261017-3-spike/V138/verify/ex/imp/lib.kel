@@ -1,0 +1,9 @@
+pub effect E = { throw: (String) => Never, ask: () => Int32 }
+pub effect Res = { use: () => Unit }
+pub let guarded(n: Int32): Int32 @ Console = ({ perform use(); perform throw("lib" + show(n)) }) handle {
+  case use() => resume()
+  case cancel => { let a = perform ask(); echoln("lib cancel " + show(a)) }
+} handle {
+  case throw(e) => { echoln("lib H " + e); n * 10 }
+  case ask() => { let x = resume(n); x + 1 }
+}

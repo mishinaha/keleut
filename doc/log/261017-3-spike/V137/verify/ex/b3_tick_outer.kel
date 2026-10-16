@@ -1,0 +1,19 @@
+effect Fail = { throw: (String) => Never, tick: () => Int32 }
+effect Stop = { stop: () => Never }
+effect Res = { use: () => Unit }
+let rec loop(n: Int32, acc: Int32): Int32 =
+  if n == 0 then acc else {
+    let t = perform tick()
+    ({ perform use(); perform stop(); 1 }) handle {
+      case use() => resume()
+      case cancel => perform throw("c" + show(n))
+    } handle {
+      case stop() => loop(n - 1, acc + t)
+    }
+  }
+let r = loop(4, 0) handle {
+  case throw(e) => { echoln("caught " + e); 1 }
+  case tick() => { let v = resume(10); echoln("tick got " + show(v)); v + 1 }
+  case return(x) => { echoln("ret " + show(x)); x }
+}
+echoln(show(r))

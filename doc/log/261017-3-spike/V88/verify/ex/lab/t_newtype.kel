@@ -1,0 +1,1 @@
+let f(x: {newtype: Int32}): Int32 = 1

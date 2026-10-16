@@ -1,0 +1,140 @@
+=== r1.in
+-- HEAD
+_ : String = "a\nb"
+c
+<stdin>:6:15: 字句エラー: unexpected end of unicode escape
+<stdin>:8:9: パースエラー(付近のトークンを確認してください)
+rc=0
+-- NEW
+_ : String = "a\nb"
+c
+<stdin>:6:15: 字句エラー: Unicode エスケープの 16 進の桁が足りません
+<stdin>:8:9: パースエラー(付近のトークンを確認してください)
+rc=0
+=== r2.in
+-- HEAD
+:type の式が途中で終わっています
+<stdin>:2:3: パースエラー(付近のトークンを確認してください)
+rc=0
+-- NEW
+:type の式が途中で終わっています
+<stdin>:2:3: パースエラー(付近のトークンを確認してください)
+rc=0
+=== r3.in
+-- HEAD
+a : Int32 = 1
+after
+rc=0
+-- NEW
+a : Int32 = 1
+after
+rc=0
+=== r4.kel
+-- HEAD
+/* not a comment
+2
+rc=0
+s : String
+_ : {}
+c : Int32
+_ : {}
+rc=0
+-- NEW
+/* not a comment
+2
+rc=0
+s : String
+_ : {}
+c : Int32
+_ : {}
+rc=0
+=== r5.kel
+-- HEAD
+r5.kel:1:1: パースエラー(付近のトークンを確認してください)
+rc=2
+r5.kel:1:1: パースエラー(付近のトークンを確認してください)
+rc=2
+-- NEW
+r5.kel:1:1: パースエラー(付近のトークンを確認してください)
+rc=2
+r5.kel:1:1: パースエラー(付近のトークンを確認してください)
+rc=2
+=== r6.kel
+-- HEAD
+A😀	\"ok
+end
+rc=0
+s : String
+_ : {}
+_ : {}
+rc=0
+-- NEW
+A😀	\"ok
+end
+rc=0
+s : String
+_ : {}
+_ : {}
+rc=0
+=== r7.kel
+-- HEAD
+r7.kel:2:1: 字句エラー: unexpected character: ¤
+rc=2
+r7.kel:2:1: 字句エラー: unexpected character: ¤
+rc=2
+-- NEW
+r7.kel:2:1: 字句エラー: 予期しない文字です: ¤
+rc=2
+r7.kel:2:1: 字句エラー: 予期しない文字です: ¤
+rc=2
+=== r5.kel
+-- HEAD
+imp/bad.kel:1:15: 字句エラー: invalid escape sequence
+rc=2
+-- NEW
+imp/bad.kel:1:15: 字句エラー: 不正なエスケープです
+rc=2
+=== r8.kel
+-- HEAD
+imp/badc.kel:2:1: 字句エラー: unterminated block comment
+rc=2
+-- NEW
+imp/badc.kel:2:1: 字句エラー: ブロックコメントが閉じていません
+rc=2
+=== r9.kel
+-- HEAD
+! r9.kel:2:11: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+rc=1
+-- NEW
+! r9.kel:2:11: 型エラー: pub な宣言には完全な型注釈が必要です(返り値の型注釈がありません)
+rc=1
+=== r10.in
+-- HEAD
+x : Int32 = 1
+<stdin>: 入力が途中で終わっています
+rc=0
+-- NEW
+x : Int32 = 1
+<stdin>: 入力が途中で終わっています
+rc=0
+=== r11.in
+-- HEAD
+<stdin>:1:6: 字句エラー: invalid escape sequence
+rc=0
+-- NEW
+<stdin>:1:6: 字句エラー: 不正なエスケープです
+rc=0
+=== r9.kel
+-- HEAD
+a\bé /* x
+rc=0
+-- NEW
+a\bé /* x
+rc=0
+=== r12.kel
+-- HEAD
+sb
+rc=0
+-- NEW
+sb
+rc=0

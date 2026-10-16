@@ -1,0 +1,10 @@
+newtype W[A] = W(A)
+type instance Show[W[_]] { let show(w) = w match { case W(_) => "W!" } }
+let x = W(show)
+x
+let y = W(1)
+y
+type instance Show[W[_]] { let show(w) = "dup" }
+newtype V[A] = V(A)
+type instance Show[V[_]] { let show(w) = "V!" }
+let z = V(show)

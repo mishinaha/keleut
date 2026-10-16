@@ -1,0 +1,6 @@
+pub effect Log = { log: (String) => {} }
+pub let quiet(f: () => Int32 @ {Log}): Int32 =
+  f() handle {
+    case log(s, t) => resume(())
+    case return(v) => v
+  }

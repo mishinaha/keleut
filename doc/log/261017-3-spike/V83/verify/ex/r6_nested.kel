@@ -1,0 +1,13 @@
+effect Ask = { ask: () => Int32 }
+module M {
+  pub let inner(): Int32 @ {Ask, Print} = {
+    let n = perform ask()
+    println(show(Some(n + 1)))
+    n
+  }
+  pub let go(): Unit @ {Console} = {
+    let r = with_stdout(fn() => inner() handle { case ask() => resume(41) })
+    echoln(show(Cons(Some(r), Cons(None, Nil)) == Cons(Some(41), Cons(None, Nil))))
+  }
+}
+M.go()

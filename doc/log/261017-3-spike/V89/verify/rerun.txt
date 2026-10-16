@@ -1,0 +1,158 @@
+=== g10_cancelguard.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle {
+  case test() => resume(true)
+  case cancel => 1 match { case _ if resume(true) => () case _ => () }
+}
+echoln(show(r))
+--- tc
+! g10_cancelguard.kel:4:38: 型エラー: resume は操作節の中でのみ使えます
+[1]
+--- run
+! g10_cancelguard.kel:4:38: 型エラー: resume は操作節の中でのみ使えます
+[1]
+=== g11_neverguard.kel
+effect Fail = { throw: (String) => Never }
+let r = perform throw("x") handle { case throw(m) if resume(true) => true case throw(m) => false }
+echoln(show(r))
+--- tc
+! g11_neverguard.kel:2:54: 型エラー: resume は操作節の中でのみ使えます
+[1]
+--- run
+! g11_neverguard.kel:2:54: 型エラー: resume は操作節の中でのみ使えます
+[1]
+=== g12_innerreturn.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => perform Ask.ask() handle {
+    case ask() => resume(1) > 0
+    case return(b) => resume(b)
+  }
+}
+echoln(show(r))
+--- tc
+! g12_innerreturn.kel:6:23: 型エラー: resume は操作節の中でのみ使えます
+[1]
+--- run
+! g12_innerreturn.kel:6:23: 型エラー: resume は操作節の中でのみ使えます
+[1]
+=== g13_innerbody.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => (resume(perform Ask.ask() > 0)) handle {
+    case ask() => resume(1)
+  }
+}
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]
+=== g1_opguard.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() if resume(true) => true case test() => false }
+echoln(show(r))
+--- tc
+! g1_opguard.kel:2:48: 型エラー: resume は操作節の中でのみ使えます
+[1]
+--- run
+! g1_opguard.kel:2:48: 型エラー: resume は操作節の中でのみ使えます
+[1]
+=== g2_matchguard.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() => 1 match { case _ if resume(true) => true case _ => false } }
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]
+=== g3_ifcond.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() => if resume(true) then true else false }
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+true
+[0]
+=== g4_returnguard.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle {
+  case test() => resume(true)
+  case return(x) => 1 match { case _ if resume(x) => true case _ => false }
+}
+echoln(show(r))
+--- tc
+! g4_returnguard.kel:4:41: 型エラー: resume は操作節の中でのみ使えます
+[1]
+--- run
+! g4_returnguard.kel:4:41: 型エラー: resume は操作節の中でのみ使えます
+[1]
+=== g5_innerguard.kel
+effect Test = { test: () => Boolean }
+effect Ask = { ask: () => Int32 }
+let r = perform test() handle {
+  case test() => perform Ask.ask() handle {
+    case ask() if resume(true) => false
+    case ask() => true
+  }
+}
+echoln(show(r))
+--- tc
+! g5_innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます
+[1]
+--- run
+! g5_innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます
+[1]
+=== g6_matchguard_twice.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() => 1 match { case _ if resume(false) => true case _ if resume(true) => true case _ => false } }
+echoln(show(r))
+--- tc
+r : Boolean
+_ : {}
+[0]
+--- run
+実行時エラー: resume は高々1回しか呼べません(アフィン)
+[3]
+=== g7_neverbody_matchguard.kel
+effect Fail = { throw: (String) => Never }
+let r = perform throw("x") handle { case throw(m) => 1 match { case _ if resume(true) => true case _ => false } }
+echoln(show(r))
+--- tc
+! g7_neverbody_matchguard.kel:2:74: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[1]
+--- run
+! g7_neverbody_matchguard.kel:2:74: 型エラー: 再開しない操作 throw の節には resume を書けません(操作の返り値の型が Never です)
+[1]
+=== g8_lambda_matchguard.kel
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() => { let f = fn() => { 1 match { case _ if resume(true) => true case _ => false } }; f() } }
+echoln(show(r))
+--- tc
+! g8_lambda_matchguard.kel:2:88: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[1]
+--- run
+! g8_lambda_matchguard.kel:2:88: 型エラー: resume は second-class です(クロージャに閉じ込める・節の外へ持ち出すことはできません)
+[1]
+=== g9_matchguard_value.kel
+effect Test = { test: () => Int32 }
+let r = { let a = perform test(); a + 1 } handle { case test() => 0 match { case _ if resume(10) > 5 => 100 case _ => 0 } }
+echoln(show(r))
+--- tc
+r : Int32
+_ : {}
+[0]
+--- run
+100
+[0]

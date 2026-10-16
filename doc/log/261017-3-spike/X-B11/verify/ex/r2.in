@@ -1,0 +1,4 @@
+module Q { pub let q(x: Int32): Int32 = x + 2 }
+Q.q(1)
+module Q2 { module Z { pub let z = 1 } }
+Q.q(3)

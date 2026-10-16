@@ -1,0 +1,90 @@
+== a1.kel
+! a1.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== a2.kel
+! a2.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== a3.kel
+a3.kel:2:5: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== a4.kel
+! a4.kel:2:19: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== a5.kel
+! a5.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+== a6.kel
+! a6.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== a7.kel
+! a7.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== a8.kel
+! a8.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== b1.kel
+! b1.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+== b2.kel
+! b2.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+== b3.kel
+f : (T[F[String]]) => Int32
+[exit 0]
+== b4.kel
+f : (T[F[String]], F[String, Int32]) => Int32
+[exit 0]
+== b5.kel
+! b5.kel:3:13: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1 は Type です
+[exit 1]
+== b6.kel
+! b6.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== b7.kel
+! b7.kel:2:40: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2]
+[exit 1]
+== b8.kel
+! b8.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== b9.kel
+f : (F[A]) => F[A]
+g : (List[Int32]) => List[Int32]
+[exit 0]
+== c1.kel
+f : (N[{Print}]) => Int32
+[exit 0]
+== c2.kel
+! c2.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== c3.kel
+! c3.kel:1:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== d1.kel
+! d1.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+== d2.kel
+! d2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+== e1.kel
+! e1.kel:2:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+== e2.kel
+! e2.kel:1:1: 型エラー: effect 宣言に型パラメータは書けません(sample.kel §9)
+[exit 1]
+== e3.kel
+! e3.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+== e4.kel
+! e4.kel:2:42: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[ς2] :: Type
+[exit 1]
+== e5.kel
+f : (Callback[R1]) => Int32
+g : (Callback[{Print}]) => Int32
+[exit 0]
+== e6.kel
+! e6.kel:1:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+== f1.kel
+f : (Int32) => Int32 @ {Print extends R1}
+g : (Int32) => Int32 @ {Print}
+[exit 0]

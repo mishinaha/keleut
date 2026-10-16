@@ -1,0 +1,6 @@
+newtype Foo = Foo
+let idf[A](x: A): A = x
+type instance Show[Foo] {
+  let show: (Foo) => String = idf(fn(x) => "foo")
+}
+echoln(show(Foo))

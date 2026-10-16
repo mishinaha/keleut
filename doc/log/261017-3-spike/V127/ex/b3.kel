@@ -1,0 +1,2 @@
+pub let f(x: Int32): Int32 = x
+pub let g(): Int32 = f()

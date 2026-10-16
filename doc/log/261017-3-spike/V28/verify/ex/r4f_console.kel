@@ -1,0 +1,2 @@
+type WE[E]: EffectRow = {Print extends E}
+newtype Cb = Cb(() => Unit @ {WE[{Console}]})

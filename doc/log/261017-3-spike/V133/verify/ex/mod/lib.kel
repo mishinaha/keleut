@@ -1,0 +1,2 @@
+pub effect Fail = { throw: (String) => Never }
+pub let safe(f: () => Int32 @ {Fail, Console}): Int32 @ {Console} = f() handle { case throw(e) => { echoln("caught " + e); 0 - 1 } case cancel => echoln("cancelled") }

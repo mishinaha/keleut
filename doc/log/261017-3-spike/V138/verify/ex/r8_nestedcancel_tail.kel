@@ -1,0 +1,10 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let rec retry(n: Int32): Int32 =
+  (if n == 0 then 0 else ({ perform use(); perform throw("again") }) handle {
+    case use() => resume()
+    case cancel => ()
+  }) handle {
+    case throw(e) => retry(n - 1)
+  }
+echoln(show(retry(100000)))

@@ -1,0 +1,2 @@
+let f(): Int32 = 1 match {}
+echoln("ok")

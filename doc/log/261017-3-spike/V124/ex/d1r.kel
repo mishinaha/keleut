@@ -1,0 +1,4 @@
+type A[E] = (Int32) => Unit @ E
+type C = A[{}]
+let f(g: C): Unit = g(1)
+let h(): C = fn(x) => ()

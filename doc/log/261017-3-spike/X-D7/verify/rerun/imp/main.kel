@@ -1,0 +1,2 @@
+from "./lib" import Show
+let main() = println(1)

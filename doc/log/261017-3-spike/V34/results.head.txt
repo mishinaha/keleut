@@ -1,0 +1,189 @@
+== a1.kel
+let f[E](g: () => Int32 @ E): Int32 @ {} = g()
+-- HEAD: diktor-head --type-check a1.kel
+! a1.kel:1:44: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+-- 試作
+! a1.kel:1:44: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+[exit 1]
+
+== a3.kel
+let f[E](g: () => Int32 @ {}): Int32 @ E = g()
+let h[E](g: () => Int32 @ E): () => Int32 @ {} = g
+-- HEAD: diktor-head --type-check a3.kel
+f : (() => Int32 @ {}) => Int32
+! a3.kel:2:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+f : (() => Int32 @ {}) => Int32
+! a3.kel:2:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
+[exit 1]
+
+== a5.kel
+let f[E](g: () => Int32 @ E, h: (() => Int32 @ {}) => Int32): Int32 @ E = h(g)
+-- HEAD: diktor-head --type-check a5.kel
+! a5.kel:1:77: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+-- 試作
+! a5.kel:1:77: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+[exit 1]
+
+== b1.kel
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: () => Int32 @ {} = g
+  k()
+}
+-- HEAD: diktor-head --type-check b1.kel
+! b1.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+! b1.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)(値束縛は型パラメータを取れません。行を通すなら、外側で宣言した行変数を注釈に書くか、注釈を省いてください)
+[exit 1]
+
+== b1omit.kel
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k = g
+  k()
+}
+-- HEAD: diktor-head --type-check b1omit.kel
+f : (() => Int32) => Int32
+[exit 0]
+-- 試作
+f : (() => Int32) => Int32
+[exit 0]
+
+== b6.kel
+let f[E](g: () => Int32 @ E): () => Int32 @ {} = fn() => g()
+-- HEAD: diktor-head --type-check b6.kel
+! b6.kel:1:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+! b6.kel:1:5: 型エラー: 注釈された返り値型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
+[exit 1]
+
+== b7.kel
+let ap(h: () => Int32 @ {}): Int32 = h()
+let f[E](g: () => Int32 @ E): Int32 @ E = ap(g)
+-- HEAD: diktor-head --type-check b7.kel
+ap : (() => Int32 @ {}) => Int32
+! b7.kel:2:46: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+-- 試作
+ap : (() => Int32 @ {}) => Int32
+! b7.kel:2:46: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+[exit 1]
+
+== b10.kel
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: () => Int32 @ {} = fn() => g()
+  k()
+}
+-- HEAD: diktor-head --type-check b10.kel
+! b10.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+! b10.kel:2:7: 型エラー: 注釈された型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)(値束縛は型パラメータを取れません。行を通すなら、外側で宣言した行変数を注釈に書くか、注釈を省いてください)
+[exit 1]
+
+== b8.kel
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let rec k: () => Int32 @ {} = fn() => g()
+  k()
+}
+-- HEAD: diktor-head --type-check b8.kel
+! b8.kel:2:11: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+-- 試作
+! b8.kel:2:11: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+[exit 1]
+
+== c1.kel
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k: () => Int32 @ E = g
+  k()
+}
+-- HEAD: diktor-head --type-check c1.kel
+f : (() => Int32) => Int32
+[exit 0]
+-- 試作
+f : (() => Int32) => Int32
+[exit 0]
+
+== c2.kel
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1(a: Int32, g: () => Int32): Int32 = g()
+}
+-- HEAD: diktor-head --type-check c2.kel
+! c2.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+! c2.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
+[exit 1]
+
+== c4.kel
+let f[E](g: () => Int32 @ E): Int32 @ E = {
+  let k = fn(h: () => Int32 @ {}) => h()
+  k(g)
+}
+-- HEAD: diktor-head --type-check c4.kel
+! c4.kel:3:5: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
+[exit 1]
+-- 試作
+! c4.kel:3:5: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+[exit 1]
+
+== c5.kel
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1(a: Int32, g: () => Int32 @ {}): Int32 @ {} = g()
+}
+-- HEAD: diktor-head --type-check c5.kel
+! c5.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+! c5.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
+[exit 1]
+
+== c6.kel
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1[E](a: Int32, g: () => Int32 @ E): Int32 @ E = g()
+}
+-- HEAD: diktor-head --type-check c6.kel
+[exit 0]
+-- 試作
+[exit 0]
+
+== c7.kel
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1: (Int32, () => Int32) => Int32 = fn(a, g) => g()
+}
+-- HEAD: diktor-head --type-check c7.kel
+! c7.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください))
+[exit 1]
+-- 試作
+! c7.kel:5:7: 型エラー: インスタンスメソッド run1 がクラス宣言の型を満たしません(行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)(値束縛の実装は型パラメータを取れません。行を通すなら、関数束縛にして行変数を型パラメータに取るか、注釈を省いてください)
+[exit 1]
+
+== c8.kel
+type class Run[A] {
+  val run1[E]: (A, () => Int32 @ E) => Int32 @ E
+}
+type instance Run[Int32] {
+  let run1 = fn(a, g) => g()
+}
+-- HEAD: diktor-head --type-check c8.kel
+[exit 0]
+-- 試作
+[exit 0]
+

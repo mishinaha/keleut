@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+type instance Sz[Foo] {
+  let sz: (Foo) => Int32 = { let n = handle perform ask() { ask() => resume(4i32) }; fn(x) => n }
+}
+echoln(show(sz(Foo)))

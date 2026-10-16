@@ -1,0 +1,7 @@
+type Name = String
+let s: Name = "あいう😀é"
+echoln(s)
+echoln("\u00e9x")
+/* コメント 😀 */
+// 行コメント 日本語
+echoln(show(1))

@@ -1,0 +1,74 @@
+==  x1_sfxrange.kel
+-- HEAD
+! x1_sfxrange.kel:2:8: 未実装: 数値接尾辞 4294967295i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+-- combined
+! x1_sfxrange.kel:2:8: 型エラー: 数値リテラル 4294967295i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== --type-check x1_sfxrange.kel
+-- HEAD
+! x1_sfxrange.kel:2:8: 未実装: 数値接尾辞 4294967295i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+-- combined
+! x1_sfxrange.kel:2:8: 型エラー: 数値リテラル 4294967295i8 の接尾辞 i8 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+==  x2_both.kel
+-- HEAD
+! x2_both.kel:5:1: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+-- combined
+! x2_both.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+== --type-check x2_both.kel
+-- HEAD
+f : (Int32) => Int32
+! x2_both.kel:5:1: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+-- combined
+f : (Int32) => Int32
+! x2_both.kel:2:8: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+==  x3_order.kel
+-- HEAD
+! x3_order.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+-- combined
+! x3_order.kel:1:34: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+== --type-check x3_order.kel
+-- HEAD
+g : Int32
+! x3_order.kel:2:1: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+-- combined
+g : Int32
+! x3_order.kel:1:34: 型エラー: 数値リテラルのパターン 4294967295 は Int32 の範囲を超えるので、どの値にも一致しません
+[exit 1]
+==  x4_samedecl.kel
+-- HEAD
+! x4_samedecl.kel:1:1: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+-- combined
+! x4_samedecl.kel:1:48: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+== --type-check x4_samedecl.kel
+-- HEAD
+! x4_samedecl.kel:1:1: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+-- combined
+! x4_samedecl.kel:1:48: 型エラー: Float64 は Rem のインスタンスではありません
+[exit 1]
+==  x5_i64.kel
+-- HEAD
+! x5_i64.kel:3:8: 未実装: 数値接尾辞 1u64(v0 は i32/i64/f64 のみ)
+[exit 4]
+-- combined
+! x5_i64.kel:3:8: 型エラー: 数値リテラル 1u64 の接尾辞 u64 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]
+== --type-check x5_i64.kel
+-- HEAD
+! x5_i64.kel:3:8: 未実装: 数値接尾辞 1u64(v0 は i32/i64/f64 のみ)
+[exit 4]
+-- combined
+! x5_i64.kel:3:8: 型エラー: 数値リテラル 1u64 の接尾辞 u64 はありません(接尾辞は i32、i64、f64 だけです)
+[exit 1]

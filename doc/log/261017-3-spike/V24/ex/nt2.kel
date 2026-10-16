@@ -1,0 +1,2 @@
+pub newtype T = A((Int32) => Int32 @ {})
+  | B(Int32, (Int32) => Int32)

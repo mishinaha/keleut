@@ -1,0 +1,3 @@
+let id[A](x: A): A = x
+let w = id(Ref.new)
+let k: Int32 = w

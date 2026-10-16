@@ -1,0 +1,222 @@
+####### <一時領域>/bin/diktor-head
+===  r1_nongen_top.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+0
+[exit 0]
+=== --strict-exhaustive r1_nongen_top.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r1_nongen_top.kel
+id : (A) => A
+h : (_A) => _B
+⚠ match が非網羅的です。例えば _ が漏れています
+k : (Boolean) => Int32
+_ : {}
+[exit 0]
+===  r2_weak_dexp.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+3
+[exit 0]
+=== --strict-exhaustive r2_weak_dexp.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r2_weak_dexp.kel
+id : (A) => A
+k : (_A) => _A
+_ : (_A) => _B
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r3_inst_int.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r3_inst_int.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r3_inst_int.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r4_order.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+⚠ match が非網羅的です。例えば 0 が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r4_order.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+⚠ match が非網羅的です。例えば 0 が漏れています
+[exit 1]
+=== --type-check r4_order.kel
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+⚠ match が非網羅的です。例えば 0 が漏れています
+_ : {}
+[exit 0]
+===  r5_local_nongen.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+0
+[exit 0]
+=== --strict-exhaustive r5_local_nongen.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r5_local_nongen.kel
+id : (A) => A
+g : (Boolean) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r6_module.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+1
+[exit 0]
+=== --strict-exhaustive r6_module.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r6_module.kel
+M.f : (Int32) => Int32 @ {}
+M.g : (A) => B
+⚠ match が非網羅的です。例えば _ が漏れています
+M.h : (Boolean) => Int32 @ {}
+_ : {}
+[exit 0]
+===  r7_alias.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r7_alias.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r7_alias.kel
+f : (A) => Int32
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+=== --strict-exhaustive r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+=== --type-check r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+===  r9_inst_generic.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r9_inst_generic.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r9_inst_generic.kel
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+=== repl
+id : (A) => A = <fn>
+k : (_A) => _A = <fn>
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : (_A) => _B = <fn>
+_ : Int32 = 3
+####### <一時領域>/items/V134/verify/diktor/_build/default/bin/main.exe
+===  r1_nongen_top.kel
+! r1_nongen_top.kel:3:40: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --strict-exhaustive r1_nongen_top.kel
+! r1_nongen_top.kel:3:40: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --type-check r1_nongen_top.kel
+id : (A) => A
+h : (Never) => _A
+! r1_nongen_top.kel:3:40: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+===  r2_weak_dexp.kel
+! r2_weak_dexp.kel:4:15: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --strict-exhaustive r2_weak_dexp.kel
+! r2_weak_dexp.kel:4:15: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --type-check r2_weak_dexp.kel
+id : (A) => A
+k : (_A) => _A
+_ : (Never) => _A
+! r2_weak_dexp.kel:4:15: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+===  r3_inst_int.kel
+! r3_inst_int.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Never と Int32)
+[exit 1]
+=== --strict-exhaustive r3_inst_int.kel
+! r3_inst_int.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Never と Int32)
+[exit 1]
+=== --type-check r3_inst_int.kel
+! r3_inst_int.kel:2:37: 型エラー: インスタンスメソッド describe がクラス宣言の型を満たしません(型が一致しません: Never と Int32)
+[exit 1]
+===  r4_order.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+ok
+[exit 0]
+=== --strict-exhaustive r4_order.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+[exit 1]
+=== --type-check r4_order.kel
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば 0 が漏れています
+⚠ match が非網羅的です。例えば _ が漏れています
+_ : {}
+[exit 0]
+===  r5_local_nongen.kel
+! r5_local_nongen.kel:2:75: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --strict-exhaustive r5_local_nongen.kel
+! r5_local_nongen.kel:2:75: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --type-check r5_local_nongen.kel
+id : (A) => A
+! r5_local_nongen.kel:2:75: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+===  r6_module.kel
+! r6_module.kel:4:46: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --strict-exhaustive r6_module.kel
+! r6_module.kel:4:46: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+=== --type-check r6_module.kel
+M.f : (Int32) => Int32 @ {}
+M.g : (Never) => A
+! r6_module.kel:4:46: 型エラー: Never は Integral のインスタンスではありません
+[exit 1]
+===  r7_alias.kel
+ok
+[exit 0]
+=== --strict-exhaustive r7_alias.kel
+ok
+[exit 0]
+=== --type-check r7_alias.kel
+f : (Never) => Int32
+_ : {}
+[exit 0]
+===  r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+=== --strict-exhaustive r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+=== --type-check r8_ref.kel
+! r8_ref.kel:1:9: 型エラー: ラベル Heap がありません(行は閉じています)
+[exit 1]
+===  r9_inst_generic.kel
+! r9_inst_generic.kel:2:34: 型エラー: インスタンスメソッド area がクラス宣言の型を満たしません(型が一致しません: Never と Int32)
+[exit 1]
+=== --strict-exhaustive r9_inst_generic.kel
+! r9_inst_generic.kel:2:34: 型エラー: インスタンスメソッド area がクラス宣言の型を満たしません(型が一致しません: Never と Int32)
+[exit 1]
+=== --type-check r9_inst_generic.kel
+! r9_inst_generic.kel:2:34: 型エラー: インスタンスメソッド area がクラス宣言の型を満たしません(型が一致しません: Never と Int32)
+[exit 1]
+=== repl
+id : (A) => A = <fn>
+k : (_A) => _A = <fn>
+_ : (Never) => _A = <fn>
+! <stdin>:4:3: 型エラー: Never は Integral のインスタンスではありません

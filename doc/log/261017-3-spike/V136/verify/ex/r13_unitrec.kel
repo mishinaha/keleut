@@ -1,0 +1,3 @@
+type class Get[A] { val get: ({ x: Int32, y: Int32 }) => A }
+type instance Get[Int32] { let get(r) = r match { case { x, y } => x + y } }
+echo(show(get({ x: 1, y: 2 })))

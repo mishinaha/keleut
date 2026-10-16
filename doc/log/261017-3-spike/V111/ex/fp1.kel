@@ -1,0 +1,2 @@
+let rec f(n: Int32): Unit = ()
+and bump[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }

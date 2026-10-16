@@ -1,0 +1,94 @@
+=== p10.kel
+H: ! p10.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p10.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[Option[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p11.kel
+H: ! p11.kel:2:43: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p11.kel:2:43: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p12.kel
+H: ! p12.kel:1:41: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
+[exit 1]
+N: ! p12.kel:1:41: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。List[List[ς1]] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
+[exit 1]
+=== p13.kel
+H: ! p13.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p13.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+[exit 1]
+=== p14.kel
+H: ! p14.kel:2:37: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p14.kel:2:37: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+[exit 1]
+=== p15.kel
+H: ! p15.kel:1:45: 型エラー: 制約 Eq を ς1[Int32] に付けられません(頭が型変数の適用には制約を貼れません)
+[exit 1]
+N: ! p15.kel:1:45: 型エラー: 制約 Eq を ς1[Int32] に付けられません(頭が型変数の適用には制約を貼れません)。List[ς1[Int32]] が Eq であるための前提として要求されました
+[exit 1]
+=== p16.kel
+H: ! p16.kel:4:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p16.kel:4:10: 型エラー: Opaque は Eq のインスタンスではありません。List[Box[List[Opaque]]] が Eq であるための前提として要求されました
+[exit 1]
+=== p17.kel
+H: ! p17.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p17.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p18.kel
+H: ! p18.kel:5:3: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p18.kel:5:3: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p1.kel
+H: ! p1.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p1.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+[exit 1]
+=== p2.kel
+H: ! p2.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p2.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。List[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p3.kel
+H: ! p3.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p3.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません。Option[List[Opaque]] が Eq であるための前提として要求されました
+[exit 1]
+=== p4.kel
+H: ! p4.kel:2:65: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p4.kel:2:65: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+[exit 1]
+=== p5.kel
+H: ! p5.kel:2:14: 型エラー: Opaque は Show のインスタンスではありません
+[exit 1]
+N: ! p5.kel:2:14: 型エラー: Opaque は Show のインスタンスではありません。List[Opaque] が Show であるための前提として要求されました
+[exit 1]
+=== p6.kel
+H: ! p6.kel:1:47: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。[A: Eq] のように制約を書いてください
+[exit 1]
+N: ! p6.kel:1:47: 型エラー: 型パラメータ ς1 は Eq のインスタンスではありません。List[ς1] が Eq であるための前提として要求されました。[A: Eq] のように制約を書いてください
+[exit 1]
+=== p7.kel
+H: same : [A: Eq] (A, A) => Boolean
+! p7.kel:3:15: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: same : [A: Eq] (A, A) => Boolean
+! p7.kel:3:15: 型エラー: Opaque は Eq のインスタンスではありません。List[Opaque] が Eq であるための前提として要求されました
+[exit 1]
+=== p8.kel
+H: ! p8.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+N: ! p8.kel:2:10: 型エラー: Opaque は Eq のインスタンスではありません
+[exit 1]
+=== p9.kel
+H: id : (Int32) => Int32
+! p9.kel:2:10: 型エラー: (Int32) => Int32 は Eq のインスタンスではありません
+[exit 1]
+N: id : (Int32) => Int32
+! p9.kel:2:10: 型エラー: (Int32) => Int32 は Eq のインスタンスではありません。List[(Int32) => Int32] が Eq であるための前提として要求されました
+[exit 1]

@@ -1,0 +1,4 @@
+module M {
+  pub let f(x: Int32): Int32 = x + 1
+}
+echoln(show(M.f(41)))

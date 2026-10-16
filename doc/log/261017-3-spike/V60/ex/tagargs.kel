@@ -1,0 +1,2 @@
+let k = 1
+let a = #Tag(1) { k }

@@ -1,0 +1,2 @@
+from "./lib" import L
+with_stdout(fn() => { echoln(show(L.inc(1))); echoln(show(L.dec(3))); echoln(show(L.run1(9))) })

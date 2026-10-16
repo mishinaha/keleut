@@ -1,0 +1,2 @@
+from "./lib1" import twice
+echoln(show(twice(21)))

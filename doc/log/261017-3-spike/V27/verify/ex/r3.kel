@@ -1,0 +1,6 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+module M {
+  pub let f[F, E](c: Callback[F[E]]): Int32 = 7
+}
+let main(): Unit @ Console = with_stdout(fn() => println(show(M.f(Callback(fn() => {})))))
+main()

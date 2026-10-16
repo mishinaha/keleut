@@ -1,0 +1,36 @@
+== --repl < repl_b.txt
+-- HEAD
+idf : (A) => A = <fn>
+! <stdin>:2:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+g : (_A) => _A = <fn>
+実行時エラー: ゼロ除算です
+<stdin>:7:1: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+実行時エラー: ゼロ除算です
+_ : N = N(1)
+half
+実行時エラー: ゼロ除算です
+_ : N = N(2)
+h : (N) => N @ {Console, Blocking, Print extends R1} = <fn>
+-- NEW
+idf : (A) => A = <fn>
+! <stdin>:2:5: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+g : (_A) => _A = <fn>
+実行時エラー: ゼロ除算です
+<stdin>:6:14: 構文エラー: この宣言はブロック内では使えません(let / let rec / 式のみ)
+実行時エラー: ゼロ除算です
+_ : N = N(1)
+half
+実行時エラー: ゼロ除算です
+_ : N = N(2)
+h : (N) => N @ {Console, Blocking, Print extends R1} = <fn>
+== --repl < repl_c.txt
+-- HEAD
+a : Int32 = 1
+<stdin>:3:1: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+y : (Int32, Int32) = (1, 2)
+w : Int32 = 4
+-- NEW
+a : Int32 = 1
+<stdin>:2:11: 構文エラー: ブロックの中の let には pub を付けられません(with より後ろの宣言は公開できません)
+y : (Int32, Int32) = (1, 2)
+w : Int32 = 4

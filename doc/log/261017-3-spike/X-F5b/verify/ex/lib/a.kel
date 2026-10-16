@@ -1,0 +1,2 @@
+pub let k: Int32 = if true then 1else 2
+pub let z: Int32 = 0b1_0

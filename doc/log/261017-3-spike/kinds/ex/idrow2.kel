@@ -1,0 +1,4 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype N[X] = MkN(Callback[Id[X]])
+type Id[A] = A
+let f(n: N[{Print}]): Int32 = 0

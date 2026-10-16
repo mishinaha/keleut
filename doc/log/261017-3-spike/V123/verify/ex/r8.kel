@@ -1,0 +1,2 @@
+from "./imp/badc" import v
+echoln("x")

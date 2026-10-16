@@ -1,0 +1,1 @@
+let g[F](x: Int32): Int32 @ F[Console] = x

@@ -1,0 +1,5 @@
+patching file lib/elab.ml
+Hunk #1 succeeded at 1338 (offset 6 lines).
+Hunk #2 succeeded at 1511 (offset 25 lines).
+patching file test/visibility.t
+Hunk #1 succeeded at 458 (offset 40 lines).

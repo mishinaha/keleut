@@ -1,0 +1,14 @@
+File "test/import.t", line 1, characters 0-0:
+diff --git a/_build/default/test/import.t b/_build/default/test/import.t.corrected
+index 5c049bb..db88d15 100644
+--- a/_build/default/test/import.t
++++ b/_build/default/test/import.t.corrected
+@@ -171,6 +171,8 @@ pub を外せば、インスタンスを宣言したファイルを import し
+   > echoln(describe(Box(1i32)))
+   > KEL
+   $ diktor pi/main2.kel
++  ! pi/main2.kel:1:38: import エラー: ./lib に describe という公開の宣言はありません
++  [1]
+ 
+ ## 読み込み
+ 

@@ -1,0 +1,2 @@
+pub let pid(x: Int32): Int32 = x
+let hidden(x: Int32) = x

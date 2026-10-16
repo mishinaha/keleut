@@ -1,0 +1,6 @@
+分野 spec の合成の順(写しは snap/diktor = diktor 39d4091)
+1. V83  items/V83/V83.patch  -p0(見出しは diktor/lib/prelude.kel)  --dry-run で当たる、手直しなし
+2. V32  items/V32/V32.patch  -p0(見出しは diktor/test/annot_rows.t)  --dry-run で当たる、手直しなし
+V28、X-effsuffix は差分なし(解消の確認のみ)
+2 つの差分はファイルが別で、順序は結果に影響しない。
+合成差分: clusters/spec/spec.patch(138 行、prelude.kel と annot_rows.t の 2 ファイル)

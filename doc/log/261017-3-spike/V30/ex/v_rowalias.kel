@@ -1,0 +1,3 @@
+type R: EffectRow = {Log}
+effect Log = { log: (String) => Unit }
+let f(): Unit @ R = perform log("a")

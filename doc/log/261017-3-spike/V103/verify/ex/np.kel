@@ -1,0 +1,9 @@
+effect Tick = { tick: () => Int32 }
+let f(): Int32 @ Tick = perform tick() * 2 + -1
+let v = f() handle {
+  case tick() => resume(5 % 3)
+  case return(x) => x == 3
+}
+let id[T](x: T): T = x
+let s = id(Show.show)
+let t = s(v)

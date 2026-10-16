@@ -1,0 +1,7 @@
+type class Describe[A] {
+  val describe: (A) => String
+}
+type instance Describe[Int32] {
+  pub let rec describe(n: Int32): String = "int"
+}
+with_stdout(fn() => println(describe(1i32)))

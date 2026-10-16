@@ -1,0 +1,2 @@
+let take(g: (Int32) => Int32): Unit = ()
+let u(): Unit = take(fn(x, y) => x)

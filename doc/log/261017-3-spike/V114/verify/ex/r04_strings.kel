@@ -1,0 +1,4 @@
+let s = "Int8 u8 1u8 Float32"
+echoln(s)
+let t: {a: Int32} = {a = 1i32}
+echoln(show(t.a))

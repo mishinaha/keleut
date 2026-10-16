@@ -1,0 +1,4 @@
+newtype Cb[E] = Cb(() => Unit @ E)
+type W[E]: EffectRow = {Print extends E}
+let run_cb[E](c: Cb[W[E]]): Unit @ W[E] = c match { case Cb(f) => f() }
+with_stdout(fn() => run_cb(Cb(fn() => perform print("cb\n"))))

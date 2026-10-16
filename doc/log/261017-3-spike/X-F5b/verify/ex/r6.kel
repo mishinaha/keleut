@@ -1,0 +1,7 @@
+let n = 1_000i64
+let m = 2.5e-3
+{
+  echoln(show(n))
+  echoln(show(m))
+  echoln(show((if n == 1000i64 then 1else 0)))
+}

@@ -1,0 +1,7 @@
+type class Ap[A] {
+  val ap: ((A) => A, A) => A
+}
+type instance Ap[Int32] {
+  let ap(f, x) = f(x)
+}
+let v = ap(fn() => 1, 2i32)

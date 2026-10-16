@@ -1,0 +1,5 @@
+module P {
+  pub type P: EffectRow = {Print}
+}
+let f(): Unit @ P = println("x")
+f()

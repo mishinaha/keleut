@@ -1,0 +1,2 @@
+module M { pub type W[E]: EffectRow = {Print extends E} }
+let g[F[_]](x: F[Int32]): Int32 @ W[Console] = 0

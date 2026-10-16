@@ -1,0 +1,5 @@
+type class C[A] { val c: (A) => Int32 }
+type instance C[Int32] { let c(x) = x }
+newtype Box[A] = Box(A)
+type instance[A: C] C[Box[_]] { let c(b) = 0 }
+let z = c(Box(1.5))

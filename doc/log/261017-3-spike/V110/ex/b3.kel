@@ -1,0 +1,5 @@
+newtype Foo = Foo
+type instance Show[Foo] {
+  let show(x: Foo): String = { echoln("call"); "foo" }
+}
+echoln(show(Foo))

@@ -1,0 +1,382 @@
+==== t19.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g: (Int32) => Int32 = idf(k)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- $ diktor --type-check t19.kel
+idf : (A) => A
+M.k : (Int32) => Int32 @ {}
+M.g : (Int32) => Int32 @ {}
+use : () => Int32 @ {Console}
+_ : {}
+[exit 0]
+==== t19b.kel
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x + 1)
+module M {
+  pub let g: (Int32) => Int32 = idf(k)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- $ diktor --type-check t19b.kel
+idf : (A) => A
+k : (Int32) => Int32 @ {}
+M.g : (Int32) => Int32 @ {}
+use : () => Int32 @ {Console}
+_ : {}
+[exit 0]
+==== t19e.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g: (Int32) => Int32 @ {} = idf(k)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- $ diktor --type-check t19e.kel
+idf : (A) => A
+M.k : (Int32) => Int32 @ {}
+M.g : (Int32) => Int32 @ {}
+use : () => Int32 @ {Console}
+_ : {}
+[exit 0]
+==== t19f.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g(x: Int32): Int32 = k(x)
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- $ diktor --type-check t19f.kel
+idf : (A) => A
+M.k : (Int32) => Int32 @ {}
+M.g : (Int32) => Int32 @ {}
+use : () => Int32 @ {Console}
+_ : {}
+[exit 0]
+==== t19v.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(x) => x + 1)
+  pub let g: (Int32) => Int32 = k
+}
+let use(): Int32 @ {Console} = M.g(1)
+with_stdout(fn() => echoln(show(use())))
+---- $ diktor --type-check t19v.kel
+idf : (A) => A
+M.k : (Int32) => Int32 @ {}
+M.g : (Int32) => Int32 @ {}
+use : () => Int32 @ {Console}
+_ : {}
+[exit 0]
+==== a1.kel
+let idf[A](x: A): A = x
+let k = idf(fn(u: Int32) => u + 1)
+module M {
+  pub let f(): Int32 = run h { k(1) }
+}
+---- $ diktor --type-check a1.kel
+idf : (A) => A
+k : (Int32) => Int32 @ {}
+M.f : () => Int32 @ {}
+[exit 0]
+==== a1np.kel
+let idf[A](x: A): A = x
+let k = idf(fn(u: Int32) => u + 1)
+module M {
+  let f(): Int32 = run h { k(1) }
+}
+---- $ diktor --type-check a1np.kel
+idf : (A) => A
+k : (Int32) => Int32 @ {}
+M.f : () => Int32
+[exit 0]
+==== a4.kel
+let idf[A](x: A): A = x
+let k = idf(fn(x) => x)
+module M {
+  pub let f[A](x: A): A = k(x)
+}
+---- $ diktor --type-check a4.kel
+idf : (A) => A
+k : (_A) => _A
+! a4.kel:4:29: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+==== a7.kel
+let idf[A](x: A): A = x
+let k = idf(fn(u: Int32) => u + 1)
+let use(): Int32 @ {Console} = { echoln("x"); k(1) }
+module M {
+  pub let f(): Int32 = run h { k(1) }
+}
+---- $ diktor --type-check a7.kel
+idf : (A) => A
+k : (Int32) => Int32 @ {}
+use : () => Int32 @ {Console}
+M.f : () => Int32 @ {}
+[exit 0]
+==== a8.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(u: Int32) => u + 1)
+  pub let f(): Int32 = run h { k(1) }
+}
+---- $ diktor --type-check a8.kel
+idf : (A) => A
+M.k : (Int32) => Int32 @ {}
+M.f : () => Int32 @ {}
+[exit 0]
+==== a8np.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(u: Int32) => u + 1)
+  let f(): Int32 = run h { k(1) }
+}
+---- $ diktor --type-check a8np.kel
+idf : (A) => A
+M.k : (Int32) => Int32 @ {}
+M.f : () => Int32
+[exit 0]
+==== a9.kel
+let idf[A](x: A): A = x
+module M {
+  let r = idf({go = fn(u: Int32) => u + 1})
+  pub let f(): Int32 = run h { r.go(1) }
+}
+---- $ diktor --type-check a9.kel
+idf : (A) => A
+M.r : {go: (Int32) => Int32}
+! a9.kel:4:32: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+==== a9np.kel
+let idf[A](x: A): A = x
+module M {
+  let r = idf({go = fn(u: Int32) => u + 1})
+  let f(): Int32 = run h { r.go(1) }
+}
+---- $ diktor --type-check a9np.kel
+idf : (A) => A
+M.r : {go: (Int32) => Int32}
+! a9np.kel:4:28: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+==== a10.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(u: Int32) => fn(v: Int32) => u + v)
+  pub let f(): Int32 = run h { k(1)(2) }
+}
+---- $ diktor --type-check a10.kel
+idf : (A) => A
+M.k : (Int32) => (Int32) => Int32
+! a10.kel:4:32: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: スコープ付きの型 ς1 がスコープの外に漏れています)
+[exit 1]
+==== a10np.kel
+let idf[A](x: A): A = x
+module M {
+  let k = idf(fn(u: Int32) => fn(v: Int32) => u + v)
+  let f(): Int32 = run h { k(1)(2) }
+}
+---- $ diktor --type-check a10np.kel
+idf : (A) => A
+M.k : (Int32) => (Int32) => Int32
+! a10np.kel:4:28: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+==== b1.kel
+module M {
+  pub let g: (Int32) => {a: Int32} = fn(x) => {b = x}
+}
+---- $ diktor --type-check b1.kel
+! b1.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+[exit 1]
+==== b1np.kel
+module M {
+  let g: (Int32) => {a: Int32} = fn(x) => {b = x}
+}
+---- $ diktor --type-check b1np.kel
+! b1np.kel:2:7: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
+[exit 1]
+==== b2.kel
+module M {
+  pub let g: (Int32) => Int32 = fn(x) => { echoln("a"); x }
+}
+---- $ diktor --type-check b2.kel
+! b2.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+[exit 1]
+==== b3.kel
+module M {
+  pub let g: ({ a: Int32 }) => Int32 = fn(r: { b: Int32 }) => r.b
+}
+---- $ diktor --type-check b3.kel
+! b3.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+[exit 1]
+==== b3np.kel
+module M {
+  let g: ({ a: Int32 }) => Int32 = fn(r: { b: Int32 }) => r.b
+}
+---- $ diktor --type-check b3np.kel
+! b3np.kel:2:7: 型エラー: 注釈された型を満たしません(ラベル a がありません(行は閉じています))
+[exit 1]
+==== b4.kel
+module M {
+  pub let g: (Int32) => Int32 = fn(x, y) => x
+}
+---- $ diktor --type-check b4.kel
+! b4.kel:2:11: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 @ {} と (_A, _B) => _A(引数は 1 個と 2 個です))
+[exit 1]
+==== b4np.kel
+module M {
+  let g: (Int32) => Int32 = fn(x, y) => x
+}
+---- $ diktor --type-check b4np.kel
+! b4np.kel:2:7: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 と (_A, _B) => _A(引数は 1 個と 2 個です))
+[exit 1]
+==== b5.kel
+module M {
+  pub let rec g: (Int32) => {a: Int32} = fn(x) => {b = x}
+}
+---- $ diktor --type-check b5.kel
+! b5.kel:2:15: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+[exit 1]
+==== b5np.kel
+module M {
+  let rec g: (Int32) => {a: Int32} = fn(x) => {b = x}
+}
+---- $ diktor --type-check b5np.kel
+! b5np.kel:2:11: 型エラー: ラベル a がありません(行は閉じています)
+[exit 1]
+==== b6.kel
+module M {
+  pub let g: (Int32) => #A | #B = fn(x) => #C
+}
+---- $ diktor --type-check b6.kel
+! b6.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル C がありません(行は閉じています))
+[exit 1]
+==== b6np.kel
+module M {
+  let g: (Int32) => #A | #B = fn(x) => #C
+}
+---- $ diktor --type-check b6np.kel
+! b6np.kel:2:7: 型エラー: 注釈された型を満たしません(ラベル C がありません(行は閉じています))
+[exit 1]
+==== b7.kel
+module M {
+  pub let g: (Int32) => Int32 @ {} = fn(x) => { echoln("a"); x }
+}
+---- $ diktor --type-check b7.kel
+! b7.kel:2:11: 型エラー: 注釈された型を満たしません(ラベル Console がありません(行は閉じています))
+[exit 1]
+==== b10.kel
+module M {
+  pub let rec g: (Int32) => Int32 = fn(x) => { echoln("a"); x }
+}
+---- $ diktor --type-check b10.kel
+! b10.kel:2:15: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+[exit 1]
+==== b11.kel
+module M {
+  pub let g: (Int32) => {a: Int32} = fn(x) => { echoln("a"); {b = x} }
+}
+---- $ diktor --type-check b11.kel
+! b11.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル a がありません(行は閉じています))
+[exit 1]
+==== b12.kel
+module M {
+  pub let f(): Int32 = run h { echoln("x"); 1 }
+}
+---- $ diktor --type-check b12.kel
+! b12.kel:2:32: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+[exit 1]
+==== b13.kel
+module M {
+  pub let g: (Int32) => Int32 = 3
+}
+---- $ diktor --type-check b13.kel
+! b13.kel:2:11: 型エラー: 注釈された型を満たしません((Int32) => Int32 @ {} は Integral のインスタンスではありません)
+[exit 1]
+==== b14.kel
+let idf[A](x: A): A = x
+module M {
+  let r = idf({go = fn(u: Int32) => u + 1})
+  pub let g: (Int32) => Int32 = fn(x) => run h { r.go(x) }
+}
+---- $ diktor --type-check b14.kel
+idf : (A) => A
+M.r : {go: (Int32) => Int32}
+! b14.kel:4:50: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+==== b14np.kel
+let idf[A](x: A): A = x
+module M {
+  let r = idf({go = fn(u: Int32) => u + 1})
+  let g: (Int32) => Int32 = fn(x) => run h { r.go(x) }
+}
+---- $ diktor --type-check b14np.kel
+idf : (A) => A
+M.r : {go: (Int32) => Int32}
+! b14np.kel:4:46: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+==== c1.kel
+module M {
+  pub let f(): Int32 = run h { let c = Ref.new(0); run h2 { Ref.get(c) } }
+}
+---- $ diktor --type-check c1.kel
+! c1.kel:2:69: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+[exit 1]
+==== c1np.kel
+module M {
+  let f(): Int32 = run h { let c = Ref.new(0); run h2 { Ref.get(c) } }
+}
+---- $ diktor --type-check c1np.kel
+! c1np.kel:2:65: 型エラー: ほかのリージョンの Ref を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+[exit 1]
+==== c2.kel
+module M {
+  pub let f[E](g: () => Int32 @ E): Int32 = g()
+}
+---- $ diktor --type-check c2.kel
+! c2.kel:2:45: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません)
+[exit 1]
+==== c3.kel
+module M {
+  pub let f(g: () => Int32 @ {Console}): Int32 = g()
+}
+---- $ diktor --type-check c3.kel
+! c3.kel:2:50: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+[exit 1]
+==== n1.kel
+module M {
+  pub let g: (Int32) => (Int32) => Int32 @ {} = fn(x) => fn(y) => { echoln("a"); y }
+}
+---- $ diktor --type-check n1.kel
+! n1.kel:2:11: 型エラー: pub な宣言はエフェクトを起こせません(@ を明示するか pub を外してください。元の報告: ラベル Console がありません(行は閉じています))
+[exit 1]
+==== d1.kel
+module M {
+  pub let h: (Int32) => Int32 = fn() => { echoln("a"); 1 }
+}
+---- $ diktor --type-check d1.kel
+! d1.kel:2:11: 型エラー: 注釈された型を満たしません(引数の個数が一致しません: (Int32) => Int32 @ {} と () => _A @ {Console extends _R1}(引数は 1 個と 0 個です))
+[exit 1]
+==== d2.kel
+module M {
+  pub let h: (Int32) => Int32 = fn(x) => { echoln("a"); "s" }
+}
+---- $ diktor --type-check d2.kel
+! d2.kel:2:11: 型エラー: 注釈された型を満たしません(型が一致しません: Int32 と String)
+[exit 1]
+==== r1.kel
+module M {
+  pub let leak(): Array[Int32] = run h { MutableArray.new(3, 0) }
+}
+---- $ diktor --type-check r1.kel
+! r1.kel:2:34: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]
+==== r5.kel
+pub let leak(): Array[Int32] = run h { MutableArray.new(3, 0) }
+---- $ diktor --type-check r5.kel
+! r5.kel:1:32: 型エラー: スコープ付きの型 ς1 がスコープの外に漏れています
+[exit 1]

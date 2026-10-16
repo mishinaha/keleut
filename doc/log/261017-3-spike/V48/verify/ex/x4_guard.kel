@@ -1,0 +1,5 @@
+let f(n: Never): Int32 = n match { case m if false => 1 }
+let g(o: Option[Never]): Int32 = o match { case None if true => 1 }
+let h(o: Option[Never]): Int32 = o match { case Some(n) if true => 1 }
+let k(p: (Int32, Never)): Int32 = p match { case (0, n) if true => 1 }
+echo("ok")

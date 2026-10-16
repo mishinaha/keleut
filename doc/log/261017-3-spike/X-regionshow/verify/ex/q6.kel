@@ -1,0 +1,3 @@
+let swap[k, A](r: Ref[k, A], x: A): A @ Heap[k] = { let old = Ref.get(r); Ref.set(r, x); old }
+let main(): Int32 = run k { let r = Ref.new(1); swap(r, 2); Ref.get(r) }
+echoln(show(main()))

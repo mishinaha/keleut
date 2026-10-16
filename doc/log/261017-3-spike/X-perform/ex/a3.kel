@@ -1,0 +1,4 @@
+type Unit = {}
+effect Async2 = { yield2: () => Unit }
+newtype Box = Box(() => Unit)
+let bad(f: () => Unit @ Async2): Box = Box(f)

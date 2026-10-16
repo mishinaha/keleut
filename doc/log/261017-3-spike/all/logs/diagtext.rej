@@ -1,0 +1,92 @@
+--- tmp/claude-1000/-home-sumito3478-repo-keleut/0c9c47ee-be87-463e-9238-3f21c285a8f5/scratchpad/snap/diktor/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ lib/elab.ml	2026-10-17 04:45:57.276643914 +0900
+@@ -273,14 +273,36 @@
+    pub の言い換え(§11.12、§11.28、§11.29)、行が空の位置の言い換え(§11.12)、
+    newtype のフィールドの言い換え(§11.18)、
+    インスタンスメソッドの純粋性の言い換え(§11.38)が共用する *)
++let has_sub sub s =
++  let n = String.length sub and m = String.length s in
++  let rec go i = i + n <= m && (String.sub s i n = sub || go (i + 1)) in
++  go 0
++
+ let row_failure msg =
+-  let has sub s =
+-    let n = String.length sub and m = String.length s in
+-    let rec go i = i + n <= m && (String.sub s i n = sub || go (i + 1)) in
+-    go 0
+-  in
++  let has = has_sub in
+   has "行型ではありません" msg || has "スコープ付きの型" msg || has "ラベル " msg || has "は注釈で固定された行変数" msg
+ 
++(* 型の中に、閉じた行を書いた位置があるかどうか。
++   数えるのは、最外の行が閉じた矢印と、型の型引数に書いた閉じた行(`Cb[{}]` の `{}`)である。
++   newtype のフィールドの言い換え(§11.18)が、言い換えの条件に使う。
++   フィールドの型は宣言から作ったスキーマで、型パラメータは Generic の変数である。
++   型パラメータの位置は、閉じた行を書いた位置として数えない。 *)
++let closed_row_arg t =
++  match repr t with
++  | TRowEmpty -> true
++  | TRowExtend _ -> (match snd (row_fields t) with TRowEmpty -> true | _ -> false)
++  | _ -> false
++
++let rec has_closed_arrow ty =
++  match repr ty with
++  | TArrow (args, ret, eff) ->
++      (match snd (row_fields eff) with TRowEmpty -> true | _ -> false) || has_closed_arrow args || has_closed_arrow ret
++  | TCon (_, tys) -> List.exists (fun t -> closed_row_arg t || has_closed_arrow t) tys
++  | TApp (f, a) -> has_closed_arrow f || has_closed_arrow a
++  | TRecord r | TVariant r -> has_closed_arrow r
++  | TRowExtend (_, f, rest) -> has_closed_arrow f || has_closed_arrow rest
++  | TRowEmpty | TVar _ -> false
++
+ (* 最外の行が閉じた矢印の尾部を、新しい行変数で開く(使用時の開き。§11.26)。
+    名前で参照した関数の型(§11.11)と、呼び出し先の関数の型(§11.12)に掛ける。
+    開いてから単一化すると、閉じた行のラベルを含むどの行の下からでも使える。
+@@ -4109,23 +4238,30 @@
+         (* クラスパラメータがメソッドの型のどこかに現れることを要求する(§11.33)。
+            メソッドの参照で作る穴の型が、クラスパラメータの現れる位置の型から決まるためである。
+            一般化したスキーマの制約の鍵の列にクラスパラメータの鍵があるかで判定する *)
+-        (match repr ty with
+-        | TArrow _ ->
+-            if not (List.exists (fun (vid, _) -> vid = pinfo.vid) (Unify.dkeys_of ty)) then
+-              type_error
+-                ("メソッド " ^ v.T.cv_name ^ " の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)")
+-        | _ -> type_error ("メソッド " ^ v.T.cv_name ^ " の型は矢印型でなければなりません"));
++        (at_node v.T.cv_ty @@ fun () ->
++         match repr ty with
++         | TArrow _ ->
++             if not (List.exists (fun (vid, _) -> vid = pinfo.vid) (Unify.dkeys_of ty)) then
++               type_error
++                 ("メソッド " ^ v.T.cv_name ^ " の型にクラスパラメータが現れません(どのインスタンスのメソッドかを型から決められません)")
++         | _ -> type_error ("メソッド " ^ v.T.cv_name ^ " の型は矢印型でなければなりません"));
+         (v.T.cv_name, ty))
+       c.T.cls_vals
+   in
+   (* 同じクラスの中でのメソッドの重複を拒否する(register_effect の操作の重複と同じ)。
+      素通しにすると、elab の修飾名の型は最後の宣言で決まり、インスタンス本体の照合は
+-     最初の宣言を見るので、型検査を通ったプログラムが実行時に型やアリティの食い違いで壊れる *)
++     最初の宣言を見るので、型検査を通ったプログラムが実行時に型やアリティの食い違いで壊れる。
++     メソッドごとの診断は、操作と同じく、そのメソッドの型の位置を指す。
++     重複は 2 度目の宣言の型を指す *)
+   let rec dup = function
+     | [] -> ()
+-    | (m, _) :: rest -> if List.mem_assoc m rest then type_error ("メソッド " ^ m ^ " が二重に宣言されています") else dup rest
++    | (v : T.class_val) :: rest ->
++        (match List.find_opt (fun (w : T.class_val) -> w.T.cv_name = v.T.cv_name) rest with
++        | Some w -> at_node w.T.cv_ty (fun () -> type_error ("メソッド " ^ v.T.cv_name ^ " が二重に宣言されています"))
++        | None -> ());
++        dup rest
+   in
+-  dup methods;
++  dup c.T.cls_vals;
+   (* 非修飾名の所有者は高々 1 クラス、という不変条件をここで守る。破れると、elab(宣言順の先勝ち)と
+      interp(クラス名の順の後勝ち)が別の規則で勝者を選ぶ。両者が別のクラスを選ぶと、
+      誤った実体を呼ぶか、偽の「インスタンスが見つかりません」を出す。組み込みと同名の
+--- tmp/claude-1000/-home-sumito3478-repo-keleut/0c9c47ee-be87-463e-9238-3f21c285a8f5/scratchpad/snap/diktor/lib/unify.ml	2026-10-17 03:33:52.000000000 +0900
++++ lib/unify.ml	2026-10-17 04:45:57.273201432 +0900
+@@ -1162,4 +1262,5 @@
+ 
+ let reset () =
+   class_vars := [];
++  Hashtbl.reset premise_origins;
+   holes := []

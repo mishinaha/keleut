@@ -1,0 +1,8 @@
+module M {
+  type W[E]: EffectRow = {Print extends E}
+  module N {
+    pub let hi(): {} @ {Print} = perform print("nested\n")
+  }
+  pub let go(): {} @ W[{}] = N.hi()
+}
+with_stdout(fn() => M.go())

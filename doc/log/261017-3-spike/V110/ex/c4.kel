@@ -1,0 +1,4 @@
+newtype Foo = Foo
+type instance[A: Show] Show[List[_]] {
+  let show = fn(xs: List[A]) => "list"
+}

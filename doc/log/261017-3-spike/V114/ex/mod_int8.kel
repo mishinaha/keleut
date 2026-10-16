@@ -1,0 +1,2 @@
+module M { pub newtype Int8 = MkI(Int32) }
+let f(x: Int8): Int32 = 1

@@ -1,0 +1,8 @@
+effect Ask = { ask: (Int32) => Int32 }
+effect Ask2 = { ask: (Int32) => Int32 }
+let r = perform Ask.ask(1) handle {
+  case Ask.ask(1) => resume(100)
+  case ask(_) => resume(0)
+  case return(x) => x
+}
+echoln(show(r))

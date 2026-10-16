@@ -1,0 +1,10 @@
+module M {
+  pub let inc(x: Int32): Int32 @ {} = x + 1
+  pub let neg(x: Int32): Int32 @ {} = -x
+  let idf[A](x: A): A = x
+  let g0 = idf(fn(x: Int32) => x * 2)
+  pub let g(x: Int32): Int32 @ {} = g0(x)
+}
+let p(): Unit @ Console = echoln(show(M.inc(1) + M.neg(5) + M.g(3)))
+p()
+echoln(show(M.g(4)))

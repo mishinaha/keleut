@@ -1,0 +1,4 @@
+type Unit = {}
+effect Out = { out: (String) => Unit }
+effect P = { p: () => Unit }
+let f(): Unit @ {} = { perform p() } handle { case p() => { perform out("c"); resume() } case return(x) => x }

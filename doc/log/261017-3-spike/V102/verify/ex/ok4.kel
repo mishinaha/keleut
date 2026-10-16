@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+newtype Box = Box(() => Int32)
+let r: Int32 = {
+  let v = perform ask()
+  Box(fn() => v) match { case Box(f) => f() }
+} handle { case ask() => resume(41) }
+echoln(show(r))

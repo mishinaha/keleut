@@ -1,0 +1,13 @@
+effect Job = { job: (() => Int32 @ {Console}) => Int32 }
+module M {
+  pub let run_job[E](body: () => Int32 @ {Job, Console extends E}): Int32 @ {Console extends E} =
+    body() handle {
+      case job(f) if false => resume(0)
+      case job(f) => resume(f() + 1)
+      case return(x) => x
+    }
+  pub let go[E](): Int32 @ {Console extends E} = run_job(fn() => perform job(fn() => { echoln("in"); 41 }))
+}
+echoln(show(M.go()))
+let r = M.run_job(fn() => perform job(fn() => { echoln("out"); 1 }))
+echoln(show(r))

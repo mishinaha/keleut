@@ -1,0 +1,4 @@
+let x = {
+  pub let y = 1
+  y
+}

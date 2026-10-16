@@ -1,0 +1,6 @@
+type class C[A] { val cm: (A) => Int32 @ {}; val aux: (A) => Int32 @ {} }
+type instance C[Int32] {
+  let rec cm(x) = if x <= 0i32 then 0i32 else aux(x - 1i32)
+  and aux(y) = cm(y)
+}
+echoln(show(cm(5i32)))

@@ -1,0 +1,3 @@
+[lib/elab.ml] code: 不一致(先頭から 557 トークン目) / marker: 0 件
+  旧: "ラベル " msg || has "は注釈で固定された行変数" msg let opened_rows : tvar ref list ref = ref
+  新: "ラベル " msg || has "は注釈で固定された行変数" msg let op_row_note what = "(" ^ what ^ "が求める関数の行は空

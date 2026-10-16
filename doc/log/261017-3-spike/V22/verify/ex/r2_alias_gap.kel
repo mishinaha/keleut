@@ -1,0 +1,8 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+type R: EffectRow = {Log}
+newtype Z = MkZ(A[{}])
+newtype A[X] = MkA(Al[{Log extends X}])
+newtype Bq = MkBq(Al[R])
+type Al[Q] = () => Unit @ Q
+let f(x: Z): Z = x

@@ -1,0 +1,2 @@
+effect Reg = { reg: ((Option[Int32]) => Int32) => Unit }
+let use(): Unit @ Reg = perform reg(fn(Some(x)) => x)

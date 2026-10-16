@@ -1,0 +1,4 @@
+pub module P {
+  pub type P: EffectRow = {Print}
+  type Q = Int32
+}

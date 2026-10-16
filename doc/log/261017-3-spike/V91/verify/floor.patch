@@ -1,0 +1,48 @@
+diff -ruN -x _build <一時領域>/items/V91/verify/diktor/lib/unify.ml diktor4/lib/unify.ml
+--- a/lib/unify.ml	2026-10-17 04:15:09.582538461 +0900
++++ b/lib/unify.ml	2026-10-17 04:21:26.618141043 +0900
+@@ -300,6 +300,10 @@
+ (* 証拠の穴の台帳(§8.11)。既定化の失敗を報告する位置を探すのにも使うので、ここで定義する *)
+ let holes : (int * Tree.hole) list ref = ref []
+ 
++let hole_seq = ref 0
++
++let decl_hole_floor = ref 0
++
+ (* 制約つきの新変数はここで作り、作った時点で台帳に載せる。
+    instantiate、subst_params、第11章のコンストラクタの具体化(dd_params の展開)もここを通る。
+    未定変数が制約を持つ入口は、この関数と、既存の未定変数に制約を足す add_class
+@@ -707,7 +711,7 @@
+   let same u = match repr u with TVar r -> r == v | _ -> false in
+   let origin c =
+     let from_holes =
+-      List.filter_map (fun (_, (h : Tree.hole)) -> if h.h_sol = None && h.h_cls = c && same h.h_ty then Some h.h_loc else None) !holes
++      List.filter_map (fun (_, (h : Tree.hole)) -> if h.h_id > !decl_hole_floor && h.h_sol = None && h.h_cls = c && same h.h_ty then Some h.h_loc else None) !holes
+     in
+     let from_literals c = List.filter_map (fun (r, c', loc) -> if c' = c && same (TVar r) then Some loc else None) !literal_origins in
+     match (List.rev from_holes, List.rev (from_literals c), List.rev (from_literals pred)) with
+@@ -798,7 +802,8 @@
+       | _ -> ())
+     !class_vars;
+   class_vars := [];
+-  literal_origins := []
++  literal_origins := [];
++  decl_hole_floor := new_oid ()
+ 
+ (* 型に現れる変数の vid の集合 *)
+ let rec collect_vars t (acc : (oid, unit) Hashtbl.t) =
+@@ -1009,8 +1014,6 @@
+ 
+ module TT = Tree
+ 
+-let hole_seq = ref 0
+-
+ let hole_mark () = !hole_seq
+ 
+ let note_hole h =
+@@ -1116,4 +1119,5 @@
+ let reset () =
+   class_vars := [];
+   literal_origins := [];
++  decl_hole_floor := new_oid ();
+   holes := []

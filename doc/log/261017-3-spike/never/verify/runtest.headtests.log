@@ -1,0 +1,13 @@
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/_build/default/test/never_ops.t b/_build/default/test/never_ops.t.corrected
+index e586598..bd5d06a 100644
+--- a/_build/default/test/never_ops.t
++++ b/_build/default/test/never_ops.t.corrected
+@@ -89,7 +89,6 @@ perform の式が要求される型になる。match の腕にそのまま置け
+   > echoln(show(r2))
+   > EOF
+   $ diktor absurd.kel
+-  ⚠ match が非網羅的です。例えば _ が漏れています
+   3
+   -1
+   $ cat > absurdplain.kel <<'EOF'

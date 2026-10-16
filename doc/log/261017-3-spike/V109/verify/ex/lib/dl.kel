@@ -1,0 +1,2 @@
+pub let rec cnt[A: Eq](xs: List[A], y: A): Int32 = xs match { case Nil => 0 case Cons(h, t) => (h == y) match { case true => 1 + cnt(t, y) case false => cnt(t, y) } }
+pub let mk[A: Eq](y: A): (List[A]) => Int32 @ {} = fn(xs) => cnt(xs, y)

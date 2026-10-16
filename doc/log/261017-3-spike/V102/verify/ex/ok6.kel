@@ -1,0 +1,4 @@
+newtype Box = Box(() => Int32)
+let xs = Cons(Box(fn() => 1), Nil)
+let v = xs match { case Cons(Box(f), _) if f() > 0 => f() case _ => 0 }
+echoln(show(v))

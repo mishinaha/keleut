@@ -1,0 +1,63 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:09:57.742111072 +0900
+@@ -986,12 +986,28 @@
+       List.map2
+         (fun a pk ->
+           let a = check_no_hole a in
++          (* 投機の間は、カインドが未確定のパラメータへ渡した要素なしの波括弧({} と
++             {extends R})を、パラメータとの照合に使わない。
++             型として一度読むのは、extends の右の R のカインドを Row に決めるためで、
++             行カインドは 1 つなので、行として読んでも同じカインドになる。
++             本体へは、読んだ型の代わりに、カインドのセルをパラメータと共有する新しい型変数を渡す。
++             本体がその変数を使う位置が、パラメータのカインドを決める。
++             §11.3 の elab_con_args と違って Unit を渡さないのは、
++             エイリアスは本体を展開するので、渡した型が本体の中の別の型構成子の引数に届き、
++             そのパラメータを Type に張ってしまうからである *)
++          let ambiguous =
++            !speculating && match (kind_repr pk, snd a) with KVar _, T.EBraceRow ([], _) -> true | _ -> false
++          in
+           let t =
+-            match kind_repr pk with
+-            | KRow -> elab_eff ~check_row:false env level ~expanding a
+-            | _ -> elab_type env level ~expanding a
++            if ambiguous then (
++              ignore (elab_type env level ~expanding a);
++              new_var ~kind:pk level)
++            else
++              match kind_repr pk with
++              | KRow -> elab_eff ~check_row:false env level ~expanding a
++              | _ -> elab_type env level ~expanding a
+           in
+-          if not (same_kind pk (Unify.kind_of t)) then
++          if (not ambiguous) && not (same_kind pk (Unify.kind_of t)) then
+             type_error
+               ("型エイリアス " ^ display_of info.Decls.al_name ^ " の型引数のカインドが一致しません: " ^ show_kind pk
+              ^ " を期待しましたが " ^ Show.show t ^ " は " ^ show_kind (Unify.kind_of t) ^ " です");
+@@ -4842,14 +4858,18 @@
+           match Hashtbl.find_opt Decls.aliases (intern t.T.ta_name) with
+           | None -> ()
+           | Some info -> (
+-              try
+-                let rigids = make_rigids ~kinds:info.Decls.al_kinds 1 info.Decls.al_params in
+-                let env_ty = { env with types = List.fold_left (fun m (n, ty, _) -> SMap.add n ty m) env.types rigids } in
+-                ignore
+-                  (match info.Decls.al_kind with
+-                  | Some "EffectRow" -> elab_eff env_ty 1 info.Decls.al_body
+-                  | _ -> elab_type env_ty 1 info.Decls.al_body)
+-              with Type_error _ | Type_error_at _ | NotImplemented _ | NotImplemented_at _ -> ()))
++              speculating := true;
++              Fun.protect
++                ~finally:(fun () -> speculating := false)
++                (fun () ->
++                  try
++                    let rigids = make_rigids ~kinds:info.Decls.al_kinds 1 info.Decls.al_params in
++                    let env_ty = { env with types = List.fold_left (fun m (n, ty, _) -> SMap.add n ty m) env.types rigids } in
++                    ignore
++                      (match info.Decls.al_kind with
++                      | Some "EffectRow" -> elab_eff env_ty 1 info.Decls.al_body
++                      | _ -> elab_type env_ty 1 info.Decls.al_body)
++                  with Type_error _ | Type_error_at _ | NotImplemented _ | NotImplemented_at _ -> ())))
+       | _ -> ())
+     decls;
+   (* 1b の後始末の 2 周目: カインドの既定化。1b がすべて終わってから既定化する。宣言ごとに

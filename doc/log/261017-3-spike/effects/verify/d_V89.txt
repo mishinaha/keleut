@@ -1,0 +1,110 @@
+1,2c1
+< ## V89: §13.5 の「ガード」の範囲
+< 
+---
+> ### N.6 V89：§13.5 の「ガード」の範囲
+3a3
+> #### (1) 判定、規模、依存、出典
+7c7
+< - 依存: V133(入れ子の `handle` のガード、`return` 節、`cancel` 節の `resume` の診断の文面)。本項目は文面を変えないので、V133 が文面を変えれば、本項目で足す `innerguard` の期待値だけが変わる。§13.5 の同じ段落(1273〜1276 行)にも V133 が触れうるので、V133 と同じマイルストーンか V133 の後に置く。V128(と V125)は §13.6 の 1297〜1298 行の近くに `cancel` 節の経路を足すので、そこで使う語を「操作節のガード」に揃える。
+---
+> - 依存: V133(入れ子の `handle` のガード、`return` 節、`cancel` 節の `resume` の診断の文面)。本項目は文面を変えないので、V133 が文面を変えれば、本項目で足す `innerguard` の期待値だけが変わる。§13.5 の同じ段落(1273〜1276 行)にも V133 が触れうるので、V133 と同じマイルストーンか V133 の後に置く。本計画は同じマイルストーンの中で V133 の後に置き、innerguard を V133 の文面で書く。V133 は仕様の文面を変えないので、§13.5 の段落は本項目だけが書き換える。V128(と V125)は §13.6 の 1297〜1298 行の近くに `cancel` 節の経路を足すので、そこで使う語を「操作節のガード」に揃える。
+10c10
+< 
+---
+> #### (2) 現状(根拠つき)
+36c36
+< HEAD での実測(例は `ex/`、出力は `results.head.txt`)。
+---
+> HEAD での実測(例は `doc/log/261017-3-spike/V89/ex/`、出力は `doc/log/261017-3-spike/V89/results.head.txt`)。
+40,55c40,57
+< | `ex/g1_opguard.kel` | `case test() if resume(true) => …` | 拒否、2:48「resume は操作節の中でのみ使えます」、終了状態 1 |
+< | `ex/g11_neverguard.kel` | 再開しない操作の節自身のガードに `resume` | 拒否、同じ文面、終了状態 1 |
+< | `ex/g5_innerguard.kel` | 外側の節の中の入れ子の `handle` の操作節のガードに `resume` | 拒否、同じ文面、終了状態 1 |
+< | `ex/g2_matchguard.kel` | 節の本体の `1 match { case _ if resume(true) => true … }` | 受理、`true` |
+< | `ex/g9_matchguard_value.kel` | 本体の `match` のガードで `resume(10) > 5` | 受理、`100`(再開した計算の値 11 をガードで使う) |
+< | `ex/g3_ifcond.kel` | 本体の `if resume(true) then … else …` | 受理、`true` |
+< | `ex/g6_matchguard_twice.kel` | 本体の `match` の 2 つのガードで `resume` | 型検査は通る。実行で「resume は高々1回しか呼べません(アフィン)」、終了状態 3 |
+< | `ex/g4_returnguard.kel` | `return` 節の本体の `match` のガード | 拒否(`return` 節の規則)、終了状態 1 |
+< | `ex/g10_cancelguard.kel` | `cancel` 節の本体の `match` のガード | 拒否(`cancel` 節の規則)、終了状態 1 |
+< | `ex/g7_neverbody_matchguard.kel` | 再開しない操作の節の本体の `match` のガード | 拒否「再開しない操作 throw の節には resume を書けません(…)」、終了状態 1 |
+< | `ex/g8_lambda_matchguard.kel` | 節の中の `fn() => { … match { case _ if resume(true) … } }` | 拒否「resume は second-class です(…)」、終了状態 1 |
+< | `ex/g12_innerreturn.kel` | 入れ子の `handle` の `return` 節に外側の `resume` | 拒否「resume は操作節の中でのみ使えます」、終了状態 1 |
+< | `ex/g13_innerbody.kel` | 入れ子の `handle` の本体に外側の `resume` | 受理、`true` |
+< | `verify/ex/b1_innerhandle_in_guard.kel` | 操作節自身のガードの中の別の `handle` の操作節で `resume(1)` | 受理、`true` |
+< | `verify/ex/b2_innerhandle_in_return.kel` | `return` 節の中の別の `handle` の操作節で `resume(2)` | 受理、`true` |
+< | `verify/ex/b3_innerhandle_in_cancel.kel` | `cancel` 節の中の別の `handle` の操作節で `resume(3)` | 受理、`cancel 3` と `false` |
+---
+> | `doc/log/261017-3-spike/V89/ex/g1_opguard.kel` | `case test() if resume(true) => …` | 拒否、2:48「resume は操作節の中でのみ使えます」、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g11_neverguard.kel` | 再開しない操作の節自身のガードに `resume` | 拒否、同じ文面、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g5_innerguard.kel` | 外側の節の中の入れ子の `handle` の操作節のガードに `resume` | 拒否、同じ文面、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g2_matchguard.kel` | 節の本体の `1 match { case _ if resume(true) => true … }` | 受理、`true` |
+> | `doc/log/261017-3-spike/V89/ex/g9_matchguard_value.kel` | 本体の `match` のガードで `resume(10) > 5` | 受理、`100`(再開した計算の値 11 をガードで使う) |
+> | `doc/log/261017-3-spike/V89/ex/g3_ifcond.kel` | 本体の `if resume(true) then … else …` | 受理、`true` |
+> | `doc/log/261017-3-spike/V89/ex/g6_matchguard_twice.kel` | 本体の `match` の 2 つのガードで `resume` | 型検査は通る。実行で「resume は高々1回しか呼べません(アフィン)」、終了状態 3 |
+> | `doc/log/261017-3-spike/V89/ex/g4_returnguard.kel` | `return` 節の本体の `match` のガード | 拒否(`return` 節の規則)、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g10_cancelguard.kel` | `cancel` 節の本体の `match` のガード | 拒否(`cancel` 節の規則)、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g7_neverbody_matchguard.kel` | 再開しない操作の節の本体の `match` のガード | 拒否「再開しない操作 throw の節には resume を書けません(…)」、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g8_lambda_matchguard.kel` | 節の中の `fn() => { … match { case _ if resume(true) … } }` | 拒否「resume は second-class です(…)」、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g12_innerreturn.kel` | 入れ子の `handle` の `return` 節に外側の `resume` | 拒否「resume は操作節の中でのみ使えます」、終了状態 1 |
+> | `doc/log/261017-3-spike/V89/ex/g13_innerbody.kel` | 入れ子の `handle` の本体に外側の `resume` | 受理、`true` |
+> | `doc/log/261017-3-spike/V89/verify/ex/b1_innerhandle_in_guard.kel` | 操作節自身のガードの中の別の `handle` の操作節で `resume(1)` | 受理、`true` |
+> | `doc/log/261017-3-spike/V89/verify/ex/b2_innerhandle_in_return.kel` | `return` 節の中の別の `handle` の操作節で `resume(2)` | 受理、`true` |
+> | `doc/log/261017-3-spike/V89/verify/ex/b3_innerhandle_in_cancel.kel` | `cancel` 節の中の別の `handle` の操作節で `resume(3)` | 受理、`cancel 3` と `false` |
+> 
+> `b1`〜`b3` は反証者の実測(`doc/log/261017-3-spike/V89/verify/boundary.txt`)であり、HEAD で走らせた結果である。
+57c59,60
+< `b1`〜`b3` は反証者の実測(`verify/boundary.txt`)であり、HEAD で走らせた結果である。
+---
+> V133 の後は、拒否する例の文面が位置ごとに変わる(実測、分野の合成)。
+> `g1`、`g5`、`g11` は「操作節のガードには resume を書けません(…)」、`g4`、`g12` は「return 節には resume を書けません(…)」、`g10` は「cancel 節には resume を書けません(…)」になり、位置と終了状態は変わらない。
+63c66
+< 
+---
+> #### (3) 判断と確定
+89c92
+< 
+---
+> #### (4) 仕様側の改訂案
+113c116
+< 
+---
+> #### (5) diktor 側の変更
+117c120
+< - cram: 新しいファイル `test/resume_guard.t` を作る(5 ブロック、5 プログラム、12 コマンド)。試作は `V89.patch`、写しでの `dune runtest` は差分なしで終了状態 0(`runtest.after.txt`)。前書きは HEAD の処理系の実測から起こした。
+---
+> - cram: 新しいファイル `test/resume_guard.t` を作る(5 ブロック、5 プログラム、12 コマンド)。試作は `doc/log/261017-3-spike/V89/V89.patch`、写しでの `dune runtest` は差分なしで終了状態 0(`doc/log/261017-3-spike/V89/runtest.after.txt`)。前書きは HEAD の処理系の実測から起こした。
+121c124
+<   - `innerguard`(2 コマンド): 入れ子の `handle` の操作節のガードに外側の `resume`(`g5`)。前書き「節の中に書いた入れ子の handle の操作節のガードには、外側の節の resume を書けない」。「! innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます」、`[1]`。
+---
+>   - `innerguard`(2 コマンド): 入れ子の `handle` の操作節のガードに外側の `resume`(`g5`)。前書き「節の中に書いた入れ子の handle の操作節のガードには、外側の節の resume を書けない」。V133 の後に入れるので、期待値は「! innerguard.kel:5:19: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)」、`[1]` とする(分野の合成で実測)。試作の差分 `doc/log/261017-3-spike/V89/V89.patch` は HEAD の文面で書いてあるので、当てた後にこの 1 行を改める。
+130a134
+> #### (6) リスク
+132,133c136
+< 
+< - V133 が入れ子の `handle` の節の診断の文面を変えると、`innerguard` の期待値が変わる。V133 と同じマイルストーンにするか、V133 の後に置けば、期待値を 1 度で書ける。V133 が §13.5 の 1273〜1276 行の段落を書き換える場合は、本項目の 5 文と合わせて 1 度で書く。
+---
+> - V133 が入れ子の `handle` の節の診断の文面を変えると、`innerguard` の期待値が変わる。本計画は V133 の後に置くので、期待値を 1 度で書ける。V133 が §13.5 の 1273〜1276 行の段落を書き換える場合は、本項目の 5 文と合わせて 1 度で書く。
+136a140
+> #### (7) 検証の観点
+138,139c142
+< 
+< - 改訂後の §13.5 の各文が、`ex/` の 13 本と `verify/ex/` の `b1`〜`b7` の HEAD での結果(`results.head.txt`、`verify/boundary.txt`)と一致すること。特に、`return` 節や `cancel` 節の本体の中の `match` のガード(`g4`、`g10`)が「`return` 節、`cancel` 節の中」の規則で拒否されること、`b1`〜`b3` が 4 文目の除外で受理されることが文面から読めること。
+---
+> - 改訂後の §13.5 の各文が、`doc/log/261017-3-spike/V89/ex/` の 13 本と `doc/log/261017-3-spike/V89/verify/ex/` の `b1`〜`b7` の HEAD での結果(`doc/log/261017-3-spike/V89/results.head.txt`、`doc/log/261017-3-spike/V89/verify/boundary.txt`)と一致すること。特に、`return` 節や `cancel` 節の本体の中の `match` のガード(`g4`、`g10`)が「`return` 節、`cancel` 節の中」の規則で拒否されること、`b1`〜`b3` が 4 文目の除外で受理されることが文面から読めること。
+145a149
+> #### (8) 検証の反映
+147,151c151,154
+< 
+< - must_fix 1(ガード、`return` 節、`cancel` 節の中の別の `handle` の操作節の `resume` を除外する。cram に `b1` の形を足す): 反映した。改訂文の 4 文目と D[V89-3] を足し、(2) の表に `b1`〜`b3` を載せ、cram に `guardhandle` を足した。写しで `dune runtest` が通ることを確かめた。
+< - must_fix 2(5 文目の「上の」の誤り): 反映した。1277 行が一般に述べているので、2 回目の再開を述べる文を改訂文から省いた((4) にその旨を書いた)。
+< - must_fix 3(§13.6 の「操作節のガード（§13.4）」は 1293 行だけ): 反映した。(2) と (4) を、1293 行は「操作節のガード（§13.4）」、1297 行は「ガード」、1298 行は「再開する操作の節のガード」と書くように直した。
+< - must_fix 4(cram の件数): 反映した。`guardhandle` を足した後の数を写しのファイルで数え、5 ブロック、5 プログラム、12 コマンドと書いた。各ブロックにコマンドの数を添えた。
+---
+> - 必須の指摘 1(ガード、`return` 節、`cancel` 節の中の別の `handle` の操作節の `resume` を除外する。cram に `b1` の形を足す): 反映した。改訂文の 4 文目と D[V89-3] を足し、(2) の表に `b1`〜`b3` を載せ、cram に `guardhandle` を足した。写しで `dune runtest` が通ることを確かめた。
+> - 必須の指摘 2(5 文目の「上の」の誤り): 反映した。1277 行が一般に述べているので、2 回目の再開を述べる文を改訂文から省いた((4) にその旨を書いた)。
+> - 必須の指摘 3(§13.6 の「操作節のガード（§13.4）」は 1293 行だけ): 反映した。(2) と (4) を、1293 行は「操作節のガード（§13.4）」、1297 行は「ガード」、1298 行は「再開する操作の節のガード」と書くように直した。
+> - 必須の指摘 4(cram の件数): 反映した。`guardhandle` を足した後の数を写しのファイルで数え、5 ブロック、5 プログラム、12 コマンドと書いた。各ブロックにコマンドの数を添えた。
+157a161,162
+> 
+> 

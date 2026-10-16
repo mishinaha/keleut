@@ -1,0 +1,2 @@
+let f[A](x: A, r: Ref[A, Int32]): Int32 = 0
+let g[h](x: h): Int32 = 0

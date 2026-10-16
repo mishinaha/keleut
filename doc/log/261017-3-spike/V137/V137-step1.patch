@@ -1,0 +1,103 @@
+diff a/lib/interp.ml b/lib/interp.ml
+--- a/lib/interp.ml	2026-10-17 03:33:52.000000000 +0900
++++ ./lib/interp.ml	2026-10-17 04:19:48.215258701 +0900
+@@ -997,6 +997,7 @@
+           match ex with
+           (* 自分宛ての巻き戻し。保留していた節の値(再開しない操作の節では破棄の印)を
+              discontinue の戻り値として effc に返す *)
++          | Unwind (id, VPending f) when id = inst -> f ()
+           | Unwind (id, v) when id = inst -> v
+           | ex ->
+               (* 外側による巻き戻し(または実行時エラー)の通過。cancel 節を実行してから再送出する *)
+@@ -1057,10 +1058,8 @@
+                              先に送った別の破棄の閉包が戻る。そのときは本体を評価せず、戻った
+                              値をそのまま返す。閉包が末尾でない resume の戻り値として別の節に
+                              届いたときは、その節が評価する(§14.4 の Resume) *)
+-                          let tok = VPending (fun () -> eval { env with locals; resume = None } c.T.cl_body) in
+-                          (match Effect.Deep.discontinue k (Unwind (inst, tok)) with
+-                          | VPending f as v when v == tok -> f ()
+-                          | v -> v)
++                          Effect.Deep.discontinue k
++                            (Unwind (inst, VPending (fun () -> eval { env with locals; resume = None } c.T.cl_body)))
+                       | Some (locals, c, `Resumable tail) -> (
+                           match snd c.T.cl_body with
+                           | T.Resume arg -> (
+diff a/test/tail_calls.t b/test/tail_calls.t
+--- a/test/tail_calls.t	2026-10-17 03:33:52.000000000 +0900
++++ ./test/tail_calls.t	2026-10-17 04:19:48.217379876 +0900
+@@ -193,6 +193,75 @@
+   実行時エラー: スタックオーバーフロー(再帰が深すぎます)
+   [3]
+ 
++cancel 節から起こした再開しない操作による破棄が打ち切られた後に、ハンドラの本体の中で
++評価される節の本体も、末尾位置にある(§5.7、§13.6)。打ち切られるのが外側のハンドラ
++(retrycancel)でも、再開する操作の節から送出を受けるハンドラ(retrycancelvia)でも、
++破棄を進めている当のハンドラ(retrycancelsame)でも、再試行の回数によって領域が増えない。
++打ち切りのたびに同じ診断が 1 行記録される:
++
++  $ cat > retrycancel.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Stop = { stop: () => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   ({ perform use(); perform stop(); 1 }) handle {
++  >     case use() => resume()
++  >     case cancel => perform throw("from cancel")
++  >   } handle {
++  >     case stop() => loop(n - 1)
++  >   }
++  > let r = loop(100000) handle {
++  >   case throw(e) => { echoln("caught " + e); 1 }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retrycancel.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  $ cat > retrycancelvia.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Ask = { ask: () => Int32 }
++  > effect Stop = { stop: () => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   ({ perform use(); perform stop(); 1 }) handle {
++  >     case use() => resume()
++  >     case cancel => { let a = perform ask(); () }
++  >   } handle {
++  >     case stop() => loop(n - 1)
++  >   }
++  > let r = (loop(100000) handle {
++  >   case ask() => perform throw("from ask")
++  > }) handle {
++  >   case throw(e) => { echoln("caught " + e); 1 }
++  > }
++  > echoln(show(r))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retrycancelvia.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++  $ cat > retrycancelsame.kel <<'KEL'
++  > effect Fail = { throw: (String) => Never }
++  > effect Res = { use: () => Unit }
++  > let rec loop(n: Int32): Int32 =
++  >   if n == 0 then 0 else
++  >   ({ perform use(); perform throw("first") }) handle {
++  >     case use() => resume()
++  >     case cancel => perform throw("from cancel")
++  >   } handle {
++  >     case throw(e) => loop(n - 1)
++  >   }
++  > echoln(show(loop(100000)))
++  > KEL
++  $ OCAMLRUNPARAM=l=100k diktor retrycancelsame.kel 2> err.txt
++  0
++  $ sort err.txt | uniq -c | sed 's/^ *//'
++  100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
++
+ 再開しない操作の節の値が、同じハンドラの末尾でない resume の戻り値として届く形(§5.7 の
+ 但し書き)。保留していた節の評価が続くので、節の本体は末尾位置にならず、この実装では
+ 小さい上限で落ちる:

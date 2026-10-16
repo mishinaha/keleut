@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+module M {
+  pub let go(u: Int32): Int32 = {
+    let inner: Int32 = { perform ask() + u } handle { case ask() => resume(10) }
+    inner + perform ask()
+  } handle { case ask() => resume(20) }
+}
+echoln(show(M.go(1)))

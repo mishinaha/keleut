@@ -1,0 +1,4 @@
+type F = (Int32) => Int32
+pub let h[F[_]](x: F[Int32], g: (F[Int32]) => Int32 @ {}): Int32 = g(x)
+echoln(show(h(Some(1i32), fn(o) => o match { case Some(n) => n
+  case None => 0 })))

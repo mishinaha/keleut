@@ -1,0 +1,11 @@
+effect Ask = { ask: (Int32) => Int32 }
+let r =
+  perform ask(1) handle {
+    case return(a) => a
+    case ask(n) => resume(n)
+    case return(b) => b
+    case return(c) => c
+    case cancel
+      => ()
+    case cancel => ()
+  }

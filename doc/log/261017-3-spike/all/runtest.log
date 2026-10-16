@@ -1,0 +1,308 @@
+# 段ごとの dune runtest(promote の前)の結果。各段の build は成功(警告は lib/parser.mly:88 の Warning 60 のみ)
+# ビルドは /tmp が満杯のため DUNE_BUILD_DIR=/dev/shm/claude-0c9c47ee-all-build で行った(差分の a/ b/ のパスはその build dir を指す)
+
+======== stage spec: 0 ファイル、0 行
+
+======== stage syntax: 0 ファイル、0 行
+
+======== stage numeric: 0 ファイル、0 行
+
+======== stage eval: 0 ファイル、0 行
+
+======== stage effects: 7 ファイル、114 行
+File "test/smoke.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/smoke.t b/dev/shm/claude-0c9c47ee-all-build/default/test/smoke.t.corrected
+index f7b7952..d4fa57e 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/smoke.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/smoke.t.corrected
+@@ -24,7 +24,7 @@
+ 
+   $ printf 'effect E = { op: () => Int32 }\nlet r = (1) handle { case op() => resume(1) case cancel(e) => () }\n' > cr.kel
+   $ diktor cr.kel; echo "exit: $?"
+-  ! cr.kel:2:9: 未実装: cancel(reason)(v0 は case cancel のみ)
++  ! cr.kel:2:50: 未実装: cancel(reason)(v0 は case cancel のみ)
+   exit: 4
+ 
+ 言語に無い数値の接尾辞は型エラーで exit 1(LangSpec §4.2、§15.5):
+File "test/resume_guard.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/resume_guard.t b/dev/shm/claude-0c9c47ee-all-build/default/test/resume_guard.t.corrected
+index 0ca37ce..c200b43 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/resume_guard.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/resume_guard.t.corrected
+@@ -56,7 +56,7 @@
+   > echoln(show(r))
+   > KEL
+   $ diktor --type-check innerguard.kel
+-  ! innerguard.kel:5:19: 型エラー: resume は操作節の中でのみ使えます
++  ! innerguard.kel:5:19: 型エラー: 操作節のガードには resume を書けません(ガードは節が選ばれる前に評価されるので、継続を再開できません)
+   [1]
+ 
+ 操作節のガードの中に書いた別の handle の操作節の resume は、内側の節の
+File "test/typecheck_m6.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck_m6.t b/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck_m6.t.corrected
+index 4bb07a1..9d9ceec 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck_m6.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck_m6.t.corrected
+@@ -235,7 +235,7 @@ qual4 から case write(s) を落とすと、File の write の網羅漏れと f
+   > EOF
+   $ diktor --type-check --no-prelude qual5.kel
+   prog : () => String @ {File}
+-  ! qual5.kel:5:19: 型エラー: 操作 flush はエフェクト File に属しません
++  ! qual5.kel:7:8: 型エラー: 操作 flush はエフェクト File に属しません
+   [1]
+ 
+ qual5 から flush の節を落とすと、残る誤りは網羅漏れだけになり、それが
+@@ -298,7 +298,7 @@ qual5 から flush の節を落とすと、残る誤りは網羅漏れだけに
+   > let bad(): Unit @ {} = perform print("x")
+   > EOF
+   $ diktor --type-check --no-prelude efferr.kel
+-  ! efferr.kel:3:24: 型エラー: エフェクト Print をここでは実行できません(ラベル Print がありません(行は閉じています))
++  ! efferr.kel:3:24: 型エラー: エフェクト Print をここでは実行できません(ラベル Print がありません(行は閉じています))(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+   $ cat > efferr2.kel <<'EOF'
+File "test/typecheck.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck.t b/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck.t.corrected
+index da73319..5fb6748 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/typecheck.t.corrected
+@@ -214,7 +214,7 @@ let rec と前方参照(注釈が完全 — @ も明示 — な let は宣言順
+   > EOF2
+   $ diktor --type-check --no-prelude mix.kel
+   ok : Int32
+-  ! mix.kel:3:11: 未実装: cancel(reason)(v0 は case cancel のみ)
++  ! mix.kel:3:52: 未実装: cancel(reason)(v0 は case cancel のみ)
+   [4]
+ 
+ 標準環境の名前は再宣言できない(LangSpec §16.1。newtype、型エイリアス、effect、
+File "test/trailing_block.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/trailing_block.t b/dev/shm/claude-0c9c47ee-all-build/default/test/trailing_block.t.corrected
+index 069d632..107e9fd 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/trailing_block.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/trailing_block.t.corrected
+@@ -101,7 +101,7 @@ g(1)(2) { k } では、末尾ブロックは 2 つ目の呼び出しに加わる
+   > EOF
+   $ diktor --type-check tuple2.kel
+   apply2 : (Int32, Int32, (Int32, Int32) => Int32 @ {}) => Int32
+-  ! tuple2.kel:2:22: 型エラー: 型が一致しません: (_A, _A) と Int32
++  ! tuple2.kel:2:22: 型エラー: 引数の個数が一致しません: ((_A, _A)) => _A と (Int32, Int32) => Int32 @ {}(引数は 1 個と 2 個です)
+   [1]
+ 
+ { case ... } の照合は match と同じ規則で、残りを受ける節が無ければ照合対象の
+File "test/eval.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/eval.t b/dev/shm/claude-0c9c47ee-all-build/default/test/eval.t.corrected
+index a3eec2d..6fd2854 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/eval.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/eval.t.corrected
+@@ -855,5 +855,5 @@ with _ と with (_) は引数のない無名関数を、with _x は 1 引数の
+   > KEL
+   $ diktor --type-check with2.kel
+   one : ((Int32) => A) => A
+-  ! with2.kel:3:3: 型エラー: ラベル _item がありません(行は閉じています)
++  ! with2.kel:3:3: 型エラー: 引数の個数が一致しません: () => _A と (Int32) => _B(引数は 0 個と 1 個です)
+   [1]
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t b/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t.corrected
+index aa2381c..2abd98f 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t.corrected
+@@ -28,7 +28,7 @@
+   > KEL
+   $ diktor --type-check --no-prelude nested2.kel
+   call_pure : (() => {} @ {}) => {}
+-  ! nested2.kel:4:41: 型エラー: エフェクト A をここでは実行できません(ラベル A がありません(行は閉じています))
++  ! nested2.kel:4:41: 型エラー: エフェクト A をここでは実行できません(ラベル A がありません(行は閉じています))(この位置の行は空 = 純粋です — 注釈の @ {} か、高階の引数の行が @ {} だからです(入れ子の矢印の @ 省略も @ {} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)
+   [1]
+ 
+ レコード型のフィールドとタプル型の要素の矢印も入れ子(裁定 D115)。省略した @ は
+@@ -122,7 +122,7 @@ effect の操作型の引数の矢印も入れ子(D44 の対象外という裁
+   > let bad(f: () => Unit @ Async2): Unit @ NurP = perform spawnp(f)
+   > KEL
+   $ diktor --type-check --no-prelude opsig2.kel
+-  ! opsig2.kel:4:48: 型エラー: ラベル Async2 がありません(行は閉じています)
++  ! opsig2.kel:4:63: 型エラー: ラベル Async2 がありません(行は閉じています)(操作 spawnp の引数の型が求める関数の行は空 = 純粋です。操作の型の矢印は書いたとおりに読み、@ の省略は @ {} と読みます。エフェクトを起こす関数を通すなら、操作の型のその矢印に @ で行を書いてください。§9)
+   [1]
+ 
+ V14(高階位置の省略 @ によるエフェクト洗浄)が閉じたこと。改訂前は
+
+======== stage never: 0 ファイル、0 行
+
+======== stage classes: 1 ファイル、14 行
+File "test/repl.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/repl.t b/dev/shm/claude-0c9c47ee-all-build/default/test/repl.t.corrected
+index b989227..c814246 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/repl.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/repl.t.corrected
+@@ -305,7 +305,7 @@ Show のインスタンスを持つ newtype の値は Show.show で表示し、
+   m : [A: Show] Option[(A) => String] = Some(<fn>)
+   v : [A: Show] #Tag((A) => String) | R1 = #Tag(<fn>)
+   idf : (A) => A = <fn>
+-  t : (Int32) => String @ {Console, Blocking, Print} = <fn>
++  t : (Int32) => String @ {} = <fn>
+   _ : String = "2"
+   h : (Int32) => String = <fn>
+   ev : [A: Eq] (A) => Boolean = <fn>
+
+======== stage region: 1 ファイル、14 行
+File "test/region.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/region.t b/dev/shm/claude-0c9c47ee-all-build/default/test/region.t.corrected
+index ea867d1..a080270 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/region.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/region.t.corrected
+@@ -187,7 +187,7 @@ unbox では h、現れない size では A と出る:
+   two : (Ref[h, A], MutableArray[h1, Int32]) => A @ {Heap[h], Heap[h1]}
+   both : (h, Ref[h, Int32]) => Int32
+   id : (A) => A
+-  w : (_A) => Ref[_h, _A] @ {Heap[_h] extends _R1}
++  w : (_A) => Ref[_h, _A] @ {Heap[_h]}
+   unbox : (Box[h]) => Ref[h, Int32]
+   size : (Box[A]) => Int32
+   $ printf 'let main(): Int32 = run h { let r = Ref.new(1); r }\n' > regionshow2.kel
+
+======== stage diagtext: 4 ファイル、61 行
+File "test/rec_tparam_note.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t b/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t.corrected
+index 1f631bc..ee42230 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/rec_tparam_note.t.corrected
+@@ -87,5 +87,5 @@ g の引数の型が f の A に決まる。g の本体が f を呼ぶ位置(引
+   > and bump[k](a: MutableArray[k, Int32]): Unit = run h2 { MutableArray.set(a, 0, 42) }
+   > KEL
+   $ diktor --type-check region.kel
+-  ! region.kel:2:74: 型エラー: スコープ付きの型が一致しません: ς1 と ς2
++  ! region.kel:2:74: 型エラー: ほかのリージョンの MutableArray を使おうとしています(スコープ付きの型が一致しません: ς1 と ς2)
+   [1]
+File "test/ctor_field_row.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t b/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t.corrected
+index 315ff5c..6211f67 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/ctor_field_row.t.corrected
+@@ -119,7 +119,7 @@
+   > KEL
+   $ diktor --type-check ctorarity.kel
+   k : () => Int32
+-  ! ctorarity.kel:3:9: 型エラー: ラベル _item がありません(行は閉じています)(コンストラクタ Box のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)
++  ! ctorarity.kel:3:9: 型エラー: 引数の個数が一致しません: () => Int32 と (Int32) => Int32 @ {}(引数は 0 個と 1 個です)
+   [1]
+   $ cat > ctorrecmiss.kel <<'KEL'
+   > newtype R = R({f: () => Int32, g: Int32})
+File "test/never_ops.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t b/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t.corrected
+index 91f544e..a5b0dd5 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/never_ops.t.corrected
+@@ -744,5 +744,5 @@ resume で再開したときは、先の破棄で終わった計算の値、つ
+   > }
+   > KEL
+   $ diktor --type-check clsfailpure.kel
+-  ! clsfailpure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の本体がエフェクトを起こしています。元の報告: ラベル Fail がありません(行は閉じています)
++  ! clsfailpure.kel:6:7: 型エラー: 型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド parse の注釈に @ {} 以外の行を書いています。元の報告: ラベル Fail がありません(行は閉じています)
+   [1]
+File "test/annot_rows.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t b/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t.corrected
+index 07d1bcd..b4a556a 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/annot_rows.t.corrected
+@@ -1077,7 +1077,7 @@ rectpflowrev):
+   > and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+   > KEL
+   $ diktor --type-check recrowclosed.kel
+-  ! recrowclosed.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
++  ! recrowclosed.kel:1:40: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+   [1]
+   $ cat > recrowrev.kel <<'KEL'
+   > let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+@@ -1111,7 +1111,7 @@ rectpflowrev):
+   > and a[E](n: Int32): Int32 @ {Console extends E} = { echo("a"); b(n) }
+   > KEL
+   $ diktor --type-check recrowclosedmutrev.kel
+-  ! recrowclosedmutrev.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、この行と一致させられません(注釈を extends 付きの形にしてください)
++  ! recrowclosedmutrev.kel:1:72: 型エラー: 行 ς1 は注釈で固定された行変数なので、空の行と一致させられません
+   [1]
+   $ cat > recrowone.kel <<'KEL'
+   > let rec a[E](n: Int32): Int32 @ {Console extends E} = n match { case 0 => 0 case m => b(m - 1) }
+
+======== stage via: 1 ファイル、23 行
+File "test/literal_default.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t b/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t.corrected
+index 4121ed4..7848c21 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/literal_default.t.corrected
+@@ -53,7 +53,7 @@
+   > let z = c(Box(1.5))
+   > KEL
+   $ diktor premlit.kel
+-  ! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません
++  ! premlit.kel:5:9: 型エラー: Float64 は C のインスタンスではありません。Box[Float64] が C であるための前提として要求されました
+   [1]
+ 
+ 一般化しない束縛を経由して前の宣言から伝わった制約は、前の宣言の位置ではなく、
+@@ -72,7 +72,7 @@
+   $ diktor --type-check weaklit.kel
+   ident : (A) => A
+   g : [_A: C] (_A) => Int32 @ {}
+-  ! weaklit.kel:7:15: 型エラー: Float64 は C のインスタンスではありません
++  ! weaklit.kel:7:15: 型エラー: Float64 は C のインスタンスではありません。Box[Float64] が C であるための前提として要求されました
+   [1]
+ 
+ 同じ宣言に既定化の失敗が 2 つあるときは、先に書いた方を報告する:
+
+======== stage kinds: 1 ファイル、31 行
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t b/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t.corrected
+index 03ffe4e..8d55a77 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t.corrected
+@@ -148,7 +148,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   [1]
+   $ printf 'type F = (Int32) => Int32\npub newtype Box = Box(F)\n' > pubaliasnt.kel
+   $ diktor --type-check pubaliasnt.kel
+-  ! pubaliasnt.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
++  ! pubaliasnt.kel:2:23: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+   [1]
+ 
+ エイリアスの型引数に書いた矢印は、注釈に直接書いた矢印として扱う。本体の矢印が @ を
+@@ -167,7 +167,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   [1]
+   $ printf 'type K[A] = Int32\npub newtype Box = Box(K[(Int32) => Int32])\n' > pubaliasarg4.kel
+   $ diktor --type-check pubaliasarg4.kel
+-  ! pubaliasarg4.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! pubaliasarg4.kel:2:23: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+ 
+ エイリアスの本体の名前は、エイリアスを宣言した位置で読む(§15.1)。module の中の
+@@ -213,5 +213,5 @@ import したエイリアスにも、同じ要求が働く:
+   > echoln(show(idf(3)))
+   > KEL
+   $ diktor pubaliastp.kel
+-  [1, 2]
+-  3
++  pubaliastp.kel:4:1: 構文エラー: type instance の本体の let には pub を付けられません(メソッドはクラスを import して使います): desc
++  [2]
+
+======== stage kinds2: 1 ファイル、23 行
+File "test/pub.t", line 1, characters 0-0:
+diff --git a/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t b/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t.corrected
+index 18b2ae3..1bf9cc7 100644
+--- a/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t
++++ b/dev/shm/claude-0c9c47ee-all-build/default/test/pub.t.corrected
+@@ -148,7 +148,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   [1]
+   $ printf 'type F = (Int32) => Int32\npub newtype Box = Box(F)\n' > pubaliasnt.kel
+   $ diktor --type-check pubaliasnt.kel
+-  ! pubaliasnt.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
++  ! pubaliasnt.kel:2:23: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(型エイリアス F の本体の矢印に @ がありません)
+   [1]
+ 
+ エイリアスの型引数に書いた矢印は、注釈に直接書いた矢印として扱う。本体の矢印が @ を
+@@ -167,7 +167,7 @@ pub な newtype のフィールドの矢印にも @ が要る(§13 / M26。省
+   [1]
+   $ printf 'type K[A] = Int32\npub newtype Box = Box(K[(Int32) => Int32])\n' > pubaliasarg4.kel
+   $ diktor --type-check pubaliasarg4.kel
+-  ! pubaliasarg4.kel:2:1: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
++  ! pubaliasarg4.kel:2:23: 型エラー: pub な newtype のフィールドには完全な型注釈が必要です(注釈の中の矢印に @ がありません)
+   [1]
+ 
+ エイリアスの本体の名前は、エイリアスを宣言した位置で読む(§15.1)。module の中の
+
+======== final: dune runtest 0 行(全段の promote と手直しの後)

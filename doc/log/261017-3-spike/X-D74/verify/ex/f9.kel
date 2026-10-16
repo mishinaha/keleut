@@ -1,0 +1,1 @@
+let a: Int32 = run h { let r = Ref.new(0); let m = MutableArray.new(1, r); run k { let s = Ref.new(1); MutableArray.set(m, 0, s); 0 } }

@@ -1,0 +1,2 @@
+newtype T = Foo
+let a = Foo {}

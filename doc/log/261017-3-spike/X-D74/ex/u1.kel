@@ -1,0 +1,1 @@
+let f = fn(r) => run h { Ref.get(r) }

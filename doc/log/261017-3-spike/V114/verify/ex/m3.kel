@@ -1,0 +1,2 @@
+let ok = 1 + 2
+module A { module B { let x = 1 } }

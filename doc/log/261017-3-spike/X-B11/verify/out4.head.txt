@@ -1,0 +1,4 @@
+## prel2
+hi
+hi
+exit=0

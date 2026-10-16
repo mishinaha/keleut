@@ -1,0 +1,4 @@
+newtype Void
+type class Describe[A] { val describe: (A) => String }
+type instance Describe[Void] { let describe(n) = n match {} }
+echoln("ok")

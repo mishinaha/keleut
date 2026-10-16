@@ -1,0 +1,138 @@
+=== dead.kel
+     1	let f(x: Int32): Int32 = x match {
+     2	  case 4294967295 => 1
+     3	  case _ => 2
+     4	}
+     5	echoln(show(f(0 - 1)))
+--- diktor-head dead.kel
+2
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive dead.kel
+f : (Int32) => Int32
+_ : {}
+[exit 0]
+=== expr.kel
+     1	let x: Int32 = 4294967295
+     2	echoln(show(x))
+--- diktor-head expr.kel
+実行時エラー: 数値リテラルが範囲外です: 4294967295
+[exit 3]
+--- diktor-head --type-check --strict-exhaustive expr.kel
+x : Int32
+_ : {}
+[exit 0]
+=== i64.kel
+     1	let g(x: Int64): Int32 = x match {
+     2	  case 9223372036854775808 => 1
+     3	  case 0x1FFFFFFFFFFFFFFFF => 2
+     4	  case _ => 3
+     5	}
+     6	echoln(show(g(0i64)))
+--- diktor-head i64.kel
+3
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive i64.kel
+g : (Int64) => Int32
+_ : {}
+[exit 0]
+=== hex.kel
+     1	let f(x: Int32): Int32 = x match {
+     2	  case 0x1FFFFFFFF => 1
+     3	  case _ => 2
+     4	}
+     5	echoln(show(f(0)))
+--- diktor-head hex.kel
+2
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive hex.kel
+f : (Int32) => Int32
+_ : {}
+[exit 0]
+=== nested.kel
+     1	let f(o: Option[Int32]): Int32 = o match {
+     2	  case Some(4294967295) => 1
+     3	  case Some(_) => 2
+     4	  case None => 3
+     5	}
+     6	let (4294967295, y) = (1, 2)
+     7	echoln(show(f(Some(0))))
+--- diktor-head nested.kel
+⚠ match が非網羅的です。例えば (0, _) が漏れています
+実行時エラー: パターンに値が一致しません: (1, 2)
+[exit 3]
+--- diktor-head --type-check --strict-exhaustive nested.kel
+f : (Option[Int32]) => Int32
+⚠ match が非網羅的です。例えば (0, _) が漏れています
+_ : {}
+[exit 1]
+=== only.kel
+     1	let f(x: Int32): Int32 = x match {
+     2	  case 4294967295 => 1
+     3	}
+     4	echoln(show(f(0)))
+--- diktor-head only.kel
+⚠ match が非網羅的です。例えば 0 が漏れています
+実行時エラー: match のどの節にも一致しません: 0
+[exit 3]
+--- diktor-head --type-check --strict-exhaustive only.kel
+f : (Int32) => Int32
+⚠ match が非網羅的です。例えば 0 が漏れています
+_ : {}
+[exit 1]
+=== dflt.kel
+     1	let h = fn(x) => x match {
+     2	  case 4294967295 => 1i32
+     3	  case _ => 2i32
+     4	}
+     5	echoln(show(h(5)))
+--- diktor-head dflt.kel
+2
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive dflt.kel
+h : (Int32) => Int32
+_ : {}
+[exit 0]
+=== i64ok.kel
+     1	let g(x: Int64): Int32 = x match {
+     2	  case 4294967295 => 1
+     3	  case _ => 3
+     4	}
+     5	echoln(show(g(4294967295i64)))
+--- diktor-head i64ok.kel
+1
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive i64ok.kel
+g : (Int64) => Int32
+_ : {}
+[exit 0]
+=== dup.kel
+     1	let f(x: Int32): Int32 = x match {
+     2	  case 4294967295 => 1
+     3	  case 4294967295 => 2
+     4	  case _ => 3
+     5	}
+     6	echoln(show(f(0)))
+--- diktor-head dup.kel
+⚠ 第 2 節は到達不能です(冗長)
+3
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive dup.kel
+f : (Int32) => Int32
+⚠ 第 2 節は到達不能です(冗長)
+_ : {}
+[exit 1]
+=== handler.kel
+     1	effect Ask = { ask: (Int32) => Int32 }
+     2	let r = { perform ask(7) } handle {
+     3	  case ask(4294967295) => resume(1)
+     4	  case ask(_) => resume(2)
+     5	  case return(v) => v
+     6	}
+     7	echoln(show(r))
+--- diktor-head handler.kel
+2
+[exit 0]
+--- diktor-head --type-check --strict-exhaustive handler.kel
+r : Int32
+_ : {}
+[exit 0]

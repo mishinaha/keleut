@@ -1,0 +1,78 @@
+i1_weakimpl diktor-head exit=0
+i1_weakimpl main.exe exit=0
+i2_weakimplval diktor-head exit=0
+i2_weakimplval main.exe exit=0
+i5_valeff diktor-head exit=0
+i5_valeff main.exe exit=0
+i6_valeff_user diktor-head exit=0
+i6_valeff_user main.exe exit=0
+i7_valeff_console diktor-head exit=0
+i7_valeff_console main.exe exit=0
+i8_user_console diktor-head exit=0
+i8_user_console main.exe exit=0
+== r4 --type-check diktor-head
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+p : [A: Show] (A) => String @ {}
+q : ((Int32) => Int32, Int32)
+idf2 : (A) => A
+w : (Int32) => Int32
+_ : {}
+== repl diktor-head
+(Array[A]) => Int32
+[A: Show] (A) => String
+(Ref[A, B]) => B @ {Heap[A] extends R1}
+(Int32) => Int32
+id : (A) => A = <fn>
+! <stdin>:6:12: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:7:9: 型エラー: 未束縛の変数: g
+! <stdin>:8:6: 型エラー: 未束縛の変数: g
+w : (Int32) => Int32 = <fn>
+2
+3(Int32) => Int32 @ {Console, Blocking, Print extends R1}
+! <stdin>:13:7: 型エラー: 未束縛の変数: g
+== np
+id : (A) => A
+s : [_A: Show] (_A) => String
+t : String
+== imp
+n : Int32
+p : () => {} @ {Print}
+_ : {}
+== r4 --type-check main.exe
+f : (Int32) => Int32
+g : (Int32) => Int32
+h : [A: Add] (A, A) => A
+n : (Int32) => Int32
+c : [A: Ord] (A, A) => Boolean
+s : (Int32) => String
+p : [A: Show] (A) => String @ {}
+q : ((Int32) => Int32, Int32)
+idf2 : (A) => A
+w : (Int32) => Int32 @ {}
+_ : {}
+== repl main.exe
+(Array[A]) => Int32
+[A: Show] (A) => String
+(Ref[A, B]) => B @ {Heap[A] extends R1}
+(Int32) => Int32
+id : (A) => A = <fn>
+! <stdin>:6:12: 型エラー: 曖昧な制約: Show を満たす型が決まりません(一般化しない束縛か式文の型変数です。注釈で型を決めてください)
+! <stdin>:7:9: 型エラー: 未束縛の変数: g
+! <stdin>:8:6: 型エラー: 未束縛の変数: g
+w : (Int32) => Int32 @ {} = <fn>
+2
+3(Int32) => Int32
+! <stdin>:13:7: 型エラー: 未束縛の変数: g
+== np
+id : (A) => A
+s : [_A: Show] (_A) => String @ {}
+t : String
+== imp
+n : Int32
+p : () => {} @ {Print}
+_ : {}

@@ -1,0 +1,3 @@
+newtype N[A] = C(N[(A, A)]) | D(A)
+let g(D(x): N[Never]) = 1
+let h(n: N[Never]): Int32 = n match { case C(y) => 2 }

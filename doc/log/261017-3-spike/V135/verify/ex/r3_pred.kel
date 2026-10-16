@@ -1,0 +1,5 @@
+effect Fail = { throw: (String) => Never }
+let f(): Int32 @ Fail = perform throw("x") + 1
+let g(): Boolean @ Fail = perform throw("y") == 1
+echoln(show(f() handle { case throw(m) => 0 - 1 }))
+echoln(show(g() handle { case throw(m) => false }))

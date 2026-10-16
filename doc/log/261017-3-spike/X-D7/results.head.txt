@@ -1,0 +1,103 @@
+=== show_same.kel
+type class Show[A] { val show: (A) => String }
+--- --type-check
+! show_same.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+=== show_diff.kel
+type class Show[A] { val show: (A) => Boolean }
+--- --type-check
+! show_diff.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+=== add_arity.kel
+type class Add[A] { val add: (A) => A }
+--- --type-check
+! add_arity.kel:1:1: 型エラー: 標準環境の type class Add は再宣言できません
+exit 1
+=== eq_same.kel
+type class Eq[A] { val eq: (A, A) => Boolean }
+--- --type-check
+! eq_same.kel:1:1: 型エラー: 標準環境の type class Eq は再宣言できません
+exit 1
+=== ord_sub.kel
+type class Ord[A] { val lt: (A, A) => Boolean }
+--- --type-check
+! ord_sub.kel:1:1: 型エラー: 標準環境の type class Ord は再宣言できません
+exit 1
+=== mod_show.kel
+module M {
+  pub type class Show[A] { val show: (A) => Boolean }
+}
+newtype P = P(Int32)
+type instance M.Show[P] { let show(p) = true }
+let main() = println(M.show(P(1)))
+--- --type-check
+mod_show.kel:5:16: パースエラー(付近のトークンを確認してください)
+exit 2
+=== mod_show2.kel
+module M {
+  pub type class Show[A] { val show: (A) => Boolean }
+  newtype P = P(Int32)
+  type instance Show[P] { let show(p) = true }
+  pub let f(): Boolean = show(P(1))
+}
+let main() = println(M.f())
+--- --type-check
+! mod_show2.kel:2:3: 未実装: module 内の type class 宣言(M10): module M
+exit 4
+=== user_dup.kel
+type class C[A] { val c: (A) => Int32 }
+type class C[A] { val c: (A) => Boolean }
+--- --type-check
+! user_dup.kel:2:1: 型エラー: type class C が二重に宣言されています
+exit 1
+=== imp/lib.kel
+pub type class Show[A] { val show: (A) => Boolean }
+=== imp/main.kel
+from "./lib" import Show
+let main() = println(1)
+--- --type-check imp/main.kel
+! imp/lib.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+=== show_diff.kel --no-prelude
+! show_diff.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+=== myprelude.kel (--prelude に渡す)
+type class Show[A] { val show: (A) => Boolean }
+=== plain.kel
+let main() = println(show(1))
+--- --prelude myprelude.kel --type-check plain.kel
+! myprelude.kel:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 1
+=== --repl に type class Show[A] { val show: (A) => Boolean } を与える
+! <stdin>:1:1: 型エラー: 標準環境の type class Show は再宣言できません
+exit 0
+=== other_show.kel
+type class MyShow[A] { val show: (A) => Boolean }
+! other_show.kel:1:1: 型エラー: メソッド名 show は型クラス Show が既に宣言しています(非修飾名が衝突するため、v0 では同名メソッドを複数のクラスに宣言できません)
+exit 1
+=== methods.kel(組み込みのメソッドの型の確認)
+let a = Add.add
+let s = Sub.sub
+let m = Mul.mul
+let d = Div.div
+let r = Rem.rem
+let n = Neg.neg
+let e = Eq.eq
+let l = Ord.lt
+let le = Ord.le
+let g = Ord.gt
+let ge = Ord.ge
+let sh = Show.show
+a : [A: Add] (A, A) => A
+s : [A: Sub] (A, A) => A
+m : [A: Mul] (A, A) => A
+d : [A: Div] (A, A) => A
+r : [A: Rem] (A, A) => A
+n : [A: Neg] (A) => A
+e : [A: Eq] (A, A) => Boolean
+l : [A: Ord] (A, A) => Boolean
+le : [A: Ord] (A, A) => Boolean
+g : [A: Ord] (A, A) => Boolean
+ge : [A: Ord] (A, A) => Boolean
+sh : [A: Show] (A) => String
+exit 0

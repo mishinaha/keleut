@@ -1,0 +1,7 @@
+let g(k) = k(1)
+let f() = {
+  with x = g(1)(2)
+  x
+}
+
+let b = 2

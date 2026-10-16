@@ -1,0 +1,3 @@
+effect Fail = { fail: (String) => Never, warn: (String) => {} }
+let g(): Int32 = ({ perform Fail.warn("w"); perform Fail.fail("x") }) handle { case Fail.fail(s) => 0 case Fail.warn(s) => resume({}) }
+echoln(show(g()))

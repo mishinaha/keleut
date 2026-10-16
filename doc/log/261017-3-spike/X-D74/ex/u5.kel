@@ -1,0 +1,4 @@
+let f(): Unit = {
+  let k = fn(s) => run h { let t = Ref.new(0); let u = Cons(t, Cons(s, Nil)); () }
+  ()
+}

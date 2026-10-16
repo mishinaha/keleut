@@ -1,0 +1,15 @@
+File "test/visibility.t", line 1, characters 0-0:
+diff --git a/_build/default/test/visibility.t b/_build/default/test/visibility.t.corrected
+index 93bd5b0..9491cf8 100644
+--- a/_build/default/test/visibility.t
++++ b/_build/default/test/visibility.t.corrected
+@@ -424,7 +424,8 @@ Type エイリアスのコンパニオンが pub でも pub でなくても、
+ 
+   $ printf 'module M {\n  type E: EffectRow = {Print}\n  let f[E](x: Int32): Int32 @ {E} = x\n}\n' > visrow26.kel
+   $ diktor --type-check visrow26.kel
+-  M.f : (Int32) => Int32 @ {Print}
++  ! visrow26.kel:3:31: 型エラー: 行変数 E は extends の位置にのみ書けます
++  [1]
+ 
+ 同名クラスによる可視性の迂回は宣言時に拒否(M16 検証。修飾名 M.f が
+ クラス M のメソッド f と値環境で区別できないため):

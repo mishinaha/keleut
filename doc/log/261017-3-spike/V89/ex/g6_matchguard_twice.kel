@@ -1,0 +1,3 @@
+effect Test = { test: () => Boolean }
+let r = perform test() handle { case test() => 1 match { case _ if resume(false) => true case _ if resume(true) => true case _ => false } }
+echoln(show(r))

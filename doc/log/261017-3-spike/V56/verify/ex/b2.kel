@@ -1,0 +1,7 @@
+module M {
+  type T = Int32
+  let f(x: Int32): Int32 @ {T} = x
+}
+module N {
+  let g(x: Int32): Int32 @ T = x
+}

@@ -1,0 +1,8 @@
+type class Two[A] { val f: (A) => Int32
+  val pp[B: Show]: (A, B) => String }
+type instance Two[Int32] {
+  let rec f(n: Int32): Int32 = if n == 0i32 then 0i32 else f(n - 1i32)
+  and pp(a: Int32, b) = show(b)
+}
+echoln(show(f(3i32)))
+echoln(pp(1i32, "x"))

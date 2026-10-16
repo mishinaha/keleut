@@ -1,0 +1,5 @@
+module M {
+  pub newtype Ref[A, B] = MkR(A, B)
+  pub let f[A](r: Ref[A, Int32]): Int32 = 0
+}
+let g[A](r: M.Ref[A, Int32]): Int32 = 0

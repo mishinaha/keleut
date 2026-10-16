@@ -1,0 +1,14 @@
+File "test/invariants.t", line 1, characters 0-0:
+diff --git a/_build/default/test/invariants.t b/_build/default/test/invariants.t.corrected
+index 24dc694..8cca06c 100644
+--- a/_build/default/test/invariants.t
++++ b/_build/default/test/invariants.t.corrected
+@@ -368,7 +368,7 @@ r(1) を先に書くと、宣言の終わりの既定化で r が (Int32) => Int
+   > pub let h(f: F): Int32 = f(1)
+   > KEL
+   $ inv aliaspub_a.kel aliaspub_b.kel
+-  differ: exit 1 / 0
++  same: exit 1
+ 
+ §18.4 のインスタンスの対象の除外。対象は型構成子に限る(§12.2)ので、エイリアスに
+ 置き換えられない:

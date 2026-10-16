@@ -1,0 +1,6 @@
+newtype N = N(Int32)
+type instance Add[N] { let add(a: N, b: N): N = (a, b) match { case (N(x), N(y)) => N(x + y) } }
+type instance Show[N] { let show(a: N): String = a match { case N(x) => "N" + show(x) } }
+type instance Neg[N] { let neg(a: N): N = a match { case N(x) => N(-x) } }
+let main(): Unit @ Console = echoln(show(-(N(1) + N(2))))
+main()

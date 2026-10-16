@@ -1,0 +1,2 @@
+let f[A](x: A): Int32 = { let g = fn(y) => y match {}; 1 }
+echoln(show(f(3)))

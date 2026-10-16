@@ -1,0 +1,4 @@
+let rec f[A](x: A): Int32 = h(x)
+and g[B](y: B): Int32 = 0
+and h[C](z: C): Int32 = g(z)
+echoln(show(f(1i32)))

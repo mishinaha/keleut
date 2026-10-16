@@ -1,0 +1,9 @@
+type Pair[A] = (A, A)
+module M {
+  pub type IntPair = Pair[Int32]
+  pub let swap(p: IntPair): IntPair @ {} = p match { case (a, b) => (b, a) }
+}
+let p: M.IntPair = M.swap((1, 2))
+p match {
+  case (a, b) => echoln(show(a) + "," + show(b))
+}

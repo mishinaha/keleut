@@ -1,0 +1,2 @@
+newtype H = MkH(Cb[{Print}], Pa[{}])
+let f(h: H): Int32 = 0

@@ -1,0 +1,184 @@
+--- r1_alias.kel H
+caught x
+[exit 0]
+--- r1_alias.kel T
+caught x
+[exit 0]
+--- r1_alias.kel P
+caught x
+[exit 0]
+--- r1_alias.kel A
+caught x
+[exit 0]
+--- r2_tparam.kel H
+! r2_tparam.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r2_tparam.kel T
+! r2_tparam.kel:5:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r2_tparam.kel P
+! r2_tparam.kel:4:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: ς1 と Never)
+[exit 1]
+--- r2_tparam.kel A
+caught y
+[exit 0]
+--- r5_module.kel H
+! r5_module.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5_module.kel T
+! r5_module.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5_module.kel P
+! r5_module.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5_module.kel A
+! r5_module.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5b_module_ann.kel H
+! r5b_module_ann.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5b_module_ann.kel T
+! r5b_module_ann.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5b_module_ann.kel P
+! r5b_module_ann.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r5b_module_ann.kel A
+! r5b_module_ann.kel:3:3: 未実装: module 内の type class 宣言(M10): module M
+[exit 4]
+--- r7_nested.kel H
+a
+caught x
+[exit 0]
+--- r7_nested.kel T
+a
+caught x
+[exit 0]
+--- r7_nested.kel P
+a
+caught x
+[exit 0]
+--- r7_nested.kel A
+a
+caught x
+[exit 0]
+--- r9_list.kel H
+! r9_list.kel:3:1: 型エラー: インスタンス頭 List のカインドがクラス Size のパラメータと一致しません
+[exit 1]
+--- r9_list.kel T
+! r9_list.kel:3:1: 型エラー: インスタンス頭 List のカインドがクラス Size のパラメータと一致しません
+[exit 1]
+--- r9_list.kel P
+! r9_list.kel:3:1: 型エラー: インスタンス頭 List のカインドがクラス Size のパラメータと一致しません
+[exit 1]
+--- r9_list.kel A
+! r9_list.kel:3:1: 型エラー: インスタンス頭 List のカインドがクラス Size のパラメータと一致しません
+[exit 1]
+--- r10_import.kel H
+r10_import.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10_import.kel T
+r10_import.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10_import.kel P
+r10_import.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10_import.kel A
+r10_import.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10b_import_ann.kel H
+r10b_import_ann.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10b_import_ann.kel T
+r10b_import_ann.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10b_import_ann.kel P
+r10b_import_ann.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r10b_import_ann.kel A
+r10b_import_ann.kel:1:28: パースエラー(付近のトークンを確認してください)
+[exit 2]
+--- r11_clause.kel H
+caught neg
+[exit 0]
+--- r11_clause.kel T
+caught neg
+[exit 0]
+--- r11_clause.kel P
+caught neg
+[exit 0]
+--- r11_clause.kel A
+caught neg
+[exit 0]
+--- r10_import.kel H
+! r10_import.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10_import.kel T
+! r10_import.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10_import.kel P
+! r10_import.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10_import.kel A
+! r10_import.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10b_import_ann.kel H
+! r10b_import_ann.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10b_import_ann.kel T
+! r10b_import_ann.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10b_import_ann.kel P
+! r10b_import_ann.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- r10b_import_ann.kel A
+! r10b_import_ann.kel:1:1: import エラー: import 先が検索パスに見つかりません: lib/desc
+[exit 1]
+--- REPL H
+! <stdin>:4:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+g : () => String @ {Fail} = <fn>
+caught y
+[exit 0]
+--- REPL P
+f : () => String @ {Fail} = <fn>
+g : () => String @ {Fail} = <fn>
+caught y
+[exit 0]
+--- REPL A
+f : () => String @ {Fail} = <fn>
+g : () => String @ {Fail} = <fn>
+caught y
+[exit 0]
+--- r10_import.kel H
+! r10_import.kel:2:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r10_import.kel T
+! r10_import.kel:2:5: 型エラー: 曖昧な制約: Describe を満たす型が決まりません(結果の型に現れない型変数です。注釈で型を決めてください)
+[exit 1]
+--- r10_import.kel P
+caught x
+[exit 0]
+--- r10_import.kel A
+caught x
+[exit 0]
+--- r10b_import_ann.kel H
+caught x
+[exit 0]
+--- r10b_import_ann.kel T
+caught x
+[exit 0]
+--- r10b_import_ann.kel P
+caught x
+[exit 0]
+--- r10b_import_ann.kel A
+caught x
+[exit 0]
+--- r2b H
+caught y
+[exit 0]
+--- r2b P
+! r2b_tparam_ann.kel:4:5: 型エラー: 注釈された返り値型を満たしません(スコープ付きの型が一致しません: ς1 と Never)
+[exit 1]
+--- r2b A
+caught y
+[exit 0]

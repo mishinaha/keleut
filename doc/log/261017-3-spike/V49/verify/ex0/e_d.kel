@@ -1,0 +1,8 @@
+let escaped[E](): (Int32) => Int32 @ {Console extends E} = run h {
+  let slot = Ref.new(fn(x) => x)
+  let _: (Int32) => Int32 @ {Console} = Ref.get(slot)
+  let cell = Ref.new(41)
+  let _ = Ref.set(slot, fn(x) => Ref.get(cell) + x)
+  Ref.get(slot)
+}
+echoln(show(escaped()(1)))

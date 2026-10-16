@@ -1,0 +1,8 @@
+let mkshow[A: Show](x: A): () => String = fn() => show(x) + "!"
+let f = mkshow(1)
+let g = mkshow("a")
+echoln(f() + g())
+let rec twice[A: Show + Eq](x: A, y: A): String = (x == y) match { case true => show(x) case false => twice(y, y) + show(x) }
+echoln(twice(1, 2))
+let outer[A: Show](x: A): String = { let inner[B: Show](y: B): String = show(x) + show(y); inner(true) + inner(x) }
+echoln(outer(3))

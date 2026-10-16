@@ -1,0 +1,4 @@
+newtype N = N(Int32)
+let id[T](x: T): T = x
+type instance Show[N] { let show: (N) => String = id(fn(x: N) => "n") }
+echoln(show(N(1)))

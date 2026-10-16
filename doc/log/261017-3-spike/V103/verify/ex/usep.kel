@@ -1,0 +1,3 @@
+let id[T](x: T): T = x
+let g = id(Show.show)
+echoln(g(1) + g(true) + show(twice(-2)))

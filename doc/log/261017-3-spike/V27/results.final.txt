@@ -1,0 +1,291 @@
+== r1.kel
+-- HEAD
+f : (Callback[F[A]]) => Int32
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r1.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r2.kel
+-- HEAD
+mk : () => Holder[F, A]
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r2.kel:2:31: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+== r3.kel
+-- HEAD
+M.f : (Callback[F[A]]) => Int32 @ {}
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r3.kel:3:22: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r4.kel
+-- HEAD
+f : (Int32) => Int32 @ {Print extends F[A]}
+! r4.kel:3:63: 型エラー: 行型ではありません: _F[_A]
+[exit 1]
+-- P
+! r4.kel:2:32: 型エラー: 型エイリアス W の型引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r5.kel
+-- HEAD
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r5.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== r6.kel
+-- HEAD
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r6.kel:1:1: 型エラー: newtype Holder の型パラメータ F への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+== r7.kel
+-- HEAD
+go : (Callback[F[A]]) => {} @ {extends F[A]}
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r7.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r8.kel
+-- HEAD
+go : (Callback[F[A]]) => Int32
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r8.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== r9.kel
+-- HEAD
+f : (Callback[F[A]]) => Int32
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! r9.kel:2:17: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== s10.kel
+-- HEAD
+[exit 0]
+-- P
+! s10.kel:2:35: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+== s11.kel
+-- HEAD
+f : (Callback[F[A]]) => Int32
+main : () => {} @ {Console}
+_ : {}
+[exit 0]
+-- P
+! s11.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== s1.kel
+-- HEAD
+[exit 0]
+-- P
+! s1.kel:1:20: 型エラー: extends の右の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+== s2.kel
+-- HEAD
+f : ({x: Int32 extends F[Int32]}) => Int32
+[exit 0]
+-- P
+! s2.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== s3.kel
+-- HEAD
+[exit 0]
+-- P
+! s3.kel:2:20: 型エラー: 型構成子 Box の第1引数のカインドが一致しません: Row を期待しましたが F[Int32] は行になりません
+[exit 1]
+== s4.kel
+-- HEAD
+[exit 0]
+-- P
+! s4.kel:1:1: 型エラー: newtype H の型パラメータ G への適用が行として使われています(行を返す型構成子はありません)
+[exit 1]
+== s5.kel
+-- HEAD
+f : ({x: Int32 extends F[Int32]}) => Int32
+! s5.kel:2:65: 型エラー: 型が一致しません: {} と _F[Int32]
+[exit 1]
+-- P
+! s5.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== s6.kel
+-- HEAD
+[exit 0]
+-- P
+! s6.kel:3:23: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが F[A] は行になりません
+[exit 1]
+== s7.kel
+-- HEAD
+f : (Callback[F[A]]) => Int32
+[exit 0]
+-- P
+! s7.kel:2:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は行になりません
+[exit 1]
+== s8.kel
+-- HEAD
+! s8.kel:3:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+-- P
+! s8.kel:3:16: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[ς2] は Type です
+[exit 1]
+== s9.kel
+-- HEAD
+! s9.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+-- P
+! s9.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+== t10.kel
+-- HEAD
+[exit 0]
+-- P
+! t10.kel:1:20: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+== t1.kel
+-- HEAD
+f : ({x: Int32 extends F[Int32]}) => Int32 @ {extends F[Int32]}
+[exit 0]
+-- P
+! t1.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== t2.kel
+-- HEAD
+f : ({x: Int32 extends F[Int32]}, Callback[F[Int32]]) => Int32
+[exit 0]
+-- P
+! t2.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== t3.kel
+-- HEAD
+f : ({x: Int32 extends F[Int32]}) => Int32 @ {Print extends F[Int32]}
+[exit 0]
+-- P
+! t3.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== t4.kel
+-- HEAD
+f : (#A(Int32) | F[Int32]) => Int32
+[exit 0]
+-- P
+! t4.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== t5.kel
+-- HEAD
+f : (Callback[F[Int32]], {x: Int32 extends F[Int32]}) => Int32
+[exit 0]
+-- P
+! t5.kel:2:13: 型エラー: 型構成子 Callback の第1引数のカインドが一致しません: Row を期待しましたが ς1[Int32] は行になりません
+[exit 1]
+== t6.kel
+-- HEAD
+[exit 0]
+-- P
+! t6.kel:2:20: 型エラー: extends の右の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+== t7.kel
+-- HEAD
+f : ({x: Int32 extends F[Int32]}, Callback[F[Int32]]) => Int32
+! t7.kel:3:35: 型エラー: 型が一致しません: {} と _F[Int32]
+[exit 1]
+-- P
+! t7.kel:2:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== t8.kel
+-- HEAD
+f : (#A(Int32) | F[Int32]) => Int32
+! t8.kel:2:32: 型エラー: 型が一致しません: {} と _F[Int32]
+[exit 1]
+-- P
+! t8.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== t9.kel
+-- HEAD
+! t9.kel:2:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+-- P
+! t9.kel:2:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+== u1.kel
+-- HEAD
+! u1.kel:1:44: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+-- P
+! u1.kel:1:44: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== u2.kel
+-- HEAD
+! u2.kel:1:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+-- P
+! u2.kel:1:29: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== u3.kel
+-- HEAD
+! u3.kel:1:24: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32] :: Type
+[exit 1]
+-- P
+! u3.kel:1:24: 型エラー: エフェクト位置の型のカインドが Row ではありません: ς1[Int32] :: Type
+[exit 1]
+== u4.kel
+-- HEAD
+! u4.kel:1:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+-- P
+! u4.kel:1:33: 型エラー: エフェクト位置の型のカインドが Row ではありません: F[Int32]
+[exit 1]
+== u5.kel
+-- HEAD
+[exit 0]
+-- P
+! u5.kel:1:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+== u6.kel
+-- HEAD
+! u6.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+-- P
+! u6.kel:2:36: 型エラー: 型構成子ではない型に型引数が適用されています
+[exit 1]
+== u7.kel
+-- HEAD
+! u7.kel:3:65: 型エラー: 型が一致しません: {} と _F[Int32]
+[exit 1]
+-- P
+! u7.kel:1:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+== u8.kel
+-- HEAD
+[exit 0]
+-- P
+! u8.kel:1:13: 型エラー: extends の右は行かレコード型でなければなりません
+[exit 1]
+== u9.kel
+-- HEAD
+0
+[exit 0]
+-- P
+! u9.kel:1:13: 型エラー: ヴァリアント和の末尾の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]
+== u10.kel
+-- HEAD
+! u10.kel:2:46: 型エラー: スコープ付きの型が一致しません: ς1 と _F[Int32]
+[exit 1]
+-- P
+! u10.kel:1:13: 型エラー: extends の右の型のカインドが Row ではありません: ς1[Int32]
+[exit 1]

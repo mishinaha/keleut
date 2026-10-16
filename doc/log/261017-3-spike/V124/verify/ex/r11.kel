@@ -1,0 +1,6 @@
+from "./imp/lib" import { C, A, D }
+let f(g: C): Unit = g(1)
+let v: D[{}] = ({}, 1)
+let w: A[{}] = fn(x) => ()
+f(w)
+echoln("ok")

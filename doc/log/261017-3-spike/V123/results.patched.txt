@@ -1,0 +1,45 @@
+$ diktor badesc.kel
+badesc.kel:1:11: 字句エラー: 不正なエスケープです
+exit: 2
+$ diktor surr.kel
+surr.kel:1:15: 字句エラー: Unicode エスケープの値がサロゲートか、U+10FFFF を超えています
+exit: 2
+$ diktor short.kel
+short.kel:1:14: 字句エラー: Unicode エスケープの 16 進の桁が足りません
+exit: 2
+$ diktor shortU.kel
+shortU.kel:1:16: 字句エラー: Unicode エスケープの 16 進の桁が足りません
+exit: 2
+$ diktor esceof.kel
+esceof.kel:1:11: 字句エラー: 不正なエスケープです
+exit: 2
+$ diktor unterm.kel
+unterm.kel:1:13: 字句エラー: 文字列リテラルが閉じていません
+exit: 2
+$ diktor untermc.kel
+untermc.kel:1:17: 字句エラー: ブロックコメントが閉じていません
+exit: 2
+$ diktor stray.kel
+stray.kel:2:1: 字句エラー: #! はファイルの先頭にだけ書けます
+exit: 2
+$ diktor char.kel
+char.kel:1:11: 字句エラー: 予期しない文字です: ¤
+exit: 2
+$ diktor bom.kel
+bom.kel:1:11: 字句エラー: 予期しない文字です: U+FEFF
+exit: 2
+## repl: unterminated string continues
+a : String = "x\ny"
+x
+y
+exit: 0
+## repl: bad escape
+<stdin>:1:11: 字句エラー: 不正なエスケープです
+exit: 0
+## repl: unterminated comment continues
+ok
+exit: 0
+## repl: stray
+a : Int32 = 1
+ok
+exit: 0

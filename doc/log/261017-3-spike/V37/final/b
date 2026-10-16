@@ -1,0 +1,4 @@
+strs : Int32
+join : (Int32) => Int32
+fwd : String
+_ : {}

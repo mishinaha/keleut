@@ -1,0 +1,9 @@
+type class Pp[A] {
+  val pp[B: Show + Eq]: (A) => String
+}
+type instance Pp[Int32] {
+  let pp(x) = "i" + show(x)
+}
+let f[A: Pp](x: A): String = pp(x)
+echoln(f(3i32))
+echoln(Pp.pp(4i32))

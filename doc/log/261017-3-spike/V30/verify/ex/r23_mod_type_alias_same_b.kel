@@ -1,0 +1,5 @@
+effect Log = { log: (String) => Unit }
+module M {
+  type Log = Int32
+  pub newtype N = N(() => Unit @ {Log})
+}

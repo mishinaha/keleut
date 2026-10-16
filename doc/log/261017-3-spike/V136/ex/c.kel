@@ -1,0 +1,2 @@
+let describe(n: Never): String = n match {}
+let d2: (Never) => String = fn(n) => n match {}

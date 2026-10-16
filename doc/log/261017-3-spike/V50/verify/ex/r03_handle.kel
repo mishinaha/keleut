@@ -1,0 +1,6 @@
+type W: EffectRow = {Print}
+let f[W](u: Unit): Unit @ {Console, W} = { println("a"); println("b") }
+let main(u: Unit): Unit @ {Console} = f(()) handle {
+  case print(m) => resume(echo("[" + m + "]"))
+}
+main(())

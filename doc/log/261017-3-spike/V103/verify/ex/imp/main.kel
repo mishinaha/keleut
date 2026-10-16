@@ -1,0 +1,6 @@
+from "lib" import { idl, len, bump }
+let g = idl(Array.length)
+let xs: Array[Int32] = run h { MutableArray.freeze(MutableArray.new(3, 0)) }
+let n = run h { let r = Ref.new(1); bump(r); bump(r); Ref.get(r) }
+let p(): Unit @ Print = println(show(len(xs) + n + g(xs)))
+with_stdout(fn() => p())

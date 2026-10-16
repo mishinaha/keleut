@@ -1,0 +1,2 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+let f[F[_], E](c: Callback[F[E]]): Int32 = 0

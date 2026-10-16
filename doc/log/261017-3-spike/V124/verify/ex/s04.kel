@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+effect Log = { log: (String) => Unit }
+type H[E] = () => Int32 @ {Ask, Log extends E}
+let go(h: H[{}]): Int32 = (h() handle { case ask() => resume(5) }) handle { case log(s) => { echoln(s); resume(()) } }
+echoln(show(go(fn() => { perform log("x"); perform ask() + 1 })))

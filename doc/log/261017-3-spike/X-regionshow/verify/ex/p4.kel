@@ -1,0 +1,2 @@
+newtype h = H(Int32)
+let f[k](r: Ref[k, h]): h @ Heap[k] = Ref.get(r)

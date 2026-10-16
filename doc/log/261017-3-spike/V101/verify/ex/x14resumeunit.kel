@@ -1,0 +1,2 @@
+effect Get = { get: () => Unit }
+let use(): Unit = { perform get() } handle { case get() => resume(1i32) }

@@ -1,0 +1,111 @@
+diff a/lib/elab.ml b/lib/elab.ml
+--- a/lib/elab.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/elab.ml	2026-10-17 04:31:06.456678618 +0900
+@@ -3137,7 +3137,7 @@
+   (* 網羅性の遅延キューは generalize の直前に drain する *)
+   match snd b.T.lb_name with
+   | T.PVar x ->
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:level ~tys:[ fn_ty ] ~gen ());
+       if gen then (
+         (* 一般化の直前に曖昧性を調べる。generalize より前でなければならない。
+            後では Unbound が Generic に変わっていて判定できない *)
+@@ -3150,7 +3150,7 @@
+       finish_binding_dicts node ~gen ~rigids hmark fn_ty;
+       add_local env x fn_ty
+   | T.PWildcard ->
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:level ~tys:[ fn_ty ] ~gen ());
+       if gen then (
+         Unify.check_ambiguity ~all:false ~level [ fn_ty ];
+         Unify.generalize level fn_ty)
+@@ -3171,7 +3171,7 @@
+       let seen = ref [] in
+       let env' = elab_pat env level seen fn_ty b.T.lb_name in
+       Exhaust.queue [ (b.T.lb_name, false) ] fn_ty;
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:level ~tys:[ fn_ty ] ~gen:false ());
+       release_rigids rigids;
+       finish_binding_dicts node ~gen:false ~rigids hmark fn_ty;
+       env'
+@@ -3416,7 +3416,7 @@
+     (fun (params, param_tys) ->
+       List.iter2 (fun p t -> if not (irrefutable_pat p) then Exhaust.queue [ (p, false) ] t) params param_tys)
+     (List.rev !rec_arg_queue);
+-  List.iter warn (Exhaust.drain ());
++  List.iter warn (Exhaust.drain ~level:level ~tys:(List.map snd names) ());
+   (* 群として一括で曖昧性を調べる。相互再帰の制約は、群のどれかの型から
+      到達できればよい *)
+   Unify.check_ambiguity ~all:false ~level (List.map snd names);
+@@ -5007,7 +5007,7 @@
+           let mark = Unify.class_mark () in
+           let value = is_value e in
+           let t = elab_exp env (if value then 1 else 0) eff0 e in
+-          List.iter warn (Exhaust.drain ());
++          List.iter warn (Exhaust.drain ~level:0 ~tys:[ t ] ());
+           if value && has_constrained_unbound t then (
+             Unify.check_ambiguity ~all:false ~level:0 [ t ];
+             Unify.generalize 0 t;
+@@ -5587,7 +5587,7 @@
+       let eff0 = toplevel_eff ~extra:toplevel_extra () in
+       let mark = Unify.class_mark () in
+       let t = elab_exp env 1 eff0 e in
+-      List.iter warn (Exhaust.drain ());
++      List.iter warn (Exhaust.drain ~level:0 ~tys:[ t ] ());
+       if is_value e then (
+         Unify.check_ambiguity ~all:false ~level:0 [ t ];
+         Unify.generalize 0 t)
+diff a/lib/exhaust.ml b/lib/exhaust.ml
+--- a/lib/exhaust.ml	2026-10-17 03:33:52.000000000 +0900
++++ b/lib/exhaust.ml	2026-10-17 04:32:22.454403166 +0900
+@@ -885,6 +885,19 @@
+    積んだ数の二乗の時間がかかる(§10.13) *)
+ let queue rows ty = pending := { qe_rows = rows; qe_ty = ty } :: !pending
+ 
++(* 節のない match の照合対象の型が、制約の付かない未定の型変数であるかどうか。
++   そうなら、その変数のレベルを返す *)
++let empty_open_scrutinee { qe_rows; qe_ty } =
++  if qe_rows <> [] then None
++  else match repr qe_ty with TVar { contents = Unbound i } when i.vcls = [] -> Some i.vlevel | _ -> None
++
++(* 残った変数は Never に決める(§10.13)。カインドが合わなければ決めずに、
++   網羅性の検査に任せる *)
++let settle_empty e =
++  match empty_open_scrutinee e, repr e.qe_ty with
++  | Some _, (TVar _ as v) -> ( try Unify.unify v t_never with Type_error _ -> ())
++  | _ -> ()
++
+ let check_entry { qe_rows; qe_ty } =
+   let out = ref [] in
+   let all = List.map (fun (p, guarded) -> ([ convert p ], guarded)) qe_rows in
+@@ -915,9 +928,28 @@
+     all;
+   !out
+ 
+-let drain () =
++let rec mentions_var r t =
++  match repr t with
++  | TVar v -> v == r
++  | TCon (_, args) -> List.exists (mentions_var r) args
++  | TApp (f, a) -> mentions_var r f || mentions_var r a
++  | TArrow (a, ret, e) -> mentions_var r a || mentions_var r ret || mentions_var r e
++  | TRecord row | TVariant row -> mentions_var r row
++  | TRowEmpty -> false
++  | TRowExtend (_, f, rest) -> mentions_var r f || mentions_var r rest
++
++let drain ~level ?(tys = []) ?(gen = true) () =
+   let entries = List.rev !pending in
+   pending := [];
+-  List.concat_map check_entry entries
++  let visible e = match repr e.qe_ty with TVar r -> List.exists (mentions_var r) tys | _ -> false in
++  let defer e =
++    match empty_open_scrutinee e with
++    | None -> false
++    | Some l -> level > 0 && (l <= level || (visible e && not gen))
++  in
++  let later, now = List.partition defer entries in
++  pending := List.rev later;
++  List.iter (fun e -> match empty_open_scrutinee e with Some l when l > level && not (visible e) -> settle_empty e | _ -> ()) now;
++  List.concat_map check_entry now
+ 
+ let reset () = pending := []

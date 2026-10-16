@@ -1,0 +1,4 @@
+newtype J = MkJ(() => Unit @ Wr[{}])
+type Wr[E]: EffectRow = {Print extends E}
+let j = MkJ(fn() => println("wr"))
+with_stdout(fn() => j match { case MkJ(f) => f() })

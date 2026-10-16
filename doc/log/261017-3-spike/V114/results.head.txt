@@ -1,0 +1,163 @@
+== sfx_i8.kel 
+| let x = 1i8
+! sfx_i8.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_i8.kel --type-check
+| let x = 1i8
+! sfx_i8.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_u32.kel 
+| let x = 1u32
+! sfx_u32.kel:1:9: 未実装: 数値接尾辞 1u32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_u32.kel --type-check
+| let x = 1u32
+! sfx_u32.kel:1:9: 未実装: 数値接尾辞 1u32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_f32.kel 
+| let x = 1.5f32
+! sfx_f32.kel:1:9: 未実装: 数値接尾辞 1.5f32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_f32.kel --type-check
+| let x = 1.5f32
+! sfx_f32.kel:1:9: 未実装: 数値接尾辞 1.5f32(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_big.kel 
+| let x = 1i99999999999999999999999
+! sfx_big.kel:1:9: 未実装: 数値接尾辞 1i99999999999999999999999(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_big.kel --type-check
+| let x = 1i99999999999999999999999
+! sfx_big.kel:1:9: 未実装: 数値接尾辞 1i99999999999999999999999(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_zero.kel 
+| let x = 1i032
+! sfx_zero.kel:1:9: 未実装: 数値接尾辞 1i032(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_zero.kel --type-check
+| let x = 1i032
+! sfx_zero.kel:1:9: 未実装: 数値接尾辞 1i032(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_hex.kel 
+| let x = 0xffu8
+! sfx_hex.kel:1:9: 未実装: 数値接尾辞 0xffu8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_hex.kel --type-check
+| let x = 0xffu8
+! sfx_hex.kel:1:9: 未実装: 数値接尾辞 0xffu8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_floatint.kel 
+| let x = 1.5i8
+! sfx_floatint.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
+[exit 1]
+== sfx_floatint.kel --type-check
+| let x = 1.5i8
+! sfx_floatint.kel:1:9: 型エラー: 数値リテラル 1.5i8 は浮動小数の本体に整数接尾辞が付いています
+[exit 1]
+== sfx_pat.kel 
+| let f(n: Int32): Int32 = n match { 1i8 => 0, _ => 1 }
+sfx_pat.kel:1:36: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== sfx_pat.kel --type-check
+| let f(n: Int32): Int32 = n match { 1i8 => 0, _ => 1 }
+sfx_pat.kel:1:36: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== sfx_late.kel 
+| println("before")
+| let x = 1u8
+! sfx_late.kel:1:1: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+== sfx_late.kel --type-check
+| println("before")
+| let x = 1u8
+! sfx_late.kel:1:1: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+== sfx_after_err.kel 
+| let y: String = 1
+| let x = 1i8
+! sfx_after_err.kel:1:5: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[exit 1]
+== sfx_after_err.kel --type-check
+| let y: String = 1
+| let x = 1i8
+! sfx_after_err.kel:1:5: 型エラー: 注釈された型を満たしません(String は Integral のインスタンスではありません)
+[exit 1]
+== ty_int8.kel 
+| let f(x: Int8): Int8 = x
+! ty_int8.kel:1:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== ty_int8.kel --type-check
+| let f(x: Int8): Int8 = x
+! ty_int8.kel:1:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== sfx_ok.kel 
+| let x = 1i64
+| println(x)
+! sfx_ok.kel:2:1: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+== sfx_ok.kel --type-check
+| let x = 1i64
+| println(x)
+x : Int64
+! sfx_ok.kel:2:1: 型エラー: ラベル Print がありません(行は閉じています)
+[exit 1]
+== --repl < repl_in.txt
+! <stdin>:1:1: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+! <stdin>:2:9: 未実装: 数値接尾辞 1i16(v0 は i32/i64/f64 のみ)
+_ : Int32 = 2
+[exit 0]
+== sfx_pat.kel
+| let f(n: Int32): Int32 = n match { case 1i8 => 0, case _ => 1 }
+sfx_pat.kel:1:49: パースエラー(付近のトークンを確認してください)
+[exit 2]
+== sfx_late.kel
+| echoln("before")
+| let x = 1u8
+! sfx_late.kel:2:9: 未実装: 数値接尾辞 1u8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_ok.kel
+| let x = 1i64
+| echoln(show(x))
+1
+[exit 0]
+== ty_unknown.kel
+| let f(x: Foo): Foo = x
+! ty_unknown.kel:1:10: 型エラー: 未知の型: Foo
+[exit 1]
+== ty_int8_user.kel
+| newtype Int8 = Int8(Int32)
+| let f(x: Int8): Int8 = x
+| echoln("ok")
+! ty_int8_user.kel:2:10: 未実装: 数値型 Int8(v0 は Int32/Int64/Float64 のみ)
+[exit 4]
+== sfx_two.kel
+| let a = 1i8
+| let b = 1u16
+! sfx_two.kel:1:9: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_pat.kel
+| let f(n: Int32): Int32 = n match {
+|   case 1i8 => 0
+|   case _ => 1
+| }
+! sfx_pat.kel:2:8: 未実装: 数値接尾辞 1i8(v0 は i32/i64/f64 のみ)
+[exit 4]
+== sfx_pat_ok.kel
+| let f(n: Int64): Int32 = n match {
+|   case 1i64 => 0
+|   case _ => 1
+| }
+| echoln(show(f(1i64)))
+0
+[exit 0]
+== ty_int9_user.kel
+| newtype Int9 = Int9(Int32)
+| let f(x: Int9): Int9 = x
+| echoln("ok")
+ok
+[exit 0]
+== ty_int8_decl.kel
+| newtype Int8 = MkInt8(Int32)
+| echoln("ok")
+ok
+[exit 0]

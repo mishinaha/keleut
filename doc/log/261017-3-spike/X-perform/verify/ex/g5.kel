@@ -1,0 +1,12 @@
+effect Reg = { reg: ({name: String, act: () => Unit}) => Unit }
+let pure_act(): Unit = {}
+let mkact(): () => Unit = fn() => {}
+let go[E](): Unit @ {Console extends E} = {
+  perform reg({name = "p", act = pure_act})
+  perform reg({name = "q", act = mkact()})
+  perform reg({name = "r", act = fn() => {}})
+} handle {
+  case reg(r) => { r.act(); echoln(r.name); resume() }
+  case return(x) => x
+}
+go()
