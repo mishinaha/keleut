@@ -1,7 +1,7 @@
 # スパイク報告: Node v26.9.0 の WasmGC 対応と wasm-encoder / wasmparser
 
 調べたのは 2026-10-24 である。
-スパイクのコード、手順、出力の全文は `/home/sumito3478/repo/keleut/doc/log/261024-1-spike/wasm/README.md` にある。
+スパイクのコード、手順、出力の全文は `doc/log/261024-1-spike/wasm/README.md` にある。
 作ったファイルは `doc/log/261024-1-spike/wasm/` の下だけである。追跡済みのファイルは変えておらず、コミットもしていない。
 `Cargo.lock` は版を固定するために残した(`.gitignore` で除くのは `target/`、`node_modules/`、`out/`)。
 

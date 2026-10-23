@@ -59,7 +59,7 @@ Node 26.9.0 の V8 が、WasmGC の後段に要る機能をどこまで受け付
 - `design-probe/`: native 案の作成で、`clang --target=wasm32 -nostdlib` と `wasm-ld --no-entry` で C の関数を wasm にできることを確かめた例(`a.c` から `a.o` と 295 バイトの `a.wasm`)。
   計画の E14 である。
 - `wk.mjs`: 計画の E12 の再測定で、`wasm/depth.mjs` を `Worker` の `resourceLimits: {stackSizeMb: 1024}` で走らせたもの。
-  `depth.mjs` を絶対パスの URL で指しているので、別の場所で使うときは書き換える。
+  `depth.mjs` は `import.meta.url` からの相対の URL で指す。
 
 ### design/: 設計案と審査
 

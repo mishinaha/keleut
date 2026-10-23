@@ -1,6 +1,6 @@
 # 下調べ: LLVM ORCv2 を Rust から(spike-llvm)
 
-試作の所在: /home/sumito3478/repo/keleut/doc/log/261024-1-spike/llvm(Cargo.toml、src/main.rs 571 行、README.md、inkwell-check/、gc/、sig/)。以下は同じ README の内容に、計画への示唆を足したものである。
+試作の所在: doc/log/261024-1-spike/llvm(Cargo.toml、src/main.rs 571 行、README.md、inkwell-check/、gc/、sig/)。以下は同じ README の内容に、計画への示唆を足したものである。
 
 
 RustKeleut の LLVM 後段の前提を確かめるための小さな試作である。
