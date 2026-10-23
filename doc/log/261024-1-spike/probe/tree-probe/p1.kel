@@ -1,0 +1,24 @@
+let r = {x = 1, y = 2}
+let r2 = {x = "s" extends r}
+let a = r2.x
+let b = (r2 \ x).x
+let e1 = {p = 1, q = 2} == {q = 2, p = 1}
+let v: #Foo(Int32) | #Bar = #Foo(3)
+let e2 = v == #Foo(3)
+let total = run h {
+  let c = Ref.new(0)
+  Ref.set(c, Ref.get(c) + 41)
+  Ref.get(c) + 1
+}
+extern "C" let sqrt(x: Float64): Float64 @ {}
+let s = sqrt(9.0)
+let twice[A: Add](x: A): A @ {} = x + x
+let t = (twice(2), twice(2.5), twice(3i64))
+let main = with_stdout(fn() => {
+  println(show(a))
+  println(show(b))
+  println(show(e1))
+  println(show(e2))
+  println(show(total))
+  println(show(s))
+})

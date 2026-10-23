@@ -1,0 +1,10 @@
+effect Fail = { throw: (String) => Never }
+effect Log = { log: (String) => Unit }
+let r = (({ perform throw("outer"); 0 } handle {
+      case log(s) => resume()
+      case cancel => { echoln("c1 start"); perform throw("from cancel"); echoln("no") }
+    }) handle {
+      case throw(m) => { echoln("body " + m); 7 }
+      case cancel => echoln("c2")
+    })
+echoln(show(r))

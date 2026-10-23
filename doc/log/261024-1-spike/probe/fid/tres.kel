@@ -1,0 +1,6 @@
+effect Tick = { tick: () => Unit }
+let rec go(n: Int32): Unit @ Tick = if n == 0 then () else { perform tick(); go(n - 1) }
+let c = run h { let r = Ref.new(0)
+  go(5000000) handle { case tick() => { Ref.set(r, Ref.get(r) + 1); resume() } }
+  Ref.get(r) }
+echoln(show(c))

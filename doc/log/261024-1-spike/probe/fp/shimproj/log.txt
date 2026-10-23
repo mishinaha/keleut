@@ -1,0 +1,102 @@
+
+--type-check --no-prelude basics.kel
+--dump-tokens asi.kel
+
+--dump-tokens cont.kel
+--type-check --no-prelude rows.kel
+t.kel
+--dump-tokens suppress.kel
+--type-check --no-prelude ops.kel
+cr.kel
+--dump-tokens brace.kel
+--type-check --no-prelude ml1.kel
+--dump-tokens block.kel
+--type-check --no-prelude ml1b.kel
+u8.kel
+--dump-tokens cls.kel
+--type-check --no-prelude ml8.kel
+--dump-tokens comment.kel
+--type-check --no-prelude ml5.kel
+--dump-tokens num.kel
+--type-check --no-prelude ml5b.kel
+--dump-tokens misc.kel
+--type-check --no-prelude ml5c.kel
+--dump-tokens err.kel
+--type-check --no-prelude rec.kel
+--dump-tokens bom.kel
+--type-check --no-prelude fwdbad.kel
+--dump-tokens bom2.kel
+--type-check --no-prelude eff.kel
+--dump-tokens bomstr.kel
+--dump-tokens bomcom.kel
+--type-check --no-prelude eq.kel
+--dump-tokens c0.kel
+--type-check --no-prelude eqbad.kel
+--dump-tokens del.kel
+--type-check --no-prelude numbad.kel
+--dump-tokens nel.kel
+--type-check --no-prelude numbad2.kel
+--dump-tokens nbsp.kel
+--type-check --no-prelude aliasbad.kel
+--dump-tokens shy.kel
+--type-check --no-prelude aliasbad2.kel
+--dump-tokens zwsp.kel
+--dump-tokens rlo.kel
+--type-check --no-prelude mix.kel
+--dump-tokens wj.kel
+--type-check d1.kel
+--dump-tokens crlf.kel
+--type-check d5.kel
+--type-check cronly.kel
+--type-check d7.kel
+crstr.kel
+--type-check d8.kel
+--dump-tokens esc.kel
+rawnl.kel
+--type-check dup1.kel dup1.kel
+--dump-tokens surr.kel
+--type-check ns1.kel
+--dump-tokens oor.kel
+--type-check ns2.kel
+--dump-tokens badesc.kel
+--type-check dot5.kel
+--type-check ns3.kel
+--type-check ns4.kel
+--dump-tokens projnum.kel
+--type-check glued1.kel
+--type-check rd1.kel
+--type-check glued2.kel
+--type-check rd2.kel
+--type-check glued3.kel
+--type-check effshort.kel
+--type-check glued4.kel
+--type-check --no-prelude methods.kel
+--type-check projnum.kel
+--type-check rigids.kel
+--type-check gluedpos.kel
+--type-check --no-prelude rowname.kel
+--type-check gluedpat.kel
+--type-check --no-prelude rigidcls.kel
+--type-check gluedneg.kel
+--type-check --no-prelude tapp.kel
+--repl
+--type-check --no-prelude resugar.kel
+--type-check --no-prelude resugar2.kel
+--type-check gluedsp.kel
+--type-check gluedtext.kel
+--type-check gluedkw.kel
+--type-check gluedkw2.kel
+--type-check gluedelse.kel
+--dump-tokens effbrace.kel
+--type-check --no-prelude effbrace.kel
+--dump-tokens effnl.kel
+--type-check --no-prelude effnl.kel
+--type-check effield.kel
+--dump-tokens sample/sample.kel
+--dump-tokens sample/sample.kel
+--dump-tokens dotasi.kel
+--dump-tokens manycomments.kel
+--dump-tokens big.kel
+--dump-tokens guardfn.kel
+--type-check guardfn.kel
+--dump-tokens brokenfn.kel

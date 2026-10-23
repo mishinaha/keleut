@@ -1,0 +1,11 @@
+[package]
+name = "orc-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+llvm-sys = { version = "=221.1.1", features = ["prefer-dynamic"] }
+
+[profile.dev]
+opt-level = 1

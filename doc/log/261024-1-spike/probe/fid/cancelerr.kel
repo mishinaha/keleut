@@ -1,0 +1,10 @@
+effect Log = { log: (String) => Unit }
+effect Fail = { throw: (String) => Never }
+let r = ((({ 1 / 0 } handle {
+      case log(s) => resume()
+      case cancel => { echoln("c1 start"); let z: Int32 = 1 / 0; echoln("never") }
+    }) handle {
+      case log(s) => resume()
+      case cancel => echoln("c2")
+    }))
+echoln("unreached")

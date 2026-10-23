@@ -1,0 +1,13 @@
+effect Log = { log: (String) => Unit }
+effect Log2 = { log2: (String) => Unit }
+echoln("start")
+let r = (({ perform log("a"); 1 / 0 } handle {
+      case log2(s) => resume()
+      case cancel => echoln("c1")
+    }) handle {
+      case log(s) => { echoln("clause"); resume() }
+      case cancel => echoln("c2")
+    }) handle {
+      case log2(s) => resume()
+      case cancel => echoln("c3")
+    }

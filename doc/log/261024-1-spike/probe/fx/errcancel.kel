@@ -1,0 +1,9 @@
+effect A = { a: () => Int32 }
+effect B = { b: () => Int32 }
+let r = ((perform a() + perform b() + 1 / 0) handle {
+  case a() => resume(1)
+  case cancel => { echoln("cancel A"); __panic("in cancel A") }
+}) handle {
+  case b() => resume(2)
+  case cancel => echoln("cancel B")
+}

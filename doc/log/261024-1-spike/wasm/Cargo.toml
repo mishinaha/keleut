@@ -1,0 +1,9 @@
+[package]
+name = "wasmspike"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wasm-encoder = "0.262.0"
+wasmparser = "0.262.0"
+wat = "1.262.0"

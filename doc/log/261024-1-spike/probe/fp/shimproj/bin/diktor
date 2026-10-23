@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "$@" >> "$SHIM_LOG"
+exec /home/sumito3478/repo/keleut/diktor/_build/default/bin/main.exe "$@"

@@ -1,0 +1,2 @@
+let f = Some
+let g = f(1)

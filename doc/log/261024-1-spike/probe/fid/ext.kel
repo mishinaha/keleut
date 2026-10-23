@@ -1,0 +1,4 @@
+extern "C" let foo(x: Float64): Float64
+extern "C" let sqrt(x: Float64): Float64
+echoln(show(sqrt(2.0)))
+let y = foo(1.0)

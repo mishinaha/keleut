@@ -1,0 +1,3 @@
+let p = {f = fn(x) => show(x), g = ???}
+echoln("declared")
+echoln(p.f(1))

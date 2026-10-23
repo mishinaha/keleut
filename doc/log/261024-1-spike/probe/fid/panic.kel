@@ -1,0 +1,2 @@
+echoln("p")
+let x: Int32 = __panic("boom")

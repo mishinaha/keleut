@@ -1,0 +1,27 @@
+(module
+  ;; byte string = (array (mut i8)); printing via three strategies
+  (type $bytes (array (mut i8)))
+  (import "env" "write_bytes" (func $write_bytes (param (ref $bytes))))
+  (import "env" "write_mem" (func $write_mem (param i32 i32)))
+  (memory (export "mem") 1)
+  (data $hello "Hello, WasmGC bytes \e3\81\82\n")
+  (func $make (result (ref $bytes))
+    (array.new_data $bytes $hello (i32.const 0) (i32.const 24)))
+  ;; accessors exported to JS (JS cannot index GC arrays directly)
+  (func (export "bytes_len") (param $s (ref $bytes)) (result i32) (array.len (local.get $s)))
+  (func (export "bytes_get") (param $s (ref $bytes)) (param $i i32) (result i32)
+    (array.get_u $bytes (local.get $s) (local.get $i)))
+  ;; strategy A: pass the GC array to JS, JS reads it via exported accessors
+  (func (export "print_a") (call $write_bytes (call $make)))
+  ;; strategy B: copy into linear memory, pass (ptr,len)
+  (func (export "print_b")
+    (local $s (ref $bytes)) (local $i i32) (local $n i32)
+    (local.set $s (call $make))
+    (local.set $n (array.len (local.get $s)))
+    (block $done (loop $l
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (i32.store8 (i32.add (i32.const 1024) (local.get $i)) (array.get_u $bytes (local.get $s) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $l)))
+    (call $write_mem (i32.const 1024) (local.get $n)))
+)

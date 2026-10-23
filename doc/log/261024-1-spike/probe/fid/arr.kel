@@ -1,0 +1,8 @@
+let x = run h { let a = MutableArray.new(3, 0)
+ MutableArray.set(a, 0, 5)
+ let f = MutableArray.freeze(a)
+ MutableArray.set(a, 0, 9)
+ Array.get(f, 0) }
+echoln(show(x))
+let y = run h { let a = MutableArray.new(-1, 0)
+ 0 }

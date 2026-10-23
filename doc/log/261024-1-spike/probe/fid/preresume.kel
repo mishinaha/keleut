@@ -1,0 +1,15 @@
+effect Log = { log: (String) => Unit }
+effect Log2 = { log2: (String) => Unit }
+let r = (perform log("a") handle {
+      case log2(s) => resume()
+      case cancel => echoln("c1-body")
+    }) handle {
+      case log(s) => {
+        (perform log2("q")) handle {
+          case log2(q) => { let z: Int32 = 1 / 0; resume() }
+          case cancel => echoln("c0-inclause")
+        }
+        resume()
+      }
+      case cancel => echoln("c2-own")
+    }

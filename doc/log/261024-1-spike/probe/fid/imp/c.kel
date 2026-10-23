@@ -1,0 +1,1 @@
+pub let vc: Int32 = { echoln("init c"); 10 }

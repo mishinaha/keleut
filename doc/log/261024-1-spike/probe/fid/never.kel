@@ -1,0 +1,3 @@
+effect Fail = { throw: (String) => Never }
+let r = ({ (fn() => 0)() handle { case cancel => echoln("inner cancel") }
+  perform throw("x") } handle { case cancel => echoln("mid cancel") ; case Ask.x() => 0 }) handle { case throw(m) => { echoln("body " + m); 1 } }

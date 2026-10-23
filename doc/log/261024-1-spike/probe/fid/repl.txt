@@ -1,0 +1,5 @@
+let x = 1
+echoln(show(x))
+let y = 1 / 0
+echoln(show(x + 1))
+perform print("p\n")

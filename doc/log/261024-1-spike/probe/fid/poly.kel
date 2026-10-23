@@ -1,0 +1,7 @@
+type class Z[A] {
+  val z: (A) => Int32
+}
+newtype B(Int32)
+type instance Z[B] { let z(b) = 1 }
+let k[A: Z]: (A) => Int32 = { fn(a) => z(a) + 1 / 0 }
+echoln("declared")

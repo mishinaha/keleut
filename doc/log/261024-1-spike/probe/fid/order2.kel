@@ -1,0 +1,8 @@
+let t(s: String, v: Int32): Int32 @ Console = { echo(s); v }
+let base = {x = t("base", 0), w = 0}
+let b2 = base
+let u = {b2 with x = t("u1", 5), w = t("u2", 6)}
+echoln("")
+let s = (t("a", 1) == 2) && (t("b", 1) == 1)
+echoln(show(s))
+let m = t("scrut", 1) match { case 0 => 0 case _ => 1 }
