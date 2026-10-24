@@ -223,15 +223,116 @@ pub fn diktor(args: &[OsString]) -> u8 {
     let route = classify(args, via_ir_env());
     match (pair.as_str(), route) {
         ("dk-ir", Route::Run) => diktor_via_emit(&real, args, &[]),
-        ("dk" | "dk-ir" | "", _)
-        | (_, Route::TypeCheck | Route::Dump | Route::Repl | Route::DiktorIr) => {
+        ("dk" | "dk-ir" | "", _) | (_, Route::Repl | Route::DiktorIr) => {
             exec(&real, "diktor", args)
         }
+        (_, Route::Dump) => dump_to_keleut(&real, args),
+        ("kf", Route::Run | Route::TypeCheck) => kf_precheck(&real, args),
+        (_, Route::TypeCheck) => exec(&real, "diktor", args),
         (p, Route::Run) => {
             // 実行を keleut に振り向けるのは M88 からである。
             eprintln!("kconform shim: 組 {p} の diktor の実行の振り分けはまだありません");
             4
         }
+    }
+}
+
+/// Diktor のモードの旗である(後に書いたものが効く)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Run,
+    TypeCheck,
+    Repl,
+    DumpTokens,
+    DumpAst,
+}
+
+/// IR の旗を含まない diktor の呼び出しを、Diktor の引数解析(driver.ml の `parse_args`)と同じ規則で読む。
+///
+/// モード、入力のファイル、`--prelude` があるかを返す。
+/// 知らない旗や、引数の足りない旗があれば `None` を返す(本物の diktor に使い方の誤りを報告させる)。
+fn diktor_mode(args: &[OsString]) -> Option<(Mode, Vec<OsString>, bool)> {
+    let mut mode = Mode::Run;
+    let mut files = Vec::new();
+    let mut prelude = false;
+    let mut i = 0;
+    while i < args.len() {
+        let raw = &args[i];
+        let a = raw.to_str().unwrap_or("");
+        match a {
+            "--type-check" => mode = Mode::TypeCheck,
+            "--repl" => mode = Mode::Repl,
+            "--dump-tokens" => mode = Mode::DumpTokens,
+            "--dump-ast" => mode = Mode::DumpAst,
+            "--no-prelude" | "--strict-exhaustive" => {}
+            "--prelude" | "--import-path" => {
+                if i + 1 >= args.len() {
+                    return None;
+                }
+                prelude |= a == "--prelude";
+                i += 1;
+            }
+            _ if raw.as_bytes().first() == Some(&b'-') => return None,
+            _ => files.push(raw.clone()),
+        }
+        i += 1;
+    }
+    Some((mode, files, prelude))
+}
+
+/// 組 `kf` などで、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump tokens|ast` に振り向ける。
+///
+/// Diktor のダンプのモードは、プレリュードと import の旗を読み飛ばし、ファイルを並べた順に処理する。
+/// `keleut dump` も同じ順に処理するので、ファイルだけを渡す。
+/// 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+fn dump_to_keleut(real_diktor: &OsString, args: &[OsString]) -> u8 {
+    let tool = match diktor_mode(args) {
+        Some((Mode::DumpTokens, files, _)) if !files.is_empty() => ("tokens", files),
+        Some((Mode::DumpAst, files, _)) if !files.is_empty() => ("ast", files),
+        _ => return exec(real_diktor, "diktor", args),
+    };
+    let real = match required("KCONFORM_REAL_KELEUT") {
+        Ok(r) => r,
+        Err(c) => return c,
+    };
+    let mut v = vec![OsString::from("dump"), OsString::from(tool.0)];
+    v.extend(tool.1);
+    exec(&real, "keleut", &v)
+}
+
+/// 組 `kf` の実行と型検査の呼び出しで、先に RustKeleut の字句解析と構文解析を通す。
+///
+/// Diktor は、プレリュードの後、コマンド行のファイルを並べた順にすべて構文解析してから、
+/// import をたどり、型検査に進む。
+/// 字句と構文の誤り(2)と内部の誤り(3)の診断は標準エラーにだけ出て、標準出力は空である。
+/// そこで、`keleut dump ast` が同じファイルを 2 か 3 で拒否したら、その診断と終了状態を返す。
+/// それ以外は本物の diktor に渡す(`--prelude` で差し替えたプレリュードは先に読まれるので、そのときも渡す)。
+fn kf_precheck(real_diktor: &OsString, args: &[OsString]) -> u8 {
+    let files = match diktor_mode(args) {
+        Some((Mode::Run | Mode::TypeCheck, files, false)) if !files.is_empty() => files,
+        _ => return exec(real_diktor, "diktor", args),
+    };
+    let real = match required("KCONFORM_REAL_KELEUT") {
+        Ok(r) => r,
+        Err(c) => return c,
+    };
+    let out = Command::new(&real)
+        .arg0("keleut")
+        .arg("dump")
+        .arg("ast")
+        .args(&files)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output();
+    match out {
+        Ok(o) if matches!(o.status.code(), Some(2 | 3)) => {
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(&o.stderr);
+            o.status.code().map_or(70, |c| c as u8)
+        }
+        Ok(_) => exec(real_diktor, "diktor", args),
+        Err(e) => exec_failed(&real, e),
     }
 }
 
@@ -284,7 +385,7 @@ pub fn keleut(args: &[OsString]) -> u8 {
     restore_closed_fds();
     let pair = std::env::var("KCONFORM_PAIR").unwrap_or_default();
     let is_run = args.first().is_some_and(|a| a == "run");
-    if is_run && (pair == "dk" || pair == "dk-ir") {
+    if is_run && (pair == "dk" || pair == "dk-ir" || pair == "kf") {
         let real = match required("KCONFORM_REAL_DIKTOR") {
             Ok(r) => r,
             Err(c) => return c,
@@ -372,6 +473,23 @@ mod tests {
             classify(&a(&["--prelude", "--repl", "x.kel"]), false),
             Route::Run
         );
+    }
+
+    #[test]
+    fn diktor_のモードと入力を読む() {
+        let (m, f, p) = diktor_mode(&a(&["--no-prelude", "--dump-ast", "x.kel", "y.kel"])).unwrap();
+        assert_eq!((m, f, p), (Mode::DumpAst, a(&["x.kel", "y.kel"]), false));
+        let (m, _, p) = diktor_mode(&a(&[
+            "--dump-tokens",
+            "--type-check",
+            "--prelude",
+            "p.kel",
+            "x.kel",
+        ]))
+        .unwrap();
+        assert_eq!((m, p), (Mode::TypeCheck, true));
+        assert!(diktor_mode(&a(&["--typo", "x.kel"])).is_none());
+        assert!(diktor_mode(&a(&["x.kel", "--prelude"])).is_none());
     }
 
     #[test]

@@ -34,7 +34,7 @@ usage: kconform [OPTIONS] [--pairs P,...] [--suite all|depth] [--extra=FLAG...] 
        kconform extract-corpus [--from DIR] [--corpus DIR] [--check]
 
 options:
-  --pairs P,...       the pairs to run (default: all available pairs: dk, dk-ir)
+  --pairs P,...       the pairs to run (default: all available pairs: dk, dk-ir, kf)
   --root DIR          the rustkeleut directory (default: the one kconform was built from)
   --diktor PATH       the real diktor (default: $KELEUT_DIKTOR, else ROOT/../diktor/_build/install/default/bin/diktor)
   --keleut PATH       the real keleut (default: $KCONFORM_KELEUT, else keleut next to kconform)

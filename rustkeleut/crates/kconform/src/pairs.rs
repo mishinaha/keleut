@@ -10,6 +10,8 @@ pub enum Engine {
     Diktor,
     /// `diktor --emit-ir` の後の `diktor --run-ir`。
     DiktorIr,
+    /// Diktor の木の評価器を基準にし、RustKeleut に移したフロントエンドの段だけを RustKeleut で走らせる(組 `kf`)。
+    Frontend,
     /// `keleut run` に組の選択肢を足したもの。
     Keleut,
 }
@@ -29,12 +31,12 @@ pub struct Pair {
 }
 
 /// 組の名前の一覧である。
-pub const NAMES: &[&str] = &["dk", "dk-ir", "ki", "kj", "kt", "ka", "km", "kw"];
+pub const NAMES: &[&str] = &["dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"];
 
 /// いま走らせられる組である。
 ///
 /// RustKeleut の後段は M88 から順に加わるので、ここに名前を足していく。
-pub const AVAILABLE: &[&str] = &["dk", "dk-ir"];
+pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf"];
 
 /// `--pairs` を省いたときに走らせる組である。
 ///
@@ -72,6 +74,7 @@ pub fn expand(name: &str) -> Option<Vec<Pair>> {
     Some(match name {
         "dk" => one("dk", Engine::Diktor, &[]),
         "dk-ir" => one("dk-ir", Engine::DiktorIr, &[]),
+        "kf" => one("kf", Engine::Frontend, &[]),
         "ki" => one("ki", Engine::Keleut, EXPECT_ARGS),
         "kj" => one(
             "kj",
