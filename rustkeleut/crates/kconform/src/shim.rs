@@ -227,7 +227,7 @@ pub fn diktor(args: &[OsString]) -> u8 {
             exec(&real, "diktor", args)
         }
         (_, Route::Dump) => dump_to_keleut(&real, args),
-        ("kf", Route::Run | Route::TypeCheck) => kf_precheck(&real, args),
+        ("kf", Route::Run | Route::TypeCheck) => kf_check(&real, args),
         (_, Route::TypeCheck) => exec(&real, "diktor", args),
         (p, Route::Run) => {
             // 実行を keleut に振り向けるのは M88 からである。
@@ -300,39 +300,124 @@ fn dump_to_keleut(real_diktor: &OsString, args: &[OsString]) -> u8 {
     exec(&real, "keleut", &v)
 }
 
-/// 組 `kf` の実行と型検査の呼び出しで、先に RustKeleut の字句解析と構文解析を通す。
+/// `keleut check --kf-fallback` が、移していない段を要する入力で返す終了状態である。
+pub const KF_FALLBACK: u8 = 86;
+
+/// 組 `kf` の実行と型検査の呼び出しを、Diktor の旗のまま `keleut check` の引数に写す。
 ///
-/// Diktor は、プレリュードの後、コマンド行のファイルを並べた順にすべて構文解析してから、
-/// import をたどり、型検査に進む。
-/// 字句と構文の誤り(2)と内部の誤り(3)の診断は標準エラーにだけ出て、標準出力は空である。
-/// そこで、`keleut dump ast` が同じファイルを 2 か 3 で拒否したら、その診断と終了状態を返す。
-/// それ以外は本物の diktor に渡す(`--prelude` で差し替えたプレリュードは先に読まれるので、そのときも渡す)。
-fn kf_precheck(real_diktor: &OsString, args: &[OsString]) -> u8 {
-    let files = match diktor_mode(args) {
-        Some((Mode::Run | Mode::TypeCheck, files, false)) if !files.is_empty() => files,
+/// モードと、`keleut check` に渡す引数(旗とファイル)を返す。
+/// `--import-path` は写さない(import を書いた入力は `keleut check` が移していない段として断り、本物の diktor に渡る)。
+/// 使い方の誤りになる呼び出しと、UTF-8 でない引数を含む呼び出しは `None` を返す(本物の diktor に渡す)。
+fn kf_check_args(args: &[OsString]) -> Option<(Mode, Vec<OsString>)> {
+    let mut mode = Mode::Run;
+    let mut flags = Vec::new();
+    let mut files = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i].to_str()?;
+        match a {
+            "--type-check" => mode = Mode::TypeCheck,
+            "--repl" => mode = Mode::Repl,
+            "--dump-tokens" => mode = Mode::DumpTokens,
+            "--dump-ast" => mode = Mode::DumpAst,
+            "--no-prelude" | "--strict-exhaustive" => flags.push(OsString::from(a)),
+            "--prelude" | "--import-path" => {
+                let v = args.get(i + 1)?.to_str()?;
+                if a == "--prelude" {
+                    flags.push(OsString::from(a));
+                    flags.push(OsString::from(v));
+                }
+                i += 1;
+            }
+            _ if a.starts_with('-') => return None,
+            _ => files.push(OsString::from(a)),
+        }
+        i += 1;
+    }
+    if files.is_empty() {
+        return None;
+    }
+    flags.extend(files);
+    Some((mode, flags))
+}
+
+/// 組 `kf` の振り分けを記録の行に足す(`--list-invocations` に `kf-check` の行として出る)。
+fn log_kf(outcome: &str) {
+    let Some(log) = env("KCONFORM_LOG") else {
+        return;
+    };
+    let cmd = std::env::var("KCONFORM_CMD").unwrap_or_default();
+    let line = format!("{cmd}\tkf-check\t{outcome}\n");
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(log)
+    {
+        use std::io::Write;
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+/// 組 `kf` の実行と型検査の呼び出しを、RustKeleut の型検査に通す。
+///
+/// 型検査の呼び出し(`--type-check`)は `keleut check` に振り向け、その出力と終了状態を返す。
+/// 実行の呼び出しは、先に `keleut check --quiet` を走らせ、Diktor が実行の前段の型検査で止まる入力
+/// (字句、構文、型の誤り、`--strict-exhaustive` の警告)では、その診断と終了状態を返す。
+/// 型検査を通った入力は、本物の diktor に渡して実行する(警告は diktor が出し直す)。
+/// どちらも、`keleut check` が移していない段を要する入力として断ったとき([`KF_FALLBACK`])は、本物の diktor に渡す。
+fn kf_check(real_diktor: &OsString, args: &[OsString]) -> u8 {
+    let (mode, kargs) = match kf_check_args(args) {
+        Some((m @ (Mode::Run | Mode::TypeCheck), k)) => (m, k),
         _ => return exec(real_diktor, "diktor", args),
     };
     let real = match required("KCONFORM_REAL_KELEUT") {
         Ok(r) => r,
         Err(c) => return c,
     };
-    let out = Command::new(&real)
-        .arg0("keleut")
-        .arg("dump")
-        .arg("ast")
-        .args(&files)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output();
-    match out {
-        Ok(o) if matches!(o.status.code(), Some(2 | 3)) => {
-            use std::io::Write;
-            let _ = std::io::stderr().write_all(&o.stderr);
-            o.status.code().map_or(70, |c| c as u8)
+    let mut cmd = Command::new(&real);
+    cmd.arg0("keleut")
+        .arg("check")
+        .arg("--kf-fallback")
+        .arg(KF_FALLBACK.to_string());
+    if mode == Mode::Run {
+        cmd.arg("--quiet");
+    }
+    cmd.args(&kargs);
+    if mode == Mode::TypeCheck {
+        match cmd.status() {
+            Ok(st) if st.code() == Some(KF_FALLBACK as i32) => {
+                log_kf("fallback");
+                exec(real_diktor, "diktor", args)
+            }
+            Ok(st) => {
+                log_kf("keleut");
+                st.code().map_or(70, |c| c as u8)
+            }
+            Err(e) => exec_failed(&real, e),
         }
-        Ok(_) => exec(real_diktor, "diktor", args),
-        Err(e) => exec_failed(&real, e),
+    } else {
+        let out = cmd
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .output();
+        match out {
+            Ok(o) if o.status.code() == Some(KF_FALLBACK as i32) => {
+                log_kf("fallback");
+                exec(real_diktor, "diktor", args)
+            }
+            Ok(o) if o.status.success() => {
+                log_kf("keleut-pass");
+                exec(real_diktor, "diktor", args)
+            }
+            Ok(o) => {
+                log_kf("keleut");
+                use std::io::Write;
+                let _ = std::io::stderr().write_all(&o.stderr);
+                o.status.code().map_or(70, |c| c as u8)
+            }
+            Err(e) => exec_failed(&real, e),
+        }
     }
 }
 

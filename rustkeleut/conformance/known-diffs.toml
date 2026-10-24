@@ -6,6 +6,7 @@
 # Diktor の木の評価器のスタックの限度を試すもので、語数を写さない。
 # 同じ意図の試験は conformance/depth/ と conformance/frontend-depth/ に作り直す。
 # 組 dk は本物の diktor をそのまま走らせるので、これらの項目に当たらない。
+# 組 kf は M97 から型検査の呼び出しを keleut check で走らせるので、--type-check の呼び出しの項目に当たる。
 
 [[diff]]
 file = "diktor/test/if.t"
@@ -45,14 +46,14 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 176
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 180
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -80,7 +81,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 208
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -251,3 +252,13 @@ line = 307
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
+
+# 組 kf の型検査の呼び出し(M97 から keleut check)が、標準出力に書けないときの診断の接頭辞は keleut: である。
+# Diktor は diktor: を出す。終了状態(74)と診断の種類は同じである。
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 636
+pairs = ["kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
