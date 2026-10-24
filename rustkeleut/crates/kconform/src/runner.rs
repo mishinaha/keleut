@@ -9,10 +9,16 @@
 //! - シェルが `exit` で終わっても `trap 'exit 0' EXIT` で 0 にし、記録の無いコマンドは「到達しない」とする。
 //! - 標準入力は `/dev/null` にする。
 //!   `LC_ALL=C` にし、`TMPDIR` を試験の中の空のディレクトリにし、`TESTDIR` と `DIKTOR_VIA_IR` を消す。
-//! - 出力からは、dune と同じ順に、まず端末の色の指定を除き、次にシェルの誤りの文面の頭に付くスクリプトの位置
-//!   (`<main.sh>: N: <k.sh>: ` と `<k.sh>: line N: `)を除く。
-//!   スクリプトの位置は、置き換える前の絶対パスで照らし合わせる。
-//! - 出力の中の作業ディレクトリと `TMPDIR` の絶対パスを、`$TESTCASE_ROOT` と `$TMPDIR` に置き換える。
+//! - 出力は、dune 3.21.1 の cram(`cram_exec.ml` の `sanitize` と `rewrite_paths`)と同じ順に整える。
+//!   まず端末の色の指定を除く。
+//!   次に、パスの置き換えを dune と同じく語ごとに行う([`rewrite_paths`])。
+//!   作業ディレクトリで始まる語の頭を `$TESTCASE_ROOT` にするのは dune と同じである。
+//!   `TMPDIR` で始まる語の頭を `$TMPDIR` にするのは kconform だけの正規化である。
+//!   dune の試験のシェルの `TMPDIR` は dune の作る `/tmp/build_*_dune` で、dune はこれを置き換えない。
+//!   kconform の `TMPDIR` は試験ごとに作るディレクトリなので、置き換えないと出力が走らせるたびに変わる。
+//!   最後に、シェルの誤りの文面の頭に付くスクリプトの位置(`<main.sh>: N: <k.sh>: ` と `<k.sh>: line N: `)を除く。
+//!   スクリプトは作業ディレクトリと `TMPDIR` の外(`meta/`)に置くので、パスの置き換えはスクリプトの位置に当たらない。
+//! - 行への切り方(改行の直前の CR を 1 つ落とすことなど)は、`cram::render` が dune の `split_lines` と同じにする。
 //! - PATH の先頭に shim のディレクトリを置き、元の PATH からは `diktor` と `keleut` を持つディレクトリを除く。
 //!   shim を通らない呼び出しが、本物に黙って届かないようにするためである。
 
@@ -228,11 +234,8 @@ fn run_inner(case: &Case, pair: &Pair, cfg: &Config) -> std::io::Result<CaseResu
         match std::fs::read_to_string(&code_file) {
             Ok(code) => {
                 let out = std::fs::read(meta.join(format!("{k}.output"))).unwrap_or_default();
-                let out = strip_ansi(&out);
                 let cmd_s = meta.join(format!("{k}.sh")).to_string_lossy().into_owned();
-                let out = strip_script_prefixes(&out, main_s.as_bytes(), cmd_s.as_bytes());
-                let out = crate::util::replace_all(&out, &root_s, b"$TESTCASE_ROOT");
-                let out = crate::util::replace_all(&out, &tmp_s, b"$TMPDIR");
+                let out = sanitize(&out, &root_s, &tmp_s, main_s.as_bytes(), cmd_s.as_bytes());
                 outcomes.push(Outcome::Ran {
                     output: out,
                     code: code.trim().parse().unwrap_or(0),
@@ -264,6 +267,58 @@ fn run_inner(case: &Case, pair: &Pair, cfg: &Config) -> std::io::Result<CaseResu
         timed_out,
         error: None,
     })
+}
+
+/// 1 つのコマンドの出力を、dune 3.21.1 の cram と同じ順に整える。
+///
+/// 端末の色の指定を除き、パスを語ごとに置き換え([`rewrite_paths`])、
+/// 行の頭のスクリプトの位置(親のスクリプト `main` とコマンドのスクリプト `cmd` のもの)を除く。
+pub fn sanitize(out: &[u8], root: &[u8], tmp: &[u8], main: &[u8], cmd: &[u8]) -> Vec<u8> {
+    let out = strip_ansi(out);
+    let out = rewrite_paths(&out, root, tmp);
+    strip_script_prefixes(&out, main, cmd)
+}
+
+/// パスを語ごとに置き換える(dune 3.21.1 の `cram_exec.ml` の `rewrite_paths` と同じ切り方)。
+///
+/// 語は、`/` で始まり、空白、改行、CR、タブ、`:` のどれでもないバイトが続く最長の並びである(正規表現 `/[^ \n\r\t:]+`)。
+/// 語の頭が `tmp` なら `$TMPDIR` に、そうでなく `root` なら `$TESTCASE_ROOT` に、1 つの語につき 1 度だけ置き換える。
+/// dune の `Build_path_prefix_map.rewrite` と同じく、頭の比べ方は文字列の接頭辞で、パスの部分の境目を見ない。
+/// 新しく足した対応から先に見るので、後に足す `tmp` を先に比べる。
+/// 語の途中に現れるパスは置き換えない。
+/// `$TMPDIR` への置き換えは kconform だけの正規化である(モジュールの説明を見よ)。
+pub fn rewrite_paths(out: &[u8], root: &[u8], tmp: &[u8]) -> Vec<u8> {
+    let stop = |b: u8| matches!(b, b' ' | b'\n' | b'\r' | b'\t' | b':');
+    let mut v = Vec::with_capacity(out.len());
+    let mut i = 0;
+    while i < out.len() {
+        if out[i] != b'/' {
+            v.push(out[i]);
+            i += 1;
+            continue;
+        }
+        let j = out[i + 1..]
+            .iter()
+            .position(|&b| stop(b))
+            .map_or(out.len(), |k| i + 1 + k);
+        let word = &out[i..j];
+        if j == i + 1 {
+            v.push(b'/');
+        } else if let Some(r) = (!tmp.is_empty()).then(|| word.strip_prefix(tmp)).flatten() {
+            v.extend_from_slice(b"$TMPDIR");
+            v.extend_from_slice(r);
+        } else if let Some(r) = (!root.is_empty())
+            .then(|| word.strip_prefix(root))
+            .flatten()
+        {
+            v.extend_from_slice(b"$TESTCASE_ROOT");
+            v.extend_from_slice(r);
+        } else {
+            v.extend_from_slice(word);
+        }
+        i = j;
+    }
+    v
 }
 
 /// コマンドの行(ヒアドキュメントの中身を除く)が、`diktor` をコマンドの語として含むかどうかを返す。
@@ -364,6 +419,45 @@ mod tests {
             &cmd(&["cat > a.kel <<'EOF'", "x", "EOF", "diktor a.kel"]),
             "diktor"
         ));
+    }
+
+    #[test]
+    fn 色の指定とパスとスクリプトの位置の順に整える() {
+        let s = |o: &[u8]| {
+            sanitize(
+                o,
+                b"/w/root",
+                b"/w/tmp",
+                b"/w/meta/main.sh",
+                b"/w/meta/0.sh",
+            )
+        };
+        assert_eq!(
+            s(b"\x1b[31m/w/meta/0.sh: line 1: /w/root/x: Permission denied\x1b[0m\n"),
+            b"$TESTCASE_ROOT/x: Permission denied\n"
+        );
+        assert_eq!(
+            s(b"/w/meta/main.sh: 3: /w/meta/0.sh: cannot create /w/tmp/a: x\n"),
+            b"cannot create $TMPDIR/a: x\n"
+        );
+        // 色の指定を先に除くので、色の指定に挟まれたスクリプトの位置も除く。
+        assert_eq!(s(b"\x1b[1m/w/meta/0.sh: line 2: y\n"), b"y\n");
+    }
+
+    #[test]
+    fn パスは語の頭だけを_1_度置き換える() {
+        let r = |o: &[u8]| rewrite_paths(o, b"/w/root", b"/w/tmp");
+        // dune 3.21.1 と同じく、語の途中のパスと、別の語に続くパスは置き換えない。
+        assert_eq!(r(b"/x/w/root/a"), b"/x/w/root/a");
+        assert_eq!(r(b"/w/root/a/w/root"), b"$TESTCASE_ROOT/a/w/root");
+        assert_eq!(r(b"/w/root/a /w/tmp/b"), b"$TESTCASE_ROOT/a $TMPDIR/b");
+        // `/` は語の始まりなので、語の文字に続く `/` からも語が始まる。
+        assert_eq!(r(b"x/w/root/a"), b"x$TESTCASE_ROOT/a");
+        // `:` は語を切る。
+        assert_eq!(r(b"/w/root/a:/w/tmp:x"), b"$TESTCASE_ROOT/a:$TMPDIR:x");
+        // 頭の比べ方は文字列の接頭辞である。
+        assert_eq!(r(b"/w/rootx"), b"$TESTCASE_ROOTx");
+        assert_eq!(r(b"a / b //"), b"a / b //");
     }
 
     #[test]

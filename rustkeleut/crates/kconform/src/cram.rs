@@ -1,13 +1,27 @@
 //! cram の `.t` の読み取りと、結果の組み立てである。
 //!
-//! 読み方は dune の cram と同じにする。
+//! 読み方は dune 3.21.1 の cram の字句解析器(`cram_lexer.mll`)と同じで、行ごとに 3 つの状態を移る
+//! (diktor/test/via_ir_run.py の `parse_cram` と同じ形)。
 //!
-//! - `  $ ` で始まる行がコマンドの始まりである。
-//!   `  $` だけの行はコマンドでなく、出力の行である(dune と同じ)。
-//! - 直後に続く `  > ` の行(または `  >` だけの行)が、同じコマンドの続きの行である。
-//! - その後に続く、`  ` で始まり `  $ ` で始まらない行が、期待の出力である。
+//! - 初めの状態では、`  $ ` で始まる行がコマンドの始まりである。
+//!   直後に続く `  > ` の行(または `  >` だけの行)が、同じコマンドの続きの行である。
+//!   コマンドを読むと、初めの状態に戻る。
+//! - 初めの状態で 2 つの空白で始まるほかの行を読むと、出力の状態に移る。
+//!   `  $` だけの行も、2 つの空白で始まるので出力の行になる。
+//!   初めの状態のそのほかの行は注釈で、注釈の状態に移る。
+//! - 注釈の状態では、2 つの空白で始まらない行がすべて注釈である。
+//!   2 つの空白で始まる行で、初めの状態に戻る。
+//! - 出力の状態では、2 つの空白で始まる行が出力の行である。
+//!   コマンドの直後から続く出力の行だけが、そのコマンドの期待の出力になる。
 //!   0 でない終了状態は、期待の出力の最後の `[N]` の行で表す。
-//! - それ以外の行は注釈である。
+//!   注釈の後の出力の行は、どのコマンドにも付かないので捨てる([`Item::Dropped`])。
+//! - 出力の状態の空白 1 つだけの行は、取っておく。
+//!   次に `  $ ` の行が来れば、取っておいた行は捨てる。
+//!   ファイルが終わるか、ほかの行が来れば、取っておいた行は注釈になる。
+//!   空白 1 つで始まりほかの文字が続く行は注釈で、取っておいた行とともに注釈の状態に移る。
+//!
+//! 捨てた行は dune の `.t.corrected` に現れないので、dune では期待との差になる。
+//! kconform も、捨てた行を記録との差として報告する。
 //!
 //! 行はバイト列のまま扱う。
 //! `.t` にも出力にも、正しくない UTF-8 が現れうるからである。
@@ -19,6 +33,14 @@ pub enum Item {
     Comment(Vec<u8>),
     /// コマンドとその期待の出力である。
     Command(Command),
+    /// どのコマンドにも付かないので、dune が捨てる行である。
+    /// [`corrected`] は書かない。
+    Dropped {
+        /// 行の番号(1 から数える)である。
+        line: usize,
+        /// 行の中身である。
+        text: Vec<u8>,
+    },
 }
 
 /// cram の 1 つのコマンドである。
@@ -73,39 +95,108 @@ fn body(l: &[u8]) -> Vec<u8> {
     }
 }
 
-/// `.t` の中身を項目の列に分ける。
+/// `.t` の中身を項目の列に分ける(読み方はモジュールの説明を見よ)。
 pub fn parse(text: &[u8]) -> Vec<Item> {
+    #[derive(PartialEq, Eq)]
+    enum State {
+        Block,
+        Output,
+        Comment,
+    }
     let mut lines: Vec<&[u8]> = text.split(|&b| b == b'\n').collect();
     if lines.last().is_some_and(|l| l.is_empty()) {
         lines.pop();
     }
     let mut items = Vec::new();
+    let mut state = State::Block;
+    // 出力の行を足す先のコマンドの、`items` の中の位置である。
+    let mut cur: Option<usize> = None;
+    // 出力の状態で取っておいた、空白 1 つだけの行(行の番号と中身)である。
+    let mut pending: Vec<(usize, Vec<u8>)> = Vec::new();
+    let add_output = |items: &mut Vec<Item>, cur: Option<usize>, i: usize, l: &[u8]| match cur
+        .and_then(|k| match &mut items[k] {
+            Item::Command(c) => Some(c),
+            _ => None,
+        }) {
+        Some(c) => c.expected.push(l.to_vec()),
+        None => items.push(Item::Dropped {
+            line: i + 1,
+            text: l.to_vec(),
+        }),
+    };
     let mut i = 0;
     while i < lines.len() {
         let l = lines[i];
-        if is_command_start(l) {
-            let line = i + 1;
-            let mut text = vec![body(l)];
-            i += 1;
-            while i < lines.len() && is_continuation(lines[i]) {
-                text.push(body(lines[i]));
+        match state {
+            State::Output => {
+                if is_command_start(l) {
+                    for (n, t) in pending.drain(..) {
+                        items.push(Item::Dropped { line: n, text: t });
+                    }
+                    state = State::Block;
+                    continue;
+                }
+                if l == b" " {
+                    pending.push((i + 1, l.to_vec()));
+                    i += 1;
+                    continue;
+                }
+                if l.starts_with(b"  ") {
+                    add_output(&mut items, cur, i, l);
+                    i += 1;
+                    continue;
+                }
+                state = if pending.is_empty() {
+                    State::Block
+                } else {
+                    cur = None;
+                    State::Comment
+                };
+                items.extend(pending.drain(..).map(|(_, t)| Item::Comment(t)));
+                if l.starts_with(b" ") {
+                    items.push(Item::Comment(l.to_vec()));
+                    cur = None;
+                    state = State::Comment;
+                    i += 1;
+                }
+            }
+            State::Comment => {
+                if l.starts_with(b"  ") {
+                    state = State::Block;
+                    continue;
+                }
+                items.push(Item::Comment(l.to_vec()));
                 i += 1;
             }
-            let mut expected = Vec::new();
-            while i < lines.len() && lines[i].starts_with(b"  ") && !is_command_start(lines[i]) {
-                expected.push(lines[i].to_vec());
-                i += 1;
+            State::Block => {
+                if is_command_start(l) {
+                    let line = i + 1;
+                    let mut text = vec![body(l)];
+                    i += 1;
+                    while i < lines.len() && is_continuation(lines[i]) {
+                        text.push(body(lines[i]));
+                        i += 1;
+                    }
+                    cur = Some(items.len());
+                    items.push(Item::Command(Command {
+                        line,
+                        text,
+                        expected: Vec::new(),
+                    }));
+                } else if l.starts_with(b"  ") && !is_continuation(l) {
+                    add_output(&mut items, cur, i, l);
+                    state = State::Output;
+                    i += 1;
+                } else {
+                    items.push(Item::Comment(l.to_vec()));
+                    cur = None;
+                    state = State::Comment;
+                    i += 1;
+                }
             }
-            items.push(Item::Command(Command {
-                line,
-                text,
-                expected,
-            }));
-        } else {
-            items.push(Item::Comment(l.to_vec()));
-            i += 1;
         }
     }
+    items.extend(pending.into_iter().map(|(_, t)| Item::Comment(t)));
     items
 }
 
@@ -115,7 +206,18 @@ pub fn commands(items: &[Item]) -> Vec<&Command> {
         .iter()
         .filter_map(|it| match it {
             Item::Command(c) => Some(c),
-            Item::Comment(_) => None,
+            Item::Comment(_) | Item::Dropped { .. } => None,
+        })
+        .collect()
+}
+
+/// dune が捨てる行(行の番号と中身)の列を取り出す。
+pub fn dropped(items: &[Item]) -> Vec<(usize, &[u8])> {
+    items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Dropped { line, text } => Some((*line, text.as_slice())),
+            _ => None,
         })
         .collect()
 }
@@ -133,8 +235,9 @@ pub enum Outcome {
 /// 結果を、`.t` の期待の出力の形の行の列にする。
 ///
 /// dune の cram と同じく、出力の最後の改行の有無は区別しない。
-/// 改行で終わる行は、改行の直前の CR を 1 つだけ落とす(dune が使う `split_lines` と同じ)。
-/// 行の途中の CR と、改行の無い最後の部分の末尾の CR は残す。
+/// 改行で終わる行は、改行の直前の CR を 1 つだけ落とす(dune が使う Stdune の `split_lines` と同じ)。
+/// 改行の無い最後の部分は、CR 1 つだけなら捨て、ほかは末尾の CR を含めてそのまま残す。
+/// 行の途中の CR は残す。
 /// 0 でない終了状態は `[N]` の行にする。
 pub fn render(outcome: &Outcome) -> Vec<Vec<u8>> {
     match outcome {
@@ -143,13 +246,15 @@ pub fn render(outcome: &Outcome) -> Vec<Vec<u8>> {
             let mut v = Vec::new();
             if !output.is_empty() {
                 let mut parts: Vec<&[u8]> = output.split(|&b| b == b'\n').collect();
-                if output.ends_with(b"\n") {
+                // LF の後ろの部分が空か CR 1 つだけなら捨てる。残る部分はどれも LF で終わった行である。
+                let last_ended = matches!(parts.last(), Some(&b"") | Some(&b"\r"));
+                if last_ended {
                     parts.pop();
                 }
                 let n = parts.len();
                 for (k, p) in parts.into_iter().enumerate() {
-                    // 最後の部分は、出力が改行で終わるときだけ改行で終わった行である。
-                    let ended_by_lf = k + 1 < n || output.ends_with(b"\n");
+                    // 最後の部分は、捨てた部分がその後ろにあったときだけ LF で終わった行である。
+                    let ended_by_lf = k + 1 < n || last_ended;
                     let p = match p.strip_suffix(b"\r") {
                         Some(q) if ended_by_lf => q,
                         _ => p,
@@ -177,6 +282,7 @@ pub fn corrected(items: &[Item], outcomes: &[Outcome]) -> Vec<u8> {
                 out.extend_from_slice(l);
                 out.push(b'\n');
             }
+            Item::Dropped { .. } => {}
             Item::Command(c) => {
                 for (j, l) in c.text.iter().enumerate() {
                     let mark: &[u8] = match (j == 0, l.is_empty()) {
@@ -244,6 +350,37 @@ mod tests {
     }
 
     #[test]
+    fn dune_と同じく注釈の後の出力の行と取っておいた行を捨てる() {
+        // dune 3.21.1 が `.t.corrected` から落とす行は、`  b`、`  $ echo d` の前の ` `、`  $`、`  x`、`  > orphan` である。
+        // `  $` と `  x`、`  > orphan` は期待の出力になり、ほかは捨てる行になる。
+        let t = b"  $ echo a\n  a\ncomment\n  b\n  $ echo c\n  c\n \n  $ echo d\n  d\n  $\n  $ echo e\n  e\n \n  x\n  > orphan\n";
+        let items = parse(t);
+        let cs = commands(&items);
+        assert_eq!(cs.len(), 4);
+        assert_eq!(cs[0].expected, vec![b"  a".to_vec()]);
+        assert_eq!(cs[1].expected, vec![b"  c".to_vec()]);
+        assert_eq!(cs[2].expected, vec![b"  d".to_vec(), b"  $".to_vec()]);
+        assert_eq!(
+            cs[3].expected,
+            vec![b"  e".to_vec(), b"  x".to_vec(), b"  > orphan".to_vec()]
+        );
+        assert_eq!(dropped(&items), vec![(4, &b"  b"[..]), (7, &b" "[..])]);
+        // ファイルの終わりで取っておいた行は注釈になる。
+        assert_eq!(items.last(), Some(&Item::Comment(b" ".to_vec())));
+        // 空白 1 つの行の後の注釈は、取っておいた行とともに注釈になり、その後の出力の行は捨てる。
+        let items = parse(b"  $ echo e\n  e\n \nnote\n  y\n");
+        assert_eq!(commands(&items)[0].expected, vec![b"  e".to_vec()]);
+        assert_eq!(dropped(&items), vec![(5, &b"  y"[..])]);
+        // コマンドの直後の空白 1 つの行は注釈で、続く `  $ ` の行は新しいコマンドである。
+        let items = parse(b"  $ true\n \n  $ false\n  [1]\n");
+        assert_eq!(commands(&items).len(), 2);
+        assert!(dropped(&items).is_empty());
+        // コマンドに続かない `  > ` の行は注釈である。
+        let items = parse(b"x\n  > y\n");
+        assert_eq!(items[1], Item::Comment(b"  > y".to_vec()));
+    }
+
+    #[test]
     fn 最後の改行の有無は区別しない() {
         let a = render(&Outcome::Ran {
             output: b"x".to_vec(),
@@ -273,5 +410,16 @@ mod tests {
                 b"  y\r".to_vec(),
             ]
         );
+        // 改行の無い最後の部分が CR 1 つだけなら、dune はその行を書かない。
+        let r = render(&Outcome::Ran {
+            output: b"a\r\n\r".to_vec(),
+            code: 1,
+        });
+        assert_eq!(r, vec![b"  a".to_vec(), b"  [1]".to_vec()]);
+        let r = render(&Outcome::Ran {
+            output: b"\r".to_vec(),
+            code: 0,
+        });
+        assert!(r.is_empty());
     }
 }

@@ -101,25 +101,6 @@ pub fn wait_timeout(child: &mut Child, limit: Duration) -> std::io::Result<Optio
     }
 }
 
-/// バイト列の中の `from` をすべて `to` に置き換える。
-pub fn replace_all(hay: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
-    if from.is_empty() {
-        return hay.to_vec();
-    }
-    let mut out = Vec::with_capacity(hay.len());
-    let mut i = 0;
-    while i < hay.len() {
-        if hay[i..].starts_with(from) {
-            out.extend_from_slice(to);
-            i += from.len();
-        } else {
-            out.push(hay[i]);
-            i += 1;
-        }
-    }
-    out
-}
-
 /// 端末の色の指定を除く(dune 3.21.1 の `Ansi_color.strip` と同じ)。
 ///
 /// ESC から、その後に最初に現れる `m` までを除く。
@@ -182,11 +163,6 @@ pub fn sh_quote(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn 置き換え() {
-        assert_eq!(replace_all(b"a/x/b/x", b"/x", b"$R"), b"a$R/b$R");
-    }
 
     #[test]
     fn 並行の結果は元の順になる() {
