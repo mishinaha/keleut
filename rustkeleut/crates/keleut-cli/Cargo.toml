@@ -12,5 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 keleut-front = { path = "../keleut-front" }
+keleut-interp = { path = "../keleut-interp" }
 keleut-lir = { path = "../keleut-lir" }
+keleut-rt = { path = "../keleut-rt" }
 kir = { path = "../kir" }

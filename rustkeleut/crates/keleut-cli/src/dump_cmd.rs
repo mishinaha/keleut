@@ -18,7 +18,7 @@ const TOOLS: &[(&str, Handler)] = &[
     ("tokens", crate::front_cmd::tokens),
     ("ast", crate::front_cmd::ast),
     ("lir", crate::lir_cmd::main),
-    ("bytecode", unimplemented_tool),
+    ("bytecode", crate::run_cmd::dump_bytecode),
     ("llvm", unimplemented_tool),
 ];
 

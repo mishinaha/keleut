@@ -11,7 +11,9 @@ name = "keleut-cli"
 version = "0.1.0"
 dependencies = [
  "keleut-front",
+ "keleut-interp",
  "keleut-lir",
+ "keleut-rt",
  "kir",
 ]
 
@@ -20,10 +22,28 @@ name = "keleut-front"
 version = "0.1.0"
 
 [[package]]
+name = "keleut-interp"
+version = "0.1.0"
+dependencies = [
+ "keleut-lir",
+ "keleut-rt",
+ "keleut-rtcore",
+ "kir",
+]
+
+[[package]]
 name = "keleut-lir"
 version = "0.1.0"
 dependencies = [
  "kir",
+]
+
+[[package]]
+name = "keleut-rt"
+version = "0.1.0"
+dependencies = [
+ "keleut-lir",
+ "keleut-rtcore",
 ]
 
 [[package]]

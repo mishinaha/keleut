@@ -11,6 +11,7 @@ mod dump_cmd;
 mod front_cmd;
 mod kir_cmd;
 mod lir_cmd;
+mod run_cmd;
 
 /// 終了状態の定数である(計画 6.2 節の表)。
 mod exit {
@@ -46,7 +47,7 @@ type Handler = fn(&[String]) -> u8;
 ///
 /// 表に無い名前は使い方の誤り(64)にする。
 const COMMANDS: &[(&str, Handler)] = &[
-    ("run", unimplemented_command),
+    ("run", run_cmd::main),
     ("check", check_cmd::main),
     ("emit-kir", unimplemented_command),
     ("kir", kir_cmd::main),
@@ -122,7 +123,7 @@ mod tests {
     #[test]
     fn 中身の無いサブコマンドは未実装になる() {
         for (name, _) in COMMANDS {
-            if *name != "kir" && *name != "dump" && *name != "check" {
+            if *name != "kir" && *name != "dump" && *name != "check" && *name != "run" {
                 assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
             }
         }
