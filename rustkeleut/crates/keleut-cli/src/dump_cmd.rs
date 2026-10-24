@@ -17,7 +17,7 @@ type Handler = fn(&[String]) -> u8;
 const TOOLS: &[(&str, Handler)] = &[
     ("tokens", crate::front_cmd::tokens),
     ("ast", crate::front_cmd::ast),
-    ("lir", unimplemented_tool),
+    ("lir", crate::lir_cmd::main),
     ("bytecode", unimplemented_tool),
     ("llvm", unimplemented_tool),
 ];

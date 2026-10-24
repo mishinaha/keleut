@@ -9,6 +9,7 @@ use std::process::ExitCode;
 mod dump_cmd;
 mod front_cmd;
 mod kir_cmd;
+mod lir_cmd;
 
 /// 終了状態の定数である(計画 6.2 節の表)。
 mod exit {

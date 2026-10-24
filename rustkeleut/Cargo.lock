@@ -11,6 +11,7 @@ name = "keleut-cli"
 version = "0.1.0"
 dependencies = [
  "keleut-front",
+ "keleut-lir",
  "kir",
 ]
 
