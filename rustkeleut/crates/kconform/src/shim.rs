@@ -212,6 +212,142 @@ fn diktor_via_emit(real: &OsString, args: &[OsString], run_ir_args: &[OsString])
     exec(real, "diktor", &run)
 }
 
+/// Diktor の実行の呼び出しの旗とファイルを、`keleut emit-kir` の引数に写す(組 `x-ir`)。
+///
+/// `--no-prelude`、`--prelude`、`--import-path` は同じ綴りで渡す。
+/// ほかの旗(使い方の誤りになるものを含む)と、UTF-8 でない引数を含む呼び出しは `None` を返す(本物の diktor に渡す)。
+fn emit_args(args: &[OsString]) -> Option<Vec<OsString>> {
+    let mut out = Vec::new();
+    let mut files = 0;
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i].to_str()?;
+        match a {
+            "--no-prelude" => out.push(OsString::from(a)),
+            "--prelude" | "--import-path" => {
+                let v = args.get(i + 1)?.to_str()?;
+                out.push(OsString::from(a));
+                out.push(OsString::from(v));
+                i += 1;
+            }
+            _ if a.starts_with('-') => return None,
+            _ => {
+                files += 1;
+                out.push(OsString::from(a));
+            }
+        }
+        i += 1;
+    }
+    (files > 0).then_some(out)
+}
+
+/// `keleut emit-kir` を走らせる。`quiet` なら標準エラーを捨てずに預かり、失敗したときだけ書く。
+fn keleut_emit(
+    real_keleut: &OsString,
+    text: bool,
+    out: &OsString,
+    eargs: &[OsString],
+    quiet: bool,
+) -> Result<u8, u8> {
+    let mut cmd = Command::new(real_keleut);
+    cmd.arg0("keleut").arg("emit-kir");
+    if text {
+        cmd.arg("--text");
+    }
+    cmd.arg("-o").arg(out).args(eargs);
+    log_route("x-ir-emit", if text { "text" } else { "binary" });
+    if quiet {
+        match cmd.stderr(std::process::Stdio::piped()).output() {
+            Ok(o) if o.status.success() => Ok(0),
+            Ok(o) => {
+                use std::io::Write;
+                let _ = std::io::stderr().write_all(&o.stderr);
+                Err(o.status.code().map_or(70, |c| c as u8))
+            }
+            Err(e) => Err(exec_failed(real_keleut, e)),
+        }
+    } else {
+        match cmd.status() {
+            Ok(st) if st.success() => Ok(0),
+            Ok(st) => Err(st.code().map_or(70, |c| c as u8)),
+            Err(e) => Err(exec_failed(real_keleut, e)),
+        }
+    }
+}
+
+/// Diktor の実行の呼び出しを、`keleut emit-kir` の後の `diktor --run-ir` にする(組 `x-ir`)。
+///
+/// 書き出しが 0 で終わらなければ、その出力と終了状態をそのまま返す。
+fn keleut_via_emit(real: &OsString, args: &[OsString], run_ir_args: &[OsString]) -> u8 {
+    let Some(eargs) = emit_args(args) else {
+        return exec(real, "diktor", args);
+    };
+    let keleut = match required("KCONFORM_REAL_KELEUT") {
+        Ok(r) => r,
+        Err(c) => return c,
+    };
+    let kir = temp_kir().into_os_string();
+    if let Err(c) = keleut_emit(&keleut, false, &kir, &eargs, false) {
+        return c;
+    }
+    let mut run = vec![OsString::from("--run-ir"), kir];
+    run.extend_from_slice(run_ir_args);
+    exec(real, "diktor", &run)
+}
+
+/// 組 `x-ir` で、KIR を書き出すだけの呼び出し(`--emit-ir`、`--emit-ir-text` と、プレリュードと import の旗)を
+/// `keleut emit-kir` に振り向ける。
+///
+/// 両方の旗があれば、Diktor と同じくテキストを先に書き、警告は 1 回だけ出す。
+/// ほかの IR の旗(`--run-ir`、`--via-ir`、`--max-depth`、`--dump-ir-tables`)やモードの旗を含む呼び出しと、
+/// 環境変数 `DIKTOR_VIA_IR` を立てた呼び出しは、本物の diktor に渡す。
+fn x_ir_emit(real: &OsString, args: &[OsString]) -> u8 {
+    if via_ir_env() {
+        return exec(real, "diktor", args);
+    }
+    let mut bin = None;
+    let mut text = None;
+    let mut rest = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].to_str() {
+            Some("--emit-ir") if i + 1 < args.len() => {
+                bin = Some(args[i + 1].clone());
+                i += 1;
+            }
+            Some("--emit-ir-text") if i + 1 < args.len() => {
+                text = Some(args[i + 1].clone());
+                i += 1;
+            }
+            Some(a @ ("--prelude" | "--import-path")) if i + 1 < args.len() => {
+                rest.push(OsString::from(a));
+                rest.push(args[i + 1].clone());
+                i += 1;
+            }
+            _ => rest.push(args[i].clone()),
+        }
+        i += 1;
+    }
+    let Some(eargs) = emit_args(&rest) else {
+        return exec(real, "diktor", args);
+    };
+    let keleut = match required("KCONFORM_REAL_KELEUT") {
+        Ok(r) => r,
+        Err(c) => return c,
+    };
+    if let Some(t) = &text
+        && let Err(c) = keleut_emit(&keleut, true, t, &eargs, bin.is_some())
+    {
+        return c;
+    }
+    if let Some(b) = &bin
+        && let Err(c) = keleut_emit(&keleut, false, b, &eargs, false)
+    {
+        return c;
+    }
+    0
+}
+
 /// `diktor` の shim の本体である。
 pub fn diktor(args: &[OsString]) -> u8 {
     restore_closed_fds();
@@ -228,6 +364,9 @@ pub fn diktor(args: &[OsString]) -> u8 {
         ("dk-ir", Route::TypeCheck) if strict_exhaustive_run(args) => {
             diktor_via_emit(&real, args, &[])
         }
+        ("x-ir", Route::Run) => keleut_via_emit(&real, args, &[]),
+        ("x-ir", Route::DiktorIr) => x_ir_emit(&real, args),
+        ("x-ir", _) => exec(&real, "diktor", args),
         ("dk" | "dk-ir" | "", _) | (_, Route::Repl | Route::DiktorIr) => {
             exec(&real, "diktor", args)
         }
@@ -519,7 +658,7 @@ pub fn keleut(args: &[OsString]) -> u8 {
     restore_closed_fds();
     let pair = std::env::var("KCONFORM_PAIR").unwrap_or_default();
     let is_run = args.first().is_some_and(|a| a == "run");
-    if is_run && (pair == "dk" || pair == "dk-ir" || pair == "kf") {
+    if is_run && (pair == "dk" || pair == "dk-ir" || pair == "kf" || pair == "x-ir") {
         let real = match required("KCONFORM_REAL_DIKTOR") {
             Ok(r) => r,
             Err(c) => return c,
@@ -541,6 +680,9 @@ pub fn keleut(args: &[OsString]) -> u8 {
         }
         if pair == "dk-ir" {
             return diktor_via_emit(&real, &dargs, &ir_extra);
+        }
+        if pair == "x-ir" {
+            return keleut_via_emit(&real, &dargs, &ir_extra);
         }
         return exec(&real, "diktor", &dargs);
     }
@@ -685,5 +827,16 @@ mod tests {
         assert_eq!(ir, a(&["--max-depth", "10"]));
         assert!(!k);
         assert!(run_to_diktor(&a(&["p.kir"])).2);
+    }
+
+    #[test]
+    fn 実行の旗を_emit_kir_に写す() {
+        assert_eq!(
+            emit_args(&a(&["--no-prelude", "--import-path", "lib", "x.kel"])).unwrap(),
+            a(&["--no-prelude", "--import-path", "lib", "x.kel"])
+        );
+        assert!(emit_args(&a(&["--typo", "x.kel"])).is_none());
+        assert!(emit_args(&a(&["--no-prelude"])).is_none());
+        assert!(emit_args(&a(&["x.kel", "--prelude"])).is_none());
     }
 }

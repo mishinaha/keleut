@@ -14,6 +14,9 @@ pub enum Engine {
     Frontend,
     /// `keleut run` に組の選択肢を足したもの。
     Keleut,
+    /// `keleut emit-kir` の後の `diktor --run-ir`(組 `x-ir`)。
+    /// Rust のフロントエンドが書いた KIR を Diktor が実行する。
+    RustIr,
 }
 
 /// 走らせる組の 1 つの実体である。
@@ -31,12 +34,14 @@ pub struct Pair {
 }
 
 /// 組の名前の一覧である。
-pub const NAMES: &[&str] = &["dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"];
+pub const NAMES: &[&str] = &[
+    "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir",
+];
 
 /// いま走らせられる組である。
 ///
 /// RustKeleut の後段は M88 から順に加わるので、ここに名前を足していく。
-pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki"];
+pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "x-ir"];
 
 /// `--pairs` を省いたときに走らせる組である。
 ///
@@ -85,6 +90,7 @@ pub fn expand(name: &str) -> Option<Vec<Pair>> {
         "ka" => seeded("ka", "alternating", 8),
         "km" => seeded("km", "mixed", 4),
         "kw" => one("kw", Engine::Keleut, &["--backend", "wasm"]),
+        "x-ir" => one("x-ir", Engine::RustIr, &[]),
         _ => return None,
     })
 }
