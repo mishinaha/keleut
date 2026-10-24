@@ -149,7 +149,7 @@ impl Out {
 }
 
 /// I/O の誤りの文面(OCaml の `Sys_error` の文面と同じく、末尾の `(os error N)` を除く)。
-fn io_msg(e: &std::io::Error) -> String {
+pub(crate) fn io_msg(e: &std::io::Error) -> String {
     let s = e.to_string();
     match s.rfind(" (os error ") {
         Some(i) => s[..i].to_string(),
@@ -163,7 +163,8 @@ struct Options {
     limits: Limits,
 }
 
-fn parse_bytes(s: &str) -> Option<usize> {
+/// `k`、`m`、`g` の接尾辞を使えるバイト数を読む。64 KiB より小さい値は受けない。
+pub(crate) fn parse_bytes(s: &str) -> Option<usize> {
     let (num, mul) = match s.as_bytes().last()? {
         b'k' | b'K' => (&s[..s.len() - 1], 1usize << 10),
         b'm' | b'M' => (&s[..s.len() - 1], 1 << 20),

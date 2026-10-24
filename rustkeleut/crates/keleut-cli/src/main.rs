@@ -6,6 +6,7 @@
 
 use std::process::ExitCode;
 
+mod check_cmd;
 mod dump_cmd;
 mod front_cmd;
 mod kir_cmd;
@@ -46,7 +47,7 @@ type Handler = fn(&[String]) -> u8;
 /// 表に無い名前は使い方の誤り(64)にする。
 const COMMANDS: &[(&str, Handler)] = &[
     ("run", unimplemented_command),
-    ("check", unimplemented_command),
+    ("check", check_cmd::main),
     ("emit-kir", unimplemented_command),
     ("kir", kir_cmd::main),
     ("build", unimplemented_command),
@@ -121,7 +122,7 @@ mod tests {
     #[test]
     fn 中身の無いサブコマンドは未実装になる() {
         for (name, _) in COMMANDS {
-            if *name != "kir" && *name != "dump" {
+            if *name != "kir" && *name != "dump" && *name != "check" {
                 assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
             }
         }
