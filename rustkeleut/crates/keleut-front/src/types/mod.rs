@@ -1,4 +1,5 @@
 //! 型検査の核である(Diktor の syntax.ml の `Type`、decls.ml、unify.ml、show.ml、exhaust.ml、elab.ml)。
+//! 型検査を済ませた状態から KIR を作る手順([`emit`]、Diktor の ir_write.ml)も置く。
 //!
 //! Diktor の型検査は大域の可変状態(表と参照)を使うが、本モジュールはそれを 1 つの文脈 [`Tc`] に集める(計画 7 節)。
 //! 型は添字で引く表(arena)に置き、型変数は添字の Union-Find にする。
@@ -25,6 +26,7 @@ mod decl;
 mod decls;
 mod elab;
 mod elab_bind;
+pub mod emit;
 mod exhaust;
 mod flatten;
 pub mod fx;

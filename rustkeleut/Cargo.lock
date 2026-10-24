@@ -20,6 +20,9 @@ dependencies = [
 [[package]]
 name = "keleut-front"
 version = "0.1.0"
+dependencies = [
+ "kir",
+]
 
 [[package]]
 name = "keleut-interp"

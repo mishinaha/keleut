@@ -51,7 +51,7 @@ pub(crate) struct PubScope {
 }
 
 /// 演算子の意味(Diktor の `Prims.bin_op_sem`)。
-fn bin_op_sem(op: BinOp) -> Option<(&'static str, &'static str)> {
+pub(crate) fn bin_op_sem(op: BinOp) -> Option<(&'static str, &'static str)> {
     use BinOp::*;
     match op {
         Add => Some(("Add", "add")),
