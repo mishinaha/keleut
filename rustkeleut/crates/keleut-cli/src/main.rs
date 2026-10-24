@@ -8,6 +8,7 @@ use std::process::ExitCode;
 
 mod check_cmd;
 mod dump_cmd;
+mod emit_kir_cmd;
 mod front_cmd;
 mod kir_cmd;
 mod lir_cmd;
@@ -31,7 +32,7 @@ usage: keleut COMMAND [ARGS...]
 commands:
   run [OPTIONS] FILE.kel... | FILE.kir   run a program
   check FILE.kel...                      type-check (same output as diktor --type-check)
-  emit-kir [--text] -o OUT FILE.kel...   write KIR
+  emit-kir [--text] [-o OUT] FILE.kel... write KIR
   kir verify|dis|asm|tables FILE         KIR tools
   build --target wasm -o DIR FILE        build a WasmGC program
   dump tokens|ast|lir|bytecode|llvm FILE debugging output
@@ -49,7 +50,7 @@ type Handler = fn(&[String]) -> u8;
 const COMMANDS: &[(&str, Handler)] = &[
     ("run", run_cmd::main),
     ("check", check_cmd::main),
-    ("emit-kir", unimplemented_command),
+    ("emit-kir", emit_kir_cmd::main),
     ("kir", kir_cmd::main),
     ("build", unimplemented_command),
     ("dump", dump_cmd::main),
@@ -123,7 +124,7 @@ mod tests {
     #[test]
     fn 中身の無いサブコマンドは未実装になる() {
         for (name, _) in COMMANDS {
-            if *name != "kir" && *name != "dump" && *name != "check" && *name != "run" {
+            if !["kir", "dump", "check", "run", "emit-kir"].contains(name) {
                 assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
             }
         }
