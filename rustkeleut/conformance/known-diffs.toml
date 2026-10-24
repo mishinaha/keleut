@@ -1,6 +1,7 @@
 # 既知の差の一覧(計画 261024-1 の 8.1 節)。
 # kconform は、ここに無い差が 1 件でもあれば失敗する。
 # 各項目は、試験のパスの末尾、`  $ ` の行の番号、組、理由、台帳の番号を持つ。
+# 鍵 when と against は省ける(conformance/README.md と crates/kconform/src/known_diffs.rs を見よ)。
 #
 # V213: OCAMLRUNPARAM=l=... で OCaml のスタックの上限を絞るブロックは、
 # Diktor の木の評価器のスタックの限度を試すもので、語数を写さない。
@@ -255,13 +256,121 @@ ledger = "V213"
 
 # 組 kf の型検査の呼び出し(M97 から keleut check)が、標準出力に書けないときの診断の接頭辞は keleut: である。
 # Diktor は diktor: を出す。終了状態(74)と診断の種類は同じである。
+# 組 ki も、型検査の呼び出しを keleut check で走らせる(M88)。
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 636
-pairs = ["kf"]
+pairs = ["kf", "ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
+
+# 組 ki の実行の呼び出し(M88 から keleut run)も、標準出力に書けないときの診断の接頭辞は keleut: である。
+# conformance/bytes/ の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf)のほうが記録と違う。
+# これらの組の項目は against = "record" とし、記録との差だけを許す。
+# 組 ki は記録と一致し、基準の組 dk と違うので、別の項目を against = "pair" として置く。
+# sinkfail.t:26 の組 ki は、M89 までは評価が handle に届いて 4 で終わるので、known-diffs-unimplemented.toml に当たる。
+# M89 でその登録を消したら、ここに組 ki の against = "pair" の項目を足す。
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 632
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 57
+pairs = ["dk", "dk-ir", "kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 57
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 63
+pairs = ["dk", "dk-ir", "kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 63
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 70
+pairs = ["dk", "dk-ir", "kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 70
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 73
+pairs = ["dk", "dk-ir", "kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 73
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 26
+pairs = ["dk", "dk-ir", "kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+# V218: 標準出力が非ブロッキングのパイプのとき、Diktor は書き込みの EAGAIN を Sys_blocked_io の例外で受けて、
+# 内部エラーの後に 2 で終わる。keleut run は計画 6.5 節の出力の規約のとおり待って書き直し、0 で終わる。
+# bytes.t の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf)が記録と違い(against = "record")、
+# 組 ki が組 dk と違う(against = "pair")。
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 50
+pairs = ["dk", "dk-ir", "kf"]
+reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
+ledger = "V218"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 50
+pairs = ["ki"]
+reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
+ledger = "V218"
+against = "pair"
 
 # 組 kf の実行と型検査の呼び出し(M98 から import を含めてすべて keleut check)が、
 # 入力や import 先を開けないときの診断の接頭辞も keleut: である。終了状態(64)と診断の種類は同じである。
@@ -283,6 +392,22 @@ ledger = "V217"
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 668
+pairs = ["kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+# コーパスの、--prelude に開けないファイルを渡す 2 本。組 kf は keleut が型検査の前にプレリュードを読む。
+
+[[diff]]
+file = "corpus/ir_run/0005-hw.kel"
+line = 1
+pairs = ["kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "corpus/resolved_names/0002-pmuse.kel"
+line = 1
 pairs = ["kf"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
