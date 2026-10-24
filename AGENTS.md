@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 
 - `doc/sample.kel` is the Keleut language specification: its comments define syntax and semantics. `doc/log/` records design and status notes.
-- `diktor/` is a Git submodule containing the OCaml bootstrap interpreter. Core modules live in `lib/`, the CLI entry point in `bin/main.ml`, and Cram tests in `test/*.t`. Keep implementation logic in the library.
+- `diktor/` is a Git submodule containing Diktor, the OCaml reference interpreter of Keleut. It serves as the test oracle for RustKeleut, the main implementation, and as the reference implementation of KIR. Core modules live in `lib/`, the CLI entry point in `bin/main.ml`, and Cram tests in `test/*.t`. Keep implementation logic in the library.
 - `diktor/lib/prelude.kel` provides the prelude; `diktor/test/sample/` holds specification fixtures and stubs.
 - `reference/` contains ignored local reference material, including `MiniLang.scala` when available; a fresh clone does not supply it.
 
