@@ -262,3 +262,27 @@ line = 636
 pairs = ["kf"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
+
+# 組 kf の実行と型検査の呼び出し(M98 から import を含めてすべて keleut check)が、
+# 入力や import 先を開けないときの診断の接頭辞も keleut: である。終了状態(64)と診断の種類は同じである。
+
+[[diff]]
+file = "diktor/test/import.t"
+line = 298
+pairs = ["kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 339
+pairs = ["kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 668
+pairs = ["kf"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
