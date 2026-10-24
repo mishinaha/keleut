@@ -6,6 +6,8 @@
 
 use std::process::ExitCode;
 
+mod dump_cmd;
+mod front_cmd;
 mod kir_cmd;
 
 /// 終了状態の定数である(計画 6.2 節の表)。
@@ -47,7 +49,7 @@ const COMMANDS: &[(&str, Handler)] = &[
     ("emit-kir", unimplemented_command),
     ("kir", kir_cmd::main),
     ("build", unimplemented_command),
-    ("dump", unimplemented_command),
+    ("dump", dump_cmd::main),
     ("repl", unimplemented_command),
     ("compat-diktor", unimplemented_command),
 ];
@@ -84,7 +86,20 @@ fn dispatch(args: &[String]) -> u8 {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `std::env::args` は UTF-8 でない引数で落ちるので、`args_os` で受けて使い方の誤りにする。
+    let mut args = Vec::new();
+    for a in std::env::args_os().skip(1) {
+        match a.into_string() {
+            Ok(s) => args.push(s),
+            Err(a) => {
+                eprintln!(
+                    "keleut: argument is not valid UTF-8: {}",
+                    a.to_string_lossy()
+                );
+                return ExitCode::from(exit::USAGE);
+            }
+        }
+    }
     ExitCode::from(dispatch(&args))
 }
 
@@ -105,7 +120,7 @@ mod tests {
     #[test]
     fn 中身の無いサブコマンドは未実装になる() {
         for (name, _) in COMMANDS {
-            if *name != "kir" {
+            if *name != "kir" && *name != "dump" {
                 assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
             }
         }

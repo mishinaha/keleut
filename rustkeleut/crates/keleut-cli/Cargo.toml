@@ -11,4 +11,5 @@ name = "keleut"
 path = "src/main.rs"
 
 [dependencies]
+keleut-front = { path = "../keleut-front" }
 kir = { path = "../kir" }
