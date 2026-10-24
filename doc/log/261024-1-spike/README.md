@@ -37,6 +37,23 @@ Node 26.9.0 の V8 が、WasmGC の後段に要る機能をどこまで受け付
 `run.mjs`、`fx*.mjs`、`depth.mjs`、`tier.mjs`、`utf8.mjs` は、Node で動かす検査である。
 手順と出力は `wasm/README.md` にある。
 
+### stack/: Node のスタックと WasmGC の配列の長さ(M79)
+
+計画の M79 で足した試作である(2026-10-24、親 6e82e6d の上)。
+`depth.mjs` と `wk.mjs` は E12 の再測定で、`../wasm/out/tail.wasm` を `import.meta.url` からの相対パスで読む。
+`bigframe.mjs` は Wasm の非末尾の再帰の 1 段のバイト数と、`--stack-size` と `Worker` の `stackSizeMb` の上限を測り、`B_wasm` と `S` を決める。
+`arraylen.mjs` は WasmGC の配列の長さの上限を測る。
+この 2 つは、`wasmgen.mjs` で Wasm のモジュールを JS のバイト列として組むので、ビルドの手順が要らない。
+手順は `stack/README.md` に、測った値は `doc/log/261024-2-m79.md` の 1 節と 2 節にある。
+
+### rtcore/: musl の libm を x86_64 と wasm32 で比べる試作(M79)
+
+計画の M79 で足した試作である(2026-10-24、親 6e82e6d の上)。
+musl 1.2.6 の `sin cos exp log` を、libc なしで clang により x86_64 と wasm32 に組み、2 つの結果をビット列で比べる(V200)。
+`make -C doc/log/261024-1-spike/rtcore check` が、組み立て、libc の記号を参照しないことの確認、1,000,000 個の入力での比較を行い、差があれば 0 でない状態で終わる。
+手順は `rtcore/README.md` に、取り込んだファイルの一覧は `rtcore/musl/SOURCE.md` にある。
+版、出所、sha256 と結果は `doc/log/261024-2-m79.md` の 3 節にある。
+
 ### probe/: 探査のプログラム
 
 調査報告と設計案の作成で、仮説を確かめるために書いた小さなプログラムである。
@@ -98,6 +115,6 @@ Node 26.9.0 の V8 が、WasmGC の後段に要る機能をどこまで受け付
   同じ形の表(終了状態とパス)は、`corpus/` の中で `find . -name '*.kel' | while read f; do diktor --type-check "$f" >/dev/null 2>&1; echo "$? $f"; done` で作れる(行の順は `find` に依る)。
 - `probe/fp/diktor-copy/`: fp が時間を測るために使った diktor の写しである。
   diktor 6e49bbb を別の場所に写して `dune build` すれば同じものになる。
-- ビルドの成果物: `llvm/target/`(実行のたびに `target/ir/*.ll` も書く)、`llvm/inkwell-check/target/`、`wasm/target/`、`wasm/out/`、`probe/tg/llv/target/`、`probe/tg/fib/target/`。
+- ビルドの成果物: `llvm/target/`(実行のたびに `target/ir/*.ll` も書く)、`llvm/inkwell-check/target/`、`wasm/target/`、`wasm/out/`、`rtcore/out/`、`probe/tg/llv/target/`、`probe/tg/fib/target/`。
   作業の木に残っていることがあるが、各ディレクトリの `.gitignore` で除いてあり、材料には含めない。
-  `llvm/README.md` と `wasm/README.md` の手順(`cargo build --release`、`cargo run -q`)と、`probe/tg/llv` と `probe/tg/fib` の `cargo build --release` で作り直せる。
+  `llvm/README.md` と `wasm/README.md` の手順(`cargo build --release`、`cargo run -q`)、`make -C doc/log/261024-1-spike/rtcore check` と、`probe/tg/llv` と `probe/tg/fib` の `cargo build --release` で作り直せる。
