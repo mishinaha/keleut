@@ -223,18 +223,78 @@ pub fn diktor(args: &[OsString]) -> u8 {
     let route = classify(args, via_ir_env());
     match (pair.as_str(), route) {
         ("dk-ir", Route::Run) => diktor_via_emit(&real, args, &[]),
+        // `--strict-exhaustive` だけの呼び出しは表では型検査の行にあるが、Diktor はプログラムを実行するので、
+        // 組 `ki` と同じく実行として扱う。
+        ("dk-ir", Route::TypeCheck) if strict_exhaustive_run(args) => {
+            diktor_via_emit(&real, args, &[])
+        }
         ("dk" | "dk-ir" | "", _) | (_, Route::Repl | Route::DiktorIr) => {
             exec(&real, "diktor", args)
         }
         (_, Route::Dump) => dump_to_keleut(&real, args),
         ("kf", Route::Run | Route::TypeCheck) => kf_check(&real, args),
+        (p, Route::Run | Route::TypeCheck) if is_keleut_pair(p) => keleut_backend(&real, args),
         (_, Route::TypeCheck) => exec(&real, "diktor", args),
         (p, Route::Run) => {
-            // 実行を keleut に振り向けるのは M88 からである。
-            eprintln!("kconform shim: 組 {p} の diktor の実行の振り分けはまだありません");
+            eprintln!("kconform shim: 組 {p} の diktor の実行の振り分けはありません");
             4
         }
     }
+}
+
+/// 型検査の行に当たる呼び出しが、実際には実行(`--strict-exhaustive` があり `--type-check` が効かない)かどうかを返す。
+fn strict_exhaustive_run(args: &[OsString]) -> bool {
+    matches!(diktor_mode(args), Some((Mode::Run, f, _)) if !f.is_empty())
+}
+
+/// 組が RustKeleut の後段(`keleut run`)で実行する組(`ki kj kt ka km kw`)かどうかを返す。
+fn is_keleut_pair(name: &str) -> bool {
+    crate::pairs::expand(name)
+        .is_some_and(|ps| ps.iter().all(|p| p.engine == crate::pairs::Engine::Keleut))
+}
+
+/// RustKeleut の後段の組で、Diktor の実行と型検査の呼び出しを振り分ける(計画 8.1 節の shim の表)。
+///
+/// - 実行(旗なし、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive`)は、
+///   本物の `diktor --emit-ir` が 0 で終われば `keleut run 組の選択肢 FILE.kir` に移り、
+///   0 でなければその出力と終了状態をそのまま返す。
+///   網羅漏れの警告で 1 で終わるかどうかは、同じ旗(`--strict-exhaustive`)を渡した `diktor --emit-ir` が決める
+///   (0 でなければ `keleut run` に進まず、その出力と終了状態を返す)。
+/// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す(M98 で切り替えた行)。
+/// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+fn keleut_backend(real: &OsString, args: &[OsString]) -> u8 {
+    match diktor_mode(args) {
+        Some((Mode::Run, files, _)) if !files.is_empty() => diktor_to_keleut_run(real, args),
+        Some((Mode::TypeCheck, files, _)) if !files.is_empty() => kf_check(real, args),
+        _ => exec(real, "diktor", args),
+    }
+}
+
+/// Diktor の実行の呼び出しを、本物の `diktor --emit-ir` の後の `keleut run 組の選択肢 FILE.kir` にする。
+///
+/// 書き出しの警告(網羅漏れなど)は `diktor --emit-ir` が標準エラーに出し、`keleut run` は出さない。
+/// 木の評価器と同じく、警告は実行の出力より前に出る。
+fn diktor_to_keleut_run(real: &OsString, args: &[OsString]) -> u8 {
+    let keleut = match required("KCONFORM_REAL_KELEUT") {
+        Ok(r) => r,
+        Err(c) => return c,
+    };
+    let kir = temp_kir().into_os_string();
+    let mut emit = vec![OsString::from("--emit-ir"), kir.clone()];
+    emit.extend_from_slice(args);
+    let st = match Command::new(real).arg0("diktor").args(&emit).status() {
+        Ok(st) => st,
+        Err(e) => return exec_failed(real, e),
+    };
+    if !st.success() {
+        log_route("keleut-run", "diktor-emit");
+        return st.code().map_or(70, |c| c as u8);
+    }
+    log_route("keleut-run", "keleut");
+    let mut run = vec![OsString::from("run")];
+    run.extend(pair_args());
+    run.push(kir);
+    exec(&keleut, "keleut", &run)
 }
 
 /// Diktor のモードの旗である(後に書いたものが効く)。
@@ -337,11 +397,16 @@ fn kf_check_args(args: &[OsString]) -> Option<(Mode, Vec<OsString>)> {
 
 /// 組 `kf` の振り分けを記録の行に足す(`--list-invocations` に `kf-check` の行として出る)。
 fn log_kf(outcome: &str) {
+    log_route("kf-check", outcome);
+}
+
+/// 振り分けを記録の行に足す(`--list-invocations` に `tag` の行として出る)。
+fn log_route(tag: &str, outcome: &str) {
     let Some(log) = env("KCONFORM_LOG") else {
         return;
     };
     let cmd = std::env::var("KCONFORM_CMD").unwrap_or_default();
-    let line = format!("{cmd}\tkf-check\t{outcome}\n");
+    let line = format!("{cmd}\t{tag}\t{outcome}\n");
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .append(true)
         .create(true)
@@ -420,6 +485,8 @@ const RUN_KELEUT_ONLY: &[(&str, usize)] = &[
 /// `keleut run ARGS` の `ARGS` を、Diktor の呼び出しに写す(組 `dk` と `dk-ir`)。
 ///
 /// 戻り値は、Diktor の引数、`--run-ir` に足す旗、KIR のファイルを走らせるかどうかである。
+/// テキストの KIR(`.kirt`)も KIR のファイルとして扱う。
+/// `diktor --run-ir` はバイナリしか読まないので、[`keleut`] がその呼び出しを断る。
 fn run_to_diktor(args: &[OsString]) -> (Vec<OsString>, Vec<OsString>, bool) {
     let mut out = Vec::new();
     let mut ir_extra = Vec::new();
@@ -458,6 +525,14 @@ pub fn keleut(args: &[OsString]) -> u8 {
             Err(c) => return c,
         };
         let (dargs, ir_extra, is_kir) = run_to_diktor(&args[1..]);
+        // `diktor --run-ir` はテキストの KIR を読まないので、Diktor の側だけが shim のせいで 65 になる。
+        // 基準の組の結果を RustKeleut のアセンブラに頼らせないため、変換せずに断る。
+        if dargs.iter().any(|a| a.as_bytes().ends_with(b".kirt")) {
+            eprintln!(
+                "kconform shim: 組 {pair} は keleut run のテキストの KIR(.kirt)を Diktor で走らせられません"
+            );
+            return 4;
+        }
         if is_kir {
             let mut v = vec![OsString::from("--run-ir")];
             v.extend(dargs);
@@ -488,6 +563,43 @@ mod tests {
 
     fn a(xs: &[&str]) -> Vec<OsString> {
         xs.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn 後段の組を見分ける() {
+        for p in ["ki", "kj", "kt", "ka", "km", "kw"] {
+            assert!(is_keleut_pair(p), "{p}");
+        }
+        for p in ["dk", "dk-ir", "kf", "x-ir", "zz", ""] {
+            assert!(!is_keleut_pair(p), "{p}");
+        }
+        // 実行と型検査は diktor の引数解析と同じ規則でモードを決める(後に書いたものが効く)。
+        let (m, f, _) = diktor_mode(&a(&["--strict-exhaustive", "x.kel"])).unwrap();
+        assert_eq!((m, f), (Mode::Run, a(&["x.kel"])));
+        let (m, _, _) = diktor_mode(&a(&["--strict-exhaustive", "--type-check", "x.kel"])).unwrap();
+        assert_eq!(m, Mode::TypeCheck);
+    }
+
+    #[test]
+    fn 網羅を厳しくする実行は組_dk_ir_でも実行にする() {
+        assert!(strict_exhaustive_run(&a(&["--strict-exhaustive", "x.kel"])));
+        assert!(strict_exhaustive_run(&a(&[
+            "--no-prelude",
+            "--strict-exhaustive",
+            "x.kel"
+        ])));
+        assert!(!strict_exhaustive_run(&a(&[
+            "--strict-exhaustive",
+            "--type-check",
+            "x.kel"
+        ])));
+        assert!(!strict_exhaustive_run(&a(&["--type-check", "x.kel"])));
+        assert!(!strict_exhaustive_run(&a(&["--strict-exhaustive"])));
+        assert!(!strict_exhaustive_run(&a(&[
+            "--strict-exhaustive",
+            "--typo",
+            "x.kel"
+        ])));
     }
 
     #[test]
