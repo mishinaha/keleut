@@ -1,0 +1,22 @@
+effect Ask = {
+  ask: () => Int32,
+  fail: (Int32) => Never
+}
+
+let once(body: () => Int32 @ {Ask}): Int32 =
+  body() handle {
+    case ask() => resume(1)
+    case fail(n) => n
+    case return(v) => v + 100
+    case cancel => ()
+  }
+
+let twice(body: () => Int32 @ {Ask}): Int32 =
+  body() handle {
+    case ask() => { let x = resume(2); x * 2 }
+    case fail(n) => n
+  }
+
+let r1 = once(fn() => perform ask() + perform ask())
+let r2 = twice(fn() => perform ask())
+let r3 = once(fn() => perform fail(7))

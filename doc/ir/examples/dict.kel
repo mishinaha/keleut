@@ -1,0 +1,18 @@
+type class Size[A] {
+  val size: (A) => Int32
+}
+
+newtype Box[A] = Box(A)
+
+type instance Size[Int32] {
+  let size(x) = 1
+}
+
+type instance[A: Size] Size[Box[_]] {
+  let size(b) = b match { case Box(x) => size(x) + 1 }
+}
+
+let sum_sizes[A: Size](x: A, y: A): Int32 = size(x) + size(y)
+
+let n = sum_sizes(Box(5), Box(6))
+let same = {k = 1, v = true} == {k = 1, v = true}

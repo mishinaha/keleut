@@ -1,0 +1,13 @@
+newtype Shape = Circle(r: Int32) | Rect(w: Int32, h: Int32)
+
+let area(s: Shape): Int32 = s match {
+  case Circle(r) => 3 * r * r
+  case Rect(w, h) if w == h => w * w
+  case Rect(w = w, h = h) => w * h
+}
+
+let scale(k: Int32): (Shape) => Int32 = fn(s) => k * area(s)
+
+let p = {x = 1, y = 2}
+let q = {p with x = 10}
+let (a, b) = (scale(2)(Rect(3, 4)), q.x)

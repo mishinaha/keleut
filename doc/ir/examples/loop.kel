@@ -1,0 +1,4 @@
+let rec loop(n: Int32, acc: Int64): Int64 =
+  if n == 0 then acc else loop(n - 1, acc + 1)
+
+let total = loop(3, 0)
