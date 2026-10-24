@@ -1,0 +1,1409 @@
+(kir 0 3 0)
+(unit "builtin" (paths))
+(unit "prelude" (paths "<prelude>"))
+(unit "main" (paths "sample/stubs.kel" "sample/sample.kel"))
+(type "builtin/Boolean")
+(type "builtin/Int32")
+(type "builtin/Int64")
+(type "builtin/Float64")
+(type "builtin/String")
+(type "builtin/Never")
+(type "builtin/Ref")
+(type "builtin/Array")
+(type "builtin/MutableArray")
+(type "prelude/Option" (ctor None 0) (ctor Some 1))
+(type "prelude/List" (ctor Nil 0) (ctor Cons 2))
+(type "main/Instant")
+(type "main/Conn")
+(type "main/Stmt")
+(type "main/Chan")
+(type "main/Resp")
+(type "main/UserId" (ctor UserId 1))
+(type "main/TotalFloat64" (ctor TotalFloat64 1))
+(type "main/Callback" (ctor Callback 1))
+(type "main/Parser.Parser" (ctor Parser 1))
+(type "main/BigInt.BigInt")
+(effect "prelude/Console" (op write 1 resume runtime))
+(effect "prelude/Print" (op print 1 resume user))
+(effect "main/Db" (op db_op 1 resume user))
+(effect "main/Fail" (op throw 1 never user))
+(effect "main/File" (op read 0 resume user) (op write 1 resume user))
+(effect "main/ReqId" (op req_id 0 resume user))
+(effect "main/Logger" (op log 1 resume user))
+(effect "main/Tracer" (op span 1 resume user))
+(effect "main/Async" (op yield_ 0 resume user) (op sleep 1 resume user))
+(effect "main/Nursery" (op spawn 1 resume user))
+(effect "main/Deadline" (op deadline 0 resume user))
+(effect "main/Background" (op spawn_bg 1 resume user))
+(class "builtin/Add" (method add 0))
+(class "builtin/Sub" (method sub 0))
+(class "builtin/Mul" (method mul 0))
+(class "builtin/Div" (method div 0))
+(class "builtin/Rem" (method rem 0))
+(class "builtin/Neg" (method neg 0))
+(class "builtin/Eq" (method eq 0))
+(class "builtin/Ord" (method lt 0) (method le 0) (method gt 0) (method ge 0))
+(class "builtin/Show" (method show 0))
+(class "main/Functor" (method map 0))
+(instance "prelude/instance:Show[List]" "builtin/Show" "prelude/List" (premises 1) (method show 0 "prelude/instance:Show[List].show"))
+(instance "prelude/instance:Show[Option]" "builtin/Show" "prelude/Option" (premises 1) (method show 0 "prelude/instance:Show[Option].show"))
+(instance "prelude/instance:Eq[List]" "builtin/Eq" "prelude/List" (premises 1) (method eq 0 "prelude/instance:Eq[List].eq"))
+(instance "prelude/instance:Eq[Option]" "builtin/Eq" "prelude/Option" (premises 1) (method eq 0 "prelude/instance:Eq[Option].eq"))
+(instance "main/instance:Functor[List]" "main/Functor" "prelude/List" (premises 0) (method map 0 "main/instance:Functor[List].map"))
+(instance "main/instance:Add[BigInt.BigInt]" "builtin/Add" "main/BigInt.BigInt" (premises 0) (method add 0 "main/instance:Add[BigInt.BigInt].add"))
+(instance "main/instance:Mul[BigInt.BigInt]" "builtin/Mul" "main/BigInt.BigInt" (premises 0) (method mul 0 "main/instance:Mul[BigInt.BigInt].mul"))
+(global "builtin/Ref.new" builtin)
+(global "builtin/Ref.get" builtin)
+(global "builtin/Ref.set" builtin)
+(global "builtin/Array.length" builtin)
+(global "builtin/Array.get" builtin)
+(global "builtin/Array.each" builtin)
+(global "builtin/MutableArray.new" builtin)
+(global "builtin/MutableArray.length" builtin)
+(global "builtin/MutableArray.get" builtin)
+(global "builtin/MutableArray.set" builtin)
+(global "builtin/MutableArray.freeze" builtin)
+(global "builtin/pinned" builtin)
+(global "prelude/__int32_add" extern prim "__int32_add" 0)
+(global "prelude/__int32_sub" extern prim "__int32_sub" 0)
+(global "prelude/__int32_mul" extern prim "__int32_mul" 0)
+(global "prelude/__int32_div" extern prim "__int32_div" 0)
+(global "prelude/__int32_rem" extern prim "__int32_rem" 0)
+(global "prelude/__int32_neg" extern prim "__int32_neg" 0)
+(global "prelude/__int32_eq" extern prim "__int32_eq" 0)
+(global "prelude/__int32_lt" extern prim "__int32_lt" 0)
+(global "prelude/__int32_le" extern prim "__int32_le" 0)
+(global "prelude/__int32_gt" extern prim "__int32_gt" 0)
+(global "prelude/__int32_ge" extern prim "__int32_ge" 0)
+(global "prelude/__int64_add" extern prim "__int64_add" 0)
+(global "prelude/__int64_sub" extern prim "__int64_sub" 0)
+(global "prelude/__int64_mul" extern prim "__int64_mul" 0)
+(global "prelude/__int64_div" extern prim "__int64_div" 0)
+(global "prelude/__int64_rem" extern prim "__int64_rem" 0)
+(global "prelude/__int64_neg" extern prim "__int64_neg" 0)
+(global "prelude/__int64_eq" extern prim "__int64_eq" 0)
+(global "prelude/__int64_lt" extern prim "__int64_lt" 0)
+(global "prelude/__float64_add" extern prim "__float64_add" 0)
+(global "prelude/__float64_sub" extern prim "__float64_sub" 0)
+(global "prelude/__float64_mul" extern prim "__float64_mul" 0)
+(global "prelude/__float64_div" extern prim "__float64_div" 0)
+(global "prelude/__float64_neg" extern prim "__float64_neg" 0)
+(global "prelude/__float64_eq" extern prim "__float64_eq" 0)
+(global "prelude/__float64_lt" extern prim "__float64_lt" 0)
+(global "prelude/__string_concat" extern prim "__string_concat" 0)
+(global "prelude/__string_eq" extern prim "__string_eq" 0)
+(global "prelude/__string_lt" extern prim "__string_lt" 0)
+(global "prelude/__string_length" extern prim "__string_length" 0)
+(global "prelude/__string_sub" extern prim "__string_sub" 0)
+(global "prelude/__i32_to_i64" extern prim "__i32_to_i64" 0)
+(global "prelude/__i32_to_f64" extern prim "__i32_to_f64" 0)
+(global "prelude/__i64_to_i32" extern prim "__i64_to_i32" 0)
+(global "prelude/__i64_to_f64" extern prim "__i64_to_f64" 0)
+(global "prelude/__f64_to_i32" extern prim "__f64_to_i32" 0)
+(global "prelude/__f64_to_i64" extern prim "__f64_to_i64" 0)
+(global "prelude/__panic" extern prim "__panic" 0)
+(global "prelude/__int64_le" extern prim "__int64_le" 0)
+(global "prelude/__int64_gt" extern prim "__int64_gt" 0)
+(global "prelude/__int64_ge" extern prim "__int64_ge" 0)
+(global "prelude/__float64_le" extern prim "__float64_le" 0)
+(global "prelude/__float64_gt" extern prim "__float64_gt" 0)
+(global "prelude/__float64_ge" extern prim "__float64_ge" 0)
+(global "prelude/__string_le" extern prim "__string_le" 0)
+(global "prelude/__string_gt" extern prim "__string_gt" 0)
+(global "prelude/__string_ge" extern prim "__string_ge" 0)
+(global "prelude/__show_int32" extern prim "__show_int32" 0)
+(global "prelude/echo" fn "prelude/echo")
+(global "prelude/echoln" fn "prelude/echoln")
+(global "prelude/println" fn "prelude/println")
+(global "prelude/with_stdout" fn "prelude/with_stdout")
+(global "main/Db.query" fn "main/Db.query")
+(global "main/sqrt" fn "main/sqrt")
+(global "main/each" fn "main/each")
+(global "main/heavy" fn "main/heavy")
+(global "main/audit_log" fn "main/audit_log")
+(global "main/handle_client" fn "main/handle_client")
+(global "main/a" value i32)
+(global "main/b" value i64)
+(global "main/c" value i64)
+(global "main/d" value i32)
+(global "main/e" value f64)
+(global "main/sum_xy" fn "main/sum_xy")
+(global "main/with_z" fn "main/with_z")
+(global "main/move_x" fn "main/move_x")
+(global "main/outer_x" fn "main/outer_x")
+(global "main/make_point" fn "main/make_point")
+(global "main/swap" fn "main/swap")
+(global "main/fst" fn "main/fst")
+(global "main/describe" fn "main/describe")
+(global "main/report" fn "main/report")
+(global "main/some_one" fn "main/some_one")
+(global "main/get_or" fn "main/get_or")
+(global "main/list_length" fn "main/list_length")
+(global "main/twice_sum_xy" fn "main/twice_sum_xy")
+(global "main/dist" fn "main/dist")
+(global "main/head_and_rest" fn "main/head_and_rest")
+(global "main/inc_all" fn "main/inc_all")
+(global "main/count_if" fn "main/count_if")
+(global "main/is_even" fn "main/is_even")
+(global "main/is_odd" fn "main/is_odd")
+(global "main/fma" dictabs "main/fma")
+(global "main/same_point" fn "main/same_point")
+(global "main/same_pair" fn "main/same_pair")
+(global "main/user_names" fn "main/user_names")
+(global "main/println" fn "main/println")
+(global "main/capture" fn "main/capture")
+(global "main/try_" fn "main/try_")
+(global "main/file_open" extern C "file_open" 0)
+(global "main/file_read" extern C "file_read" 0)
+(global "main/file_write" extern C "file_write" 0)
+(global "main/file_close" extern C "file_close" 0)
+(global "main/with_file" fn "main/with_file")
+(global "main/copy" fn "main/copy")
+(global "main/Parser.bind" fn "main/Parser.bind")
+(global "main/Parser.pure" fn "main/Parser.pure")
+(global "main/Parser.token" fn "main/Parser.token")
+(global "main/parens" fn "main/parens")
+(global "main/handle_request" fn "main/handle_request")
+(global "main/sum" fn "main/sum")
+(global "main/doubled" fn "main/doubled")
+(global "main/par_map" fn "main/par_map")
+(global "main/par" fn "main/par")
+(global "main/scope" fn "main/scope")
+(global "main/serve" fn "main/serve")
+(global "main/with_timeout" fn "main/with_timeout")
+(global "main/handle_audited" fn "main/handle_audited")
+(global "main/crunch" fn "main/crunch")
+(global "main/channel" fn "main/channel")
+(global "main/send" fn "main/send")
+(global "main/recv" fn "main/recv")
+(global "main/sin" extern C "sin" 0)
+(global "main/sqlite_step" extern C "sqlite_step" 0)
+(global "main/pinned" fn "main/pinned")
+(global "main/BigInt.parse" fn "main/BigInt.parse")
+(global "main/BigInt.normalize" fn "main/BigInt.normalize")
+(global "main/big_sum" fn "main/big_sum")
+(fn "prelude/echo" lambda noyield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (perform "prelude/Console" write (local 0)))
+(fn "prelude/echoln" lambda noyield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (perform "prelude/Console" write
+    (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (local 0) (lit str "\x0a"))))
+(fn "prelude/println" lambda yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (perform "prelude/Print" print
+    (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (local 0) (lit str "\x0a"))))
+(fn "prelude/with_stdout" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (handle tail "prelude/Print"
+    (body "prelude/with_stdout$h0.body" (local 0))
+    (op print T "prelude/with_stdout$h0.op.print")
+    (return "prelude/with_stdout$h0.return")))
+(fn "prelude/with_stdout$h0.body" handlebody yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call ntail yield (env 0)))
+(fn "prelude/with_stdout$h0.op.print" opclause yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (pats (wild))
+  (resume tail
+    (perform "prelude/Console" write (local 0))))
+(fn "prelude/with_stdout$h0.return" retclause yield (params any) (locals) (dicts 0) (caps) (result any) (local 0))
+(fn "prelude/instance:Show[List].show" dictabs yield
+  (params)
+  (locals)
+  (dicts 1)
+  (caps)
+  (result any)
+  (closure "prelude/instance:Show[List].show$0" (dparam 0)))
+(fn "prelude/instance:Show[List].show$0" lambda yield
+  (params any)
+  (locals any any any any)
+  (dicts 0)
+  (caps any)
+  (result str)
+  (letrec
+    (rec 1
+      (dictabs "prelude/instance:Show[List].show$1" (local 1)))
+    (letrec
+      (rec 2
+        (closure "prelude/instance:Show[List].show$3" (local 2)))
+      (letrec
+        (rec 3
+          (closure "prelude/instance:Show[List].show$4" (local 3)))
+        (letrec
+          (rec 4
+            (closure "prelude/instance:Show[List].show$5" (local 2) (local 3) (local 4)))
+          (match
+            (local 0)
+            (clause (ctor "prelude/List" Nil) (lit str "[]"))
+            (clause
+              (wild)
+              (opcall "builtin/Add" add
+                (dbuiltin "builtin/Add" "builtin/String")
+                (opcall "builtin/Add" add
+                  (dbuiltin "builtin/Add" "builtin/String")
+                  (lit str "[")
+                  (call ntail yield
+                    (local 4)
+                    (call ntail yield
+                      (dictapp (local 1) (env 0))
+                      (local 0)
+                      (construct "prelude/List" Nil))
+                    (lit bool true)))
+                (lit str "]")))))))))
+(fn "prelude/instance:Show[List].show$1" dictabs yield
+  (params)
+  (locals)
+  (dicts 1)
+  (caps any)
+  (result any)
+  (closure "prelude/instance:Show[List].show$2" (dparam 0) (env 0)))
+(fn "prelude/instance:Show[List].show$2" lambda yield
+  (params any any)
+  (locals any any any any any str any any any any any any)
+  (dicts 0)
+  (caps any any)
+  (result any)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1
+          (ctor "prelude/List" Cons
+            (field 0 (bind 3))
+            (field 1
+              (ctor "prelude/List" Cons
+                (field 0 (bind 4))
+                (field 1
+                  (ctor "prelude/List" Cons
+                    (field 0 (bind 5))
+                    (field 1 (bind 6)))))))))
+      (let 7
+        (opcall "builtin/Add" add
+          (dbuiltin "builtin/Add" "builtin/String")
+          (opcall "builtin/Add" add
+            (dbuiltin "builtin/Add" "builtin/String")
+            (opcall "builtin/Add" add
+              (dbuiltin "builtin/Add" "builtin/String")
+              (opcall "builtin/Add" add
+                (dbuiltin "builtin/Add" "builtin/String")
+                (opcall "builtin/Add" add
+                  (dbuiltin "builtin/Add" "builtin/String")
+                  (opcall "builtin/Add" add
+                    (dbuiltin "builtin/Add" "builtin/String")
+                    (call ntail yield
+                      (method "builtin/Show" show (env 0))
+                      (local 2))
+                    (lit str ", "))
+                  (call ntail yield
+                    (method "builtin/Show" show (env 0))
+                    (local 3)))
+                (lit str ", "))
+              (call ntail yield
+                (method "builtin/Show" show (env 0))
+                (local 4)))
+            (lit str ", "))
+          (call ntail yield
+            (method "builtin/Show" show (env 0))
+            (local 5)))
+        (call tail yield
+          (dictapp (env 1) (env 0))
+          (local 6)
+          (construct "prelude/List" Cons
+            (field 0 (local 7))
+            (field 1 (local 1))))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 8))
+        (field 1
+          (ctor "prelude/List" Cons
+            (field 0 (bind 9))
+            (field 1
+              (ctor "prelude/List" Cons
+                (field 0 (bind 10))
+                (field 1 (ctor "prelude/List" Nil)))))))
+      (construct "prelude/List" Cons
+        (field 0
+          (opcall "builtin/Add" add
+            (dbuiltin "builtin/Add" "builtin/String")
+            (opcall "builtin/Add" add
+              (dbuiltin "builtin/Add" "builtin/String")
+              (opcall "builtin/Add" add
+                (dbuiltin "builtin/Add" "builtin/String")
+                (opcall "builtin/Add" add
+                  (dbuiltin "builtin/Add" "builtin/String")
+                  (call ntail yield
+                    (method "builtin/Show" show (env 0))
+                    (local 8))
+                  (lit str ", "))
+                (call ntail yield
+                  (method "builtin/Show" show (env 0))
+                  (local 9)))
+              (lit str ", "))
+            (call ntail yield
+              (method "builtin/Show" show (env 0))
+              (local 10))))
+        (field 1 (local 1))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 11))
+        (field 1
+          (ctor "prelude/List" Cons
+            (field 0 (bind 12))
+            (field 1 (ctor "prelude/List" Nil)))))
+      (construct "prelude/List" Cons
+        (field 0
+          (opcall "builtin/Add" add
+            (dbuiltin "builtin/Add" "builtin/String")
+            (opcall "builtin/Add" add
+              (dbuiltin "builtin/Add" "builtin/String")
+              (call ntail yield
+                (method "builtin/Show" show (env 0))
+                (local 11))
+              (lit str ", "))
+            (call ntail yield
+              (method "builtin/Show" show (env 0))
+              (local 12))))
+        (field 1 (local 1))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 13))
+        (field 1 (ctor "prelude/List" Nil)))
+      (construct "prelude/List" Cons
+        (field 0
+          (call ntail yield
+            (method "builtin/Show" show (env 0))
+            (local 13)))
+        (field 1 (local 1))))
+    (clause (ctor "prelude/List" Nil) (local 1))))
+(fn "prelude/instance:Show[List].show$3" lambda yield
+  (params any any)
+  (locals str str any str)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1
+          (ctor "prelude/List" Cons
+            (field 0 (bind 3))
+            (field 1 (bind 4)))))
+      (call tail yield
+        (env 0)
+        (local 4)
+        (construct "prelude/List" Cons
+          (field 0
+            (opcall "builtin/Add" add
+              (dbuiltin "builtin/Add" "builtin/String")
+              (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (local 2) (lit str ", "))
+              (local 3)))
+          (field 1 (local 1)))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 5))
+        (field 1 (ctor "prelude/List" Nil)))
+      (construct "prelude/List" Cons
+        (field 0 (local 5))
+        (field 1 (local 1))))
+    (clause (ctor "prelude/List" Nil) (local 1))))
+(fn "prelude/instance:Show[List].show$4" lambda yield
+  (params any any)
+  (locals str str any str)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1
+          (ctor "prelude/List" Cons
+            (field 0 (bind 3))
+            (field 1 (bind 4)))))
+      (call tail yield
+        (env 0)
+        (local 4)
+        (construct "prelude/List" Cons
+          (field 0
+            (opcall "builtin/Add" add
+              (dbuiltin "builtin/Add" "builtin/String")
+              (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (local 3) (lit str ", "))
+              (local 2)))
+          (field 1 (local 1)))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 5))
+        (field 1 (ctor "prelude/List" Nil)))
+      (construct "prelude/List" Cons
+        (field 0 (local 5))
+        (field 1 (local 1))))
+    (clause (ctor "prelude/List" Nil) (local 1))))
+(fn "prelude/instance:Show[List].show$5" lambda yield
+  (params any bool)
+  (locals str)
+  (dicts 0)
+  (caps any any any)
+  (result str)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1 (ctor "prelude/List" Nil)))
+      (local 2))
+    (clause
+      (wild)
+      (match
+        (local 1)
+        (clause
+          (lit bool true)
+          (call tail yield
+            (env 2)
+            (call ntail yield (env 1) (local 0) (construct "prelude/List" Nil))
+            (lit bool false)))
+        (clause
+          (lit bool false)
+          (call tail yield
+            (env 2)
+            (call ntail yield (env 0) (local 0) (construct "prelude/List" Nil))
+            (lit bool true)))))))
+(fn "prelude/instance:Show[Option].show" dictabs yield
+  (params)
+  (locals)
+  (dicts 1)
+  (caps)
+  (result any)
+  (closure "prelude/instance:Show[Option].show$0" (dparam 0)))
+(fn "prelude/instance:Show[Option].show$0" lambda yield
+  (params any)
+  (locals any)
+  (dicts 0)
+  (caps any)
+  (result str)
+  (match
+    (local 0)
+    (clause (ctor "prelude/Option" None) (lit str "None"))
+    (clause
+      (ctor "prelude/Option" Some
+        (field 0 (bind 1)))
+      (opcall "builtin/Add" add
+        (dbuiltin "builtin/Add" "builtin/String")
+        (opcall "builtin/Add" add
+          (dbuiltin "builtin/Add" "builtin/String")
+          (lit str "Some(")
+          (call ntail yield
+            (method "builtin/Show" show (env 0))
+            (local 1)))
+        (lit str ")")))))
+(fn "prelude/instance:Eq[List].eq" dictabs yield
+  (params)
+  (locals)
+  (dicts 1)
+  (caps)
+  (result any)
+  (closure "prelude/instance:Eq[List].eq$0" (dparam 0)))
+(fn "prelude/instance:Eq[List].eq$0" lambda yield
+  (params any any)
+  (locals any any any any)
+  (dicts 0)
+  (caps any)
+  (result bool)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/List" Nil)
+      (match
+        (local 1)
+        (clause (ctor "prelude/List" Nil) (lit bool true))
+        (clause (wild) (lit bool false))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1 (bind 3)))
+      (match
+        (local 1)
+        (clause (ctor "prelude/List" Nil) (lit bool false))
+        (clause
+          (ctor "prelude/List" Cons
+            (field 0 (bind 4))
+            (field 1 (bind 5)))
+          (and
+            (call ntail yield
+              (method "builtin/Eq" eq (env 0))
+              (local 2)
+              (local 4))
+            (call tail yield
+              (method "builtin/Eq" eq
+                (dinst "prelude/instance:Eq[List]" (env 0)))
+              (local 3)
+              (local 5))))))))
+(fn "prelude/instance:Eq[Option].eq" dictabs yield
+  (params)
+  (locals)
+  (dicts 1)
+  (caps)
+  (result any)
+  (closure "prelude/instance:Eq[Option].eq$0" (dparam 0)))
+(fn "prelude/instance:Eq[Option].eq$0" lambda yield
+  (params any any)
+  (locals any any)
+  (dicts 0)
+  (caps any)
+  (result bool)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/Option" None)
+      (match
+        (local 1)
+        (clause (ctor "prelude/Option" None) (lit bool true))
+        (clause (wild) (lit bool false))))
+    (clause
+      (ctor "prelude/Option" Some
+        (field 0 (bind 2)))
+      (match
+        (local 1)
+        (clause (ctor "prelude/Option" None) (lit bool false))
+        (clause
+          (ctor "prelude/Option" Some
+            (field 0 (bind 3)))
+          (call tail yield
+            (method "builtin/Eq" eq (env 0))
+            (local 2)
+            (local 3)))))))
+(fn "main/Db.query" lambda noyield (params str) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/sqrt" lambda yield (params f64) (locals) (dicts 0) (caps) (result f64) (hole))
+(fn "main/each" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/heavy" lambda yield (params i32) (locals) (dicts 0) (caps) (result i32) (hole))
+(fn "main/audit_log" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/handle_client" lambda yield (params any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/a" thunk yield (params) (locals) (dicts 0) (caps) (result i32) (lit i32 0))
+(fn "main/b" thunk yield (params) (locals) (dicts 0) (caps) (result i64) (lit i64 0))
+(fn "main/c" thunk yield (params) (locals) (dicts 0) (caps) (result i64) (lit i64 0))
+(fn "main/d" thunk yield (params) (locals) (dicts 0) (caps) (result i32) (lit i32 -1))
+(fn "main/e" thunk yield (params) (locals) (dicts 0) (caps) (result f64) (lit f64 0x3ff8000000000000))
+(fn "main/sum_xy" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result f64)
+  (opcall "builtin/Add" add
+    (dbuiltin "builtin/Add" "builtin/Float64")
+    (rec_select x (local 0))
+    (rec_select y (local 0))))
+(fn "main/with_z" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_extend z (lit f64 0x0000000000000000) (local 0)))
+(fn "main/move_x" lambda yield
+  (params any f64)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_update x
+    (local 0)
+    (opcall "builtin/Add" add
+      (dbuiltin "builtin/Add" "builtin/Float64")
+      (rec_select x (local 0))
+      (local 1))))
+(fn "main/outer_x" lambda yield
+  (params)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result f64)
+  (let 0
+    (rec_extend x
+      (lit f64 0x3ff0000000000000)
+      (rec_extend x
+        (lit f64 0x4000000000000000)
+        (rec_extend y (lit f64 0x4008000000000000) (rec_empty))))
+    (rec_select x (local 0))))
+(fn "main/make_point" lambda yield
+  (params f64 f64)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_extend x
+    (local 0)
+    (rec_extend y (local 1) (rec_empty))))
+(fn "main/swap" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_extend _item
+    (rec_select _item
+      (rec_restrict _item (local 0)))
+    (rec_extend _item
+      (rec_select _item (local 0))
+      (rec_empty))))
+(fn "main/fst" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_select _item (local 0)))
+(fn "main/describe" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result str)
+  (match
+    (local 0)
+    (clause
+      (variant Even (record closed))
+      (lit str "even"))
+    (clause
+      (variant Odd (record closed))
+      (lit str "odd"))
+    (clause (wild) (lit str "unknown"))))
+(fn "main/report" lambda yield
+  (params any)
+  (locals str str i32 i32)
+  (dicts 0)
+  (caps)
+  (result str)
+  (match
+    (local 0)
+    (clause
+      (variant NotFound (bind 1))
+      (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (lit str "not found: ") (local 1)))
+    (clause
+      (variant Denied (bind 2))
+      (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (lit str "denied: ") (local 2)))
+    (clause
+      (variant Syntax
+        (record closed
+          (field _item (bind 3))
+          (field _item (bind 4))))
+      (lit str "syntax error"))))
+(fn "main/some_one" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (construct "prelude/Option" Some
+    (field 0 (lit i32 1))))
+(fn "main/get_or" lambda yield
+  (params any any)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result any)
+  (match
+    (local 0)
+    (clause
+      (ctor "prelude/Option" Some
+        (field 0 (bind 2)))
+      (local 2))
+    (clause (ctor "prelude/Option" None) (local 1))))
+(fn "main/list_length" lambda yield
+  (params any)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result i32)
+  (letrec
+    (rec 1
+      (closure "main/list_length$0" (local 1)))
+    (call tail yield (local 1) (local 0) (lit i32 0))))
+(fn "main/list_length$0" lambda yield
+  (params any i32)
+  (locals any)
+  (dicts 0)
+  (caps any)
+  (result i32)
+  (match
+    (local 0)
+    (clause (ctor "prelude/List" Nil) (local 1))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (wild))
+        (field 1 (bind 2)))
+      (call tail yield
+        (env 0)
+        (local 2)
+        (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/Int32") (local 1) (lit i32 1))))))
+(fn "main/twice_sum_xy" lambda yield
+  (params any)
+  (locals f64 f64)
+  (dicts 0)
+  (caps)
+  (result f64)
+  (let 1
+    (let 2
+      (opcall "builtin/Add" add
+        (dbuiltin "builtin/Add" "builtin/Float64")
+        (rec_select x (local 0))
+        (rec_select y (local 0)))
+      (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/Float64") (local 2) (local 2)))
+    (opcall "builtin/Sub" sub
+      (dbuiltin "builtin/Sub" "builtin/Float64")
+      (local 1)
+      (rec_select x (local 0)))))
+(fn "main/dist" lambda yield
+  (params any)
+  (locals f64 f64)
+  (dicts 0)
+  (caps)
+  (result f64)
+  (letpat
+    (record open
+      (field x (bind 1))
+      (field y (bind 2)))
+    (local 0)
+    (call tail yield
+      (global "main/sqrt")
+      (opcall "builtin/Add" add
+        (dbuiltin "builtin/Add" "builtin/Float64")
+        (opcall "builtin/Mul" mul (dbuiltin "builtin/Mul" "builtin/Float64") (local 1) (local 1))
+        (opcall "builtin/Mul" mul (dbuiltin "builtin/Mul" "builtin/Float64") (local 2) (local 2))))))
+(fn "main/head_and_rest" lambda yield
+  (params any)
+  (locals any any)
+  (dicts 0)
+  (caps)
+  (result any)
+  (letpat
+    (record rest
+      (field _item (bind 1))
+      (bind 2))
+    (local 0)
+    (local 1)))
+(fn "main/inc_all" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail yield
+    (method "main/Functor" map (dinst "main/instance:Functor[List]"))
+    (local 0)
+    (closure "main/inc_all$0")))
+(fn "main/inc_all$0" lambda yield
+  (params i32)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result i32)
+  (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/Int32") (local 0) (lit i32 1)))
+(fn "main/count_if" lambda yield
+  (params any any)
+  (locals any any any)
+  (dicts 0)
+  (caps)
+  (result i32)
+  (match
+    (local 0)
+    (clause (ctor "prelude/List" Nil) (lit i32 0))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1 (bind 3)))
+      (guard
+        (call ntail yield (local 1) (local 2)))
+      (opcall "builtin/Add" add
+        (dbuiltin "builtin/Add" "builtin/Int32")
+        (lit i32 1)
+        (call ntail yield (global "main/count_if") (local 3) (local 1))))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (wild))
+        (field 1 (bind 4)))
+      (call tail yield (global "main/count_if") (local 4) (local 1)))))
+(fn "main/is_even" lambda yield
+  (params i32)
+  (locals i32 i32)
+  (dicts 0)
+  (caps)
+  (result bool)
+  (match
+    (local 0)
+    (clause (lit i32 0) (lit bool true))
+    (clause
+      (bind 1)
+      (guard
+        (opcall "builtin/Ord" lt (dbuiltin "builtin/Ord" "builtin/Int32") (local 1) (lit i32 0)))
+      (call tail yield
+        (global "main/is_even")
+        (opcall "builtin/Sub" sub (dbuiltin "builtin/Sub" "builtin/Int32") (lit i32 0) (local 1))))
+    (clause
+      (bind 2)
+      (call tail yield
+        (global "main/is_odd")
+        (opcall "builtin/Sub" sub (dbuiltin "builtin/Sub" "builtin/Int32") (local 2) (lit i32 1))))))
+(fn "main/is_odd" lambda yield
+  (params i32)
+  (locals i32 i32)
+  (dicts 0)
+  (caps)
+  (result bool)
+  (match
+    (local 0)
+    (clause (lit i32 0) (lit bool false))
+    (clause
+      (bind 1)
+      (guard
+        (opcall "builtin/Ord" lt (dbuiltin "builtin/Ord" "builtin/Int32") (local 1) (lit i32 0)))
+      (call tail yield
+        (global "main/is_odd")
+        (opcall "builtin/Sub" sub (dbuiltin "builtin/Sub" "builtin/Int32") (lit i32 0) (local 1))))
+    (clause
+      (bind 2)
+      (call tail yield
+        (global "main/is_even")
+        (opcall "builtin/Sub" sub (dbuiltin "builtin/Sub" "builtin/Int32") (local 2) (lit i32 1))))))
+(fn "main/fma" dictabs yield
+  (params)
+  (locals)
+  (dicts 2)
+  (caps)
+  (result any)
+  (closure "main/fma$0" (dparam 0) (dparam 1)))
+(fn "main/fma$0" lambda yield
+  (params any any any)
+  (locals)
+  (dicts 0)
+  (caps any any)
+  (result any)
+  (opcall "builtin/Add" add
+    (env 0)
+    (opcall "builtin/Mul" mul (env 1) (local 0) (local 1))
+    (local 2)))
+(fn "main/same_point" lambda yield
+  (params any any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result bool)
+  (opcall "builtin/Eq" eq
+    (drecord
+      (field x (dbuiltin "builtin/Eq" "builtin/Float64"))
+      (field y (dbuiltin "builtin/Eq" "builtin/Float64")))
+    (local 0)
+    (local 1)))
+(fn "main/same_pair" lambda yield
+  (params any any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result bool)
+  (opcall "builtin/Eq" eq
+    (drecord
+      (field _item (dbuiltin "builtin/Eq" "builtin/Int32"))
+      (field _item (dbuiltin "builtin/Eq" "builtin/String")))
+    (local 0)
+    (local 1)))
+(fn "main/instance:Functor[List].map" dictabs yield
+  (params)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result any)
+  (letrec
+    (rec 0
+      (closure "main/instance:Functor[List].map$0" (local 0)))
+    (local 0)))
+(fn "main/instance:Functor[List].map$0" lambda yield
+  (params any any)
+  (locals any any)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (match
+    (local 0)
+    (clause (ctor "prelude/List" Nil) (construct "prelude/List" Nil))
+    (clause
+      (ctor "prelude/List" Cons
+        (field 0 (bind 2))
+        (field 1 (bind 3)))
+      (construct "prelude/List" Cons
+        (field 0
+          (call ntail yield (local 1) (local 2)))
+        (field 1
+          (call ntail yield (env 0) (local 3) (local 1)))))))
+(fn "main/user_names" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail yield
+    (method "main/Functor" map (dinst "main/instance:Functor[List]"))
+    (local 0)
+    (closure "main/user_names$0")))
+(fn "main/user_names$0" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result str)
+  (seq
+    (call ntail yield
+      (global "prelude/println")
+      (rec_select id (local 0)))
+    (rec_select name (local 0))))
+(fn "main/println" lambda yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (perform "prelude/Print" print
+    (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (local 0) (lit str "\x0a"))))
+(fn "main/$init35" thunk yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (handle ntail "prelude/Print" (body "main/$init35$h0.body") (op print T "main/$init35$h0.op.print") (return "main/$init35$h0.return")))
+(fn "main/$init35$h0.body" handlebody yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call ntail yield (global "main/println") (lit str "test")))
+(fn "main/$init35$h0.op.print" opclause yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (pats (wild))
+  (resume tail
+    (perform "prelude/Console" write (local 0))))
+(fn "main/$init35$h0.return" retclause yield (params any) (locals) (dicts 0) (caps) (result any) (local 0))
+(fn "main/capture" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (handle tail "prelude/Print"
+    (body "main/capture$h0.body" (local 0))
+    (op print G "main/capture$h0.op.print")
+    (return "main/capture$h0.return")))
+(fn "main/capture$h0.body" handlebody yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call ntail yield (env 0)))
+(fn "main/capture$h0.op.print" opclause yield
+  (params str)
+  (locals any str)
+  (dicts 0)
+  (caps)
+  (result any)
+  (pats (wild))
+  (letpat
+    (record open
+      (field value (bind 1))
+      (field output (bind 2)))
+    (resume ntail (rec_empty))
+    (rec_extend value
+      (local 1)
+      (rec_extend output
+        (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (local 0) (local 2))
+        (rec_empty)))))
+(fn "main/capture$h0.return" retclause yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_extend value
+    (local 0)
+    (rec_extend output (lit str "") (rec_empty))))
+(fn "main/try_" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (handle tail "main/Fail"
+    (body "main/try_$h0.body" (local 0))
+    (op throw N "main/try_$h0.op.throw")
+    (return "main/try_$h0.return")))
+(fn "main/try_$h0.body" handlebody yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call ntail yield (env 0)))
+(fn "main/try_$h0.op.throw" opclause yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (pats (wild))
+  (variant Err (local 0)))
+(fn "main/try_$h0.return" retclause yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (variant Ok (local 0)))
+(fn "main/with_file" lambda yield
+  (params str any)
+  (locals i32)
+  (dicts 0)
+  (caps)
+  (result any)
+  (let 2
+    (call ntail yield (global "main/file_open") (local 0))
+    (handle tail "main/File"
+      (body "main/with_file$h0.body" (local 1))
+      (op read T "main/with_file$h0.op.read" (local 2))
+      (op write T "main/with_file$h0.op.write" (local 2))
+      (return "main/with_file$h0.return" (local 2))
+      (cancel "main/with_file$h0.cancel" (local 2)))))
+(fn "main/with_file$h0.body" handlebody yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call ntail yield (env 0)))
+(fn "main/with_file$h0.op.read" opclause yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps i32)
+  (result any)
+  (pats)
+  (resume tail
+    (call ntail yield (global "main/file_read") (env 0))))
+(fn "main/with_file$h0.op.write" opclause yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps i32)
+  (result any)
+  (pats (wild))
+  (resume tail
+    (call ntail yield (global "main/file_write") (env 0) (local 0))))
+(fn "main/with_file$h0.return" retclause yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps i32)
+  (result any)
+  (seq
+    (call ntail yield (global "main/file_close") (env 0))
+    (local 0)))
+(fn "main/with_file$h0.cancel" cancelclause yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps i32)
+  (result any)
+  (call ntail yield (global "main/file_close") (env 0)))
+(fn "main/copy" lambda noyield
+  (params str str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail noyield
+    (global "main/with_file")
+    (local 0)
+    (closure "main/copy$0" (local 1))))
+(fn "main/copy$0" lambda yield
+  (params)
+  (locals str)
+  (dicts 0)
+  (caps str)
+  (result any)
+  (let 0
+    (perform "main/File" read)
+    (call tail yield
+      (global "main/with_file")
+      (env 0)
+      (closure "main/copy$1" (local 0)))))
+(fn "main/copy$1" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps str)
+  (result any)
+  (perform "main/File" write (env 0)))
+(fn "main/Parser.bind" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/Parser.pure" lambda noyield (params any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/Parser.token" lambda noyield (params str) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/parens" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail yield
+    (global "main/Parser.bind")
+    (call ntail yield (global "main/Parser.token") (lit str "("))
+    (closure "main/parens$0")))
+(fn "main/parens$0" lambda yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail yield
+    (global "main/Parser.bind")
+    (call ntail yield (global "main/Parser.token") (lit str ")"))
+    (closure "main/parens$1" (local 0))))
+(fn "main/parens$1" lambda yield
+  (params str)
+  (locals)
+  (dicts 0)
+  (caps str)
+  (result any)
+  (call tail yield
+    (global "main/Parser.pure")
+    (rec_extend _item
+      (env 0)
+      (rec_extend _item (local 0) (rec_empty)))))
+(fn "main/handle_request" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (seq
+    (perform "main/Logger" log
+      (opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/String") (lit str "handling ") (perform "main/ReqId" req_id)))
+    (call tail yield
+      (global "main/Db.query")
+      (rec_select query (local 0)))))
+(fn "main/$init49" thunk yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (perform "prelude/Console" write
+    (rec_select output
+      (call ntail noyield (global "main/capture") (closure "main/$init49$0")))))
+(fn "main/$init49$0" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail yield (global "main/println") (lit str "test")))
+(fn "main/sum" lambda yield
+  (params any)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result i32)
+  (let 1
+    (call ntail yield (global "builtin/Ref.new") (lit i32 0))
+    (seq
+      (call ntail yield
+        (global "builtin/Array.each")
+        (local 0)
+        (closure "main/sum$0" (local 1)))
+      (call tail yield (global "builtin/Ref.get") (local 1)))))
+(fn "main/sum$0" lambda yield
+  (params i32)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call tail yield
+    (global "builtin/Ref.set")
+    (env 0)
+    (opcall "builtin/Add" add
+      (dbuiltin "builtin/Add" "builtin/Int32")
+      (call ntail yield (global "builtin/Ref.get") (env 0))
+      (local 0))))
+(fn "main/doubled" lambda yield
+  (params any)
+  (locals any any)
+  (dicts 0)
+  (caps)
+  (result any)
+  (let 1
+    (call ntail yield
+      (global "builtin/MutableArray.new")
+      (call ntail yield (global "builtin/Array.length") (local 0))
+      (lit i32 0))
+    (let 2
+      (call ntail yield (global "builtin/Ref.new") (lit i32 0))
+      (seq
+        (call ntail yield
+          (global "builtin/Array.each")
+          (local 0)
+          (closure "main/doubled$0" (local 1) (local 2)))
+        (call tail yield (global "builtin/MutableArray.freeze") (local 1))))))
+(fn "main/doubled$0" lambda yield
+  (params i32)
+  (locals)
+  (dicts 0)
+  (caps any any)
+  (result any)
+  (seq
+    (call ntail yield
+      (global "builtin/MutableArray.set")
+      (env 0)
+      (call ntail yield (global "builtin/Ref.get") (env 1))
+      (opcall "builtin/Mul" mul (dbuiltin "builtin/Mul" "builtin/Int32") (local 0) (lit i32 2)))
+    (call tail yield
+      (global "builtin/Ref.set")
+      (env 1)
+      (opcall "builtin/Add" add
+        (dbuiltin "builtin/Add" "builtin/Int32")
+        (call ntail yield (global "builtin/Ref.get") (env 1))
+        (lit i32 1)))))
+(fn "main/par_map" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/par" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/scope" lambda yield (params any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/serve" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (call tail yield
+    (global "main/scope")
+    (closure "main/serve$0" (local 0))))
+(fn "main/serve$0" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call tail yield (global "main/each") (env 0) (closure "main/serve$1")))
+(fn "main/serve$1" lambda yield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (perform "main/Nursery" spawn
+    (closure "main/serve$2" (local 0))))
+(fn "main/serve$2" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (call tail yield (global "main/handle_client") (env 0)))
+(fn "main/with_timeout" lambda yield (params i64 any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/handle_audited" lambda yield
+  (params any)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result any)
+  (let 1
+    (call ntail yield (global "main/handle_request") (local 0))
+    (seq
+      (perform "main/Background" spawn_bg
+        (closure "main/handle_audited$0" (local 0) (local 1)))
+      (local 1))))
+(fn "main/handle_audited$0" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps any any)
+  (result any)
+  (call tail yield (global "main/audit_log") (env 0) (env 1)))
+(fn "main/crunch" lambda yield
+  (params any)
+  (locals any)
+  (dicts 0)
+  (caps)
+  (result i32)
+  (let 1
+    (call ntail yield (global "builtin/Ref.new") (lit i32 0))
+    (seq
+      (call ntail yield
+        (global "builtin/Array.each")
+        (local 0)
+        (closure "main/crunch$0" (local 1)))
+      (call tail yield (global "builtin/Ref.get") (local 1)))))
+(fn "main/crunch$0" lambda yield
+  (params i32)
+  (locals)
+  (dicts 0)
+  (caps any)
+  (result any)
+  (seq
+    (perform "main/Async" yield_)
+    (call tail yield
+      (global "builtin/Ref.set")
+      (env 0)
+      (opcall "builtin/Add" add
+        (dbuiltin "builtin/Add" "builtin/Int32")
+        (call ntail yield (global "builtin/Ref.get") (env 0))
+        (call ntail yield (global "main/heavy") (local 0))))))
+(fn "main/channel" lambda yield (params i32) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/send" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/recv" lambda yield (params any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/pinned" lambda yield (params any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/BigInt.parse" lambda noyield (params str) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/BigInt.normalize" lambda yield (params any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/instance:Add[BigInt.BigInt].add" dictabs yield (params) (locals) (dicts 0) (caps) (result any) (closure "main/instance:Add[BigInt.BigInt].add$0"))
+(fn "main/instance:Add[BigInt.BigInt].add$0" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/instance:Mul[BigInt.BigInt].mul" dictabs yield (params) (locals) (dicts 0) (caps) (result any) (closure "main/instance:Mul[BigInt.BigInt].mul$0"))
+(fn "main/instance:Mul[BigInt.BigInt].mul$0" lambda yield (params any any) (locals) (dicts 0) (caps) (result any) (hole))
+(fn "main/big_sum" lambda yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (opcall "builtin/Add" add
+    (dinst "main/instance:Add[BigInt.BigInt]")
+    (call ntail yield (global "main/BigInt.parse") (lit str "123"))
+    (call ntail yield (global "main/BigInt.parse") (lit str "456"))))
+(init "builtin")
+(init "prelude" (def_fns "prelude/__int32_add") (def_fns "prelude/__int32_sub") (def_fns "prelude/__int32_mul") (def_fns "prelude/__int32_div") (def_fns "prelude/__int32_rem") (def_fns "prelude/__int32_neg") (def_fns "prelude/__int32_eq") (def_fns "prelude/__int32_lt") (def_fns "prelude/__int32_le") (def_fns "prelude/__int32_gt") (def_fns "prelude/__int32_ge") (def_fns "prelude/__int64_add") (def_fns "prelude/__int64_sub") (def_fns "prelude/__int64_mul") (def_fns "prelude/__int64_div") (def_fns "prelude/__int64_rem") (def_fns "prelude/__int64_neg") (def_fns "prelude/__int64_eq") (def_fns "prelude/__int64_lt") (def_fns "prelude/__float64_add") (def_fns "prelude/__float64_sub") (def_fns "prelude/__float64_mul") (def_fns "prelude/__float64_div") (def_fns "prelude/__float64_neg") (def_fns "prelude/__float64_eq") (def_fns "prelude/__float64_lt") (def_fns "prelude/__string_concat") (def_fns "prelude/__string_eq") (def_fns "prelude/__string_lt") (def_fns "prelude/__string_length") (def_fns "prelude/__string_sub") (def_fns "prelude/__i32_to_i64") (def_fns "prelude/__i32_to_f64") (def_fns "prelude/__i64_to_i32") (def_fns "prelude/__i64_to_f64") (def_fns "prelude/__f64_to_i32") (def_fns "prelude/__f64_to_i64") (def_fns "prelude/__panic") (def_fns "prelude/__int64_le") (def_fns "prelude/__int64_gt") (def_fns "prelude/__int64_ge") (def_fns "prelude/__float64_le") (def_fns "prelude/__float64_gt") (def_fns "prelude/__float64_ge") (def_fns "prelude/__string_le") (def_fns "prelude/__string_gt") (def_fns "prelude/__string_ge") (def_fns "prelude/__show_int32") (def_fns "prelude/echo") (def_fns "prelude/echoln") (def_fns "prelude/println") (def_fns "prelude/with_stdout") (def_instance "prelude/instance:Show[List]") (def_instance "prelude/instance:Show[Option]") (def_instance "prelude/instance:Eq[List]") (def_instance "prelude/instance:Eq[Option]"))
+(init "main" (def_fns "main/Db.query") (def_fns "main/sqrt") (def_fns "main/each") (def_fns "main/heavy") (def_fns "main/audit_log") (def_fns "main/handle_client") (def_value "main/a" "main/a") (def_value "main/b" "main/b") (def_value "main/c" "main/c") (def_value "main/d" "main/d") (def_value "main/e" "main/e") (def_fns "main/sum_xy") (def_fns "main/with_z") (def_fns "main/move_x") (def_fns "main/outer_x") (def_fns "main/make_point") (def_fns "main/swap") (def_fns "main/fst") (def_fns "main/describe") (def_fns "main/report") (def_fns "main/some_one") (def_fns "main/get_or") (def_fns "main/list_length") (def_fns "main/twice_sum_xy") (def_fns "main/dist") (def_fns "main/head_and_rest") (def_fns "main/inc_all") (def_fns "main/count_if") (def_fns "main/is_even" "main/is_odd") (def_fns "main/fma") (def_fns "main/same_point") (def_fns "main/same_pair") (def_instance "main/instance:Functor[List]") (def_fns "main/user_names") (def_fns "main/println") (run_exp "main/$init35") (def_fns "main/capture") (def_fns "main/try_") (def_fns "main/file_open") (def_fns "main/file_read") (def_fns "main/file_write") (def_fns "main/file_close") (def_fns "main/with_file") (def_fns "main/copy") (def_fns "main/Parser.bind") (def_fns "main/Parser.pure") (def_fns "main/Parser.token") (def_fns "main/parens") (def_fns "main/handle_request") (run_exp "main/$init49") (def_fns "main/sum") (def_fns "main/doubled") (def_fns "main/par_map") (def_fns "main/par") (def_fns "main/scope") (def_fns "main/serve") (def_fns "main/with_timeout") (def_fns "main/handle_audited") (def_fns "main/crunch") (def_fns "main/channel") (def_fns "main/send") (def_fns "main/recv") (def_fns "main/sin") (def_fns "main/sqlite_step") (def_fns "main/pinned") (def_fns "main/BigInt.parse") (def_fns "main/BigInt.normalize") (def_instance "main/instance:Add[BigInt.BigInt]") (def_instance "main/instance:Mul[BigInt.BigInt]") (def_fns "main/big_sum"))

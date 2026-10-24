@@ -1,0 +1,48 @@
+type Unit = {}
+effect Print   = { print: (String) => Unit }
+effect Console = { write: (String) => Unit }
+let println(message: String): Unit @ Print = perform print(message + "\n")
+let capture[A, E](body: () => A @ {Print extends E}): {value: A, output: String} @ E =
+  body() handle {
+    case print(message) => {
+      let {value, output} = resume()
+      {value, output = message + output}
+    }
+    case return(x) => {value = x, output = ""}
+  }
+effect Fail = { throw: (String) => Never }
+let try_[A, E](body: () => A @ {Fail extends E}): #Ok(A) | #Err(String) @ E =
+  body() handle {
+    case throw(e)  => #Err(e)
+    case return(x) => #Ok(x)
+  }
+effect File = {
+  read:  () => String,
+  write: (String) => Unit,
+}
+effect Fs = {}
+extern "prim" let __open(path: String): Int32 @ Fs
+extern "prim" let __read(h: Int32): String @ Fs
+extern "prim" let __write(h: Int32, s: String): Unit @ Fs
+extern "prim" let __close(h: Int32): Unit @ Fs
+let with_file[A, E](path: String, body: () => A @ {File, Fs extends E}): A @ {Fs extends E} = {
+  let h = __open(path)
+  body() handle {
+    case read()    => resume(__read(h))
+    case write(s)  => resume(__write(h, s))
+    case return(x) => { __close(h); x }
+    case cancel    => __close(h)
+  }
+}
+let copy(src: String, dst: String): Unit @ {Console, Fs} = {
+  with _ = with_file(src)
+  let text = perform read()
+  with _ = with_file(dst)
+  perform File.write(text)
+}
+let echo_test[E](): Unit @ {Console extends E} =
+  println("test") handle {
+    case print(message) => resume(perform Console.write(message))
+    case return(x) => x
+  }
+let captured = capture(fn() => println("test"))

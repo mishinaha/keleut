@@ -1,0 +1,15 @@
+type Size = #Big(Int32) | #Small
+let s = "日本語\u0000\"q\"\\ \t~é"
+echoln(show(__string_length(s)))
+let mk(n: Int32): Size = if n > 0 then #Big(n) else #Small
+echoln(show(mk(1) == mk(0)))
+let r = {a = 1, b = "x"}
+echoln(show(r == {a = 1, b = "x"}))
+let f = -2.5e-3
+let g = 0.0 / 0.0
+echoln(show(f) + show(g == g))
+let big = 0x7fffffffffffffffi64
+let neg = -9223372036854775808i64
+echoln(show(big) + show(neg))
+let {a = aa, b = bb} = r
+echoln(show(aa) + bb)

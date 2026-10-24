@@ -1,0 +1,9 @@
+[package]
+name = "kir"
+description = "KIR(Keleut の中間言語)の型、バイナリとテキストの読み書き、検証器"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]

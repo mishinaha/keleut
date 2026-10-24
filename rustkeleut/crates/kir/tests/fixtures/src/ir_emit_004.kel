@@ -1,0 +1,8 @@
+let r = {x = 1, y = "s"}
+let s = {x = true extends r}
+let t = {s with y = "t"}
+let u = (t \ x).x
+let get(p) = p match {
+  case {x, ...rest} => (x, rest.y)
+}
+let tup(q: (Int32, Int32)): Int32 = q match { case (m, n) => m + n }

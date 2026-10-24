@@ -1,0 +1,24 @@
+type Unit = {}
+type Point = {x: Float64, y: Float64}
+newtype List[A] = Nil | Cons(A, tail: List[A])
+extern "prim" let __int32_add(x: Int32, y: Int32): Int32
+extern "prim" let __int32_mul(x: Int32, y: Int32): Int32
+extern "prim" let __string_concat(x: String, y: String): String
+let fma[A: Add + Mul](x: A, y: A, z: A): A = x * y + z
+let same_point(p: Point, q: Point): Boolean = p == q
+type class MyShow[A] { val myshow: (A) => String }
+type instance MyShow[Boolean] {
+  let myshow(b) = b match { case true => "true" case false => "false" }
+}
+let use_myshow = myshow(true)
+let generic_show = fn(x) => myshow(x)
+type class Functor[F[_]] {
+  val map[A, B, E]: (F[A], (A) => B @ E) => F[B] @ E
+}
+type instance Functor[List[_]] {
+  let rec map[A, B, E](xs: List[A], f: (A) => B @ E): List[B] @ E =
+    xs match {
+      case Nil              => Nil
+      case Cons(head, tail) => Cons(f(head), map(tail, f))
+    }
+}
