@@ -1,0 +1,14 @@
+[package]
+name = "keleut-cli"
+description = "RustKeleut のコマンド行の入口(バイナリ keleut)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "keleut"
+path = "src/main.rs"
+
+[dependencies]
+kir = { path = "../kir" }
