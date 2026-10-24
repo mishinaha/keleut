@@ -1,0 +1,15 @@
+[package]
+name = "keleut-interp"
+description = "LIR のバイトコードの符号化とインタプリタ"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+keleut-lir = { path = "../keleut-lir" }
+keleut-rt = { path = "../keleut-rt" }
+keleut-rtcore = { path = "../keleut-rtcore" }
+
+[dev-dependencies]
+kir = { path = "../kir" }
