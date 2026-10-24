@@ -1,0 +1,10 @@
+type class Render[A] {
+  val render: (A) => String
+}
+newtype L(String)
+let use(x: L): String = render(x)
+echoln("before")
+echoln(use(L("q")))
+type instance Render[L] {
+  let render(x) = x match { case L(s) => s }
+}

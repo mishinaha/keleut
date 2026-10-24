@@ -1,0 +1,16 @@
+type class Desc[A] {
+  val desc: (A) => String
+}
+newtype N(Int32)
+type instance Desc[N] {
+  let desc(x) = x match { case N(n) => "N" + show(n) }
+}
+type instance[A: Desc] Desc[List[_]] {
+  let desc(xs) = xs match { case Nil => "." case Cons(h, t) => desc(h) + desc(t) }
+}
+let all[A: Desc](x: A): String = desc(x)
+let rec go[A: Desc](x: A, n: Int32): String = if n == 0 then desc(x) else go(x, n - 1)
+echoln(all(Cons(N(1), Cons(N(2), Nil))))
+echoln(go(Cons(N(3), Nil), 100000))
+let d = desc
+echoln(d(Cons(N(4), Nil)))

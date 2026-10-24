@@ -1,0 +1,7 @@
+let rec mk(n: Int32): {a: Int32, b: {c: Int32}} = {a = n, b = {c = n}}
+echoln(show(mk(3) == mk(3)))
+echoln(show(mk(3) == {a = 3, b = {c = 4}}))
+
+let l = Cons({a = 1}, Cons({a = 2}, Nil))
+echoln(show(l == Cons({a = 1}, Cons({a = 2}, Nil))))
+echoln(show((1, "a") == (1, "b")))

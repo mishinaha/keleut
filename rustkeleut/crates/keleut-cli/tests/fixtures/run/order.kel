@@ -1,0 +1,12 @@
+let t(s: String, v: Int32): Int32 @ Console = { echo(s); v }
+newtype P = P(a: Int32, b: Int32)
+let pick(): (Int32, Int32) => Int32 @ Console = { echo("F"); fn(x, y) => x + y }
+let r1 = pick()(t("1", 1), t("2", 2))
+echoln("")
+let r2 = t("L", 1) + t("R", 2)
+echoln("")
+let p = P(b = t("b", 1), a = t("a", 2))
+echoln("")
+let base = {x = t("base", 0)}
+let e = {y = t("y", 1), z = t("z", 2) extends {echo("ext"); base}}
+echoln("")

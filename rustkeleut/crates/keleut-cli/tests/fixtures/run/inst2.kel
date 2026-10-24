@@ -1,0 +1,10 @@
+type class Sz[A] {
+  val sz: (A) => Int32
+}
+newtype B(Int32)
+type instance Sz[B] {
+  let sz = { echoln("init sz"); fn(b) => 3 }
+}
+echoln("after")
+echoln(show(sz(B(1))))
+echoln(show(sz(B(1))))
