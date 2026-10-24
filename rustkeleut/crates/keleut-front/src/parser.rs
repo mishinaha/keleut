@@ -80,6 +80,8 @@ enum Step {
 struct Machine {
     stack: Vec<Cell>,
     current: u16,
+    /// 還元のたびに右辺を移す列(割り付けを使い回す)。
+    buf: Vec<(Sv, Pos, Pos)>,
 }
 
 /// 自動機械の失敗(意味の動作の誤りか、木の深さの限度)である。
@@ -99,6 +101,7 @@ impl Machine {
         Machine {
             stack: Vec::new(),
             current: ENTRY,
+            buf: Vec::new(),
         }
     }
 
@@ -116,12 +119,15 @@ impl Machine {
             let e = self.stack.last().map_or(Pos::START, |c| c.ep);
             (self.current, e, e)
         };
-        let mut args = actions::Args::new(
-            self.stack.drain(at..).map(|c| (c.sv, c.sp, c.ep)).collect(),
-            (sp, ep),
-        );
-        let sv = actions::run(p, cx, &mut args)?;
+        let mut buf = std::mem::take(&mut self.buf);
+        buf.clear();
+        buf.extend(self.stack.drain(at..).map(|c| (c.sv, c.sp, c.ep)));
+        let mut args = actions::Args::new(buf, (sp, ep));
+        let sv = actions::run(p, cx, &mut args);
+        self.buf = args.into_vec();
+        let sv = sv?;
         if cx.over {
+            sv.dismantle();
             return Err(MErr::Limit);
         }
         let target = GOTO[base as usize * N_NONTERMINALS + prod.lhs as usize];

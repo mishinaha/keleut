@@ -492,3 +492,162 @@ impl DeclKind {
         }
     }
 }
+
+// ---- 深い木を捨てること ----
+
+/// 再帰で捨ててよい部分木の深さの上限である。
+///
+/// これより深い部分木は、[`dismantle`] が作業の列でほどいてから捨てる。
+const SHALLOW_DEPTH: u32 = 64;
+
+/// [`dismantle`] がほどく木のノードである。
+pub(crate) enum Node {
+    Exp(Exp),
+    Pat(Pat),
+    Ty(TypeExp),
+    Decl(Decl),
+    Bind(LetBinding),
+}
+
+impl Node {
+    fn depth(&self) -> u32 {
+        match self {
+            Node::Exp(e) => e.meta.depth,
+            Node::Pat(p) => p.meta.depth,
+            Node::Ty(t) => t.meta.depth,
+            Node::Decl(d) => d.meta.depth,
+            Node::Bind(b) => b.meta.depth,
+        }
+    }
+}
+
+/// 木を、深さに比例するスタックを使わずに捨てる。
+///
+/// 構文解析が限度で止まったとき、最後の還元で作ったノードは限度より深いことがある
+/// (ブロックの `let` の鎖は、ブロックを閉じる 1 回の還元で作る)。
+/// その木を再帰で捨てると、小さいスタックではあふれるので、子を作業の列に移しながらほどく。
+/// 深さが [`SHALLOW_DEPTH`] 以下の部分木は、そのまま捨てる。
+pub(crate) fn dismantle(mut work: Vec<Node>) {
+    fn push_ty(work: &mut Vec<Node>, t: TypeExp) {
+        work.push(Node::Ty(t));
+    }
+    while let Some(n) = work.pop() {
+        if n.depth() <= SHALLOW_DEPTH {
+            continue;
+        }
+        match n {
+            Node::Exp(e) => match e.kind {
+                ExpKind::Apply(f, a) => work.extend([Node::Exp(*f), Node::Exp(*a)]),
+                ExpKind::Construct(_, args) => {
+                    work.extend(args.into_iter().map(|a| Node::Exp(a.exp)))
+                }
+                ExpKind::Variant(_, e)
+                | ExpKind::Not(e)
+                | ExpKind::Neg(e)
+                | ExpKind::RecordRestriction(e, _)
+                | ExpKind::RecordSelection(e, _)
+                | ExpKind::Perform(_, e)
+                | ExpKind::Run(_, e)
+                | ExpKind::Resume(Some(e)) => work.push(Node::Exp(*e)),
+                ExpKind::BinOp(l, _, r)
+                | ExpKind::RecordExtend(l, _, r)
+                | ExpKind::RecordUpdate(l, _, r) => work.extend([Node::Exp(*l), Node::Exp(*r)]),
+                ExpKind::Lambda(l) => {
+                    work.extend(l.params.into_iter().map(Node::Pat));
+                    work.push(Node::Exp(*l.body));
+                }
+                ExpKind::Let(b, e) => work.extend([Node::Bind(*b), Node::Exp(*e)]),
+                ExpKind::LetRec(bs, e) => {
+                    work.extend(bs.into_iter().map(Node::Bind));
+                    work.push(Node::Exp(*e));
+                }
+                ExpKind::Seq(es) => work.extend(es.into_iter().map(Node::Exp)),
+                ExpKind::Match(e, cs) | ExpKind::Handle(e, cs) => {
+                    work.push(Node::Exp(*e));
+                    for c in cs {
+                        work.push(Node::Pat(c.pat));
+                        work.extend(c.guard.map(Node::Exp));
+                        work.push(Node::Exp(c.body));
+                    }
+                }
+                ExpKind::Bool(_)
+                | ExpKind::Number(_)
+                | ExpKind::Text(_)
+                | ExpKind::Ident(_)
+                | ExpKind::Hole
+                | ExpKind::RecordEmpty
+                | ExpKind::Resume(None) => {}
+            },
+            Node::Pat(p) => match p.kind {
+                PatKind::Record(fs, rest) => {
+                    work.extend(fs.into_iter().map(|(_, p)| Node::Pat(p)));
+                    work.extend(rest.map(|p| Node::Pat(*p)));
+                }
+                PatKind::Ctor(_, args) => work.extend(args.into_iter().map(|a| Node::Pat(a.pat))),
+                PatKind::Variant(_, p) => work.push(Node::Pat(*p)),
+                PatKind::Annot(p, t) => work.extend([Node::Pat(*p), Node::Ty(t)]),
+                PatKind::Wildcard
+                | PatKind::Var(_)
+                | PatKind::Bool(_)
+                | PatKind::Number(_)
+                | PatKind::Text(_) => {}
+            },
+            Node::Ty(t) => match t.kind {
+                TypeExpKind::Apply(f, args) => {
+                    push_ty(&mut work, *f);
+                    work.extend(args.into_iter().map(Node::Ty));
+                }
+                TypeExpKind::Arrow(ps, r, e) => {
+                    work.extend(ps.into_iter().map(Node::Ty));
+                    push_ty(&mut work, *r);
+                    work.extend(e.map(|t| Node::Ty(*t)));
+                }
+                TypeExpKind::BraceRow(elems, ext) => {
+                    for el in elems {
+                        match el {
+                            BraceElem::Field(_, t) => push_ty(&mut work, t),
+                            BraceElem::Label(_, args) => {
+                                work.extend(args.into_iter().map(Node::Ty))
+                            }
+                        }
+                    }
+                    work.extend(ext.map(|t| Node::Ty(*t)));
+                }
+                TypeExpKind::VariantCase(_, t) => work.extend(t.map(|t| Node::Ty(*t))),
+                TypeExpKind::Union(ts) => work.extend(ts.into_iter().map(Node::Ty)),
+                TypeExpKind::Ident(_) | TypeExpKind::Hole => {}
+            },
+            Node::Bind(b) => {
+                work.push(Node::Pat(b.name));
+                work.extend(b.params.into_iter().flatten().map(Node::Pat));
+                work.extend(b.ret.map(Node::Ty));
+                work.extend(b.eff.map(Node::Ty));
+                work.push(Node::Exp(b.body));
+            }
+            Node::Decl(d) => match d.kind {
+                DeclKind::Type(t) => push_ty(&mut work, t.body),
+                DeclKind::Newtype(n) => work.extend(
+                    n.ctors
+                        .into_iter()
+                        .flat_map(|c| c.fields)
+                        .map(|f| Node::Ty(f.ty)),
+                ),
+                DeclKind::Effect(e) => work.extend(e.ops.into_iter().map(|(_, t)| Node::Ty(t))),
+                DeclKind::Class(c) => work.extend(c.vals.into_iter().map(|v| Node::Ty(v.ty))),
+                DeclKind::Instance(i) => {
+                    work.extend(i.args.into_iter().map(Node::Ty));
+                    work.extend(i.body.into_iter().map(Node::Decl));
+                }
+                DeclKind::Let(b) => work.push(Node::Bind(b)),
+                DeclKind::LetRec(bs) => work.extend(bs.into_iter().map(Node::Bind)),
+                DeclKind::Module(_, _, ds) => work.extend(ds.into_iter().map(Node::Decl)),
+                DeclKind::Extern(e) => {
+                    work.extend(e.params.into_iter().map(Node::Pat));
+                    work.extend(e.ret.map(Node::Ty));
+                    work.extend(e.eff.map(Node::Ty));
+                }
+                DeclKind::Exp(e) => work.push(Node::Exp(e)),
+            },
+        }
+    }
+}

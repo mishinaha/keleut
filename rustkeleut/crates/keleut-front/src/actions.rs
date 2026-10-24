@@ -244,6 +244,59 @@ pub enum Sv {
     Program(Box<Program>),
 }
 
+impl Sv {
+    /// 意味の値を、木の深さに比例するスタックを使わずに捨てる([`dismantle`])。
+    ///
+    /// 構文解析が限度で止まったときの、最後の還元の値に使う。
+    pub(crate) fn dismantle(self) {
+        let work: Vec<Node> = match self {
+            Sv::Exp(e) => vec![Node::Exp(*e)],
+            Sv::Exps(es) => es.into_iter().map(Node::Exp).collect(),
+            Sv::OptExp(e) => (*e).into_iter().map(Node::Exp).collect(),
+            Sv::Pat(p) => vec![Node::Pat(*p)],
+            Sv::Pats(ps) => ps.into_iter().map(Node::Pat).collect(),
+            Sv::Ty(t) => vec![Node::Ty(*t)],
+            Sv::Tys(ts) => ts.into_iter().map(Node::Ty).collect(),
+            Sv::OptTy(t) => (*t).into_iter().map(Node::Ty).collect(),
+            Sv::Decl(d) => vec![Node::Decl(*d)],
+            Sv::Decls(ds) => ds.into_iter().map(Node::Decl).collect(),
+            Sv::DeclKind(k) => vec![Node::Decl(Decl {
+                meta: Meta {
+                    id: 0,
+                    span: Span::default(),
+                    depth: k.child_depth().saturating_add(1),
+                },
+                kind: *k,
+            })],
+            Sv::Binding(b) => vec![Node::Bind(*b)],
+            Sv::Bindings(bs) => bs.into_iter().map(Node::Bind).collect(),
+            Sv::Header(h) => h.1.into_iter().map(Node::Decl).collect(),
+            Sv::Program(p) => p.decls.into_iter().map(Node::Decl).collect(),
+            Sv::Arg(a) => vec![Node::Exp(a.1)],
+            Sv::Args(xs) => xs.into_iter().map(|(_, e)| Node::Exp(e)).collect(),
+            Sv::RField(f) => vec![Node::Exp(f.1)],
+            Sv::RFields(xs) => xs.into_iter().map(|(_, e)| Node::Exp(e)).collect(),
+            Sv::Clause(c) => {
+                let c = *c;
+                let mut v = vec![Node::Pat(c.pat), Node::Exp(c.body)];
+                v.extend(c.guard.map(Node::Exp));
+                v
+            }
+            Sv::Clauses(cs) => cs
+                .into_iter()
+                .flat_map(|c| {
+                    let mut v = vec![Node::Pat(c.pat), Node::Exp(c.body)];
+                    v.extend(c.guard.map(Node::Exp));
+                    v
+                })
+                .collect(),
+            // ほかの値は、限度の内側の深さの子しか持たない。
+            _ => Vec::new(),
+        };
+        dismantle(work);
+    }
+}
+
 #[cold]
 fn bad(want: &str, got: &Sv) -> ! {
     panic!("keleut-front: 意味の値の型が合いません({want} を期待したが {got:?})")
@@ -396,6 +449,11 @@ impl Args {
     /// 右辺の値と位置の列と、規則全体の範囲から作る。
     pub fn new(v: Vec<(Sv, Pos, Pos)>, sloc: (Pos, Pos)) -> Args {
         Args { v, sloc }
+    }
+
+    /// 右辺の列を返す(呼び出し側が割り付けを使い回す)。
+    pub fn into_vec(self) -> Vec<(Sv, Pos, Pos)> {
+        self.v
     }
 
     fn t(&mut self, i: usize) -> Sv {
