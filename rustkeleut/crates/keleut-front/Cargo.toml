@@ -1,0 +1,9 @@
+[package]
+name = "keleut-front"
+description = "RustKeleut のフロントエンド(字句、構文、脱糖。M96 から型の段を足していく)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]

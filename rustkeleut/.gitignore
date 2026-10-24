@@ -1,1 +1,3 @@
 target/
+crates/keleut-front/tools/*.cm[iox]
+crates/keleut-front/tools/*.o
