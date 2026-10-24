@@ -1,0 +1,1066 @@
+//! KIR から LIR への下ろし(計画 261024-1 の 6.4 節のパス 1〜7、9、10)。
+//!
+//! 1 回の走査で、KIR の木を基本ブロックのグラフにする。
+//! 各パスの受け持ちは次のとおりである。
+//!
+//! | パス | 受け持ち | 置き場 |
+//! |---|---|---|
+//! | 1 環境の配置 | 引数、辞書の引数、捕獲、スロットをレジスタと環境の位置に写す | 本ファイルの [`Low::entry`]、`env`、`closure` |
+//! | 2 パターンの照合 | 後戻りを伴う照合の手順 | [`crate::pattern`] |
+//! | 3 A 正規化 | 子を評価の順に命令にする | 本ファイルの各構文の下ろし |
+//! | 4 Rep と箱 | Rep の違う位置に `box` と `unbox` を置き、関数の境目を `any` にする | 本ファイルの [`Low::coerce`] |
+//! | 5 辞書の定数化 | `dbuiltin` と `dinst` の辞書のメソッドの呼び出しを、プリミティブと直の呼び出しにする | [`crate::dict`] |
+//! | 6 レコードの形 | 形の分かるレコードの操作の位置を定数にする | [`crate::record`] |
+//! | 7 数値の検査 | プリミティブの前の検査 | [`crate::numeric`] |
+//! | 9 初期化の検査の省略 | 大域を読む前の検査を置くかどうか | [`crate::initck`] と本ファイルの [`Low::global_check`] |
+//! | 10 深さの命令 | 入口の `depth_enter`、呼び出しの前後の `depth_push` と `depth_restore`、`depth_check` | [`crate::depth`] |
+//!
+//! パス 12(生存区間とスロット)は [`crate::frame`] が、下ろした後のグラフに対して行う。
+//! `handle`、利用者の操作の `perform`、`resume` は、M89 のパス 8 までのあいだ `unimplemented_value` に下ろす。
+//! この命令はブロックを終えないので、後に続く KIR も下ろして検証する。
+
+use std::collections::HashMap;
+
+use kir::{Cap, Exp, ExpId, FnId, GlobalKind as KGlobalKind, Lit, Part};
+
+use crate::builder::Builder;
+use crate::initck;
+use crate::ir::*;
+use crate::numeric::{self, Prim};
+
+/// 値のレジスタと、その Rep。
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct V {
+    pub reg: Reg,
+    pub rep: Rep,
+}
+
+impl V {
+    pub(crate) fn any(reg: Reg) -> V {
+        V { reg, rep: Rep::Any }
+    }
+}
+
+/// プログラムの全体で共有する表(ラベル、形、文字列)と、関数の番号の割り当て。
+pub(crate) struct Prog<'k> {
+    pub k: &'k kir::Program,
+    pub labels: Vec<String>,
+    label_ix: HashMap<String, LabelId>,
+    pub shapes: Vec<Vec<LabelId>>,
+    shape_ix: HashMap<Vec<LabelId>, ShapeId>,
+    pub strings: Vec<Vec<u8>>,
+    string_ix: HashMap<Vec<u8>, StrId>,
+    pub init: initck::Info,
+    /// 大域ごとの、値の本体の関数(`extern` と組み込みの値)。
+    pub global_func: Vec<Option<FuncId>>,
+    /// `Array.each` の内側のループの関数。
+    pub each_loop: Option<FuncId>,
+    /// 下ろしの途中で見つけた内部の誤り。
+    pub bug: Option<String>,
+}
+
+impl<'k> Prog<'k> {
+    pub(crate) fn new(k: &'k kir::Program) -> Prog<'k> {
+        let mut p = Prog {
+            k,
+            labels: Vec::new(),
+            label_ix: HashMap::new(),
+            shapes: Vec::new(),
+            shape_ix: HashMap::new(),
+            strings: Vec::new(),
+            string_ix: HashMap::new(),
+            init: initck::analyze(k),
+            global_func: vec![None; k.globals.len()],
+            each_loop: None,
+            bug: None,
+        };
+        p.shape(Vec::new());
+        p
+    }
+
+    /// ラベルを表に入れて番号を返す。
+    pub(crate) fn label(&mut self, l: &str) -> LabelId {
+        if let Some(&id) = self.label_ix.get(l) {
+            return id;
+        }
+        let id = LabelId(self.labels.len() as u32);
+        self.labels.push(l.to_string());
+        self.label_ix.insert(l.to_string(), id);
+        id
+    }
+
+    /// 形(正準の順のラベルの列)を表に入れて番号を返す。
+    pub(crate) fn shape(&mut self, labels: Vec<LabelId>) -> ShapeId {
+        if let Some(&id) = self.shape_ix.get(&labels) {
+            return id;
+        }
+        let id = ShapeId(self.shapes.len() as u32);
+        self.shapes.push(labels.clone());
+        self.shape_ix.insert(labels, id);
+        id
+    }
+
+    /// 文字列の定数を表に入れて番号を返す。
+    pub(crate) fn string(&mut self, s: &[u8]) -> StrId {
+        if let Some(&id) = self.string_ix.get(s) {
+            return id;
+        }
+        let id = StrId(self.strings.len() as u32);
+        self.strings.push(s.to_vec());
+        self.string_ix.insert(s.to_vec(), id);
+        id
+    }
+
+    /// 内部の誤りを覚える(最初の 1 つだけ)。
+    pub(crate) fn note_bug(&mut self, msg: String) {
+        if self.bug.is_none() {
+            self.bug = Some(msg);
+        }
+    }
+}
+
+/// 形の分かるレコードの配置(正準の順の (ラベル, フィールドの値) の列)。
+pub(crate) type Layout = Vec<(LabelId, Reg)>;
+
+/// 1 つの関数の下ろし。
+pub(crate) struct Low<'p, 'k> {
+    pub p: &'p mut Prog<'k>,
+    /// 下ろしている KIR の関数(初期化の関数と本体の関数では `None`)。
+    pub f: Option<&'k kir::Function>,
+    pub fid: Option<FnId>,
+    pub b: Builder,
+    /// KIR のスロットのレジスタ。
+    pub slots: Vec<Option<Reg>>,
+    /// KIR のスロットの Rep。
+    pub slot_rep: Vec<Rep>,
+    /// 辞書の引数のレジスタ。
+    pub dparams: Vec<Reg>,
+    /// 入口で読んだ捕獲のレジスタ(`any`)。
+    pub envs: Vec<Reg>,
+    /// 形の分かるレコードのレジスタ(パス 6)。
+    pub known: HashMap<Reg, Layout>,
+}
+
+impl<'p, 'k> Low<'p, 'k> {
+    pub(crate) fn new(p: &'p mut Prog<'k>, f: Option<(FnId, &'k kir::Function)>) -> Low<'p, 'k> {
+        let (fid, f) = match f {
+            Some((i, f)) => (Some(i), Some(f)),
+            None => (None, None),
+        };
+        let slot_rep: Vec<Rep> = match f {
+            Some(f) => f.params.iter().chain(f.locals.iter()).copied().collect(),
+            None => Vec::new(),
+        };
+        Low {
+            p,
+            f,
+            fid,
+            b: Builder::new(),
+            slots: vec![None; slot_rep.len()],
+            slot_rep,
+            dparams: Vec::new(),
+            envs: Vec::new(),
+            known: HashMap::new(),
+        }
+    }
+
+    fn k(&self) -> &'k kir::Program {
+        self.p.k
+    }
+
+    /// 内部の誤り。覚えて、ブロックを `unimplemented` で終える。
+    pub(crate) fn bug(&mut self, msg: impl Into<String>) -> Option<V> {
+        let msg = msg.into();
+        self.p.note_bug(msg.clone());
+        if self.b.current().is_some() {
+            self.b.terminate(Term::Unimplemented {
+                what: format!("内部の誤り: {msg}"),
+            });
+        }
+        None
+    }
+
+    // ---- パス 4: Rep と箱 ----
+
+    /// 値を Rep `to` のレジスタにする。
+    pub(crate) fn coerce(&mut self, v: V, to: Rep) -> Reg {
+        if v.rep == to {
+            return v.reg;
+        }
+        if to == Rep::Any {
+            let dst = self.b.reg(Rep::Any);
+            self.b.emit(Inst::Box { dst, src: v.reg });
+            return dst;
+        }
+        let src = if v.rep == Rep::Any {
+            v.reg
+        } else {
+            // 生の Rep どうしの食い違いは型の健全性の上では起きない。一様な語を通す。
+            let a = self.b.reg(Rep::Any);
+            self.b.emit(Inst::Box { dst: a, src: v.reg });
+            a
+        };
+        let dst = self.b.reg(to);
+        self.b.emit(Inst::Unbox { dst, src });
+        dst
+    }
+
+    /// 値を一様な語にする。
+    pub(crate) fn boxed(&mut self, v: V) -> Reg {
+        self.coerce(v, Rep::Any)
+    }
+
+    /// 値を返してブロックを終える。
+    pub(crate) fn ret(&mut self, v: V) {
+        let r = self.boxed(v);
+        self.b.terminate(Term::Return(r));
+    }
+
+    /// 末尾の位置なら値を返して終え、そうでなければ値をそのまま渡す。
+    pub(crate) fn finish(&mut self, v: Option<V>, tail: bool) -> Option<V> {
+        match (v, tail) {
+            (Some(v), true) => {
+                self.ret(v);
+                None
+            }
+            (v, false) => v,
+            (None, true) => None,
+        }
+    }
+
+    /// 枝の値を合流させる。`results` は(枝の終わりのブロック、値)で、ブロックはまだ終えていない。
+    pub(crate) fn join(&mut self, results: Vec<(BlockId, V)>) -> Option<V> {
+        if results.is_empty() {
+            return None;
+        }
+        let rep0 = results[0].1.rep;
+        let rep = if results.iter().all(|(_, v)| v.rep == rep0) {
+            rep0
+        } else {
+            Rep::Any
+        };
+        let join = self.b.block();
+        let dst = self.b.reg(rep);
+        for (blk, v) in results {
+            self.b.switch_to(blk);
+            let src = self.coerce(v, rep);
+            self.b.emit(Inst::Move { dst, src });
+            self.b.terminate(Term::Jump(join));
+        }
+        self.b.switch_to(join);
+        Some(V { reg: dst, rep })
+    }
+
+    // ---- パス 1: 環境の配置 ----
+
+    /// 関数の入口(深さ、捕獲、引数、辞書の引数)。
+    ///
+    /// 捕獲はすべて `depth_enter` の直後に `env_get` でレジスタに読む。
+    /// 以後は捕獲もほかの値と同じくスロットに置かれ、再開点と安全点の集合に入るので、
+    /// フレームはクロージャ(環境)を持ち続けなくてよい。
+    /// 使わなかった捕獲の `env_get` は [`drop_unused_env`] が除く。
+    pub(crate) fn entry(&mut self) {
+        crate::depth::enter(&mut self.b);
+        let f = self.f.expect("KIR の関数ではない");
+        let n = f.params.len() + f.dicts as usize;
+        let params: Vec<Reg> = (0..n).map(|_| self.b.param()).collect();
+        for i in 0..f.caps.len() {
+            let dst = self.b.reg(Rep::Any);
+            self.b.emit(Inst::EnvGet {
+                dst,
+                index: i as u32,
+            });
+            self.envs.push(dst);
+        }
+        if f.dicts > 0 {
+            self.dparams = params;
+        } else {
+            for (i, &p) in params.iter().enumerate() {
+                let r = self.coerce(V::any(p), f.params[i]);
+                self.slots[i] = Some(r);
+            }
+        }
+    }
+
+    /// 入口で読んだ捕獲のレジスタ。
+    pub(crate) fn env_reg(&mut self, i: u32) -> Reg {
+        match self.envs.get(i as usize) {
+            Some(&r) => r,
+            None => {
+                self.p.note_bug(format!("範囲の外の捕獲 {i}"));
+                self.b.konst(Const::Unit)
+            }
+        }
+    }
+
+    /// 捕獲を読む。
+    fn env(&mut self, i: u32) -> V {
+        let dst = self.env_reg(i);
+        let rep = self
+            .f
+            .and_then(|f| f.caps.get(i as usize).copied())
+            .unwrap_or(Rep::Any);
+        let reg = self.coerce(V::any(dst), rep);
+        V { reg, rep }
+    }
+
+    /// スロットを読む。
+    fn local(&mut self, i: u32) -> Option<V> {
+        match self.slots.get(i as usize).copied().flatten() {
+            Some(reg) => Some(V {
+                reg,
+                rep: self.slot_rep[i as usize],
+            }),
+            None => self.bug(format!("束縛の前のスロット {i} を読んだ")),
+        }
+    }
+
+    /// スロットに値を置く。
+    pub(crate) fn bind_slot(&mut self, i: u32, v: V) {
+        let Some(&rep) = self.slot_rep.get(i as usize) else {
+            self.bug(format!("範囲の外のスロット {i}"));
+            return;
+        };
+        let r = self.coerce(v, rep);
+        self.slots[i as usize] = Some(r);
+    }
+
+    /// 捕獲の列の要素を一様な語で読む。
+    fn cap_any(&mut self, c: Cap) -> Option<Reg> {
+        Some(match c {
+            Cap::Local(i) => {
+                let v = self.local(i)?;
+                self.boxed(v)
+            }
+            Cap::Env(i) => self.env_reg(i),
+            Cap::DParam(i) => match self.dparams.get(i as usize) {
+                Some(&r) => r,
+                None => {
+                    self.bug(format!("範囲の外の辞書の引数 {i}"));
+                    return None;
+                }
+            },
+        })
+    }
+
+    fn closure(&mut self, part: &Part) -> Option<V> {
+        let mut caps = Vec::with_capacity(part.caps.len());
+        for &c in &part.caps {
+            caps.push(self.cap_any(c)?);
+        }
+        let dst = self.b.reg(Rep::Any);
+        self.b.emit(Inst::ClosureNew {
+            dst,
+            func: FuncId(part.func.0),
+            caps,
+        });
+        Some(V::any(dst))
+    }
+
+    // ---- パス 9: 大域を読む ----
+
+    /// 大域 `g` の初期化の検査(省いてよければ何もしない)。
+    pub(crate) fn global_check(&mut self, g: kir::GlobalId) {
+        if self.p.init.may_elide(self.k(), self.fid, g) {
+            return;
+        }
+        let ok = self.b.reg(Rep::Bool);
+        self.b.emit(Inst::GlobalIsInit { dst: ok, global: g });
+        let bad = self.b.reg(Rep::Bool);
+        self.b.emit(Inst::BoolNot { dst: bad, a: ok });
+        self.b.fail_if(bad, RtError::Unbound(g), None);
+    }
+
+    /// 大域を値として読む。
+    fn global(&mut self, g: kir::GlobalId) -> V {
+        self.global_check(g);
+        let dst = self.b.reg(Rep::Any);
+        self.b.emit(Inst::GlobalGet { dst, global: g });
+        match self.k().globals[g.index()].kind {
+            KGlobalKind::Value(rep) if rep != Rep::Any => {
+                let reg = self.coerce(V::any(dst), rep);
+                V { reg, rep }
+            }
+            _ => V::any(dst),
+        }
+    }
+
+    // ---- パス 3: 式 ----
+
+    /// 式を下ろす。
+    ///
+    /// `tail` が真なら、式の値が関数の戻り値になる。
+    /// そのときはブロックを終え(`return` か末尾呼び出し)、`None` を返す。
+    /// 偽なら値を返す。
+    /// 必ず実行時エラーになる式も、ブロックを終えて `None` を返す。
+    pub(crate) fn exp(&mut self, e: ExpId, tail: bool) -> Option<V> {
+        let k = self.k();
+        let Some(x) = k.nodes.exp(e) else {
+            return self.bug(format!("範囲の外の式 {}", e.0));
+        };
+        match x {
+            Exp::Lit(l) => {
+                let v = self.lit(l);
+                self.finish(Some(v), tail)
+            }
+            Exp::LitError(text) => {
+                self.b.terminate(Term::Error {
+                    kind: RtError::LitRange(text.clone()),
+                    operand: None,
+                });
+                None
+            }
+            Exp::Local(i) => {
+                let v = self.local(*i);
+                self.finish(v, tail)
+            }
+            Exp::Env(i) => {
+                let v = self.env(*i);
+                self.finish(Some(v), tail)
+            }
+            Exp::Global(g) => {
+                let v = self.global(*g);
+                self.finish(Some(v), tail)
+            }
+            Exp::Construct { ty, ctor, fields } => {
+                let v = self.construct(*ty, *ctor, fields);
+                self.finish(v, tail)
+            }
+            Exp::Variant { label, value } => {
+                let v = self.variant(label, *value);
+                self.finish(v, tail)
+            }
+            Exp::Call {
+                tail: t,
+                yields,
+                func,
+                args,
+            } => self.call(*t && tail, *yields, *func, args, tail),
+            Exp::Method {
+                class,
+                method,
+                dict,
+                own,
+            } => {
+                let v = self.method_value(*class, *method, *dict, own);
+                self.finish(Some(v), tail)
+            }
+            Exp::Opcall {
+                class,
+                method,
+                dict,
+                args,
+            } => {
+                let v = self.opcall(*class, *method, *dict, args);
+                self.finish(v, tail)
+            }
+            Exp::Not(a) => {
+                let v = self.not(*a);
+                self.finish(v, tail)
+            }
+            Exp::And(a, b2) => self.and_or(true, *a, *b2, tail),
+            Exp::Or(a, b2) => self.and_or(false, *a, *b2, tail),
+            Exp::Closure(part) | Exp::Dictabs(part) => {
+                let v = self.closure(part);
+                self.finish(v, tail)
+            }
+            Exp::Dictapp { func, dicts } => {
+                let v = self.dictapp(*func, dicts);
+                self.finish(v, tail)
+            }
+            Exp::Let { slot, value, body } => {
+                let v = self.exp(*value, false)?;
+                self.bind_slot(*slot, v);
+                self.exp(*body, tail)
+            }
+            Exp::Letpat { pat, value, body } => {
+                let v = self.exp(*value, false)?;
+                self.letpat(*pat, v)?;
+                self.exp(*body, tail)
+            }
+            Exp::Letrec { items, body } => {
+                self.letrec(items)?;
+                self.exp(*body, tail)
+            }
+            Exp::Seq(es) => {
+                let Some((last, init)) = es.split_last() else {
+                    return self.bug("空の seq");
+                };
+                for &e in init {
+                    self.exp(e, false)?;
+                }
+                self.exp(*last, tail)
+            }
+            Exp::Match { scrutinee, clauses } => self.match_(*scrutinee, clauses, tail),
+            Exp::RecEmpty => {
+                let r = self.b.konst(Const::Unit);
+                self.known.insert(r, Vec::new());
+                self.finish(Some(V::any(r)), tail)
+            }
+            Exp::RecExtend { .. } => {
+                let v = self.rec_extend(e);
+                self.finish(v, tail)
+            }
+            Exp::RecSelect { label, record } => {
+                let v = self.rec_select(label, *record);
+                self.finish(v, tail)
+            }
+            Exp::RecRestrict { label, record } => {
+                let v = self.rec_restrict(label, *record);
+                self.finish(v, tail)
+            }
+            Exp::RecUpdate {
+                label,
+                record,
+                value,
+            } => {
+                let v = self.rec_update(label, *record, *value);
+                self.finish(v, tail)
+            }
+            Exp::Perform { effect, op, args } => {
+                let v = self.perform(*effect, *op, args);
+                self.finish(v, tail)
+            }
+            Exp::Handle(_) => {
+                let v = self.unimplemented_value("handle");
+                self.finish(Some(v), tail)
+            }
+            Exp::Resume { value, .. } => {
+                self.exp(*value, false)?;
+                let v = self.unimplemented_value("resume");
+                self.finish(Some(v), tail)
+            }
+            Exp::Hole => {
+                self.b.terminate(Term::Error {
+                    kind: RtError::Hole,
+                    operand: None,
+                });
+                None
+            }
+        }
+    }
+
+    fn lit(&mut self, l: &Lit) -> V {
+        let c = match l {
+            Lit::Bool(b) => Const::Bool(*b),
+            Lit::I32(n) => Const::I32(*n),
+            Lit::I64(n) => Const::I64(*n),
+            Lit::F64(bits) => Const::F64(*bits),
+            Lit::Str(s) => Const::Str(self.p.string(s)),
+        };
+        let rep = c.rep();
+        V {
+            reg: self.b.konst(c),
+            rep,
+        }
+    }
+
+    /// 引数を左から評価し、一様な語にする。
+    pub(crate) fn args_any(&mut self, args: &[ExpId]) -> Option<Vec<Reg>> {
+        let vs = self.args(args)?;
+        Some(vs.into_iter().map(|v| self.boxed(v)).collect())
+    }
+
+    /// 引数を左から評価する。
+    pub(crate) fn args(&mut self, args: &[ExpId]) -> Option<Vec<V>> {
+        let mut out = Vec::with_capacity(args.len());
+        for &a in args {
+            out.push(self.exp(a, false)?);
+        }
+        Some(out)
+    }
+
+    #[inline(never)]
+    fn construct(&mut self, ty: kir::TypeId, ctor: u32, fields: &[(u32, ExpId)]) -> Option<V> {
+        let arity = self
+            .k()
+            .types
+            .get(ty.index())
+            .and_then(|t| t.ctors.get(ctor as usize))
+            .map(|c| c.arity as usize);
+        let Some(arity) = arity else {
+            return self.bug("範囲の外のコンストラクタ");
+        };
+        let mut vals: Vec<Option<Reg>> = vec![None; arity];
+        for &(pos, e) in fields {
+            let v = self.exp(e, false)?;
+            let r = self.boxed(v);
+            match vals.get_mut(pos as usize) {
+                Some(slot) => *slot = Some(r),
+                None => return self.bug("範囲の外のフィールド"),
+            }
+        }
+        if arity == 0 {
+            let r = self.b.konst(Const::Ctor0 { ty, ctor });
+            return Some(V::any(r));
+        }
+        let mut regs = Vec::with_capacity(arity);
+        for v in vals {
+            regs.push(match v {
+                Some(r) => r,
+                // 書かなかったフィールドは Unit にする(Diktor の ir_eval と同じ)。
+                None => self.b.konst(Const::Unit),
+            });
+        }
+        let dst = self.b.reg(Rep::Any);
+        self.b.emit(Inst::CtorNew {
+            dst,
+            ty,
+            ctor,
+            fields: regs,
+        });
+        Some(V::any(dst))
+    }
+
+    #[inline(never)]
+    fn variant(&mut self, label: &str, value: ExpId) -> Option<V> {
+        let v = self.exp(value, false)?;
+        let payload = self.boxed(v);
+        let label = self.p.label(label);
+        let dst = self.b.reg(Rep::Any);
+        self.b.emit(Inst::VariantNew {
+            dst,
+            label,
+            payload,
+        });
+        Some(V::any(dst))
+    }
+
+    #[inline(never)]
+    fn not(&mut self, a: ExpId) -> Option<V> {
+        let v = self.exp(a, false)?;
+        let x = self.coerce(v, Rep::Bool);
+        let dst = self.b.reg(Rep::Bool);
+        self.b.emit(Inst::BoolNot { dst, a: x });
+        Some(V {
+            reg: dst,
+            rep: Rep::Bool,
+        })
+    }
+
+    /// `and`(`is_and` が真)と `or`。
+    #[inline(never)]
+    fn and_or(&mut self, is_and: bool, a: ExpId, rhs: ExpId, tail: bool) -> Option<V> {
+        let v = self.exp(a, false)?;
+        let c = self.coerce(v, Rep::Bool);
+        let eval_b = self.b.block();
+        let short = self.b.block();
+        let (then, else_) = if is_and {
+            (eval_b, short)
+        } else {
+            (short, eval_b)
+        };
+        self.b.terminate(Term::Branch {
+            cond: c,
+            then,
+            else_,
+        });
+        let mut results = Vec::new();
+        self.b.switch_to(eval_b);
+        if let Some(y) = self.exp(rhs, tail) {
+            let r = self.coerce(y, Rep::Bool);
+            results.push((
+                self.b.current().unwrap(),
+                V {
+                    reg: r,
+                    rep: Rep::Bool,
+                },
+            ));
+        }
+        self.b.switch_to(short);
+        let k = self.b.konst(Const::Bool(!is_and));
+        let kv = V {
+            reg: k,
+            rep: Rep::Bool,
+        };
+        if tail {
+            self.ret(kv);
+            return None;
+        }
+        results.push((self.b.current().unwrap(), kv));
+        self.join(results)
+    }
+
+    #[inline(never)]
+    fn letrec(&mut self, items: &[(u32, ExpId)]) -> Option<()> {
+        let k = self.k();
+        let mut parts = Vec::with_capacity(items.len());
+        for &(slot, e) in items {
+            let part = match k.nodes.exp(e) {
+                Some(Exp::Closure(p)) | Some(Exp::Dictabs(p)) => p,
+                _ => {
+                    self.bug("letrec の項目が closure でも dictabs でもない");
+                    return None;
+                }
+            };
+            let unit = self.b.konst(Const::Unit);
+            let dst = self.b.reg(Rep::Any);
+            self.b.emit(Inst::ClosureNew {
+                dst,
+                func: FuncId(part.func.0),
+                caps: vec![unit; part.caps.len()],
+            });
+            self.bind_slot(slot, V::any(dst));
+            parts.push((dst, part));
+        }
+        for (clo, part) in parts {
+            for (i, &c) in part.caps.iter().enumerate() {
+                let value = self.cap_any(c)?;
+                self.b.emit(Inst::ClosureSetCap {
+                    clo,
+                    index: i as u32,
+                    value,
+                });
+            }
+        }
+        Some(())
+    }
+
+    #[inline(never)]
+    fn letpat(&mut self, pat: kir::PatId, v: V) -> Option<()> {
+        let fail = self.b.block();
+        self.pattern(pat, v, fail, &crate::pattern::Target::Slots);
+        let cont = self.b.current();
+        self.b.switch_to(fail);
+        let op = self.boxed(v);
+        self.b.terminate(Term::Error {
+            kind: RtError::PatternFail,
+            operand: Some(op),
+        });
+        match cont {
+            Some(c) => {
+                self.b.switch_to(c);
+                Some(())
+            }
+            None => None,
+        }
+    }
+
+    #[inline(never)]
+    fn match_(&mut self, scrutinee: ExpId, clauses: &[kir::Clause], tail: bool) -> Option<V> {
+        let v = self.exp(scrutinee, false)?;
+        let mut results = Vec::new();
+        for c in clauses {
+            let next = self.b.block();
+            self.pattern(c.pat, v, next, &crate::pattern::Target::Slots);
+            if self.b.current().is_some()
+                && let Some(g) = c.guard
+                && let Some(gv) = self.exp(g, false)
+            {
+                let cond = self.coerce(gv, Rep::Bool);
+                let body = self.b.block();
+                self.b.terminate(Term::Branch {
+                    cond,
+                    then: body,
+                    else_: next,
+                });
+                self.b.switch_to(body);
+            }
+            if self.b.current().is_some()
+                && let Some(r) = self.exp(c.body, tail)
+            {
+                results.push((self.b.current().unwrap(), r));
+            }
+            self.b.switch_to(next);
+        }
+        let op = self.boxed(v);
+        self.b.terminate(Term::Error {
+            kind: RtError::MatchFail,
+            operand: Some(op),
+        });
+        if tail {
+            return None;
+        }
+        self.join(results)
+    }
+
+    // ---- 呼び出し ----
+
+    /// `call`。`tail` は末尾の呼び出しにするか、`ret` は値を返して終えるか。
+    #[inline(never)]
+    fn call(
+        &mut self,
+        tail: bool,
+        yields: bool,
+        func: ExpId,
+        args: &[ExpId],
+        ret: bool,
+    ) -> Option<V> {
+        let k = self.k();
+        match k.nodes.exp(func) {
+            Some(Exp::Global(g)) => {
+                let v = self.call_global(*g, tail, yields, args);
+                if tail {
+                    return None;
+                }
+                self.finish(v, ret)
+            }
+            Some(Exp::Method {
+                class,
+                method,
+                dict,
+                own,
+            }) => {
+                let d = self.dict(*dict);
+                let own: Vec<Reg> = own
+                    .iter()
+                    .map(|&o| {
+                        let dv = self.dict(o);
+                        self.dict_reg(dv)
+                    })
+                    .collect();
+                let args = self.args(args)?;
+                let v = self.method_call(*class, *method, d, own, args, tail, yields);
+                if tail {
+                    return None;
+                }
+                self.finish(v, ret)
+            }
+            _ => {
+                let f = self.exp(func, false)?;
+                let callee = self.boxed(f);
+                let args = self.args_any(args)?;
+                let v = self.call_value(callee, args, tail, yields);
+                if tail {
+                    return None;
+                }
+                self.finish(v, ret)
+            }
+        }
+    }
+
+    /// 値の呼び出し。
+    pub(crate) fn call_value(
+        &mut self,
+        callee: Reg,
+        args: Vec<Reg>,
+        tail: bool,
+        yields: bool,
+    ) -> Option<V> {
+        if tail {
+            self.b.terminate(Term::TailCallValue {
+                callee,
+                args,
+                yields,
+            });
+            return None;
+        }
+        let dst = self.b.reg(Rep::Any);
+        crate::depth::around_call(&mut self.b, |b| {
+            b.emit(Inst::CallValue {
+                dst,
+                callee,
+                args,
+                yields,
+            })
+        });
+        Some(V::any(dst))
+    }
+
+    /// 捕獲を持たない関数の直の呼び出し。
+    pub(crate) fn call_direct(
+        &mut self,
+        func: FuncId,
+        args: Vec<Reg>,
+        tail: bool,
+        yields: bool,
+    ) -> Option<V> {
+        if tail {
+            self.b
+                .terminate(Term::TailCallDirect { func, args, yields });
+            return None;
+        }
+        let dst = self.b.reg(Rep::Any);
+        crate::depth::around_call(&mut self.b, |b| {
+            b.emit(Inst::CallDirect {
+                dst,
+                func,
+                args,
+                yields,
+            })
+        });
+        Some(V::any(dst))
+    }
+
+    /// 呼び出し先が大域の `call`。
+    fn call_global(
+        &mut self,
+        g: kir::GlobalId,
+        tail: bool,
+        yields: bool,
+        args: &[ExpId],
+    ) -> Option<V> {
+        let k = self.k();
+        let gl = &k.globals[g.index()];
+        match &gl.kind {
+            KGlobalKind::Fn(f) => {
+                self.global_check(g);
+                let args = self.args_any(args)?;
+                self.call_direct(FuncId(f.0), args, tail, yields)
+            }
+            KGlobalKind::Extern { abi, name, .. } => {
+                self.global_check(g);
+                let vs = self.args(args)?;
+                match numeric::by_name(*abi, name) {
+                    Some(p) if numeric::sig(p).0.len() == vs.len() => self.prim_call(p, &vs, tail),
+                    Some(_) => {
+                        let callee = self.global(g).reg;
+                        let args = vs.into_iter().map(|v| self.boxed(v)).collect();
+                        self.call_value(callee, args, tail, yields)
+                    }
+                    None => {
+                        if !tail {
+                            crate::depth::check(&mut self.b);
+                        }
+                        self.b.terminate(Term::Error {
+                            kind: RtError::UnimplPrim(g),
+                            operand: None,
+                        });
+                        None
+                    }
+                }
+            }
+            KGlobalKind::Builtin => {
+                let name = gl.sym.strip_prefix("builtin/").unwrap_or(&gl.sym);
+                let vs = self.args(args)?;
+                let args: Vec<Reg> = vs.into_iter().map(|v| self.boxed(v)).collect();
+                if let Some(arity) = crate::wrappers::inline_arity(name)
+                    && arity == args.len()
+                {
+                    if !tail {
+                        crate::depth::check(&mut self.b);
+                    }
+                    let r = crate::wrappers::builtin_inline(&mut self.b, name, &args)?;
+                    let v = V::any(r);
+                    if tail {
+                        self.ret(v);
+                        return None;
+                    }
+                    return Some(v);
+                }
+                match self.p.global_func[g.index()] {
+                    Some(f) if crate::wrappers::builtin_arity(name) == Some(args.len()) => {
+                        self.call_direct(f, args, tail, yields)
+                    }
+                    _ => {
+                        let callee = self.b.reg(Rep::Any);
+                        self.b.emit(Inst::GlobalGet {
+                            dst: callee,
+                            global: g,
+                        });
+                        self.call_value(callee, args, tail, yields)
+                    }
+                }
+            }
+            KGlobalKind::Value(_) | KGlobalKind::Dictabs(_) => {
+                let f = self.global(g);
+                let callee = self.boxed(f);
+                let args = self.args_any(args)?;
+                self.call_value(callee, args, tail, yields)
+            }
+        }
+    }
+
+    /// プリミティブの呼び出し(末尾でなければ深さの検査を伴う)。
+    pub(crate) fn prim_call(&mut self, p: Prim, vs: &[V], tail: bool) -> Option<V> {
+        if !tail {
+            crate::depth::check(&mut self.b);
+        }
+        let (reps, res) = numeric::sig(p);
+        let regs: Vec<Reg> = vs
+            .iter()
+            .zip(reps.iter())
+            .map(|(&v, &r)| self.coerce(v, r))
+            .collect();
+        let r = numeric::emit(&mut self.b, p, &regs)?;
+        let v = V { reg: r, rep: res };
+        self.finish(Some(v), tail)
+    }
+
+    #[inline(never)]
+    fn dictapp(&mut self, func: ExpId, dicts: &[kir::DictId]) -> Option<V> {
+        let k = self.k();
+        if let Some(Exp::Global(g)) = k.nodes.exp(func) {
+            match k.globals[g.index()].kind {
+                KGlobalKind::Dictabs(f) => {
+                    self.global_check(*g);
+                    let ds = self.dict_regs(dicts);
+                    return self.call_direct(FuncId(f.0), ds, false, false);
+                }
+                KGlobalKind::Extern { .. } => {
+                    self.global_check(*g);
+                    // 辞書を捨てて自分を返す。深さは末尾でない呼び出しとして数える。
+                    crate::depth::check(&mut self.b);
+                    let dst = self.b.reg(Rep::Any);
+                    self.b.emit(Inst::GlobalGet { dst, global: *g });
+                    return Some(V::any(dst));
+                }
+                _ => {}
+            }
+        }
+        let fv = self.exp(func, false)?;
+        let f = self.boxed(fv);
+        let ds = self.dict_regs(dicts);
+        let dst = self.b.reg(Rep::Any);
+        crate::depth::around_call(&mut self.b, |b| b.emit(Inst::DictApp { dst, f, dicts: ds }));
+        Some(V::any(dst))
+    }
+
+    /// 辞書の式の列を一様な語にする。
+    pub(crate) fn dict_regs(&mut self, ds: &[kir::DictId]) -> Vec<Reg> {
+        ds.iter()
+            .map(|&d| {
+                let dv = self.dict(d);
+                self.dict_reg(dv)
+            })
+            .collect()
+    }
+
+    #[inline(never)]
+    fn perform(&mut self, effect: kir::EffectId, op: u32, args: &[ExpId]) -> Option<V> {
+        let k = self.k();
+        let runtime = k
+            .effects
+            .get(effect.index())
+            .and_then(|e| e.ops.get(op as usize))
+            .map(|o| o.runtime)
+            .unwrap_or(false);
+        let vs = self.args(args)?;
+        if runtime && vs.len() == 1 {
+            let s = self.coerce(vs[0], Rep::Str);
+            let dst = self.b.reg(Rep::Any);
+            self.b.emit(Inst::ConsoleWrite { dst, s });
+            return Some(V::any(dst));
+        }
+        Some(self.unimplemented_value("perform"))
+    }
+
+    /// 評価したら未実装(終了状態 4)で終わる値。続きの KIR も下ろして検証できるよう、ブロックを終えない。
+    fn unimplemented_value(&mut self, what: &str) -> V {
+        let dst = self.b.reg(Rep::Any);
+        self.b.emit(Inst::UnimplementedValue {
+            dst,
+            what: what.to_string(),
+        });
+        V::any(dst)
+    }
+}
+
+/// 入口の `env_get` のうち、結果をどこでも読まないものを除く。
+pub(crate) fn drop_unused_env(blocks: &mut [Block], nregs: usize) {
+    let mut used = vec![false; nregs];
+    for b in blocks.iter() {
+        for i in &b.insts {
+            for u in i.uses() {
+                used[u.index()] = true;
+            }
+        }
+        for u in b.term.uses() {
+            used[u.index()] = true;
+        }
+    }
+    if let Some(b0) = blocks.first_mut() {
+        b0.insts
+            .retain(|i| !matches!(i, Inst::EnvGet { dst, .. } if !used[dst.index()]));
+    }
+}

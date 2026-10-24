@@ -19,6 +19,13 @@ name = "keleut-front"
 version = "0.1.0"
 
 [[package]]
+name = "keleut-lir"
+version = "0.1.0"
+dependencies = [
+ "kir",
+]
+
+[[package]]
 name = "keleut-rtcore"
 version = "0.1.0"
 
