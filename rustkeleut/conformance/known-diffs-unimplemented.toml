@@ -1,0 +1,1938 @@
+# 一時の既知の差: 評価が handle に届くブロック(M88 で登録し、M89 で消す。台帳 V219)。
+#
+# M88 の keleut run(インタプリタ)はエフェクトを持たず、評価が handle に届くと
+# 「keleut: 未実装: handle」を書いて 4 で終わる(M86 の下ろしの約束)。
+# 計画 261024-1 の 9 節の M88 の受け入れのとおり、そのブロックを「未実装 4」として一時的にここへ登録する。
+# M89 でエフェクトを入れたら、このファイルを消す(kconform は conformance/known-diffs-*.toml も読む)。
+#
+# 項目は kconform --pairs dk,ki --suite all の結果から作った。
+# when = "unimplemented" の項目は、組 ki の結果が「keleut: 未実装」の行を含み、
+# その行より前の出力が比べる相手の先頭と一致するときだけ当たる。
+# 未実装に届く前の出力の違いと、未実装に届かなくなったブロックの差は隠さない。
+# when の無い 3 項目(invariants.t)は、標準エラーを捨てて 2 つの実行の終了状態と標準出力の一致だけを
+# same/differ の 1 行で印字するブロックで、結果に診断の行が残らない。どれも with_stdout(プレリュードの handle)を通ることを確かめてある。
+
+[[diff]]
+file = "diktor/test/annot_rows.t"
+line = 387
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/annot_rows.t"
+line = 495
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/annot_rows.t"
+line = 545
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/annot_rows.t"
+line = 944
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/annot_rows.t"
+line = 1583
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/builtin_rows.t"
+line = 20
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/builtin_rows.t"
+line = 61
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/builtin_rows.t"
+line = 81
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/builtin_rows.t"
+line = 106
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/builtin_rows.t"
+line = 143
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/effect_order.t"
+line = 19
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/effect_order.t"
+line = 71
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 16
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 18
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 36
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 38
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 48
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 59
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 67
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 83
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 85
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 103
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/empty_match.t"
+line = 219
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 99
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 140
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 166
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 190
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 215
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 259
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 290
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 306
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 344
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 367
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 390
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 409
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 428
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 447
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 466
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 484
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 502
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 523
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 540
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 554
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 568
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 585
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 601
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 644
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 713
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 774
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 815
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 845
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 956
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/import.t"
+line = 516
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/instance_init.t"
+line = 65
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/invariants.t"
+line = 108
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+
+[[diff]]
+file = "diktor/test/invariants.t"
+line = 124
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+
+[[diff]]
+file = "diktor/test/invariants.t"
+line = 342
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+
+[[diff]]
+file = "diktor/test/ir_emit.t"
+line = 841
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/ir_emit.t"
+line = 949
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/kinds.t"
+line = 59
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/kinds.t"
+line = 678
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/kinds.t"
+line = 686
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 33
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 49
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 72
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 94
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 108
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 120
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 198
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 251
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 270
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 297
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 328
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 353
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 372
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 402
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 438
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 463
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 481
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 494
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 521
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 548
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 572
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 598
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 621
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 645
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 678
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 720
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 740
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 14
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 24
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 40
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 74
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 88
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 103
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 95
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/runtime_effects.t"
+line = 41
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/trailing_block.t"
+line = 359
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/typecheck_m6.t"
+line = 497
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/typecheck_m6.t"
+line = 503
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/typecheck_sample.t"
+line = 78
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 59
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 78
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 99
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 585
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/visibility.t"
+line = 191
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 26
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/annot_rows/0030-valopen.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/annot_rows/0039-pubvalinit.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/annot_rows/0043-recand.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/annot_rows/0077-lamperform.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/annot_rows/0106-rectpflowrev.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/annot_rows/0134-instrowsub.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/builtin_rows/0001-bshowweak.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/builtin_rows/0002-bshowann.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/builtin_rows/0003-barrlen.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/builtin_rows/0004-brefget.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/builtin_rows/0005-bopweak.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/builtin_rows/0008-stdop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/effect_order/0001-effnt.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/effect_order/0005-effpos.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0001-direct.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0002-helper.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0003-valbind.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0004-abort.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0005-mutual.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0006-laterlet2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0007-okarm.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/empty_match/0016-toplevelstmt.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0002-effects.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0003-cancelouter.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0004-cancelnores.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0005-cancelabort.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0006-deep.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0009-affine.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0011-holecancel.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0012-perf.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0014-tailresume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0015-clauseerr.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0016-clauseresumed.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0017-resumeinner.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0018-resumeinnerdeep.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0019-resumeinnerpre.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0020-resumeret.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0021-resumestop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0022-resumeguard.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0023-clausestop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0024-guardop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0025-patop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0026-deadop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0027-soleop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0028-soledead.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0031-solevar.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0036-opnone2ok.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0039-gexc.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0040-gdrop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0041-sinkfail.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0049-leftmostrun.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/if/0014-resume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/instance_init/0004-instinithandled.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/invariants/0009-reorderrec_a.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/invariants/0010-reorderrec_b.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/invariants/0012-reorderrectp_b.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/invariants/0035-aliasrow_a.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/invariants/0036-aliasrow_b.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0008-tg.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0009-tg2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0010-shift.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0011-shiftt.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0012-k2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0013-k2drop.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0014-over.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0015-cancel.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0016-reserve.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0017-reserve2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0018-rs.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0019-rs2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0020-loops.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_emit/0010-con.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_emit/0015-grd.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_run/0003-h.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_run/0006-two.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/kinds/0003-cbrun.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/kinds/0048-fwdalias.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/kinds/0049-fwdalias2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0002-generic.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0003-alias.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0005-aliasorder.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0006-absurd.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0007-absurdplain.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0008-absurdann.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0013-neverclassann.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0017-nested.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0018-nontailresume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0019-mixed.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0021-guard.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0022-guardescape.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0023-guarderror.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0024-order.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0025-clauseerror.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0026-rethrow.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0027-otherescape.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0028-askescape.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0029-fromclause.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0030-cancelperform.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0031-cancelnormal.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0032-cancelsame.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0033-cancelresume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0034-cancelresumevia.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0035-cancelresumetwo.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0037-clsfail.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0038-clsfailrow.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0001-matchguard.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0002-ifcond.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0003-matchguard2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0005-guardhandle.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0006-nestresume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0007-nestresumediv.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/run_exit/0004-exitcancel.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/runtime_effects/0003-asyncuser.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/runtime_effects/0007-npok.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/runtime_effects/0008-ownfs.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0008-retc.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0009-resume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0010-stdout.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0011-nontail_resume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0013-retry.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0014-retryresume.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0015-retrycancel.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0016-retrycancelvia.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0017-retrycancelsame.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0018-retcancelret.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0019-retryresumepath.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/trailing_block/0011-resume2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/typecheck_m6/0001-eff9.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/typecheck_m6/0032-doublestack.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/verify_fixes/0003-vrgen.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/verify_fixes/0004-vrgenv.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/verify_fixes/0005-vrgen2.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/verify_fixes/0033-lfok.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/visibility/0013-visrow1.kel"
+line = 1
+pairs = ["ki"]
+reason = "評価が handle に届き、keleut run が未実装(4)で終わる(M89 で消す)"
+ledger = "V219"
+when = "unimplemented"
