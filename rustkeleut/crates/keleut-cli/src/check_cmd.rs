@@ -21,7 +21,7 @@
 //! 入力や import 先を開けないときと使い方の誤りは 64、標準出力に書けないときは 74 である。
 
 use crate::exit;
-use crate::front_cmd::{MAX_STACK_BYTES, io_msg, parse_bytes};
+use crate::front_cmd::{MAX_STACK_BYTES, io_msg, parse_bytes, stdout_closed};
 use keleut_front::Limits;
 use keleut_front::types::OutLine;
 use keleut_front::types::check::{
@@ -189,7 +189,11 @@ fn run_check(o: &Options) -> u8 {
     };
     if !stdout.is_empty() {
         let mut so = std::io::stdout().lock();
-        if let Err(e) = so.write_all(&stdout).and_then(|_| so.flush()) {
+        let r = match stdout_closed() {
+            Some(e) => Err(e),
+            None => so.write_all(&stdout).and_then(|_| so.flush()),
+        };
+        if let Err(e) = r {
             drop(so);
             eprintln_now(&format!("keleut: 標準出力に書き出せません: {}", io_msg(&e)));
             return exit::IO;

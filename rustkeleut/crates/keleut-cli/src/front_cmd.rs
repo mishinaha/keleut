@@ -157,6 +157,42 @@ pub(crate) fn io_msg(e: &std::io::Error) -> String {
     }
 }
 
+/// プロセスが始まったときに標準出力(fd 1)が閉じていたかどうかである。
+///
+/// Rust の標準ライブラリは `main` の前に、閉じている fd 0〜2 を `/dev/null` で開き直す。
+/// そのため `main` の中から書いても誤りにならず、出力が黙って捨てられる。
+/// Diktor(OCaml)は同じとき `Bad file descriptor` で 74 で終わるので、
+/// 標準ライブラリの初期化より前に走る `.init_array` の関数で fd 1 を調べておく。
+static STDOUT_CLOSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(target_os = "linux")]
+mod stdout_probe {
+    unsafe extern "C" {
+        fn fcntl(fd: i32, cmd: i32, ...) -> i32;
+    }
+
+    /// `F_GETFD` である。
+    const F_GETFD: i32 = 1;
+
+    extern "C" fn probe() {
+        // SAFETY: fd 1 の記述子の旗を読むだけで、何も変えない。
+        if unsafe { fcntl(1, F_GETFD) } == -1 {
+            super::STDOUT_CLOSED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    #[used]
+    #[unsafe(link_section = ".init_array")]
+    static PROBE: extern "C" fn() = probe;
+}
+
+/// プロセスが始まったときに標準出力が閉じていたなら、書けない誤り(`EBADF`)を返す。
+pub(crate) fn stdout_closed() -> Option<std::io::Error> {
+    STDOUT_CLOSED
+        .load(std::sync::atomic::Ordering::Relaxed)
+        .then(|| std::io::Error::from_raw_os_error(9))
+}
+
 /// 解釈したコマンド行である。
 struct Options {
     files: Vec<String>,
