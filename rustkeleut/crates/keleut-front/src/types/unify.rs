@@ -1,11 +1,11 @@
 //! 単一化、行、一般化、制約、辞書の穴である(Diktor の unify.ml、第8章)。
 
+use super::fx::{HashMap, HashSet};
 use super::{
     Cell, DKey, Evidence, Fail, Hole, HoleId, KView, Kind, Oid, R, TVar, Tc, Ty, TyNode, VarInfo,
     bug, guard, terr,
 };
 use crate::pos::Span;
-use std::collections::{HashMap, HashSet};
 
 /// 単一化の失敗の文面だけを取り出す(`try ... with Type_error msg`)。
 pub(crate) fn type_msg<T>(r: &R<T>) -> Option<&str> {
@@ -171,11 +171,6 @@ impl Tc {
         v
     }
 
-    fn note_premise_origin(&mut self, i: &VarInfo, c: Oid, via: (Ty, Oid)) {
-        let key = (i.vid, c);
-        self.premise_origins.entry(key).or_insert(via);
-    }
-
     /// `ty` の中の未束縛の `v` を `t` に置き換える(Diktor の `subst_unbound`)。
     fn subst_unbound(&mut self, v: Cell, t: Ty, ty: Ty) -> R<Ty> {
         guard()?;
@@ -241,12 +236,12 @@ impl Tc {
             TyNode::Var(v) => match self.cell(v).clone() {
                 TVar::Unbound(mut i) => {
                     if !i.vcls.contains(&c) {
-                        let orig = i.clone();
+                        let vid = i.vid;
                         i.vcls.insert(0, c);
                         self.set_tv(v, TVar::Unbound(i));
                         self.note_class_var(v);
                         if let Some(via) = via {
-                            self.note_premise_origin(&orig, c, via);
+                            self.premise_origins.entry((vid, c)).or_insert(via);
                         }
                     }
                     Ok(())
@@ -849,7 +844,7 @@ impl Tc {
 
     /// 曖昧な制約を調べる(Diktor の `check_ambiguity`)。
     pub(crate) fn check_ambiguity(&mut self, all: bool, level: i32, tys: &[Ty]) -> R<()> {
-        let mut reach = HashSet::new();
+        let mut reach = HashSet::default();
         for &t in tys {
             self.collect_vars(t, &mut reach)?;
         }
@@ -938,7 +933,7 @@ impl Tc {
 
     /// 具体化(Diktor の `instantiate`)。
     pub(crate) fn instantiate(&mut self, level: i32, t: Ty) -> R<Ty> {
-        let mut memo = HashMap::new();
+        let mut memo = HashMap::default();
         self.map_generics_with(
             &mut memo,
             &mut |tc, i| tc.new_class_var(i.vkind, i.vcls.clone(), level),
@@ -948,7 +943,7 @@ impl Tc {
 
     /// 型引数を当てる(Diktor の `subst_params`)。
     pub(crate) fn subst_params(&mut self, level: i32, args: &[(Oid, Ty)], t: Ty) -> R<Ty> {
-        let mut memo = HashMap::new();
+        let mut memo = HashMap::default();
         self.map_generics_with(
             &mut memo,
             &mut |tc, i| match args.iter().find(|(v, _)| *v == i.vid) {
@@ -995,7 +990,7 @@ impl Tc {
 
     /// 型の制約の並び(Diktor の `constraints_of`)。
     pub(crate) fn constraints_of(&mut self, t: Ty) -> R<Vec<(VarInfo, Oid)>> {
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::default();
         let mut acc = Vec::new();
         self.constraints_go(t, &mut seen, &mut acc)?;
         Ok(acc)
@@ -1068,7 +1063,7 @@ impl Tc {
     /// 具体化して、制約ごとに穴を作る(Diktor の `instantiate_ev`)。
     pub(crate) fn instantiate_ev(&mut self, loc: Span, level: i32, t: Ty) -> R<(Ty, Vec<HoleId>)> {
         let cs = self.constraints_of(t)?;
-        let mut memo = HashMap::new();
+        let mut memo = HashMap::default();
         let t2 = self.map_generics_with(
             &mut memo,
             &mut |tc, i| tc.new_class_var(i.vkind, i.vcls.clone(), level),

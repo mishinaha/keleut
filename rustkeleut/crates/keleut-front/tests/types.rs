@@ -6,9 +6,104 @@
 //! プレリュードありの `--type-check` の出力(標準出力と標準エラーを 1 本にしたもの)と終了状態を Diktor と比べる。
 
 use keleut_front::types::check::{
-    CheckOptions, Stop, check_files, check_limits, on_check_stack, render_line,
+    CheckOptions, Stop, check_files, check_limits, check_program, on_check_stack, render_line,
 };
+use keleut_front::types::load::{SourceFs, StdFs, normalize_display};
 use std::collections::HashMap;
+
+/// 名前から中身を引く表を読む手段である。
+struct MemFs(HashMap<String, Vec<u8>>);
+
+/// 表の鍵は、`.` と `..` を相殺した綴りで引く。
+impl SourceFs for MemFs {
+    fn read(&mut self, p: &str) -> Result<Vec<u8>, String> {
+        self.0
+            .get(&normalize_display(p))
+            .cloned()
+            .ok_or_else(|| format!("{p}: No such file or directory"))
+    }
+    fn exists(&mut self, p: &str) -> bool {
+        self.0.contains_key(&normalize_display(p))
+    }
+    fn realpath(&mut self, p: &str) -> Result<String, String> {
+        let k = normalize_display(p);
+        if self.0.contains_key(&k) {
+            Ok(format!("/mem/{k}"))
+        } else {
+            Err(format!("{p}: No such file or directory"))
+        }
+    }
+}
+
+/// 相対パスを `base` からのパスとして読む手段である(作業のディレクトリを変えずに、別のディレクトリで走らせる)。
+struct DirFs(std::path::PathBuf);
+
+impl DirFs {
+    fn at(&self, p: &str) -> String {
+        if p.starts_with('/') {
+            p.to_string()
+        } else {
+            self.0.join(p).to_string_lossy().into_owned()
+        }
+    }
+}
+
+impl SourceFs for DirFs {
+    fn read(&mut self, p: &str) -> Result<Vec<u8>, String> {
+        let q = self.at(p);
+        StdFs
+            .read(&q)
+            .map_err(|m| match m.strip_prefix(q.as_str()) {
+                Some(r) => format!("{p}{r}"),
+                None => m,
+            })
+    }
+    fn exists(&mut self, p: &str) -> bool {
+        let q = self.at(p);
+        StdFs.exists(&q)
+    }
+    fn realpath(&mut self, p: &str) -> Result<String, String> {
+        let q = self.at(p);
+        StdFs
+            .realpath(&q)
+            .map_err(|m| match m.strip_prefix(q.as_str()) {
+                Some(r) => format!("{p}{r}"),
+                None => m,
+            })
+    }
+}
+
+/// 型検査の結果を、Diktor の `--type-check` の標準出力と終了状態の形にする。
+fn run(fs: &mut dyn SourceFs, files: Vec<String>, no_prelude: bool) -> (String, u8) {
+    let opts = CheckOptions {
+        no_prelude,
+        prelude: None,
+        files,
+        import_path: Vec::new(),
+        max_nest: keleut_front::DEFAULT_MAX_NEST,
+    };
+    match check_files(&opts, fs) {
+        Ok(out) => {
+            let mut s = String::new();
+            for l in &out.lines {
+                s.push_str(&render_line(l));
+                s.push('\n');
+            }
+            let code = match &out.error {
+                Some(e) => {
+                    s.push_str(&e.render());
+                    s.push('\n');
+                    e.exit
+                }
+                None => 0,
+            };
+            (s, code)
+        }
+        Err(Stop::Lex(m) | Stop::Syntax(m)) => (format!("{m}\n"), 2),
+        Err(Stop::Input(m)) => (format!("diktor: ファイルを開けません: {m}\n"), 64),
+        Err(e) => (format!("{e:?}\n"), 3),
+    }
+}
 
 /// 型検査の結果を、Diktor の `--type-check` の標準出力と終了状態の形にする。
 fn check(files: &[(&str, &str)], no_prelude: bool) -> (String, u8) {
@@ -22,38 +117,9 @@ fn check(files: &[(&str, &str)], no_prelude: bool) -> (String, u8) {
             .iter()
             .map(|(n, s)| (n.clone(), s.as_bytes().to_vec()))
             .collect();
-        let opts = CheckOptions {
-            no_prelude,
-            prelude: None,
-            files: files.iter().map(|(n, _)| n.clone()).collect(),
-            max_nest: keleut_front::DEFAULT_MAX_NEST,
-        };
-        let mut read = |p: &str| {
-            map.get(p)
-                .cloned()
-                .ok_or_else(|| format!("{p}: No such file or directory"))
-        };
-        match check_files(&opts, &mut read) {
-            Ok(out) => {
-                let mut s = String::new();
-                for l in &out.lines {
-                    s.push_str(&render_line(l));
-                    s.push('\n');
-                }
-                let code = match &out.error {
-                    Some(e) => {
-                        s.push_str(&e.render());
-                        s.push('\n');
-                        e.exit
-                    }
-                    None => 0,
-                };
-                (s, code)
-            }
-            Err(Stop::Unsupported(w)) => (format!("unsupported: {w}\n"), 4),
-            Err(Stop::Lex(m) | Stop::Syntax(m)) => (format!("{m}\n"), 2),
-            Err(e) => (format!("{e:?}\n"), 3),
-        }
+        let mut fs = MemFs(map);
+        // 最初のファイルだけをコマンド行に渡す(残りは import 先)。
+        run(&mut fs, vec![files[0].0.clone()], no_prelude)
     })
     .unwrap()
 }
@@ -125,13 +191,44 @@ fn 循環したカインドは処理系の限度で止まる() {
 }
 
 #[test]
-fn import_は移していない段として断る() {
+fn import_した名前を型検査する() {
+    let lib = "pub let x: Int32 = 1\nlet hidden: Int32 = 2\npub let f(o: Option[Int32]): Int32 = o match { case Some(n) => n }\n";
     let (out, code) = check(
-        &[("m.kel", "from \"./lib\" import { x }\nlet y = x\n")],
-        true,
+        &[
+            ("m.kel", "from \"./lib\" import { x }\nlet y = x\n"),
+            ("lib.kel", lib),
+        ],
+        false,
     );
-    assert_eq!(code, 4);
-    assert!(out.starts_with("unsupported: "), "{out}");
+    assert_eq!(
+        (out.as_str(), code),
+        (
+            "⚠ lib.kel: match が非網羅的です。例えば None が漏れています\ny : Int32\n",
+            0
+        )
+    );
+    let (out, code) = check(
+        &[
+            ("m.kel", "from \"./lib\" import hidden\n"),
+            ("lib.kel", lib),
+        ],
+        false,
+    );
+    assert_eq!(
+        (out.as_str(), code),
+        (
+            "⚠ lib.kel: match が非網羅的です。例えば None が漏れています\n! m.kel:1:21: import エラー: ./lib の hidden は公開されていません\n",
+            1
+        )
+    );
+    let (out, code) = check(&[("m.kel", "from \"./nothere\" import x\n")], true);
+    assert_eq!(
+        (out.as_str(), code),
+        (
+            "! m.kel:1:1: import エラー: import 先が見つかりません: ./nothere(nothere.kel)\n",
+            1
+        )
+    );
 }
 
 #[test]
@@ -143,6 +240,59 @@ fn 深い式も型検査する() {
     let src = format!("let x = {s}\n");
     let (out, code) = check(&[("deep.kel", &src)], true);
     assert_eq!((out.as_str(), code), ("x : Int32\n", 0));
+}
+
+#[test]
+fn プレリュードは下げた限度の下限で構文解析できる() {
+    use keleut_front::types::check::{MIN_CHECK_NEST, PRELUDE};
+    let mut files = keleut_front::Files::new();
+    let id = files.add("<prelude>");
+    assert!(keleut_front::parse(PRELUDE.as_bytes(), id, &files, MIN_CHECK_NEST).is_ok());
+}
+
+#[test]
+fn 長い_import_の鎖の単位の鍵を小さいスタックで決める() {
+    // f0 が f1 を、f1 が f2 を、… と検索パスで import する 3,000 段の鎖である。
+    let n = 3000;
+    let mut map: HashMap<String, Vec<u8>> = HashMap::new();
+    for i in 0..n {
+        let src = if i + 1 < n {
+            format!(
+                "from \"f{}\" import v{}\npub let v{i}: Int32 = v{} + 1\n",
+                i + 1,
+                i + 1,
+                i + 1
+            )
+        } else {
+            format!("pub let v{i}: Int32 = 0\n")
+        };
+        map.insert(format!("f{i}.kel"), src.into_bytes());
+    }
+    map.insert(
+        "m.kel".to_string(),
+        b"from \"f0\" import v0\nlet r = v0\n".to_vec(),
+    );
+    let opts = CheckOptions {
+        no_prelude: true,
+        prelude: None,
+        files: vec!["m.kel".to_string()],
+        import_path: vec![".".to_string()],
+        max_nest: keleut_front::DEFAULT_MAX_NEST,
+    };
+    let limits = check_limits(keleut_front::DEFAULT_MAX_NEST, Some(4 << 20)).unwrap();
+    let keys = on_check_stack(limits, move || {
+        let mut fs = MemFs(map);
+        let c = check_program(&opts, &mut fs).unwrap();
+        assert_eq!(c.output.error, None);
+        c.unit_keys(&mut fs, &opts).unwrap()
+    })
+    .unwrap();
+    // 依存される側が先に並ぶ。
+    let want: Vec<(String, String)> = (0..n)
+        .rev()
+        .map(|i| (format!("@1/f{i}.kel"), format!("f{i}.kel")))
+        .collect();
+    assert_eq!(keys, want);
 }
 
 /// 本物の diktor が与えられたら、コーパスの全件で `--type-check` の出力を比べる。
@@ -171,7 +321,6 @@ fn コーパスで_diktor_と同じ() {
     files.sort();
     let mut diffs = Vec::new();
     for p in &files {
-        let src = std::fs::read_to_string(p).unwrap_or_default();
         let name = p.file_name().unwrap().to_string_lossy().to_string();
         let o = std::process::Command::new(&diktor)
             .arg("--type-check")
@@ -181,13 +330,98 @@ fn コーパスで_diktor_と同じ() {
             .unwrap();
         let mut want = String::from_utf8_lossy(&o.stdout).to_string();
         want.push_str(&String::from_utf8_lossy(&o.stderr));
-        let (got, code) = check(&[(&name, &src)], false);
-        if got.starts_with("unsupported: ") {
-            continue;
-        }
+        let dir = p.parent().unwrap().to_path_buf();
+        let limits = check_limits(keleut_front::DEFAULT_MAX_NEST, None).unwrap();
+        let n2 = name.clone();
+        let (got, code) =
+            on_check_stack(limits, move || run(&mut DirFs(dir), vec![n2], false)).unwrap();
         if (want.as_str(), o.status.code()) != (got.as_str(), Some(code as i32)) {
             diffs.push(p.display().to_string());
         }
     }
     assert!(diffs.is_empty(), "Diktor と違う: {diffs:?}");
+}
+
+/// 本物の diktor が与えられたら、KIR の単位の鍵を `diktor --emit-ir-text` の単位の行と比べる。
+#[test]
+fn 単位の鍵が_diktor_と同じ() {
+    let Some(diktor) = std::env::var_os("KELEUT_FRONT_DIKTOR") else {
+        return;
+    };
+    let d = std::env::temp_dir().join(format!("keleut-front-keys-{}", std::process::id()));
+    let files: &[(&str, &str)] = &[
+        ("p/lib/leaf.kel", "pub let base: Int32 = 10\n"),
+        (
+            "p/lib/left.kel",
+            "from \"./leaf\" import base\npub let l: Int32 = base + 1\n",
+        ),
+        (
+            "p/lib/right.kel",
+            "from \"../lib/leaf\" import base\nfrom \"std/s\" import s\npub let r: Int32 = base + s\n",
+        ),
+        (
+            "p/sp/std/s.kel",
+            "from \"../t\" import t\npub let s: Int32 = t\n",
+        ),
+        ("p/sp/t.kel", "pub let t: Int32 = 2\n"),
+        (
+            "p/main.kel",
+            "from \"./lib/left\" import l\nfrom \"./lib/right\" import r\nlet x = l + r\n",
+        ),
+        (
+            "p/q/other.kel",
+            "from \"../lib/leaf\" import base\nlet z = base\n",
+        ),
+    ];
+    for (n, s) in files {
+        let p = d.join(n);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, s).unwrap();
+    }
+    let cases: &[(&str, &[&str], &[&str])] = &[
+        ("p", &["sp"], &["main.kel"]),
+        ("", &["p/sp"], &["p/main.kel"]),
+        ("p", &["./sp", "sp"], &["main.kel", "q/other.kel"]),
+        ("p/q", &["../sp"], &["other.kel", "../main.kel"]),
+    ];
+    for (cwd, ipath, roots) in cases {
+        let dir = d.join(cwd);
+        let mut cmd = std::process::Command::new(&diktor);
+        cmd.current_dir(&dir)
+            .arg("--emit-ir-text")
+            .arg("/dev/stdout");
+        for i in *ipath {
+            cmd.arg("--import-path").arg(i);
+        }
+        let o = cmd.args(*roots).output().unwrap();
+        let text = String::from_utf8_lossy(&o.stdout);
+        let want: Vec<String> = text
+            .lines()
+            .filter(|l| l.starts_with("(unit \""))
+            .map(|l| l.to_string())
+            .collect();
+        assert!(want.len() > 3, "{cwd} {roots:?}: {text}");
+        let opts = CheckOptions {
+            no_prelude: false,
+            prelude: None,
+            files: roots.iter().map(|s| s.to_string()).collect(),
+            import_path: ipath.iter().map(|s| s.to_string()).collect(),
+            max_nest: keleut_front::DEFAULT_MAX_NEST,
+        };
+        let limits = check_limits(keleut_front::DEFAULT_MAX_NEST, None).unwrap();
+        let got = on_check_stack(limits, move || {
+            let mut fs = DirFs(dir);
+            let c = check_program(&opts, &mut fs).unwrap();
+            assert!(c.output.error.is_none());
+            c.unit_keys(&mut fs, &opts).unwrap()
+        })
+        .unwrap();
+        // builtin、prelude、依存する単位、main の順に並ぶ。
+        let got: Vec<String> = got
+            .iter()
+            .map(|(k, p)| format!("(unit \"{k}\" (paths \"{p}\"))"))
+            .collect();
+        assert_eq!(&want[2..want.len() - 1], &got[..], "{cwd} {roots:?}");
+    }
+    std::fs::remove_dir_all(&d).unwrap();
 }

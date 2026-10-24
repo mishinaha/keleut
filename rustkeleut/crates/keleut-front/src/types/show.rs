@@ -3,8 +3,8 @@
 //! 型変数の名前は、表示の中で初めて現れた順に、カインドごとの名簿から振る。
 //! 同じ表示名の別の型(別の単位の同名の型)が 1 つの表示に並ぶときは、単位の名前を添える。
 
+use super::fx::{HashMap, HashSet};
 use super::{Fail, KView, Oid, R, TVar, Tc, Ty, TyNode, VarInfo, guard};
-use std::collections::{HashMap, HashSet};
 
 struct St {
     seen: HashMap<String, Vec<Oid>>,
@@ -324,9 +324,9 @@ impl Tc {
     /// 型の列を表示し、制約の前置きを返す(Diktor の `show_all`)。
     fn show_all(&mut self, ts: &[Ty]) -> R<(Vec<String>, String)> {
         let mut st = St {
-            seen: HashMap::new(),
-            regions: HashSet::new(),
-            names: HashMap::new(),
+            seen: HashMap::default(),
+            regions: HashSet::default(),
+            names: HashMap::default(),
             constrained: Vec::new(),
             star_count: 0,
             region_count: 0,

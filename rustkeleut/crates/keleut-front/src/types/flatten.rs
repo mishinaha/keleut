@@ -1,9 +1,9 @@
 //! module の平坦化である(Diktor の elab.ml の §11.42 の `flatten_modules`)。
 
 use super::decls::{mark_spelling, marks_unit, unit_of_spelling};
+use super::fx::{HashMap, HashSet};
 use super::{R, Tc, UnitId, at, display, noimpl, terr};
 use crate::ast::{Decl, DeclKind, LetBinding, Newtype, Pat, PatKind};
-use std::collections::{HashMap, HashSet};
 
 /// 綴りを付ける表である。
 #[derive(Clone, Copy)]
@@ -81,9 +81,9 @@ impl Tc {
         unit: UnitId,
         decls: Vec<Decl>,
     ) -> R<Vec<Decl>> {
-        let mut toplevel_vals: HashSet<String> = HashSet::new();
-        let mut toplevel_types: HashSet<String> = HashSet::new();
-        let mut class_methods: HashMap<String, Vec<String>> = HashMap::new();
+        let mut toplevel_vals: HashSet<String> = HashSet::default();
+        let mut toplevel_types: HashSet<String> = HashSet::default();
+        let mut class_methods: HashMap<String, Vec<String>> = HashMap::default();
         for c in self.d.class_order.clone() {
             let ci = self.d.classes[&c].clone();
             let s = self.name_of(c);

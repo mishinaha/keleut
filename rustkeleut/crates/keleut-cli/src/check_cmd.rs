@@ -12,22 +12,22 @@
 //!   1 段あたり [`CHECK_STACK_BYTES_PER_LEVEL`](keleut_front::types::check::CHECK_STACK_BYTES_PER_LEVEL) と 64 MiB の見込みが 8 GiB を超える値は、使い方の誤りにする。
 //! - `--native-stack BYTES`:型検査を走らせる専用のスレッドのスタックの大きさ(既定は 8 GiB)。
 //!   `k`、`m`、`g` の接尾辞を使える。
-//!   与えたスタックで型検査を終えられる深さまで `--max-nest` を下げ、その深さが 0 になる小さい値と、8 GiB を超える値は使い方の誤りにする。
+//!   与えたスタックで型検査を終えられる深さまで `--max-nest` を下げ、
+//!   その深さが [`MIN_CHECK_NEST`](keleut_front::types::check::MIN_CHECK_NEST) に満たない小さい値と、8 GiB を超える値は使い方の誤りにする。
 //!   計算の規則は [`check_limits`] にある。
-//! - `--kf-fallback N`:移していない段を要する入力(import を書いたファイル)と、読めない入力のときに、
-//!   何も出さずに終了状態 `N` で終わる。kconform の組 `kf` が、そのときだけ本物の diktor に渡すために使う。
+//! - `--import-path DIR`:import の検索パスに `DIR` を足す。繰り返して書け、書いた順に探す(Diktor の同名の旗と同じ)。
 //!
-//! 終了状態は Diktor と同じで、型エラーは 1、字句と構文の誤りは 2、内部の誤りは 3、未実装は 4、
-//! 入力を開けないときと使い方の誤りは 64、標準出力に書けないときは 74 である。
-//! 移していない段を要する入力は、`--kf-fallback` が無ければ未実装(4)にする。
+//! 終了状態は Diktor と同じで、型エラーと import エラーは 1、字句と構文の誤りは 2、内部の誤りは 3、未実装は 4、
+//! 入力や import 先を開けないときと使い方の誤りは 64、標準出力に書けないときは 74 である。
 
 use crate::exit;
 use crate::front_cmd::{MAX_STACK_BYTES, io_msg, parse_bytes};
 use keleut_front::Limits;
 use keleut_front::types::OutLine;
 use keleut_front::types::check::{
-    CheckOptions, Stop, check_files, check_limits, on_check_stack, render_line,
+    CheckOptions, Stop, check_limits, check_program, on_check_stack, render_line,
 };
+use keleut_front::types::load::StdFs;
 use std::io::Write;
 
 /// 使い方である。
@@ -36,6 +36,7 @@ usage: keleut check [OPTIONS] FILE...
 options:
   --no-prelude           do not load the prelude
   --prelude PATH         use PATH as the prelude
+  --import-path DIR      add DIR to the import search path (repeatable)
   --strict-exhaustive    treat exhaustiveness warnings as errors
   --quiet                print only warnings and errors, to stderr (like diktor before running)
   --max-nest N           parser tree depth limit (default 200000)
@@ -48,7 +49,6 @@ struct Options {
     strict: bool,
     quiet: bool,
     limits: Limits,
-    fallback: Option<u8>,
 }
 
 fn parse_options(args: &[String]) -> Result<Options, String> {
@@ -59,7 +59,7 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
     let mut prelude = None;
     let mut strict = false;
     let mut quiet = false;
-    let mut fallback = None;
+    let mut import_path = Vec::new();
     let mut i = 0;
     while i < args.len() {
         let a = args[i].as_str();
@@ -88,12 +88,12 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
                         .ok_or(format!("bad --native-stack value: {v}"))?,
                 );
             }
-            "--kf-fallback" => {
+            "--import-path" => {
                 i += 1;
-                let v = args.get(i).ok_or("--kf-fallback needs a value")?;
-                fallback = Some(
-                    v.parse::<u8>()
-                        .map_err(|_| format!("bad --kf-fallback value: {v}"))?,
+                import_path.push(
+                    args.get(i)
+                        .ok_or("--import-path requires a directory")?
+                        .clone(),
                 );
             }
             _ if a.starts_with('-') && a.len() > 1 => return Err(format!("unknown option: {a}")),
@@ -110,12 +110,12 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
             no_prelude,
             prelude,
             files,
+            import_path,
             max_nest: limits.max_nest,
         },
         strict,
         quiet,
         limits,
-        fallback,
     })
 }
 
@@ -128,16 +128,16 @@ fn eprintln_now(s: &str) {
 
 /// 型検査の本体である。終了状態を返す。
 fn run_check(o: &Options) -> u8 {
-    let mut read = |p: &str| -> Result<Vec<u8>, String> {
-        std::fs::read(p).map_err(|e| format!("{p}: {}", io_msg(&e)))
-    };
-    let r = check_files(&o.check, &mut read);
+    // 型検査の文脈と木は捨てずに、プロセスの終わりまで残す。
+    // 大きい入力では、何十万もの節点と表を解放する時間が型検査の時間の 1 割近くになるからである。
+    let r = check_program(&o.check, &mut StdFs).map(|mut c| {
+        let out = std::mem::take(&mut c.output);
+        std::mem::forget(c);
+        out
+    });
     let out = match r {
         Ok(out) => out,
         Err(Stop::Input(m)) => {
-            if let Some(n) = o.fallback {
-                return n;
-            }
             eprintln_now(&format!("keleut: ファイルを開けません: {m}"));
             return exit::USAGE;
         }
@@ -152,13 +152,6 @@ fn run_check(o: &Options) -> u8 {
         Err(Stop::Internal(m)) => {
             eprintln_now(&format!("内部エラー: 予期しない例外です: {m}"));
             return 3;
-        }
-        Err(Stop::Unsupported(what)) => {
-            if let Some(n) = o.fallback {
-                return n;
-            }
-            eprintln_now(&format!("! 未実装: {what}"));
-            return exit::UNIMPLEMENTED;
         }
     };
     if let Some(p) = &out.panic {
@@ -242,9 +235,13 @@ mod tests {
         assert!(opts(&["--typo", "a.kel"]).is_err());
         assert!(opts(&[]).is_err());
         assert_eq!(
-            opts(&["--kf-fallback", "86", "a.kel"]).unwrap().fallback,
-            Some(86)
+            opts(&["--import-path", "x", "--import-path", "y", "a.kel"])
+                .unwrap()
+                .check
+                .import_path,
+            vec!["x", "y"]
         );
+        assert!(opts(&["a.kel", "--import-path"]).is_err());
         assert!(opts(&["--native-stack", "9g", "a.kel"]).is_err());
     }
 
@@ -255,11 +252,12 @@ mod tests {
         assert_eq!(o.limits.stack_bytes, 8 << 30);
         assert_eq!(o.check.max_nest, o.limits.max_nest);
         // 小さいスタックでは、収まる深さまで限度を下げる。
-        let o = opts(&["--native-stack", "512k", "a.kel"]).unwrap();
-        assert!(o.limits.max_nest >= 1 && o.limits.max_nest < 100);
+        let o = opts(&["--native-stack", "4m", "a.kel"]).unwrap();
+        assert!(o.limits.max_nest >= 64 && o.limits.max_nest < 2000);
         assert_eq!(o.check.max_nest, o.limits.max_nest);
-        // 型検査の余白に満たないスタックと、8 GiB に収まらない深さは使い方の誤りである。
+        // 型検査の余白とプレリュードの深さに満たないスタックと、8 GiB に収まらない深さは使い方の誤りである。
         assert!(opts(&["--native-stack", "256k", "a.kel"]).is_err());
+        assert!(opts(&["--native-stack", "300k", "a.kel"]).is_err());
         assert!(opts(&["--max-nest", "4000000000", "a.kel"]).is_err());
     }
 }

@@ -3,15 +3,15 @@
 use super::decls::{ClassInfo, CtorInfo, DataInfo, EffectInfo, FieldInfo, UnitTable};
 use super::elab::{pat_var_names, show_long_id};
 use super::elab_bind::Rigids;
+use super::fx::HashMap;
 use super::{
-    DictInfo, Env, Fail, GRef, KView, Kind, OutLine, R, TVar, Tc, Ty, TyNode, VarInfo, at, bug,
-    display, terr,
+    DictInfo, Emit, Env, Fail, GRef, KView, Kind, OutLine, R, TVar, Tc, Ty, TyNode, VarInfo, at,
+    bug, display, terr,
 };
 use crate::ast::{
     ClassDecl, Decl, DeclKind, Effect, InstanceDecl, LetBinding, LongId, Newtype, PatKind,
     TypeAlias, TypeExpKind, TypeParam,
 };
-use std::collections::HashMap;
 use std::rc::Rc;
 
 /// クラスのメソッドの後で走らせる検査の材料(メソッドの名前、型、メソッドの型パラメータ)である。
@@ -610,7 +610,7 @@ impl Tc {
     fn expected_of(&mut self, ci: &ClassInfo, head_ty: Ty, mname: &str) -> R<Ty> {
         match ci.ci_methods.iter().find(|(n, _)| n == mname) {
             Some((_, scheme)) => {
-                let mut memo = HashMap::new();
+                let mut memo = HashMap::default();
                 memo.insert(ci.ci_param.vid, head_ty);
                 self.map_generics_with(
                     &mut memo,
@@ -635,7 +635,7 @@ impl Tc {
         let e = self.repr(e);
         match self.node(e) {
             TyNode::Arrow(p, _, _) => {
-                let mut memo = HashMap::new();
+                let mut memo = HashMap::default();
                 let t = self.map_generics_with(
                     &mut memo,
                     &mut |tc, i| tc.new_var_k(i.vkind, Vec::new(), 1),
@@ -671,7 +671,7 @@ impl Tc {
     ) -> R<()> {
         let lvl = 1;
         let expected = self.expected_of(ci, head_ty, mname)?;
-        let mut smemo = HashMap::new();
+        let mut smemo = HashMap::default();
         let skol = self.map_generics_with(
             &mut smemo,
             &mut |tc, i| tc.new_rigid(i.vkind, i.vcls.clone(), lvl),
@@ -949,13 +949,16 @@ impl Tc {
         Ok(())
     }
 
-    fn show_binding_line(&mut self, env: &Env, b: &LetBinding) -> R<()> {
+    fn show_binding_line(&mut self, env: &Env, b: &LetBinding, emit: Emit) -> R<()> {
         if let Some(x) = binding_name(b)
             && let Some(t) = env.values.get(x.as_str()).copied()
         {
+            // 起点でない単位でも、Diktor と同じく型を表示する(表示の限度の診断を同じにする)。
             let s = self.show(t)?;
-            self.current_out
-                .push(OutLine::Binding(format!("{} : {s}", display(&x))));
+            if emit == Emit::All {
+                self.current_out
+                    .push(OutLine::Binding(format!("{} : {s}", display(&x))));
+            }
         }
         Ok(())
     }
@@ -966,7 +969,7 @@ impl Tc {
         toplevel_extra: &[String],
         env: &Env,
         decls: &[Decl],
-        emit: bool,
+        emit: Emit,
     ) -> R<Env> {
         let eff0 = self.toplevel_eff(toplevel_extra);
         // パス 1a: 型の名前とカインドの頭、エフェクトの名前。
@@ -1258,7 +1261,7 @@ impl Tc {
     }
 
     /// 宣言の 1 歩(Diktor の `process_decls` の `step`)。
-    fn step(&mut self, env: &Env, eff0: Ty, node: &Decl, emit: bool) -> R<Env> {
+    fn step(&mut self, env: &Env, eff0: Ty, node: &Decl, emit: Emit) -> R<Env> {
         let wbefore = self.warnings.len();
         let r = self.with_decl_scope(node.meta.id, |tc| -> R<Env> {
             let env2 = tc.step_inner(env, eff0, node, emit)?;
@@ -1269,16 +1272,27 @@ impl Tc {
             Ok(env2)
         });
         let env2 = at(node.meta.span, r)?;
-        let fresh: Vec<String> = self.warnings[wbefore..].to_vec();
-        if emit {
-            for w in fresh {
-                self.current_out.push(OutLine::Warning(w));
+        match emit {
+            Emit::None => {}
+            Emit::All => {
+                for i in wbefore..self.warnings.len() {
+                    let w = self.warnings[i].clone();
+                    self.current_out.push(OutLine::Warning(w));
+                }
+            }
+            Emit::Warnings(u) => {
+                // 起点でない単位の警告には、どのファイルのものかを前置する。
+                let p = self.unit_path(u);
+                for i in wbefore..self.warnings.len() {
+                    let w = format!("{p}: {}", self.warnings[i]);
+                    self.current_out.push(OutLine::Warning(w));
+                }
             }
         }
         Ok(env2)
     }
 
-    fn step_inner(&mut self, env: &Env, eff0: Ty, node: &Decl, emit: bool) -> R<Env> {
+    fn step_inner(&mut self, env: &Env, eff0: Ty, node: &Decl, emit: Emit) -> R<Env> {
         match &node.kind {
             DeclKind::Type(t) => {
                 let o = self.intern(&t.name);
@@ -1326,8 +1340,8 @@ impl Tc {
                 let bt = self.get_ty(b.meta.id)?;
                 self.check_ambiguity(true, 0, &[bt])?;
                 self.default_numerics()?;
-                if emit {
-                    self.show_binding_line(&env3, b)?;
+                if emit != Emit::None {
+                    self.show_binding_line(&env3, b, emit)?;
                 }
                 Ok(env3)
             }
@@ -1348,9 +1362,9 @@ impl Tc {
                 }
                 self.check_ambiguity(true, 0, &tys)?;
                 self.default_numerics()?;
-                if emit {
+                if emit != Emit::None {
                     for b in bs {
-                        self.show_binding_line(&env2, b)?;
+                        self.show_binding_line(&env2, b, emit)?;
                     }
                 }
                 Ok(env2)
@@ -1379,9 +1393,11 @@ impl Tc {
                     self.check_ambiguity(true, 0, &[t])?;
                     self.default_numerics()?;
                 }
-                if emit {
+                if emit != Emit::None {
                     let s = self.show(t)?;
-                    self.current_out.push(OutLine::Binding(format!("_ : {s}")));
+                    if emit == Emit::All {
+                        self.current_out.push(OutLine::Binding(format!("_ : {s}")));
+                    }
                 }
                 Ok(env.clone())
             }
@@ -1452,10 +1468,12 @@ impl Tc {
                 if !dps.is_empty() {
                     self.set_dict(node.meta.id, DictInfo::Abs(dps));
                 }
-                if emit {
+                if emit != Emit::None {
                     let s = self.show(ty)?;
-                    self.current_out
-                        .push(OutLine::Binding(format!("{} : {s}", display(&ex.name))));
+                    if emit == Emit::All {
+                        self.current_out
+                            .push(OutLine::Binding(format!("{} : {s}", display(&ex.name))));
+                    }
                 }
                 Ok(self.add_top(env, &ex.name, ty, GRef::Decl(node.meta.id, ex.name.clone())))
             }
@@ -1498,16 +1516,23 @@ impl Tc {
     pub(crate) fn check_prelude(&mut self, prelude: &[Decl]) -> R<Env> {
         self.d.in_prelude = true;
         let env0 = self.initial_env();
-        let r = self.process_decls(&[], &env0, prelude, false);
+        let r = self.process_decls(&[], &env0, prelude, Emit::None);
         self.d.in_prelude = false;
         r
     }
 
     /// 単位を検査する(Diktor の `check_unit`)。
+    ///
+    /// 起点の単位は型の行と警告を出し、起点でない単位は警告だけを出す。
     pub(crate) fn check_unit(&mut self, unit: super::UnitId, env: &Env, decls: &[Decl]) -> R<Env> {
         let saved = self.d.current_unit;
         self.d.current_unit = unit;
-        let r = self.process_decls(&[], env, decls, true);
+        let emit = if unit == super::decls::ROOT_UNIT {
+            Emit::All
+        } else {
+            Emit::Warnings(unit)
+        };
+        let r = self.process_decls(&[], env, decls, emit);
         self.d.current_unit = saved;
         r
     }

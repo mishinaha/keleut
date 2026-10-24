@@ -1,9 +1,9 @@
 //! 網羅性と到達不能の検査である(Diktor の exhaust.ml、第10章。Maranget の usefulness)。
 
+use super::fx::HashMap;
 use super::{Fail, Oid, R, Resolved, TVar, Tc, Ty, TyNode, bug, guard};
 use crate::ast::{Pat, PatKind};
 use crate::escape::ocaml_escaped;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 /// リテラルである(変種の順は Diktor の `lit` と同じで、比較の順になる)。
@@ -743,7 +743,7 @@ impl Tc {
     }
 
     fn inhabited(&mut self, ty: Ty) -> R<bool> {
-        let mut memo = HashMap::new();
+        let mut memo = HashMap::default();
         self.inhabited_go(&mut memo, &[], ty)
     }
 

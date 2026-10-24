@@ -27,14 +27,17 @@ mod elab;
 mod elab_bind;
 mod exhaust;
 mod flatten;
+pub mod fx;
+pub mod load;
 pub mod pmap;
 mod show;
 mod unify;
+mod units;
 
 use crate::ast::NodeId;
 use crate::pos::Span;
+use fx::{HashMap, HashSet};
 use pmap::PMap;
-use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 pub use decls::{AliasInfo, ClassInfo, CtorInfo, DataInfo, EffectInfo, FieldInfo, InstanceInfo};
@@ -251,6 +254,17 @@ pub(crate) fn guard() -> R<()> {
     }
 }
 
+/// 宣言列を処理するときの出力の行き先(Diktor の `process_decls` の `emit`)である。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Emit {
+    /// 何も出さない(プレリュード)。
+    None,
+    /// 型の行と警告を出す(起点の単位)。
+    All,
+    /// 警告だけを、単位のパスを前置して出す(起点でない単位)。
+    Warnings(UnitId),
+}
+
 /// `type_check` の出力の行(Diktor の `Elab.out_line`)である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutLine {
@@ -296,9 +310,9 @@ pub struct Tc {
     pub(crate) k_row: Kind,
 
     // ---- 木の注釈 ----
-    pub(crate) node_ty: HashMap<NodeId, Ty>,
-    pub(crate) resolved: HashMap<NodeId, Resolved>,
-    pub(crate) dict: HashMap<NodeId, DictInfo>,
+    pub(crate) node_ty: fx::NodeMap<Ty>,
+    pub(crate) resolved: fx::NodeMap<Resolved>,
+    pub(crate) dict: fx::NodeMap<DictInfo>,
     pub(crate) holes_arena: Vec<Hole>,
 
     // ---- 宣言表(decls.ml) ----
@@ -350,8 +364,8 @@ impl Tc {
     pub fn new() -> Tc {
         let mut tc = Tc {
             next_oid: 0,
-            intern_map: HashMap::new(),
-            name_map: HashMap::new(),
+            intern_map: HashMap::default(),
+            name_map: HashMap::default(),
             tys: Vec::new(),
             cells: Vec::new(),
             kinds: Vec::new(),
@@ -378,25 +392,25 @@ impl Tc {
             row_empty: Ty(0),
             k_star: Kind(0),
             k_row: Kind(0),
-            node_ty: HashMap::new(),
-            resolved: HashMap::new(),
-            dict: HashMap::new(),
+            node_ty: fx::NodeMap::default(),
+            resolved: fx::NodeMap::default(),
+            dict: fx::NodeMap::default(),
             holes_arena: Vec::new(),
             d: decls::Decls::default(),
-            rigid_tparams: HashMap::new(),
+            rigid_tparams: HashMap::default(),
             class_vars: Vec::new(),
             class_seq: 0,
             literal_origins: Vec::new(),
             holes: Vec::new(),
             decl_hole_floor: 0,
-            premise_origins: HashMap::new(),
+            premise_origins: HashMap::default(),
             hole_seq: 0,
             last_rigid_clash: None,
-            top_types: HashMap::new(),
+            top_types: HashMap::default(),
             warnings: Vec::new(),
             current_out: Vec::new(),
             pattern_numbers: Vec::new(),
-            pub_pure_cells: HashSet::new(),
+            pub_pure_cells: HashSet::default(),
             opened_rows: Vec::new(),
             speculating: false,
             group_stack: Vec::new(),

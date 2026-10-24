@@ -1,0 +1,668 @@
+//! import 先の読み込みと、KIR の単位の鍵である(Diktor の driver.ml の §16.3b `load_units` と §16.6 の `unit_keys`)。
+//!
+//! コマンド行で渡したファイル群(起点)から import をたどり、依存する単位を集める。
+//! 起点の各ファイルの import を書いた順に深さ優先でたどり、単位の列は帰りがけ順(依存される側が先)にする。
+//! 同じファイルは 1 回だけ読み、循環は訪問中のファイルの列で見つける。
+//!
+//! ファイルの同一性は、シンボリックリンクを解決した絶対パス(`realpath`)で決める。
+//! 利用者に見せるパス(表示)は、起点ではコマンド行の引数のままである。
+//! import 先では、相対パスなら import を書いたファイルの表示のディレクトリから、検索パスなら `--import-path` のディレクトリから組み立て、
+//! `.` と `..` を相殺した綴りにする。
+//! 相殺した綴りが同じファイルを指さないとき(シンボリックリンクの下の `..`)は、開くパスから `.` の成分だけを除いた綴りにする。
+//!
+//! ファイルの読み出し、存在の判定、`realpath` は [`SourceFs`] を通す。
+//! 試験は、作業のディレクトリを変えずに、別のディレクトリを基準にした [`SourceFs`] を渡せる。
+
+use super::check::{Stop, parse_unit};
+use crate::actions::Ctx;
+use crate::ast::{Decl, ImportDecl};
+use crate::pos::{Files, Span};
+use std::collections::HashSet;
+
+/// 入力のファイルを読む手段である。
+///
+/// 失敗の文面は、OCaml の `Sys_error` と同じく `パス: 理由` の形にする。
+pub trait SourceFs {
+    /// ファイルの中身を読む。
+    fn read(&mut self, path: &str) -> Result<Vec<u8>, String>;
+    /// ファイルの中身を、OCaml の `In_channel.with_open_bin` と `input_all` と同じ文面で読む。
+    ///
+    /// 開く段の誤りは `パス: 理由`、開いた後の読み出しの誤り(ディレクトリを開いたときなど)は理由だけである。
+    /// 既定の実装は [`read`](SourceFs::read) である。
+    fn read_channel(&mut self, path: &str) -> Result<Vec<u8>, String> {
+        self.read(path)
+    }
+    /// ファイルがあるか(OCaml の `Sys.file_exists`。シンボリックリンクはたどる)。
+    fn exists(&mut self, path: &str) -> bool;
+    /// シンボリックリンクを解決した絶対パス(`Unix.realpath`)。
+    fn realpath(&mut self, path: &str) -> Result<String, String>;
+}
+
+/// 入出力の誤りの文面(OCaml の `Sys_error` の理由の部分。Rust の `(os error N)` を除く)。
+pub fn io_reason(e: &std::io::Error) -> String {
+    let s = e.to_string();
+    match s.rfind(" (os error ") {
+        Some(i) => s[..i].to_string(),
+        None => s,
+    }
+}
+
+/// 本物のファイルシステムである。
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StdFs;
+
+impl SourceFs for StdFs {
+    fn read(&mut self, path: &str) -> Result<Vec<u8>, String> {
+        std::fs::read(path).map_err(|e| format!("{path}: {}", io_reason(&e)))
+    }
+
+    fn read_channel(&mut self, path: &str) -> Result<Vec<u8>, String> {
+        use std::io::Read;
+        let mut f = std::fs::File::open(path).map_err(|e| format!("{path}: {}", io_reason(&e)))?;
+        let mut v = Vec::new();
+        f.read_to_end(&mut v).map_err(|e| io_reason(&e))?;
+        Ok(v)
+    }
+
+    fn exists(&mut self, path: &str) -> bool {
+        std::path::Path::new(path).exists()
+    }
+
+    fn realpath(&mut self, path: &str) -> Result<String, String> {
+        std::fs::canonicalize(path)
+            .map(|p| p.to_string_lossy().into_owned())
+            .map_err(|e| format!("{path}: {}", io_reason(&e)))
+    }
+}
+
+/// 読み込んだ単位(Diktor の `unit_src`)である。
+#[derive(Clone, Debug)]
+pub struct SrcUnit {
+    /// 同一性(`realpath`)。
+    pub id: String,
+    /// 利用者に見せるパス。
+    pub display: String,
+    /// 開いたパス。
+    pub path: String,
+    /// import 文。
+    pub imports: Vec<ImportDecl>,
+    /// 宣言列(型検査に渡すと空になる)。
+    pub decls: Vec<Decl>,
+    /// import 文の添字と、その行き先の同一性。
+    pub targets: Vec<(usize, String)>,
+}
+
+/// 読み込みの結果(依存する単位の帰りがけ順の列と、起点のファイルの列)である。
+#[derive(Clone, Debug, Default)]
+pub struct Loaded {
+    pub deps: Vec<SrcUnit>,
+    pub roots: Vec<SrcUnit>,
+}
+
+/// 読み込みの失敗である。
+#[derive(Clone, Debug)]
+pub enum LoadError {
+    /// import エラー(終了状態 1)。
+    Import(Span, String),
+    /// 読めない入力、字句と構文の誤り、内部の誤り。
+    Stop(Stop),
+}
+
+impl From<Stop> for LoadError {
+    fn from(s: Stop) -> LoadError {
+        LoadError::Stop(s)
+    }
+}
+
+/// OCaml の `Filename.dirname`(Unix の規則)。
+pub fn dirname(name: &str) -> String {
+    let b = name.as_bytes();
+    if b.is_empty() {
+        return ".".to_string();
+    }
+    let mut n = b.len() as isize - 1;
+    // 末尾の区切りを飛ばす。
+    while n >= 0 && b[n as usize] == b'/' {
+        n -= 1;
+    }
+    if n < 0 {
+        return name[..1].to_string();
+    }
+    // 最後の区切りを探す。
+    while n >= 0 && b[n as usize] != b'/' {
+        n -= 1;
+    }
+    if n < 0 {
+        return ".".to_string();
+    }
+    // 区切りの並びを飛ばす。
+    while n >= 0 && b[n as usize] == b'/' {
+        n -= 1;
+    }
+    if n < 0 {
+        return name[..1].to_string();
+    }
+    name[..(n as usize + 1)].to_string()
+}
+
+/// OCaml の `Filename.concat`。
+pub fn concat(dir: &str, file: &str) -> String {
+    if dir.is_empty() || dir.ends_with('/') {
+        format!("{dir}{file}")
+    } else {
+        format!("{dir}/{file}")
+    }
+}
+
+/// 表示の綴りの正規化(Diktor の `normalize_display`)。
+pub fn normalize_display(p: &str) -> String {
+    let mut acc: Vec<&str> = Vec::new();
+    for c in p.split('/') {
+        match c {
+            "" | "." => {}
+            ".." => match acc.last() {
+                Some(&x) if x != ".." => {
+                    acc.pop();
+                }
+                _ => acc.push(".."),
+            },
+            c => acc.push(c),
+        }
+    }
+    let s = acc.join("/");
+    if p.starts_with('/') {
+        format!("/{s}")
+    } else {
+        s
+    }
+}
+
+fn import_error<T>(span: Span, msg: impl Into<String>) -> Result<T, LoadError> {
+    Err(LoadError::Import(span, msg.into()))
+}
+
+/// import のパスの形を検査し、(相対なら上る段数、検索パスなら `None`)と残りの成分を返す
+/// (Diktor の `split_import_path`)。
+pub fn split_import_path(span: Span, src: &str) -> Result<(Option<usize>, Vec<String>), LoadError> {
+    if src.is_empty() {
+        return import_error(span, "import のパスが空です");
+    }
+    if src.contains(':') {
+        return import_error(
+            span,
+            format!(
+                "import のパスにコロンは書けません(\"kel:\" などの前置は予約されています): {src}"
+            ),
+        );
+    }
+    if src.contains('\\') {
+        return import_error(span, format!("import のパスの区切りは / です: {src}"));
+    }
+    if src.starts_with('/') {
+        return import_error(span, format!("import のパスに絶対パスは書けません: {src}"));
+    }
+    if src.ends_with(".kel") {
+        return import_error(
+            span,
+            format!("import のパスに拡張子 .kel は書きません: {src}"),
+        );
+    }
+    let comps: Vec<&str> = src.split('/').collect();
+    if comps.len() >= 2 && comps[0] == "." && comps[1] == ".." {
+        return import_error(
+            span,
+            format!("import のパスの ./ と ../ は混ぜられません: {src}"),
+        );
+    }
+    let (rel, rest): (Option<usize>, &[&str]) = match comps[0] {
+        "." => (Some(0), &comps[1..]),
+        ".." => {
+            let n = comps.iter().take_while(|c| **c == "..").count();
+            (Some(n), &comps[n..])
+        }
+        _ => (None, &comps[..]),
+    };
+    if rest.is_empty() {
+        return import_error(
+            span,
+            format!("import のパスにファイル名がありません: {src}"),
+        );
+    }
+    if rest.iter().any(|c| c.is_empty() || *c == "." || *c == "..") {
+        return import_error(span, format!("import のパスの成分が不正です: {src}"));
+    }
+    Ok((rel, rest.iter().map(|s| s.to_string()).collect()))
+}
+
+/// 相殺した綴りが同じファイルを指さないときは、相殺しない開くパスを表示に使う(Diktor の `faithful_display`)。
+fn faithful_display(fs: &mut dyn SourceFs, id: &str, path: &str, display: String) -> String {
+    let comps: Vec<&str> = path
+        .split('/')
+        .filter(|c| *c != "." && !c.is_empty())
+        .collect();
+    let undotted = format!(
+        "{}{}",
+        if path.starts_with('/') { "/" } else { "" },
+        comps.join("/")
+    );
+    match fs.realpath(&display) {
+        Ok(r) if r == id => display,
+        _ => undotted,
+    }
+}
+
+/// import 文の行き先を (開くパス, 表示, 同一性) で返す(Diktor の `resolve_import`)。
+fn resolve_import(
+    fs: &mut dyn SourceFs,
+    import_path: &[String],
+    importer: &SrcUnit,
+    im: &ImportDecl,
+) -> Result<(String, String, String), LoadError> {
+    let span = im.span;
+    let src = &im.source;
+    let (rel, comps) = split_import_path(span, src)?;
+    let file = format!("{}.kel", comps.join("/"));
+    match rel {
+        Some(ups) => {
+            let prefix = if ups == 0 {
+                "./".to_string()
+            } else {
+                "../".repeat(ups)
+            };
+            let path = concat(&dirname(&importer.path), &format!("{prefix}{file}"));
+            let display =
+                normalize_display(&format!("{}/{prefix}{file}", dirname(&importer.display)));
+            if fs.exists(&path) {
+                let id = fs.realpath(&path).map_err(Stop::Input)?;
+                let d = faithful_display(fs, &id, &path, display);
+                Ok((path, d, id))
+            } else {
+                import_error(span, format!("import 先が見つかりません: {src}({display})"))
+            }
+        }
+        None => {
+            let mut found: Vec<(String, String, String)> = Vec::new();
+            for d in import_path {
+                let path = concat(d, &file);
+                if fs.exists(&path) {
+                    let id = fs.realpath(&path).map_err(Stop::Input)?;
+                    let base = if d.is_empty() { "." } else { d.as_str() };
+                    let disp = normalize_display(&format!("{base}/{file}"));
+                    let disp = faithful_display(fs, &id, &path, disp);
+                    found.push((path, disp, id));
+                }
+            }
+            // 同じファイルを複数の検索パスの綴りで見つけたものは 1 つと数える。
+            let mut distinct: Vec<(String, String, String)> = Vec::new();
+            for c in found {
+                if !distinct.iter().any(|x| x.2 == c.2) {
+                    distinct.push(c);
+                }
+            }
+            match distinct.len() {
+                1 => Ok(distinct.pop().expect("1 件ある")),
+                0 => import_error(span, format!("import 先が検索パスに見つかりません: {src}")),
+                _ => import_error(
+                    span,
+                    format!(
+                        "import 先が検索パスに複数あります: {src}({})",
+                        distinct
+                            .iter()
+                            .map(|c| c.1.as_str())
+                            .collect::<Vec<_>>()
+                            .join("、")
+                    ),
+                ),
+            }
+        }
+    }
+}
+
+/// 1 個のファイルを読んで構文解析する(Diktor の `read_unit`)。
+fn read_unit(
+    cx: &mut Ctx,
+    files: &mut Files,
+    fs: &mut dyn SourceFs,
+    path: &str,
+    display: &str,
+    id: String,
+) -> Result<SrcUnit, LoadError> {
+    let src = fs.read(path).map_err(|m| {
+        // 開く段の誤りは開くパスを含むので、表示の綴りに替える。
+        let m = match m.strip_prefix(path) {
+            Some(rest) => format!("{display}{rest}"),
+            None => m,
+        };
+        Stop::Input(m)
+    })?;
+    let prog = parse_unit(cx, files, display, &src)?;
+    Ok(SrcUnit {
+        id,
+        display: display.to_string(),
+        path: path.to_string(),
+        imports: prog.imports,
+        decls: prog.decls,
+        targets: Vec::new(),
+    })
+}
+
+/// コマンド行のファイルから import をたどって単位を集める(Diktor の `load_units`)。
+///
+/// 起点のファイルをすべて読んでから、import をたどる。
+pub fn load_units(
+    cx: &mut Ctx,
+    files: &mut Files,
+    fs: &mut dyn SourceFs,
+    roots: &[String],
+    import_path: &[String],
+) -> Result<Loaded, LoadError> {
+    let mut rs = Vec::new();
+    for f in roots {
+        let id = fs.realpath(f).map_err(Stop::Input)?;
+        rs.push(read_unit(cx, files, fs, f, f, id)?);
+    }
+    let root_ids: Vec<String> = rs.iter().map(|u| u.id.clone()).collect();
+    let mut st = LoadState {
+        cx,
+        files,
+        fs,
+        import_path,
+        root_ids: &root_ids,
+        finished: HashSet::new(),
+        order: Vec::new(),
+    };
+    for r in &mut rs {
+        st.visit(r)?;
+    }
+    Ok(Loaded {
+        deps: st.order,
+        roots: rs,
+    })
+}
+
+struct LoadState<'a> {
+    cx: &'a mut Ctx,
+    files: &'a mut Files,
+    fs: &'a mut dyn SourceFs,
+    import_path: &'a [String],
+    root_ids: &'a [String],
+    finished: HashSet<String>,
+    order: Vec<SrcUnit>,
+}
+
+impl LoadState<'_> {
+    /// 起点のファイル `root` から import を深さ優先でたどる。
+    ///
+    /// import の鎖の長さに比例するスタックを使わないように、訪問中の単位を明示の列に積む。
+    /// 列の各段は、読んだ単位と、次に調べる import の添字である。
+    fn visit(&mut self, root: &mut SrcUnit) -> Result<(), LoadError> {
+        // 訪問中の (同一性, 表示) の列で、末尾が最も新しい。先頭は起点である。
+        let mut path_stack = vec![(root.id.clone(), root.display.clone())];
+        let mut on_path: HashSet<String> = HashSet::new();
+        on_path.insert(root.id.clone());
+        let mut frames: Vec<(SrcUnit, usize)> = Vec::new();
+        let mut root_next = 0;
+        loop {
+            let (u, next) = match frames.last_mut() {
+                Some((u, k)) => (u, k),
+                None => (&mut *root, &mut root_next),
+            };
+            let k = *next;
+            if k == u.imports.len() {
+                match frames.pop() {
+                    None => return Ok(()),
+                    Some((dep, _)) => {
+                        path_stack.pop();
+                        on_path.remove(&dep.id);
+                        self.finished.insert(dep.id.clone());
+                        self.order.push(dep);
+                    }
+                }
+                continue;
+            }
+            *next += 1;
+            let im = &u.imports[k];
+            let (path, display, id) = resolve_import(self.fs, self.import_path, u, im)?;
+            let span = im.span;
+            let source = im.source.clone();
+            u.targets.push((k, id.clone()));
+            if on_path.contains(&id) {
+                let i = path_stack
+                    .iter()
+                    .position(|(x, _)| *x == id)
+                    .expect("訪問中の列にある");
+                let mut cycle: Vec<&str> =
+                    path_stack[i..].iter().map(|(_, d)| d.as_str()).collect();
+                cycle.push(&display);
+                return import_error(
+                    span,
+                    format!("import が循環しています: {}", cycle.join(" → ")),
+                );
+            }
+            if self.root_ids.contains(&id) {
+                return import_error(
+                    span,
+                    format!("コマンド行で連結したファイルは import できません: {source}"),
+                );
+            }
+            if !self.finished.contains(&id) {
+                let dep = read_unit(self.cx, self.files, self.fs, &path, &display, id.clone())?;
+                on_path.insert(id.clone());
+                path_stack.push((id, display));
+                frames.push((dep, 0));
+            }
+        }
+    }
+}
+
+// ---- KIR の単位の鍵 ----
+
+/// KIR の単位の鍵を決められないときの誤りである。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UnitKeyError {
+    /// 内部の誤り(Diktor の `bug`。終了状態 3)。
+    Bug(String),
+    /// 別のファイルが同じ鍵になった(終了状態 64)。中身は標準エラーに書く 1 行(接頭辞を除く)。
+    Clash(String),
+    /// 入力を読めない(`realpath` の失敗。終了状態 64)。
+    Input(String),
+}
+
+fn is_search_mark(c: &str) -> bool {
+    c.len() > 1 && c.starts_with('@') && c[1..].bytes().all(|b| b.is_ascii_digit())
+}
+
+fn key_components(p: &str) -> Vec<String> {
+    let mut acc: Vec<String> = Vec::new();
+    for c in p.split('/') {
+        match c {
+            "" | "." => {}
+            ".." => {
+                if acc.len() == 1 && is_search_mark(&acc[0]) {
+                    acc.push("..".into());
+                } else if acc.last().is_some_and(|x| x != "..") {
+                    acc.pop();
+                } else {
+                    acc.push("..".into());
+                }
+            }
+            c => acc.push(c.to_string()),
+        }
+    }
+    acc
+}
+
+fn key_normalize(p: &str) -> String {
+    key_components(p).join("/")
+}
+
+fn key_dir(k: &str) -> String {
+    match k.rfind('/') {
+        Some(i) => k[..i].to_string(),
+        None => String::new(),
+    }
+}
+
+/// 正規化したディレクトリ `b` から `d` への相対パスの成分。`b` の残りに `..` があれば決められない。
+fn relative_components(b: &[String], d: &[String]) -> Option<Vec<String>> {
+    let n = b.iter().zip(d).take_while(|(x, y)| x == y).count();
+    let (b2, d2) = (&b[n..], &d[n..]);
+    if b2.iter().any(|x| x == "..") {
+        return None;
+    }
+    let mut v: Vec<String> = b2.iter().map(|_| "..".to_string()).collect();
+    v.extend(d2.iter().cloned());
+    Some(v)
+}
+
+/// 依存する単位の KIR の鍵と表示の列を、`deps` の順で返す(Diktor の `unit_keys`)。
+///
+/// `files` はコマンド行のファイル、`import_path` は `--import-path` の並びである。
+pub fn unit_keys(
+    fs: &mut dyn SourceFs,
+    files: &[String],
+    import_path: &[String],
+    loaded: &Loaded,
+) -> Result<Vec<(String, String)>, UnitKeyError> {
+    let first = files.first().map(|s| s.as_str()).unwrap_or(".");
+    let base_dir = dirname(first);
+    let base = key_components(&base_dir);
+    let realpath = |fs: &mut dyn SourceFs, p: &str| fs.realpath(p).map_err(UnitKeyError::Input);
+    let mut keys: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let by_id: std::collections::HashMap<&str, &SrcUnit> =
+        loaded.deps.iter().map(|u| (u.id.as_str(), u)).collect();
+    // 起点のファイルのディレクトリの鍵。
+    let mut root_dirs = Vec::new();
+    for f in files {
+        let dir = dirname(f);
+        let textual = if base_dir.starts_with('/') == dir.starts_with('/') {
+            relative_components(&base, &key_components(&dir))
+        } else {
+            None
+        };
+        let comps = match textual {
+            Some(cs) => cs,
+            None => {
+                let rb = realpath(fs, &base_dir)?;
+                let rd = realpath(fs, &dir)?;
+                match relative_components(&key_components(&rb), &key_components(&rd)) {
+                    Some(cs) => cs,
+                    None => {
+                        return Err(UnitKeyError::Bug(format!(
+                            "KIR の単位の鍵: 起点のディレクトリの相対パスを決められません: {f}"
+                        )));
+                    }
+                }
+            }
+        };
+        root_dirs.push(comps.join("/"));
+    }
+    fn key_of(
+        fs: &mut dyn SourceFs,
+        import_path: &[String],
+        dir: &str,
+        im: &ImportDecl,
+        id: &str,
+    ) -> Result<String, UnitKeyError> {
+        let src = &im.source;
+        match split_import_path(im.span, src) {
+            Ok((Some(_), _)) => Ok(key_normalize(&format!(
+                "{}{src}.kel",
+                if dir.is_empty() {
+                    String::new()
+                } else {
+                    format!("{dir}/")
+                }
+            ))),
+            Ok((None, comps)) => {
+                let file = format!("{}.kel", comps.join("/"));
+                for (i, d) in import_path.iter().enumerate() {
+                    let path = concat(d, &file);
+                    if fs.exists(&path) && fs.realpath(&path).map_err(UnitKeyError::Input)? == id {
+                        return Ok(format!("@{}/{src}.kel", i + 1));
+                    }
+                }
+                Err(UnitKeyError::Bug(format!(
+                    "KIR の単位の鍵: 検索パスに見つかりません: {src}"
+                )))
+            }
+            Err(_) => Err(UnitKeyError::Bug(format!(
+                "KIR の単位の鍵: import のパスが不正です: {src}"
+            ))),
+        }
+    }
+    // 起点の各ファイルから、import の行き先を深さ優先でたどって鍵を決める。
+    // import の鎖の長さに比例するスタックを使わないように、(単位, ディレクトリの鍵, 次の添字) を明示の列に積む。
+    for (r, d) in loaded.roots.iter().zip(&root_dirs) {
+        let mut frames: Vec<(&SrcUnit, String, usize)> = vec![(r, d.clone(), 0)];
+        while let Some((u, dir, next)) = frames.last_mut() {
+            let u: &SrcUnit = u;
+            let Some((k, id)) = u.targets.get(*next) else {
+                frames.pop();
+                continue;
+            };
+            *next += 1;
+            if !keys.contains_key(id) {
+                let key = key_of(fs, import_path, dir.as_str(), &u.imports[*k], id)?;
+                keys.insert(id.clone(), key.clone());
+                let dep = by_id
+                    .get(id.as_str())
+                    .ok_or_else(|| UnitKeyError::Bug("KIR の単位の鍵: 単位がありません".into()))?;
+                frames.push((dep, key_dir(&key), 0));
+            }
+        }
+    }
+    let mut result = Vec::new();
+    let mut owner: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for u in &loaded.deps {
+        let k = keys
+            .get(&u.id)
+            .cloned()
+            .ok_or_else(|| UnitKeyError::Bug("KIR の単位の鍵: 鍵がありません".into()))?;
+        if let Some(d0) = owner.get(&k) {
+            return Err(UnitKeyError::Clash(format!(
+                "KIR の単位の鍵が重なります: {k}({d0} と {})",
+                u.display
+            )));
+        }
+        owner.insert(k.clone(), u.display.clone());
+        result.push((k, u.display.clone()));
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dirname_は_ocaml_と同じ() {
+        for (a, b) in [
+            ("", "."),
+            ("a", "."),
+            ("a/b", "a"),
+            ("a/b/", "a"),
+            ("a//b", "a"),
+            ("/a", "/"),
+            ("/", "/"),
+            ("//", "/"),
+            ("./a", "."),
+            ("x/./y", "x/."),
+        ] {
+            assert_eq!(dirname(a), b, "{a}");
+        }
+        assert_eq!(concat(".", "./x.kel"), "././x.kel");
+        assert_eq!(concat("a/", "x"), "a/x");
+        assert_eq!(concat("", "x"), "x");
+    }
+
+    #[test]
+    fn 表示の正規化() {
+        assert_eq!(normalize_display("./x/../y.kel"), "y.kel");
+        assert_eq!(normalize_display("../a/./b"), "../a/b");
+        assert_eq!(normalize_display("/a/../../b"), "/../b");
+        assert_eq!(normalize_display("up/lib/../none.kel"), "up/none.kel");
+        assert_eq!(key_normalize("@1/../x.kel"), "@1/../x.kel");
+        assert_eq!(key_normalize("a/../../x.kel"), "../x.kel");
+    }
+}

@@ -3,9 +3,9 @@
 //! 型の名前空間、別名、データ型、エフェクト、型クラス、インスタンス、単位と module の同義語、可視性の表と、
 //! 組み込みの登録を持つ。
 
+use super::fx::{HashMap, HashSet};
 use super::{GRef, Kind, Oid, R, Tc, Ty, TyNode, UnitId, VarInfo, display, terr};
 use crate::ast::{NodeId, TypeExp, TypeParam};
-use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 /// 型の別名の情報(Diktor の `alias_info`)である。
