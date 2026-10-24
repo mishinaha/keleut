@@ -518,6 +518,7 @@ ir_run/0003-h.kel	ir_run.t:83
 ir_run/0004-vrules.kel	ir_run.t:205	--no-prelude
 ir_run/0005-hw.kel	ir_run.t:319	--prelude pconsole.kel
 ir_run/0006-two.kel	ir_run.t:334	--no-prelude
+ir_run/0007-cyc.kel	ir_run.t:402	--no-prelude
 kinds/0001-cb.kel	kinds.t:15	--no-prelude
 kinds/0002-cbext.kel	kinds.t:34	
 kinds/0003-cbrun.kel	kinds.t:47	
