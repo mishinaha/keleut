@@ -1,0 +1,3 @@
+effect File = { read: () => String, write: (String) => Unit }
+let call(g: () => Unit @ {Console, File}): Unit = ()
+let use(): Unit = call(fn() => { perform Console.write("a"); perform write("b") })

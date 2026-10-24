@@ -1,0 +1,10 @@
+type Unit = {}
+effect Console = { write: (String) => Unit }
+newtype List[A] = Nil | Cons(head: A, tail: List[A])
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = xs match {
+    case Nil => "<>"
+    case Cons(head = h, tail = t) => "<" + Show.show(h) + ">"
+  }
+}
+let echoln(message: String): Unit @ Console = perform write(message + "\n")

@@ -1,0 +1,2 @@
+type P: EffectRow = {Print}
+extern "C" let nosuch(x: Float64): P

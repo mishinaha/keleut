@@ -1,0 +1,3 @@
+newtype Opt2[A] = None2 | Some2(A)
+let f = fn(o) => o match { case Some2(x) => x }
+echoln("ran")

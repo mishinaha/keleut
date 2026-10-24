@@ -1,0 +1,13 @@
+let x: Int32 = 7
+let f(n: Int32): Int32 = n
+echoln(show(-x))
+echoln(show(-2i64 * 3))
+echoln(show(-1.5))
+echoln(show(- -x))
+echoln(show(-(x + 1)))
+echoln(show(-x * 2))
+echoln(show(2 - -x))
+echoln(show(-f(3)))
+echoln(show(Neg.neg(4)))
+let y: Int64 = 5i64
+echoln(show(-y))

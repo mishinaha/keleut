@@ -1,0 +1,7 @@
+newtype M[A] = Z(A) | S(M[Int32])
+newtype L = C(L) | D(L)
+let r1(Z(x): M[Never]) = 1
+let r2(C(x)) = 2
+newtype Empt
+newtype M2[A] = Z2(A) | S2(M2[Empt])
+let r3(Z2(x): M2[Never]) = 3

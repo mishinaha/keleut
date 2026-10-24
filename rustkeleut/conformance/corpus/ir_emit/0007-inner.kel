@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+effect Log = { log: (Int32) => {} }
+let f(body: () => Int32 @ {Ask}): Int32 @ {Log} =
+  body() handle {
+    case ask() => (resume(5)) handle { case log(n) => resume(()) }
+  }

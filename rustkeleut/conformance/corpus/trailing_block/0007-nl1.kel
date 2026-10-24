@@ -1,0 +1,4 @@
+let a = {
+  let r = f
+  { x => x }
+}

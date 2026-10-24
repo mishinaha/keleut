@@ -1,0 +1,4 @@
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let arr = run h { let a = MutableArray.new(1, 96); MutableArray.freeze(a) }
+Array.each(arr, fn(x) => echoln(show(f(x))))
+Array.each(arr, fn(x) => echoln(show(f(x + 1))))

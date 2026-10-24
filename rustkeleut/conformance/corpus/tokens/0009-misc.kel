@@ -1,0 +1,5 @@
+let s = "a\n\tあ"
+let v = #Even
+let h = ???
+let f = fn(x, ...rest) => x
+let cmp = a <= b >= c

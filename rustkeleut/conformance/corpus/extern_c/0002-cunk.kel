@@ -1,0 +1,2 @@
+extern "C" let nosuch(x: Float64): Float64
+echoln(show(nosuch(1.0)))

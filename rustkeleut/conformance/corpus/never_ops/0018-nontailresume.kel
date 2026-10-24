@@ -1,0 +1,6 @@
+effect Parser = { next: () => Int32, fail: (String) => Never }
+let r = ({ let a = perform next(); if a > 5 then perform fail("big") else a }) handle {
+  case next() => { let v = resume(7); echoln("next clause got " + show(v)); v + 1000 }
+  case fail(m) => { echoln("fail clause " + m); 5 }
+}
+echoln(show(r))

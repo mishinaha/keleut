@@ -1,0 +1,3 @@
+newtype Foo = Wrap(Int32)
+module Foo { pub type Foo = Int32 }
+let use(x: Foo): Foo = x

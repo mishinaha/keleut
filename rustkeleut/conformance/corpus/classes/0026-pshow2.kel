@@ -1,0 +1,8 @@
+newtype List[A] = Nil | Cons(head: A, tail: List[A])
+type instance[A: Show] Show[List[_]] {
+  let show(xs) = xs match {
+    case Nil => "<>"
+    case Cons(head = h, tail = t) => Show.show(h)
+  }
+}
+let s = show(Cons(1, Nil))

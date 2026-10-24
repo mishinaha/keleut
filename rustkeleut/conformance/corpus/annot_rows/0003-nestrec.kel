@@ -1,0 +1,4 @@
+let use(r: {go: () => Unit}): Unit = r.go()
+let pair(p: (() => Unit, Int32)): Int32 = p._1
+let mk(): {go: () => Unit @ Console} = {go = fn() => echoln("hi")}
+let mkt(): (() => Unit @ Console, Int32) = (fn() => echoln("hi"), 1)

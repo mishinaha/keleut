@@ -1,0 +1,1 @@
+let bad = run h { let r = Ref.new(0); run h2 { Ref.get(r) } }

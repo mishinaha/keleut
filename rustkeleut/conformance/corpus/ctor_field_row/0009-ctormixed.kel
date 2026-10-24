@@ -1,0 +1,4 @@
+newtype Q[A] = Q(List[(A) => Int32], List[(A) => Int32])
+let k(g: () => Int32): Int32 = 0
+let k2(g: () => Int32 @ Console): Int32 = 0
+let q = Q(Cons(k, Nil), Cons(k2, Nil))

@@ -1,0 +1,8 @@
+let rec map_l[A, B, E](xs: List[A], f: (A) => B @ E): List[B] @ E = xs match {
+  case Nil => Nil
+  case Cons(x, t) => Cons(f(x), map_l(t, f))
+}
+let t(): Unit @ Console = {
+  let ys = map_l(Cons(1, Nil), show)
+  echoln("x")
+}

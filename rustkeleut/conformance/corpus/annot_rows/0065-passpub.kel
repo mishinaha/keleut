@@ -1,0 +1,9 @@
+pub let inc(x: Int32): Int32 = x + 1
+let t(xs: Array[Int32]): Unit @ Console = run h {
+  Array.each(xs, fn(x) => echoln(show(inc(x))))
+}
+let rec map_l[A, B, E](xs: List[A], f: (A) => B @ E): List[B] @ E = xs match {
+  case Nil => Nil
+  case Cons(x, tl) => Cons(f(x), map_l(tl, f))
+}
+let u(): List[Int32] @ Console = map_l(Cons(1, Nil), inc)

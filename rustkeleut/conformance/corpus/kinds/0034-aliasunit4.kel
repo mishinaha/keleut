@@ -1,0 +1,3 @@
+type C26[R] = A26[{extends R}]
+type A26[E] = Int32
+let v: C26[{}] = 1

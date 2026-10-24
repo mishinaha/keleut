@@ -1,0 +1,5 @@
+effect A = { ask: () => Int32 }
+effect B = { ask: () => Int32 }
+let q(): Int32 @ {B, A} = perform ask()
+let r = ((q() handle { case A.ask() => resume(1) }) handle { case B.ask() => resume(2) })
+echoln(show(r))

@@ -1,0 +1,3 @@
+type F = (Int32) => Int32 @ Console
+let g: F = fn(x) => { echo("v"); x }
+let kf(x: Int32): Int32 @ Console = g(x)

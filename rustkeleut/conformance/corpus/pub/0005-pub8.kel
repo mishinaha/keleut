@@ -1,0 +1,3 @@
+pub let rec fac(n: Int32): Int32 = n match { case 0 => 1 case _ => n * fac(n - 1) }
+pub let v: Int32 = fac(5)
+echoln(show(v))

@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+let bad(): Int32 @ {Console} = run h {
+  let slot = Ref.new(fn(x) => x)
+  let g: (Int32) => Int32 @ {Console} = Ref.get(slot)
+  let _ = Ref.set(slot, fn(x) => perform ask() + x)
+  Ref.get(slot)(1)
+}
+echoln(show(bad()))

@@ -1,0 +1,3 @@
+let pure_fn(): Unit @ {} = ()
+let call_p(f: () => Unit @ Print): Unit @ Print = f()
+let t(): Unit @ Print = call_p(pure_fn)

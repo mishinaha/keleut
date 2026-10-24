@@ -1,0 +1,2 @@
+let rec a(n: Int32): Int32 @ Console = b(fn() => { echo("x"); n })
+and b[F](f: () => Int32 @ F): Int32 @ Console = { echo("b"); 0 }

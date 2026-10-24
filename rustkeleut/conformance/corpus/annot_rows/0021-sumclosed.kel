@@ -1,0 +1,2 @@
+let sum2(xs: Array[Int32]): Int32 @ {} = 1
+let effectful(xs: Array[Int32]): Int32 @ {Console} = { echoln("go"); sum2(xs) }

@@ -1,0 +1,3 @@
+let b(): Int32 @ Console = { echo("b"); 2 }
+let ys: List[() => Int32] = Nil
+let xs = Cons(b, ys)

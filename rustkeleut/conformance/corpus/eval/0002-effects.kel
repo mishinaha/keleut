@@ -1,0 +1,45 @@
+let capture[A, E](body: () => A @ {Print extends E}): {value: A, output: String} @ E =
+  body() handle {
+    case print(message) => {
+      let {value, output} = resume()
+      {value, output = message + output}
+    }
+    case return(x) => {value = x, output = ""}
+  }
+effect Fail = { throw: (String) => Never }
+let try_[A, E](body: () => A @ {Fail extends E}): #Ok(A) | #Err(String) @ E =
+  body() handle {
+    case throw(e)  => #Err(e)
+    case return(x) => #Ok(x)
+  }
+let captured = capture(fn() => { println("one"); println("two"); 42 })
+echo("output=" + captured.output)
+echoln("value=" + show(captured.value))
+let ok = try_(fn() => 1 + 1)
+echoln(ok match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+let bad = try_(fn() => { perform throw("boom"); 1 })
+echoln(bad match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+with_stdout(fn() => println("translated"))
+effect Res = { use: (String) => Unit }
+let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} = {
+  echoln("open " + name)
+  body() handle {
+    case use(s)    => resume(echoln(name + " uses " + s))
+    case return(x) => { echoln("close " + name); x }
+    case cancel    => echoln("cancel " + name)
+  }
+}
+let res = try_(fn() => {
+  with _ = with_res("outer")
+  with _ = with_res("inner")
+  perform use("both")
+  perform throw("abort")
+  0
+})
+echoln(res match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })
+let normal = try_(fn() => {
+  with _ = with_res("n1")
+  perform use("x")
+  7
+})
+echoln(normal match { case #Ok(v) => "ok " + show(v) case #Err(e) => "err " + e })

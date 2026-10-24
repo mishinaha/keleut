@@ -1,0 +1,13 @@
+newtype Lst[A] = LNil | LCons(A, Lst[A])
+type instance[A: Eq] Eq[Lst[_]] {
+  let rec eq(xs, ys) = (xs, ys) match {
+    case (LNil, LNil)                 => true
+    case (LCons(x, xt), LCons(y, yt)) => x == y && eq(xt, yt)
+    case _                            => false
+  }
+}
+echoln(show(LCons(1i32, LCons(2i32, LNil)) == LCons(1i32, LCons(2i32, LNil))))
+echoln(show(LCons(1i32, LNil) == LCons(2i32, LNil)))
+echoln(show(LCons(LCons("a", LNil), LNil) == LCons(LCons("a", LNil), LNil)))
+echoln(show(LCons(LCons("a", LNil), LNil) == LCons(LCons("b", LNil), LNil)))
+echoln(show(LNil == LCons(1i32, LNil)))

@@ -1,0 +1,7 @@
+module Vault {
+  newtype Priv = P(Int32)
+  pub let mk(n: Int32): Priv = P(n)
+  let peek(p: Priv): Int32 = p match { case P(v) => v }
+}
+type class Vault[A] { val peek: (A) => A }
+echoln(show(Vault.peek(Vault.mk(9))))

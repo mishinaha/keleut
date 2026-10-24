@@ -1,0 +1,6 @@
+effect A = { op1: () => Int32 }
+let r = (fn() => perform op1())() handle {
+  case Nope.op1() => resume(1)
+  case return(x) => x
+}
+echoln(show(r))

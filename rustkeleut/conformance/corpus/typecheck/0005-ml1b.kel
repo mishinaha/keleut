@@ -1,0 +1,1 @@
+let bad = fn(f) => {a = f(1), b = f(true)}

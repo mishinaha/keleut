@@ -1,0 +1,10 @@
+type W: EffectRow = {Console}
+type V[E]: EffectRow = {Print extends E}
+module M {
+  pub newtype W = MkW(Int32)
+  type V[A] = A
+  let f(x: Int32): Int32 @ W = x
+  let g(x: Int32): Int32 @ {W, Print} = x
+  let h[E](x: Int32): Int32 @ V[E] = x
+  let k[E](x: Int32): Int32 @ {V[E], Console} = x
+}

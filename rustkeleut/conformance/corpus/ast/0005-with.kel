@@ -1,0 +1,5 @@
+let f = fn() => {
+  with x = bind(p)
+  with _ = guard(x)
+  pure(x)
+}

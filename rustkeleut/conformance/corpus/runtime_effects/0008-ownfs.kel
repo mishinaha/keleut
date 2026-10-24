@@ -1,0 +1,7 @@
+effect Fs = { touch: (String) => Int32 }
+let with_fs[A, E](body: () => A @ {Fs extends E}): A @ E =
+  body() handle {
+    case touch(p) => resume(0)
+    case return(x) => x
+  }
+let n = with_fs(fn() => perform touch("x"))

@@ -1,0 +1,5 @@
+let g(): Int32 @ Console = z()
+let z(): Int32 @ Console = 1
+let z(): Int32 @ Console = 2
+echoln(show(g()))
+echoln(show(z()))

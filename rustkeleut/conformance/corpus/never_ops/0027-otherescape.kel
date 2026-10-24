@@ -1,0 +1,8 @@
+effect Fail = { throw: (String) => Never }
+effect Other = { oops: (Int32) => Never }
+let mid(): Int32 @ {Other, Console} = ({ perform throw("x"); 1 }) handle {
+  case throw(e) => perform oops(9)
+  case cancel => echoln("cancel mid")
+}
+let r = mid() handle { case oops(n) => { echoln("oops " + show(n)); n } }
+echoln(show(r))

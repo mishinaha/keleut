@@ -1,0 +1,9 @@
+let apply[A, B, E](f: (A) => B @ E, x: A): B @ E = f(x)
+let twice[E](f: () => Unit @ E): Unit @ E = { f(); f() }
+let rec len[A](xs: List[A]): Int32 = xs match { case Nil => 0 case Cons(_, t) => 1 + len(t) }
+let total = {
+  let n = apply(fn(v) => v + 1, 41)
+  let m = len(Cons(n, Cons(n, Nil)))
+  n + m
+}
+twice { echoln(show(total)) }

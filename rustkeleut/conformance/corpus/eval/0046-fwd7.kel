@@ -1,0 +1,4 @@
+let f(): String = show(42)
+let show[E](x: Int32): String @ E = "SHADOW"
+echoln(f())
+echoln(show(42))

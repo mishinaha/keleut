@@ -1,0 +1,5 @@
+newtype List[A] = Cons(A, tail: List[A]) | Nil
+type class Functor[F[_]] { val map[A, B, E]: (F[A], (A) => B @ E) => F[B] @ E }
+type instance Functor[List[_, _, _]] {
+  let rec map[A, B, E](xs: List[A], f: (A) => B @ E): List[B] @ E = Nil
+}

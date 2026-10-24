@@ -1,0 +1,10 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+let run_cb[E](c: Callback[E]): Unit @ E = c match { case Callback(f) => f() }
+let println(message: String): Unit @ Print = perform print(message)
+let main(): Unit @ Console = {
+  let c = Callback(fn() => println("hello"))
+  run_cb(c) handle {
+    case print(m) => resume(perform write(m))
+  }
+}
+main()

@@ -1,0 +1,4 @@
+let foo: String = "user"
+let r: Int32 = PM.get() + 1
+echoln(show(r))
+echoln(foo)

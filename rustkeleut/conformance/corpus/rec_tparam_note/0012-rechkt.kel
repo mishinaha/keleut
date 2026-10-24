@@ -1,0 +1,2 @@
+let rec f(n: Option[Int32]): Int32 = g(n)
+and g[F[_]](y: F[Int32]): Int32 = 0

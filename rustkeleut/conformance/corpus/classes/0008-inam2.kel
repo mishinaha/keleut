@@ -1,0 +1,4 @@
+type class C[A] { val cm: (A) => A @ {} }
+let read_[A: Show](s: String): A = ???
+let idf[A](x: A): A = x
+type instance C[Int32] { let cm(x) = { show(read_("z")); idf(x) } }

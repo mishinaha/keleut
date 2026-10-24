@@ -1,0 +1,4 @@
+newtype Cb[R] = Cb(() => Int32 @ R)
+newtype W = W(Cb[{}])
+let b(): Int32 @ Console = { echo("b"); 2 }
+let w = W(Cb(b))

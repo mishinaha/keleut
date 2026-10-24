@@ -1,0 +1,2 @@
+let g = fn(r) => r.x.y
+let h = fn(r) => (r.x.y, r.p.q)

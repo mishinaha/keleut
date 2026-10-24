@@ -1,0 +1,13 @@
+type MyInt = Int32
+type Point = {x: Float64, y: Float64}
+type Pair = (Int32, String)
+let n: MyInt = 42
+let d = 1 + 2
+let f = 1.5
+let s = "a" + "b"
+let big = 1_000_000i64
+let point(x: Float64, y: Float64): Point = {x = x, y = y}
+let dist2(p: Point): Float64 = p.x * p.x + p.y * p.y
+let pair: Pair = (1, "one")
+let first = pair._0
+let second = pair._1

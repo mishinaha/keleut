@@ -1,0 +1,5 @@
+let f(): Unit @ {Print, Console} = { println("p"); echoln("c") }
+newtype Cb[E] = Cb(() => Unit @ E)
+let run_cb[E](c: Cb[E]): Unit @ E = c match { case Cb(g) => g() }
+with_stdout(f)
+run_cb(Cb(fn() => echoln("cb")))

@@ -1,0 +1,3 @@
+let hidden: Int32 = 1
+pub let shown: Int32 = 2
+module Inner { pub let f(x: Int32): Int32 = x }

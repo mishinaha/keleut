@@ -1,0 +1,6 @@
+effect E1 = { get1: () => Int32 }
+let r = (perform get1() + 1) handle {
+  case get1() => { let a = resume(1); let b = resume(2); a + b }
+  case return(x) => x
+}
+echoln(show(r))

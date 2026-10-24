@@ -1,0 +1,4 @@
+type Unit = {}
+newtype A15[X] = MkA15(B15[{}], () => Unit @ X)
+newtype B15[E] = MkB15(() => Unit @ E)
+let f[E](x: A15[E]): A15[E] = x

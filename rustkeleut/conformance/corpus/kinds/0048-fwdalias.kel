@@ -1,0 +1,6 @@
+newtype H = MkH(Cb[{Print}])
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)
+let fire(h: H): Unit @ Print = h match { case MkH(Callback(f)) => f() }
+let h = MkH(Callback(fn() => println("hello")))
+with_stdout(fn() => fire(h))

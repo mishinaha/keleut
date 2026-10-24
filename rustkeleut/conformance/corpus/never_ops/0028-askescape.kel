@@ -1,0 +1,8 @@
+effect Fail = { throw: (String) => Never }
+effect Ask = { ask: () => Int32 }
+let mid(): Int32 @ {Ask, Console} = ({ perform throw("x"); 1 }) handle {
+  case throw(e) => perform ask() + 1
+  case cancel => echoln("cancel mid")
+}
+let r = mid() handle { case ask() => { echoln("ask: no resume"); 5 } }
+echoln(show(r))

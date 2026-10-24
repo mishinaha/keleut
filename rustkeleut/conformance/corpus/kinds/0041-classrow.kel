@@ -1,0 +1,4 @@
+type Unit = {}
+type class C[E] {
+  val m: (Int32) => Unit @ E
+}

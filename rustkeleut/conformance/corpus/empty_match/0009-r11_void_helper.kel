@@ -1,0 +1,4 @@
+newtype Void
+let elim(x) = x match {}
+let use(v: Void): Int32 = elim(v)
+echoln("ok")

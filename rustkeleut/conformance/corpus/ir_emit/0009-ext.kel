@@ -1,0 +1,11 @@
+extern "prim" let __int32_add(a: Int32, b: Int32): Int32
+extern "C" let sin(x: Float64): Float64
+module M {
+  pub extern "prim" let __no_such(x: Int32): Int32
+  pub newtype N = N(Int32)
+  type instance Show[N] {
+    let show(n) = n match { case N(k) => "N" }
+  }
+}
+let v = M.__no_such(__int32_add(1, 2))
+let w = show(M.N(1))

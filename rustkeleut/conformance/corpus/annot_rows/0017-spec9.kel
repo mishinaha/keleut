@@ -1,0 +1,4 @@
+newtype Callback[E] = Callback(() => Unit @ E)
+let make[E](f: () => Unit @ E): Callback[E] = Callback(f)
+let fire[E](c: Callback[E]): Unit @ E = c match { case Callback(f) => f() }
+fire(make(fn() => echo("fired\n")))

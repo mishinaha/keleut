@@ -1,0 +1,3 @@
+newtype P = P(a: Int32, b: String)
+let p = P(a = 1, b = "x")
+echoln(p match { case P(a, b) => b + show(a) })

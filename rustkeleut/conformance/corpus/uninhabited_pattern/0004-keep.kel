@@ -1,0 +1,7 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+newtype Opt2[A] = Sm(A) | Nn
+let k1(Sm(x): Opt2[Empt]) = 1
+let k2(n: Never): Int32 = n match { case a => 1  case b => 2 }
+let k3(o: #Ok(Int32) | #Err(Never)): Int32 = o match { case #Ok(n) => n  case #Err(e) => 0 }
+let k4[A](a: Absurd): A = a match {}

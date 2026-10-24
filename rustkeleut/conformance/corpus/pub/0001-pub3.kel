@@ -1,0 +1,2 @@
+effect Logger = { log: (String) => Unit }
+pub let f(x: Int32): Int32 = { perform log("no"); x }

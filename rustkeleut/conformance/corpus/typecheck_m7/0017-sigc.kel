@@ -1,0 +1,2 @@
+let absurd[A](n: Never): A = n match {}
+let allwild = fn(b: Boolean) => b match { case _ => 0 }

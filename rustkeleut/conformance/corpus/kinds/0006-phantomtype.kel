@@ -1,0 +1,4 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Ph2[E] = MkPh2(Int32)
+let f(x: Ph2[{Print}]): Int32 = 0

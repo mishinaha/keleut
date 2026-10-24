@@ -1,0 +1,7 @@
+type Unit = {}
+type class Runner[A] {
+  val run_[E]: (A, () => Unit @ E) => Unit @ E
+}
+type instance Runner[Int32] {
+  let run_(x, f) = f()
+}

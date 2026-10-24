@@ -1,0 +1,5 @@
+module M {
+  newtype Priv = P(Int32)
+  pub type Pub = Priv
+}
+let f(x: M.Pub): Int32 = 1

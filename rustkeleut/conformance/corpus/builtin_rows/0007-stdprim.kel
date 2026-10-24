@@ -1,0 +1,4 @@
+let id[T](x: T): T = x
+let g = id(__string_length)
+let p(): Unit @ Print = println(show(g("ab")))
+let c(): Unit @ Console = echoln(show(g("abc")))

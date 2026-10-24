@@ -1,0 +1,2 @@
+extern "C" let sqrt(x: Float64): Float64
+let p(): Float64 @ {} = sqrt(4.0)

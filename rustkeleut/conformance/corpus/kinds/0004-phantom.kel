@@ -1,0 +1,4 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Phantom[E] = Phantom(Int32)
+let ok(): Phantom[Int32] = Phantom(0)

@@ -1,0 +1,7 @@
+newtype N = N(Int32)
+let mk(d: Int32): (N) => String @ {} = fn(x) => "n"
+let k: (N) => String = mk(0)
+let u(x: N) = k(x)
+let a(): String @ Console = u(N(1))
+let b(): String @ Print = u(N(1))
+echoln(a())

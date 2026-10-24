@@ -1,0 +1,3 @@
+module M { pub type Pair[A] = (A, A) }
+let f(x: M.Pair[Int32]): Int32 = x._0 + x._1
+echoln(show(f((20, 22))))

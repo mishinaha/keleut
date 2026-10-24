@@ -1,0 +1,3 @@
+newtype Box = Box((Int32) => Int32)
+let k(): Int32 = 1
+let x = Box(k)

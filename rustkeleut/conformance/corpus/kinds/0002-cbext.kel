@@ -1,0 +1,4 @@
+pub newtype Callback[E] = Callback(() => Unit @ E)
+pub let mk[E](f: () => Unit @ E): Callback[E] = Callback(f)
+pub let open_[E](c: Callback[E]): () => Unit @ E = c match { case Callback(f) => f }
+let with_ext[E](c: Callback[{Print extends E}]): Callback[{Print extends E}] = c

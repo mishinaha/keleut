@@ -1,0 +1,18 @@
+type Parity = #Even | #Odd
+let flip(p: Parity): Parity = p match {
+  case #Even => #Odd
+  case #Odd => #Even
+}
+let closed = fn(t) => t match {
+  case #Lft(n) => n + 0
+  case #Rgt(_) => 0
+}
+let open_default = fn(t) => t match {
+  case #Lft(n) => n
+  case _ => 0
+}
+let payload = #Point(1, 2)
+let guard = fn(t) => t match {
+  case #Val(x) if x == 0 => 0
+  case #Val(x) => x
+}

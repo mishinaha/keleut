@@ -1,0 +1,6 @@
+newtype List[A] = Nil | Cons(A, tail: List[A])
+let f = fn(xs) => {
+  let Cons(head, tail) = xs
+  head
+}
+let g = fn(xs) => xs match { case Cons(tail = t) => t case Nil => Nil }

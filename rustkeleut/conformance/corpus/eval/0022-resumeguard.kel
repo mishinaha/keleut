@@ -1,0 +1,7 @@
+effect Ask = { ask: (Int32) => Int32 }
+let r = (perform ask(1) + perform ask(0)) handle {
+  case ask(n) if 10 / n > 0 => { echoln("clause " + show(n)); let v = resume(1); echoln("after " + show(n)); v }
+  case ask(n) => resume(0)
+  case cancel => echoln("cancel ask")
+}
+echoln(show(r))

@@ -1,0 +1,4 @@
+newtype Pair[A] = Pair(A, A)
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let p = Pair(mkp(), b)

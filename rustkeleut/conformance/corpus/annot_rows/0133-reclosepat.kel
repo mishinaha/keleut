@@ -1,0 +1,7 @@
+newtype Box = Box(go: (Int32) => Int32)
+let pk(x: Int32): Int32 @ {} = x
+let k = Box(pk) match { case Box(f) => f }
+let u(x: Int32) = k(x)
+let u1(): Int32 @ Console = u(1)
+let u2(): Int32 @ Print = u(2)
+echoln(show(u1()))

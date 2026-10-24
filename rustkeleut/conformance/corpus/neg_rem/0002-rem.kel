@@ -1,0 +1,9 @@
+let x: Int32 = 7
+echoln(show(x % 3))
+echoln(show(-x % 3))
+echoln(show(x % -3))
+echoln(show(17i64 % 5))
+echoln(show(1 + 7 % 4 * 2))
+echoln(show(Rem.rem(9, 4)))
+echoln(show(2 * 7 % 4))
+echoln(show(7 % 5 % 3))

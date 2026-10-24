@@ -1,0 +1,3 @@
+let f(): Int32 = Add.add(1, 2)
+module Add { extern "prim" let add(x: String, y: String): String }
+echoln(show(f()))

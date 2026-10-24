@@ -1,0 +1,3 @@
+let compose[A, B, C, E](f: (A) => B @ E, g: (B) => C @ E): (A) => C @ E =
+  fn(x) => g(f(x))
+let pure_fn(x: Int32): Int32 @ {} = x + 1

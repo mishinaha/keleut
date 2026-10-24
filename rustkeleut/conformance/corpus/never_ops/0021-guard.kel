@@ -1,0 +1,11 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+let r = ({ perform use(); perform throw("other") }) handle {
+  case use() => resume()
+  case cancel => echoln("cancel res")
+} handle {
+  case throw(e) if { echoln("guard " + e); e == "retry" } => 7
+  case throw("other") => { echoln("literal other"); 8 }
+  case throw(e) => 0
+}
+echoln(show(r))

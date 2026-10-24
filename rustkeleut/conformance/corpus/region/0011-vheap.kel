@@ -1,0 +1,2 @@
+let v[A](x: A) = #Heap(x)
+let u[A](t: #Heap(A) | #Other(A)): Int32 = 0

@@ -1,0 +1,4 @@
+let f(): Int32 = run h {
+  let g: () => Int32 @ h = fn() => 1
+  g()
+}

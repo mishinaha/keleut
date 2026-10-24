@@ -1,0 +1,5 @@
+newtype N1 = N1(() => Unit @ Log)
+newtype N2[E] = N2(() => Unit @ {Log extends E})
+newtype N3 = A3 | B3(() => Unit @ {Log})
+effect Log = { log: (String) => Unit }
+let f[E](x: N2[E]): N2[E] = x

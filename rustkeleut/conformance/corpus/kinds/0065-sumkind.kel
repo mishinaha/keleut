@@ -1,0 +1,2 @@
+type P: EffectRow = {Print}
+let f(x: #U(Int32) | #T(P)): Int32 = 0

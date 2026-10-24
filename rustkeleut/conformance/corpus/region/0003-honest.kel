@@ -1,0 +1,2 @@
+let bump[h, E](a: MutableArray[h, Int32]): Unit @ {Heap[h] extends E} =
+  MutableArray.set(a, 0, 42)

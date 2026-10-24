@@ -1,0 +1,8 @@
+newtype P = P(x: Int32, y: Int32)
+let x = 1
+let x = x + 1
+let P(y = b, x = a) = P(10, 20)
+let (_, c) = (a, b)
+show
+#Tag(x)
+let _ = ???

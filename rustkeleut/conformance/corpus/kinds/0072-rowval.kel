@@ -1,0 +1,2 @@
+type Unit = {}
+newtype Bad2[E] = Bad2((E, Int32), () => Unit @ E)

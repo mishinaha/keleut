@@ -1,0 +1,3 @@
+let useret[X](h: (X) => Int32): Int32 = 0
+let rec f(n: Int32): Int32 = useret(g)
+and g[B](y: B) = g(1i32)

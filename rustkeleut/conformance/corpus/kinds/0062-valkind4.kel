@@ -1,0 +1,2 @@
+type P: EffectRow = {Print}
+let f(g: () => P @ {}): Int32 = 0

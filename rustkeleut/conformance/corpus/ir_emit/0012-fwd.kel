@@ -1,0 +1,6 @@
+module M {
+  pub let g(): Int32 = h()
+  pub let z: Int32 = g()
+  pub let h(): Int32 = 3
+}
+echoln(show(M.z))

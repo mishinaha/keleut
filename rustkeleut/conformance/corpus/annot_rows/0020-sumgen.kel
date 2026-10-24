@@ -1,0 +1,7 @@
+let sum(xs: Array[Int32]): Int32 = run h {
+  let acc = Ref.new(0)
+  Array.each(xs, fn(x) => Ref.set(acc, Ref.get(acc) + x))
+  Ref.get(acc)
+}
+let effectful(xs: Array[Int32]): Int32 @ {Console} = { echoln("go"); sum(xs) }
+let pure_ok(xs: Array[Int32]): Int32 @ {} = sum(xs)

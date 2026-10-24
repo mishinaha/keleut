@@ -1,0 +1,8 @@
+let f(r) = show(r.b) + show(r.a)
+let g(r) = show(r.a) + show(r.b)
+let p[A: Show + Eq](x: A): Boolean = x == x
+let q[A: Eq + Show](x: A): Boolean = x == x
+let v = f({a = 1, b = true}) + g({a = 1, b = true})
+let u = p(1) && q(1)
+let w1 = {k = 1, v = true} == {v = true, k = 1}
+let w2 = {v = true, k = 1} == {k = 1, v = true}

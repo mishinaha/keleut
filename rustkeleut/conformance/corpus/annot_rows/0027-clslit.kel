@@ -1,0 +1,7 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+effect Log = { log: (String) => Unit }
+newtype Box = Box(Int32)
+type class Sz[T] { val size: (T) => Int32 @ Print }
+type instance Sz[Box] { let size(b) = b match { case Box(x) => { perform print("e"); x } } }
+let use(b: Box): Int32 @ {Print, Log} = { perform log("l"); size(b) }

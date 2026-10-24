@@ -1,0 +1,6 @@
+effect Console = { write: (String) => {} }
+let quiet[A, E](body: () => A @ {Console extends E}): A @ E =
+  body() handle {
+    case write(s) => resume({})
+    case return(x) => x
+  }

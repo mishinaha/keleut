@@ -1,0 +1,3 @@
+let rec f[A](x: A): A = x
+and g(n: Int32): Int32 = f(n)
+let s: String = f("s")

@@ -1,0 +1,2 @@
+let ann[A: Add](x: A): A @ {} = x + x
+let esc = run h { Ref.new(0) }

@@ -1,0 +1,2 @@
+extern "prim" let __int32_add(x: Int32, y: Int32): Int32
+let f(x: Int32): Int32 @ {} = __int32_add(x, 1)

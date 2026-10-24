@@ -1,0 +1,3 @@
+let a = add(1, 2)
+let b = lt(1, 2)
+let c = show(1)

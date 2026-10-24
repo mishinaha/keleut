@@ -1,0 +1,6 @@
+module BigInt {
+  pub newtype BigInt = Small(Int32)
+  type instance Add[BigInt] { let add(x, y) = x }
+}
+let a = Small(1)
+echoln(show((a + a) match { case Small(n) => n }))

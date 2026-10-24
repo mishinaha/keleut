@@ -1,0 +1,4 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let f(MkA(n)) = 1
+let g = fn(MkA(n)) => 2

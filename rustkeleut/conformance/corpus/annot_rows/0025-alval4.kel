@@ -1,0 +1,3 @@
+type G = (Int32) => Int32 @ {}
+let k: G = fn(x) => x
+let user(): Int32 @ Console = k(1)

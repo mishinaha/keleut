@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let rec dive(k: Int32): Int32 @ {Ask} = if k == 0 then perform ask() else 1 + dive(k - 1)
+let g(k: Int32, n: Int32): Int32 = dive(k) handle { case ask() => { let v = f(n); let r = resume(v); r } }
+echoln(show(g(50, 96)))
+echoln(show(g(50, 97)))

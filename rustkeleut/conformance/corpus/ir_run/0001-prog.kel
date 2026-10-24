@@ -1,0 +1,18 @@
+newtype Shape = Circle(Float64) | Rect(Float64, Float64)
+let area(s: Shape): Float64 = s match {
+  case Circle(r) => 3.0 * r * r
+  case Rect(w, h) => w * h
+}
+newtype L[A] = N | C(A, L[A])
+let rec sum[A: Add](xs: L[A], z: A): A = xs match {
+  case N => z
+  case C(x, rest) => x + sum(rest, z)
+}
+let adder(n: Int32): (Int32) => Int32 = fn(x) => x + n
+let p = {x = 1, y = "two"}
+echoln(show(area(Circle(2.0))) + " " + show(area(Rect(2.0, 3.5))))
+echoln(show(sum(C(1, C(2, C(3, N))), 0)))
+echoln(sum(C("a", C("b", N)), "!"))
+echoln(show(adder(10)(5)) + p.y)
+extern "C" let sqrt(x: Float64): Float64
+echoln(show(sqrt(2.0)))

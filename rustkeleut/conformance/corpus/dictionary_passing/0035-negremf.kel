@@ -1,0 +1,2 @@
+let modulo[A: Rem](x: A, y: A): A = x % y
+echoln(show(modulo(1.5, 1.0)))

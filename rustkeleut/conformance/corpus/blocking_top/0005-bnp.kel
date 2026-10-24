@@ -1,0 +1,2 @@
+extern "C" let sqrt(x: Float64): Float64 @ Blocking
+let r = sqrt(16.0)

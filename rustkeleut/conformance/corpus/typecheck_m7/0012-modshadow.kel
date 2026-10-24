@@ -1,0 +1,6 @@
+let helper(x: Int32): Int32 = 100
+module M {
+  let helper(x: Int32): Int32 = x + 1
+  let use(x: Int32): Int32 = helper(x)
+}
+echoln(show(M.use(1)))

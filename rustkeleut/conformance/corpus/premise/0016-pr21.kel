@@ -1,0 +1,4 @@
+newtype A = MkA(Int32)
+newtype List[X] = Cons(X, tail: List[X]) | Nil
+type instance[A: Eq] Eq[List[_]] { let rec eq(xs: List[A], ys: List[A]): Boolean = true }
+let z(p: A): A = p

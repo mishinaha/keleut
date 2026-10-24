@@ -1,0 +1,1 @@
+let v: Int32 = run h { let r: Ref[Int32, Int32] = Ref.new(0); 0 }

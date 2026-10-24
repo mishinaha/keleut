@@ -1,0 +1,5 @@
+let call0[R, E](f: () => R @ E): R @ E = f()
+let leak(): Int32 = run h {
+  let r = Ref.new(1)
+  run k { call0 { Ref.get(r) } }
+}

@@ -1,0 +1,5 @@
+effect E1 = { op1: () => Boolean }
+let f(): Int32 @ {} = (perform op1()) handle {
+  case op1() => resume(true)
+  case return(true) => 1
+}

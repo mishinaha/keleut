@@ -1,0 +1,2 @@
+let k: (Int32) => Int32 = fn(x) => { echoln("k"); x }
+echoln(show(k(1)))

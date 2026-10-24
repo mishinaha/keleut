@@ -1,0 +1,2 @@
+let f(t: (Boolean,)): Int32 = t match { case (true,) => 1 }
+echoln(show(f((false,))))

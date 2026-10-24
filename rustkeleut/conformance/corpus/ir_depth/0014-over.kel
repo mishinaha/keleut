@@ -1,0 +1,9 @@
+effect Ask = { ask: () => Int32 }
+effect Tick = { tick: () => Unit }
+let rec dive(k: Int32): Int32 @ {Ask} = if k == 0 then perform ask() else 1 + dive(k - 1)
+let d(k: Int32): Int32 = dive(k) handle {
+  case ask() => { let r = resume(1) handle { case tick() => resume(()) }; echoln("after"); r }
+  case cancel => echoln("cancel")
+}
+echoln(show(d(95)))
+echoln(show(d(96)))

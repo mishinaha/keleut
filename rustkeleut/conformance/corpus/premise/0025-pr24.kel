@@ -1,0 +1,2 @@
+newtype Opaque = MkOpaque(Int32)
+let ng = MkOpaque(1i32) == MkOpaque(1i32)

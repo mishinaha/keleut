@@ -1,0 +1,4 @@
+let f(): Int32 = run h {
+  let rec r = Ref.new(0)
+  Ref.get(r)
+}

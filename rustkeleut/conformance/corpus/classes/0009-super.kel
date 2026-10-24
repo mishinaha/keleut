@@ -1,0 +1,2 @@
+type class MyEq[A] { val myeq: (A, A) => Boolean }
+type class MyOrd[A: MyEq] { val mylt: (A, A) => Boolean }

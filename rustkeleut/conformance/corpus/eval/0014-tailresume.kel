@@ -1,0 +1,19 @@
+effect Res = { use: (String) => Unit }
+effect Boom = { boom: () => Unit }
+let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case use(s)    => resume(echoln(name + " uses " + s))
+    case return(x) => { echoln("close " + name); x }
+    case cancel    => echoln("cancel " + name)
+  }
+let r = {
+  with _ = with_res("r1")
+  perform use("a")
+  perform boom()
+  0
+} handle {
+  case boom() => resume(???)
+  case return(x) => x
+  case cancel    => echoln("cancel outer")
+}
+echoln(show(r))

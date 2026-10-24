@@ -1,0 +1,5 @@
+type Unit = {}
+effect A = { opa: () => Unit }
+let call_pure(f: () => Unit): Unit = f()
+let call_a[E](f: () => Unit @ E): Unit @ E = f()
+let mk_a(): Unit @ A = perform opa()

@@ -1,0 +1,4 @@
+let bad(): Unit @ {} = {
+  let g: () => Unit @ Console = fn() => echoln("x")
+  g()
+}

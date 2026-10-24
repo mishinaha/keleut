@@ -1,0 +1,2 @@
+let f(): Int32 @ Heap[Int32] = 0
+let g(): Int32 @ Heap[String] = f()

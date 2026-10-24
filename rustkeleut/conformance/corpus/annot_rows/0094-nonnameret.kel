@@ -1,0 +1,5 @@
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let f(): () => Int32 @ Console = mkp()
+let twice(g: () => Int32 @ Console): Int32 @ Console = g() + g()
+let use(): Int32 @ Console = twice(mkp())

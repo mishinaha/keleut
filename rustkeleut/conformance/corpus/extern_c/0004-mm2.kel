@@ -1,0 +1,4 @@
+module Fast { pub extern "C" let sqrt(x: Float64): Float64 }
+module Precise { pub extern "C" let sqrt(x: Float64): Float64 }
+echoln(show(Fast.sqrt(4.0)))
+echoln(show(Precise.sqrt(9.0)))

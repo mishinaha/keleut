@@ -1,0 +1,6 @@
+pub newtype Box(Int32)
+module M {
+  type instance Show[Box] {
+    pub let rec show(b: Box): String = "box"
+  }
+}

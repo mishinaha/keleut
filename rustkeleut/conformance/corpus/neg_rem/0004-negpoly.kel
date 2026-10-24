@@ -1,0 +1,3 @@
+let neg2[A: Neg](a: A): A = -a
+echoln(show(neg2(5)))
+echoln(show(neg2(2.5)))

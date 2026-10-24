@@ -1,0 +1,12 @@
+type Out: EffectRow = {Console}
+module M {
+  pub type Console: EffectRow = {Print}
+  pub type Heap[E]: EffectRow = {Print extends E}
+  let f(x: Int32): Int32 @ Console = x
+  let g(x: Int32): Int32 @ {Console} = x
+  let h[E](x: Int32): Int32 @ Heap[E] = x
+  let k[E](x: Int32): Int32 @ {Heap[E]} = x
+  let o(x: Int32): Int32 @ Out = x
+}
+let m(x: Int32): Int32 @ Console = x
+let n[E](x: Int32): Int32 @ Heap[E] = x

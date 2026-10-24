@@ -1,0 +1,17 @@
+effect Stop = { stop: () => {} }
+effect Log = { note: (String) => {} }
+let inner[E](): Int32 @ {Log, Stop, Console extends E} =
+  { perform stop(); 1 } handle {
+    case note(s) => { echo("INNER:" + s + "\n"); resume({}) }
+    case cancel => { perform note("from-cancel"); echo("AFTER\n") }
+    case return(x) => x
+  }
+let mid[E](): Int32 @ {Stop, Console extends E} = inner() handle {
+  case note(s) => { echo("MID:" + s + "\n"); 7 }
+  case return(x) => x
+}
+let go[E](): Int32 @ {Console extends E} = mid() handle {
+  case stop() => 99
+  case return(x) => x
+}
+echoln(show(go()))

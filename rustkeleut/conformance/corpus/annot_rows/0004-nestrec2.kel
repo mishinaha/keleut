@@ -1,0 +1,2 @@
+let use(r: {go: () => Unit}): Unit = r.go()
+let main(): Unit @ Console = use({go = fn() => echoln("x")})

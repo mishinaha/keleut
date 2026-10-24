@@ -1,0 +1,24 @@
+effect E0 = { ask0: () => Int32, abort0: (String) => Never }
+effect E1 = { ask1: () => Int32, abort1: (String) => Never }
+effect Res = { use: () => Unit }
+let r = {
+  let w = {
+    let z = ({ perform use(); perform abort1("one"); 1 }) handle {
+      case use() => resume()
+      case cancel => { echoln("cancel res"); let a = perform ask0(); echoln("cancel got a=" + show(a)); let b = perform ask1(); echoln("cancel got b=" + show(b)); perform abort0("from cancel"); echoln("not reached") }
+    }
+    z
+  } handle {
+    case ask1() => { let y = resume(7); echoln("ask1 got " + show(y)); y + 50000 }
+    case abort1(e) => { echoln("H1 clause " + e); 10 }
+    case cancel => echoln("H1 cancel")
+  }
+  echoln("H1 value " + show(w))
+  w
+} handle {
+  case ask0() => { let x = resume(5); echoln("ask0 got " + show(x)); x + 1000 }
+  case abort0(e) => { echoln("H0 abort0 " + e); 20 }
+  case return(v) => { echoln("H0 return " + show(v)); v + 300 }
+  case cancel => echoln("H0 cancel")
+}
+echoln("r=" + show(r))

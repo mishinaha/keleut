@@ -1,0 +1,8 @@
+type Unit = {}
+effect File = { read: () => String, write: (String) => Unit }
+effect Sink = { write: (String) => Unit, flush: () => Unit }
+let prog(): Unit @ Sink = { perform write("a"); perform flush() }
+let h(): Unit = prog() handle {
+  case write(s) => resume(())
+  case Sink.flush() => resume(())
+}

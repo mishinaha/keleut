@@ -1,0 +1,7 @@
+let call[A](x: Int32, k: (Int32) => A): A = k(x)
+let rec loop(n: Int32): Unit = {
+  with m = call(n - 1)
+  (n == 0) match { case true => () case false => loop(m) }
+}
+loop(100000)
+echoln("ok")

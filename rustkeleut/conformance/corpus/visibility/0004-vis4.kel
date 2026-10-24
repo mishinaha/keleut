@@ -1,0 +1,2 @@
+module M { newtype Priv = P(Int32) }
+let u(x: Priv): Int32 = 0

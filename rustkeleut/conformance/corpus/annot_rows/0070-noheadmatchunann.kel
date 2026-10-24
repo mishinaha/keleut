@@ -1,0 +1,3 @@
+let a(): Int32 @ {} = 1
+let b(): Int32 @ Console = 2
+let pick(c: Boolean) = c match { case true => a case false => b }

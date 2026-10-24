@@ -1,0 +1,2 @@
+newtype R = R({f: Int32, g: Int32})
+let x = R({f = 1})

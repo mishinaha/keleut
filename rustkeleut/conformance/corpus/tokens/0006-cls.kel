@@ -1,0 +1,4 @@
+type class Eq[A] {
+  val eq: (A, A) => Boolean
+  val ne: (A, A) => Boolean
+}

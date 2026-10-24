@@ -1,0 +1,6 @@
+newtype T = A | B
+let f(t: T): Int32 = t match { case A => 1 }
+let d(x: Int32): Int32 = 10 / x
+echoln(show(f(A)))
+echoln(show(d(0)))
+echoln("not reached")

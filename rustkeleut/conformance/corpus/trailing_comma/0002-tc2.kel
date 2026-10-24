@@ -1,0 +1,8 @@
+type class Sizeof[A] {
+  val sizeof: (A) => Int32
+}
+type instance Sizeof[Int32,] {
+  let sizeof(x) = 4
+}
+let n = sizeof(1)
+let g[h](r: Ref[h, Int32,]): Int32 @ {Heap[h,]} = Ref.get(r)

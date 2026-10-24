@@ -1,0 +1,6 @@
+newtype Shape = Dot | Seg(Boolean, Boolean) | Box(w: Boolean, h: Boolean)
+let f = fn(s: Shape) => s match {
+  case Dot => 0
+  case Seg(true, true) => 1
+  case Box(w = true, h = true) => 2
+}

@@ -1,0 +1,3 @@
+extern "C" let sin(x: Float64): Float64 @ {}
+let loud(x: Float64): Float64 @ Console = { echo("x "); sin(x) }
+echoln(show(loud(0.0)))

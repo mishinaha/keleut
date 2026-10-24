@@ -1,0 +1,9 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+effect Fail = { throw: (String) => Never }
+effect Nop = { nop: () => Int32 }
+let bt(): Int32 @ Fail = { let (a, b): (Int32, Never) = (1, perform throw("y")); a }
+let bc(): Int32 @ Fail = { let MkA(n) = perform throw("z"); 2 }
+let mv(n: Never): Int32 = n match { case m => 1 }
+let mc(a: Absurd): Int32 = a match { case MkA(_) => 2 }
+let rc(t: () => Absurd @ Nop): Int32 = t() handle { case nop() => resume(1)  case return(MkA(n)) => 3 }

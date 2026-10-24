@@ -1,0 +1,2 @@
+let twice(f: () => Unit): Unit @ Console = { f(); f(); echoln("x") }
+twice(fn() => echoln("y"))

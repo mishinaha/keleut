@@ -1,0 +1,4 @@
+newtype List[A] = Cons(A, tail: List[A]) | Nil
+newtype Opaque = MkOpaque(Int32)
+type instance[A: Eq] Eq[List[_]] { let rec eq(xs, ys) = true }
+type instance Eq[Opaque] { let eq(a, b) = true }

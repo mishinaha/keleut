@@ -1,0 +1,2 @@
+effect Console = { write: (String) => {} }
+let r = (perform write("x\n")) handle { case write(s) => resume() }

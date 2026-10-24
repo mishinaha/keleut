@@ -1,0 +1,4 @@
+newtype Box = Box(Int32)
+type class Sz[T] { val sz: (T) => Int32 }
+type instance Sz[Box] { let sz(b) = b match { case Box(x) => x } }
+let xs = Cons(sz, Cons(fn(b: Box) => { echo("y"); 1 }, Nil))

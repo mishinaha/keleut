@@ -1,0 +1,4 @@
+let f(b: Boolean): Unit = {
+  if b then echoln("x")
+  echoln("y")
+}

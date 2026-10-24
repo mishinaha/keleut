@@ -1,0 +1,13 @@
+pub newtype Box[A] = Box(A)
+pub type Pair[A] = (A, A)
+pub effect Log = { log: (String) => {} }
+pub type class Named[A] { val name: (A) => String }
+type instance[A] Named[Box[_]] { let name(b) = "box" }
+pub module M {
+  pub newtype M = Mk(Int32)
+  pub let get(m: M): Int32 = m match { case Mk(n) => n }
+  let secret: Int32 = 7
+}
+pub let swap(p: Pair[Int32]): Pair[Int32] = p match { case (a, b) => (b, a) }
+pub let run_log[A](f: () => A @ {Log, Print}): A @ Print = f() handle { case log(s) => { println(s); resume() } }
+let first(x: Option[Int32]): Int32 = x match { case Some(n) => n }

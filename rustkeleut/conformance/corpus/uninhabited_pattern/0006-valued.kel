@@ -1,0 +1,8 @@
+newtype W[A] = Wr(A, Boolean)
+let a1(Wr(x, true): W[(Int32) => Never]) = 1
+let a2(Wr(x, true): W[Array[Never]]) = 2
+let a3[B](Wr(x, true): W[B]) = 3
+let a4(Wr(x, true): W[String]) = 4
+let a5(Wr(x, true): W[Never]) = 5
+let a6[R](Wr(x, true): W[#A(Never) | R]) = 6
+let a7(Wr(x, true): W[#A(Never)]) = 7

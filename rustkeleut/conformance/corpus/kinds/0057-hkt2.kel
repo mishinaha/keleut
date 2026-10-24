@@ -1,0 +1,2 @@
+type Unit = {}
+let f[F[_], E](g: () => Unit @ E, x: F[E]): Int32 = 0

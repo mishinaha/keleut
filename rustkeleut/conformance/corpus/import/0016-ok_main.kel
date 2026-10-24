@@ -1,0 +1,4 @@
+from "./lib/shape" import { Shape, area, }
+let helper(x: String): String = x + "!"
+echoln(show(area(Square(2.0))))
+echoln(helper("ok"))

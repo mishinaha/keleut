@@ -1,0 +1,2 @@
+newtype Box[A] = Box(A)
+type class Pure[F[_]] { val pure[A]: (A) => F[A] }

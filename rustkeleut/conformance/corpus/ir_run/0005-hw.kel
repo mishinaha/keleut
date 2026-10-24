@@ -1,0 +1,2 @@
+effect W = { write: (String) => Int32 }
+let g(): Int32 = perform write("a") handle { case write(s) => resume(1) }

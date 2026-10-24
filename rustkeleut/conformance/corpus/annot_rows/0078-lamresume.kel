@@ -1,0 +1,8 @@
+effect File = { write: (String) => Unit }
+effect Get = { get: () => () => Unit @ File }
+let use(): Unit @ {File, Console} = {
+  let g = perform get()
+  g()
+} handle {
+  case get() => resume(fn() => perform write("x"))
+}

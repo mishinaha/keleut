@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => resume(1)
+  case return(x) if x > 100 => 999
+}
+echoln(show(r))

@@ -1,0 +1,5 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype B5[E] = MkB5(() => Unit @ E)
+newtype A5[X] = MkA5(B5[{Print extends X}])
+let f[E](x: A5[E]): A5[E] = x

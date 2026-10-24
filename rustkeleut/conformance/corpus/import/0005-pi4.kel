@@ -1,0 +1,2 @@
+type class D[A] { val d: (A) => Int32 }
+pub type instance D[Boolean] { pub let d(b: Boolean): Int32 = 0i32 }

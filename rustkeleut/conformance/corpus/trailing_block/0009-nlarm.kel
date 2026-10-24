@@ -1,0 +1,5 @@
+let a = 1 match {
+  case 1 => f
+    { 2 }
+  case _ => 0
+}

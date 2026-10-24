@@ -1,0 +1,19 @@
+effect Tick = { tick: () => Unit }
+effect Ask = { ask: (Int32) => Int32 }
+effect Test = { test: () => Boolean }
+let rec ticks(n: Int32): Unit @ Tick = (n == 0) match { case true => () case false => { perform tick(); ticks(n - 1) } }
+let rec asks(n: Int32, acc: Int32): Int32 @ Ask =
+  (n == 0) match { case true => acc case false => asks(n - 1, acc + perform ask(n)) }
+let rec tests(n: Int32): Boolean @ Test = (n == 0) match { case true => true case false => perform test() && tests(n - 1) }
+ticks(100000) handle { case tick() => resume() }
+echoln("bare")
+let total = run h {
+  let c = Ref.new(0)
+  ticks(100000) handle { case tick() => { Ref.set(c, Ref.get(c) + 1); resume() } }
+  Ref.get(c)
+}
+echoln(show(total))
+echoln(show(asks(100000, 0) handle { case ask(x) => (x > 0) match { case true => resume(1) case false => resume(0) } }))
+ticks(100000) handle { case tick() => run h { let r = Ref.new(()); resume(Ref.get(r)) } }
+echoln("run")
+echoln(show(tests(100000) handle { case test() => { let t = true; t && resume(true) } }))

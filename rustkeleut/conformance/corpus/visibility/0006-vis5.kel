@@ -1,0 +1,5 @@
+module M {
+  newtype Priv = P(Int32)
+  pub let mk(n: Int32): Priv = P(n)
+}
+let x = P(1)

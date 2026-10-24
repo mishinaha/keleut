@@ -1,0 +1,6 @@
+effect File = { read: (Int32) => String, write: (String) => Int32 }
+let h[A, E](b: () => A @ {File extends E}): A @ E =
+  b() handle {
+    case write(s) => resume(0)
+    case return(x) => x
+  }

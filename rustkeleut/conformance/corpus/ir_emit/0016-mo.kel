@@ -1,0 +1,5 @@
+type class Pr[A] { val pr[B: Show + Eq]: (A, B) => String }
+newtype W = W(Int32)
+type instance Pr[W] { let pr(w, b) = if b == b then show(b) else "" }
+let z = pr(W(1), true)
+let y[C: Pr](c: C): String = pr(c, 1)

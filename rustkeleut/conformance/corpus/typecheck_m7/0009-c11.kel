@@ -1,0 +1,2 @@
+let uses2[A: Later2](x: A): A = lm2(x)
+type class Later2[A] { val lm2: (A) => A }

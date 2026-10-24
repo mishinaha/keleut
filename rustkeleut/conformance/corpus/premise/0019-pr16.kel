@@ -1,0 +1,11 @@
+module M {
+  pub newtype L[A] = C(A, tail: L[A]) | N
+}
+type instance[A: Eq] Eq[M.L[_]] {
+  let rec eq(xs, ys) = (xs, ys) match {
+    case (M.N, M.N)                 => true
+    case (M.C(x, xt), M.C(y, yt)) => x == y && eq(xt, yt)
+    case _                          => false
+  }
+}
+let b = M.C(1i32, M.N) == M.C(1i32, M.N)

@@ -1,0 +1,7 @@
+newtype Box = Box(() => Int32)
+let escape(): Box = run h {
+  let a = MutableArray.new(1, 41)
+  Box(fn() => { MutableArray.set(a, 0, 42); MutableArray.get(a, 0) })
+}
+let call(b: Box): Int32 = b match { case Box(f) => f() }
+echoln(show(call(escape())))

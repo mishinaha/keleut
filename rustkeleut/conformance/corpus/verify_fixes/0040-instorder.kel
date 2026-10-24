@@ -1,0 +1,4 @@
+newtype Box = Box(Int32)
+let b1 = Box(1) == Box(1)
+type instance Eq[Box] { let eq(a, b) = false }
+echoln(show(b1))

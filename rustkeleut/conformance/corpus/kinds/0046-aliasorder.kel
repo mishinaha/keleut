@@ -1,0 +1,3 @@
+let g(c: Cb[{Print}]): Int32 = 0
+type Cb[E] = Callback[E]
+newtype Callback[E] = Callback(() => Unit @ E)

@@ -1,0 +1,3 @@
+let rec g[A](x: A): Unit @ {} = ()
+and f[A](x: A): Unit @ Print = { println("f"); g(x) }
+with_stdout(fn() => f(1))

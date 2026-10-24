@@ -1,0 +1,7 @@
+let demo(): Int32 = run h {
+  let a = MutableArray.new(2, 1)
+  let frozen = MutableArray.freeze(a)
+  MutableArray.set(a, 0, 99)
+  Array.get(frozen, 0) + MutableArray.get(a, 0)
+}
+echoln(show(demo()))

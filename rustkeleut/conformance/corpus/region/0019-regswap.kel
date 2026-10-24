@@ -1,0 +1,1 @@
+let swap[h, k](a: Ref[h, Int32], b: Ref[k, Int32]): Unit @ Heap[h] = Ref.set(a, Ref.get(b))

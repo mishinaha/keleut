@@ -1,0 +1,3 @@
+type class Pick[A] { val pick: (A, A) => A }
+type instance Pick[Int64] { let pick(a, b) = if a > 10 then a else b }
+echo(show(pick(3i64, 20i64)))

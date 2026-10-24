@@ -1,0 +1,2 @@
+let apply_pair[A, B, R](p: (A, B), f: ((A, B)) => R): R = f(p)
+echoln(show(apply_pair((1, 2)) { case (a, b) => a * 10 + b }))

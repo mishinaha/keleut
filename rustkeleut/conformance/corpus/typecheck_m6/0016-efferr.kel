@@ -1,0 +1,3 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+let bad(): Unit @ {} = perform print("x")

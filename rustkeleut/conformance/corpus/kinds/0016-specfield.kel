@@ -1,0 +1,5 @@
+type Unit = {}
+effect Log = { log: (String) => Unit }
+newtype B10[E] = MkB10(() => Unit @ {Log}, () => Unit @ E)
+newtype A10 = MkA10(B10[{}])
+let f(x: A10): A10 = x

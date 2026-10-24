@@ -1,0 +1,6 @@
+let rec f[A: Show](x: A): String @ {} = show(x)
+and g(n: Int32): String = f(n) + f(true)
+echoln(g(3))
+let rec h[A: Show](x: A, k: Int32): String @ {} = (k == 0) match { case true => show(x) case false => i(x, k - 1) }
+and i(y, k: Int32): String = h(y, k)
+echoln(h("z", 3))

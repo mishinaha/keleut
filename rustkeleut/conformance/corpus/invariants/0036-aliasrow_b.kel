@@ -1,0 +1,7 @@
+type Out: EffectRow = {Print, Console}
+type Fn[E] = () => Unit @ E
+let f(): Unit @ Out = { println("p"); echoln("c") }
+newtype Cb[E] = Cb(Fn[E])
+let run_cb[E](c: Cb[E]): Unit @ E = c match { case Cb(g) => g() }
+with_stdout(f)
+run_cb(Cb(fn() => echoln("cb")))

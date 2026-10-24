@@ -1,0 +1,2 @@
+let f[A: Show](): Int32 = 0
+echoln(show(f()))

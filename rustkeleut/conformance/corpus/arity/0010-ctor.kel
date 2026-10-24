@@ -1,0 +1,2 @@
+newtype Fn1 = Fn1((Int32) => Int32)
+let v = Fn1(fn() => 1)

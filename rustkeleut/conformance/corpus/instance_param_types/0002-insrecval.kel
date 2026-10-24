@@ -1,0 +1,2 @@
+type class D3[A] { val d3: (A) => String }
+type instance D3[Never] { let rec d3 = fn(n) => n match {} }

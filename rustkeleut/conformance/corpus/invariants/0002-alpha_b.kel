@@ -1,0 +1,9 @@
+let call[X, Y, Q](g: (X) => Y @ Q, y: X): Y @ Q = g(y)
+let double[Rw](h: () => Unit @ Rw): Unit @ Rw = { h(); h() }
+let rec count[T](ys: List[T]): Int32 = ys match { case Nil => 0 case Cons(_, rest) => 1 + count(rest) }
+let sum_ = {
+  let a = call(fn(w) => w + 1, 41)
+  let b = count(Cons(a, Cons(a, Nil)))
+  a + b
+}
+double { echoln(show(sum_)) }

@@ -1,0 +1,7 @@
+let idf[A](x: A): A = x
+type class Sz[T] { val sz: (T) => Int32 }
+newtype Box[A] = Box(A)
+type instance[A] Sz[Box[_]] {
+  let sz: (Box[A]) => Int32 @ {} = idf(fn(b) => 1)
+}
+echoln(show(sz(Box("x"))))

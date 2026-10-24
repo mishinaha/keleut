@@ -1,0 +1,17 @@
+effect Res = { use: (String) => Unit }
+let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case use(s)    => resume(echoln(name + " uses " + s))
+    case return(x) => { echoln("close " + name); x }
+    case cancel    => __panic("cancel of " + name + " blew up")
+  }
+let rec loop(n: Int32): Unit @ Console = (n == 0) match {
+  case true => {}
+  case false => { echoln("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); loop(n - 1) }
+}
+let main() = {
+  with _ = with_res("r1")
+  perform use("a")
+  loop(100000)
+}
+main()

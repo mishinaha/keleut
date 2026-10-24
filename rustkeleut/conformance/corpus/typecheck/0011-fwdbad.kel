@@ -1,0 +1,2 @@
+let forward(x: Int32): Int32 = helper(x)
+let helper(y: Int32): Int32 = y + 1

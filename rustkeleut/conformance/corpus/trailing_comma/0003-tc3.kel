@@ -1,0 +1,12 @@
+effect Ev = {
+  op1: (Int32,) => Int32,
+  op2: (String) => {},
+}
+newtype C = C(Int32, b: String,)
+let f(x: Int32, y: Int32,): Int32 = x
+let g() = f(1, 2,)
+let r = {a = 1, b = 2,}
+let t = (1, 2,)
+let pm(v: C): Int32 = v match { case C(a, b,) => a }
+let pt(v: (Int32, Int32)): Int32 = v match { case (a, b,) => a }
+let er(k: () => {} @ {Ev, Console,}): Int32 = 1

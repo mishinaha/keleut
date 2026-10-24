@@ -1,0 +1,4 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+module M { pub type W[E]: EffectRow = {Print extends E} }
+let f[E](x: Int32): Int32 @ M.W[E] = x

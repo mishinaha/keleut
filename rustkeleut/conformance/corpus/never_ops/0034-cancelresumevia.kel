@@ -1,0 +1,11 @@
+effect E = { throw: (String) => Never, abort2: (Int32) => Never, ask: () => Int32 }
+effect Res = { use: () => Unit }
+let r = ({ perform use(); perform throw("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel res"); let a = perform ask(); echoln("cancel got " + show(a)); perform abort2(a); echoln("not reached") }
+} handle {
+  case throw(e) => { echoln("H throw " + e); 100 }
+  case abort2(n) => { echoln("H abort2 " + show(n)); 200 }
+  case ask() => { let x = resume(5); echoln("ask got " + show(x)); x + 1000 }
+}
+echoln("r=" + show(r))

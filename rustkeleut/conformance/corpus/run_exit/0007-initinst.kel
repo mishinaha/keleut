@@ -1,0 +1,6 @@
+newtype L(String)
+type class R[A] { val r: (A) => String }
+let use(x: L): String = r(x)
+echoln("before")
+echoln(use(L("a")))
+type instance R[L] { let r(x) = x match { case L(s) => s } }

@@ -1,0 +1,22 @@
+let doubled(xs: Array[Int32]): Array[Int32] = run h {
+  let out = MutableArray.new(Array.length(xs), 0)
+  let i = Ref.new(0)
+  Array.each(xs, fn(x) => {
+    MutableArray.set(out, Ref.get(i), x * 2)
+    Ref.set(i, Ref.get(i) + 1)
+  })
+  MutableArray.freeze(out)
+}
+let sum(xs: Array[Int32]): Int32 = run h {
+  let acc = Ref.new(0)
+  Array.each(xs, fn(x) => Ref.set(acc, Ref.get(acc) + x))
+  Ref.get(acc)
+}
+let mk(): Array[Int32] = run h {
+  let a = MutableArray.new(3, 0)
+  MutableArray.set(a, 0, 1)
+  MutableArray.set(a, 1, 2)
+  MutableArray.set(a, 2, 3)
+  MutableArray.freeze(a)
+}
+echoln(show(sum(doubled(mk()))))

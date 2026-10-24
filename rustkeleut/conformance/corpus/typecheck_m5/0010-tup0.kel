@@ -1,0 +1,2 @@
+let f(u: ()): Int32 = u match { }
+echoln(show(f(())))

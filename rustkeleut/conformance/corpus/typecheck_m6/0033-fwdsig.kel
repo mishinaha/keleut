@@ -1,0 +1,2 @@
+let user(): Int32 @ Console = helper(fn() => (), fn(n) => n)
+let helper[E](f: () => Unit @ E, g: (Int32) => Int32): Int32 @ {Console extends E} = ???

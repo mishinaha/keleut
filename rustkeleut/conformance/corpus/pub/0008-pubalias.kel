@@ -1,0 +1,3 @@
+type F = (Int32) => Int32
+type G = F
+pub let h(g: G): Int32 = g(1)

@@ -1,0 +1,2 @@
+let rec g[B, C](p: B, q: C): Int32 = 0
+and f(n: Int32): Int32 = { let h = fn(x) => g(x, x); n }

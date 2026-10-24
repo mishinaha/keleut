@@ -1,0 +1,2 @@
+let adder(a: Int32, b: Int32): (Int32) => (Int32) => Int32 =
+  fn(x) => fn(y) => a + x + y + b

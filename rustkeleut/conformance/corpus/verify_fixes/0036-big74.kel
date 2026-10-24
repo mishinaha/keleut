@@ -1,0 +1,6 @@
+let rec loop(n: Int32): Unit =
+  (n == 0) match {
+    case true => ()
+    case false => { echoln("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"); loop(n - 1) }
+  }
+loop(100000)

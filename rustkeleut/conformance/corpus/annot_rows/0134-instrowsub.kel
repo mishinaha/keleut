@@ -1,0 +1,5 @@
+let pp(x: Int32): Int32 @ Print = { println("p"); x }
+type class C[T] { val m: (T) => Int32 @ {Print, Console} }
+type instance C[Int32] { let m(x: Int32): Int32 @ Print = pp(x) }
+let u(): Unit @ {Print, Console} = echoln(show(m(1)))
+with_stdout(fn() => u())

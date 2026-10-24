@@ -1,0 +1,4 @@
+let f[E](): String @ E = g("s")
+let g[E](x: Int32): Int32 @ E = 7
+let g[E](x: String): String @ E = "STR"
+echoln(show(f()))

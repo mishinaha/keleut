@@ -1,0 +1,4 @@
+type F = () => Int32
+newtype Box = Box(F)
+let b(): Int32 @ Console = { echo("b"); 2 }
+let x = Box(b)

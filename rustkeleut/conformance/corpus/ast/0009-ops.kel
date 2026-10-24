@@ -1,0 +1,3 @@
+let arith = fn(a, b) => a + b - a * b / a
+let cmp = fn(a, b) => (a == b, a != b, a < b, a <= b, a > b, a >= b)
+let bools = fn(p, q) => (p && q, p || q, !p)

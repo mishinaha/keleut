@@ -1,0 +1,4 @@
+newtype Opt2[A] = Sm(A) | Nn
+newtype P = MkP(Opt2[Int32])
+let f(MkP(Sm(n))) = 1
+let g = fn(MkP(Sm(n))) => 2

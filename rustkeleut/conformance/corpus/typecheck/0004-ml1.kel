@@ -1,0 +1,4 @@
+let r = {
+  let id = fn(x) => x
+  {a = id(1), b = id(true)}
+}

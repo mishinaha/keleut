@@ -1,0 +1,3 @@
+let g(t: #A | #B | #C): Int32 = t match { case #A => 1  case #B => 2  case #C => 3 }
+let rec f(#A) = 1
+and h(v) = { let z = f(v); g(v) }

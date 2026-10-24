@@ -1,0 +1,3 @@
+module A { pub let f(x: Int32): Int32 = x + 1 }
+module B { pub let f(x: Int32): Int32 = x + 2 }
+echoln(show(A.f(1)) + show(B.f(1)))

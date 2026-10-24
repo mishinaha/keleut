@@ -1,0 +1,7 @@
+newtype Box = MkBox(Int32)
+effect Ask = { ask: (Box) => Int32 }
+let r = perform ask(MkBox(3)) handle {
+  case ask(MkBox(n), m) => resume(n)
+  case return(x) => x
+}
+echoln(show(r))

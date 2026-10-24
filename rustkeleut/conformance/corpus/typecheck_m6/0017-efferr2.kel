@@ -1,0 +1,6 @@
+type Unit = {}
+effect File2 = { read2: () => String, write2: (String) => Unit }
+let bad = fn(body) => body() handle {
+  case read2() => resume("")
+  case return(x) => x
+}

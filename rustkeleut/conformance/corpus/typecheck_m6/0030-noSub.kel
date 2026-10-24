@@ -1,0 +1,3 @@
+effect Logger = { log: (String) => Unit }
+let pure_f(x: Int32): Int32 @ {} = x + 1
+let impure(x: Int32): Int32 @ {Logger} = { perform log("hi"); pure_f(x) }

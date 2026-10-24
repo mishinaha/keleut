@@ -1,0 +1,4 @@
+let rec f: (Int32) => Int32 @ Console = fn(x) => g(x)
+and g: (Int32) => Int32 = fn(x) => { echoln("g"); x }
+let use(): Int32 @ {Console, Print} = { println("p"); f(1) + g(2) }
+with_stdout(fn() => use())

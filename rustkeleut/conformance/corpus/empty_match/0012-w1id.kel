@@ -1,0 +1,4 @@
+let id(x) = x
+let rec loop[A](): A = loop()
+let t(u: Int32): Int32 = { let g = fn(w: Int32) => id(loop()) match {}; u }
+echoln(show(id(3)))

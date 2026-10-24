@@ -1,0 +1,2 @@
+pub let rec f(): Unit @ Print = { println("a"); g() }
+and g(): Unit = ()

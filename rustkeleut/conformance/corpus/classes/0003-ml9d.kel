@@ -1,0 +1,2 @@
+let read_[A: Show](s: String): A = ???
+let wrapper() = { let v = show(read_("2")); v }

@@ -1,0 +1,2 @@
+type Pair2[A, B] = (A, B)
+let q: Pair2[Int32] = (1, "a")

@@ -1,0 +1,2 @@
+effect Fail = { throw: (String) => Never }
+{ perform throw("x") match {} } handle { case throw(e) => echoln(e) }

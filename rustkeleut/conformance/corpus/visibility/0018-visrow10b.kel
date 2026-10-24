@@ -1,0 +1,8 @@
+module N {
+  pub newtype Heap[A] = MkH(A)
+  type Console = Int32
+  let f(x: Int32): Int32 @ Console = x
+  let g(x: Int32): Int32 @ {Console, Print} = x
+  let h[H](x: Int32): Int32 @ Heap[H] = x
+  let k[H](x: Int32): Int32 @ {Heap[H]} = x
+}

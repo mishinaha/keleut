@@ -1,0 +1,6 @@
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let rec loop(n: Int32): Int32 = if n == 0 then 0 else loop(n - 1)
+echoln(show(loop(100000)))
+echoln(show(f(98)))
+echoln(show(f(99)))
+echoln("not reached")

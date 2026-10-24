@@ -1,0 +1,12 @@
+newtype Cb[E] = Cb(() => Unit @ E)
+module M {
+  pub type W: EffectRow = {Print}
+  type V: EffectRow = W
+  let at(x: Int32): Int32 @ W = x
+  let elem(x: Int32): Int32 @ {W, Console} = x
+  let tail(x: Int32): Int32 @ {Console extends W} = x
+  let arg(c: Cb[W]): Int32 = 0
+  let rhs(x: Int32): Int32 @ V = x
+  pub let say(s: String): Unit @ W = perform print(s + "\n")
+}
+with_stdout(fn() => M.say("hi"))

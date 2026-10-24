@@ -1,0 +1,7 @@
+let two[r, s, A](x: Ref[r, A], y: MutableArray[s, Int32]): A @ {Heap[r], Heap[s]} = Ref.get(x)
+let both[A](x: A, r: Ref[A, Int32]): Int32 = 0
+let id[A](x: A): A = x
+let w = id(Ref.new)
+newtype Box[k] = Box(Ref[k, Int32])
+let unbox[k](b: Box[k]): Ref[k, Int32] = b match { case Box(r) => r }
+let size[k](b: Box[k]): Int32 = 0

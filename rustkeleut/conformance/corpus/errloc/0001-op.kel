@@ -1,0 +1,4 @@
+let a = 1
+let bad =
+  1 + true
+let c = 2

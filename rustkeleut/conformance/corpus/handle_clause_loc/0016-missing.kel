@@ -1,0 +1,7 @@
+effect Two = { one: () => Int32, two: () => Int32 }
+let r =
+  perform one() handle {
+    case return(v) => v
+    case one() => resume(1)
+  }
+echoln(show(r))

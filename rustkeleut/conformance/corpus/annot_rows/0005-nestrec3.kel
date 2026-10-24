@@ -1,0 +1,2 @@
+let pair(p: (() => Unit, Int32)): Int32 = p._1
+let main(): Int32 @ Console = pair((fn() => echoln("x"), 1))

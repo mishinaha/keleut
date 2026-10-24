@@ -1,0 +1,5 @@
+let a = true
+let b: Int64 = 9223372036854775807
+let c = -1.5
+let d = "q\"\\\n日"
+let k = 4294967295

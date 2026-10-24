@@ -1,0 +1,6 @@
+type class Sz[A] { val sz: (A) => Int32 }
+newtype Foo = Foo
+type instance Sz[Foo] {
+  let sz: (Foo) => Int32 = { let r = Ref.new(0i32); fn(x) => 1i32 }
+}
+echoln(show(sz(Foo)))

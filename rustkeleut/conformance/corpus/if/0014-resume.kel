@@ -1,0 +1,8 @@
+effect Ask = { ask: (Int32) => Int32 }
+effect Tick = { tick: () => Unit }
+let rec asks(n: Int32, acc: Int32): Int32 @ Ask =
+  if n == 0 then acc else asks(n - 1, acc + perform ask(n))
+let rec ticks(n: Int32): Unit @ Tick = if n == 0 then () else { perform tick(); ticks(n - 1) }
+echoln(show(asks(100000, 0) handle { case ask(x) => if x > 0 then resume(1) else resume(0) }))
+ticks(100000) handle { case tick() => { let c = 1; if c == 1 then resume() else resume() } }
+echoln("ticks")

@@ -1,0 +1,5 @@
+type Unit = {}
+effect E1 = { op: (String) => Unit }
+effect E2 = { op: (String) => Unit }
+effect E3 = { op: (String) => Unit }
+let f(): Unit @ {E3, E1} = perform op("f")

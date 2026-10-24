@@ -1,0 +1,8 @@
+let probe(): Int32 = run h {
+  let inner = MutableArray.new(2, 0)
+  let outer = MutableArray.new(1, inner)
+  let frozen = MutableArray.freeze(outer)
+  MutableArray.set(inner, 0, 99)
+  MutableArray.get(Array.get(frozen, 0), 0)
+}
+echoln(show(probe()))

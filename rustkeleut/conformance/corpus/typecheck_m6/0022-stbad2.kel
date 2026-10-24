@@ -1,0 +1,1 @@
+let bad = run h { let r = Ref.new(0); fn(u) => Ref.get(r) }

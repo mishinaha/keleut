@@ -1,0 +1,11 @@
+effect Ask = { ask: () => Int32 }
+effect Tick = { tick: () => Unit }
+effect Zz = { zz: () => Unit }
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let inner(m: Int32): Int32 @ {Tick, Console} = ({ let a = perform ask(); a } handle { case zz() => resume(()) case cancel => echoln(show(f(m))) }) handle { case ask() => { perform tick(); if 1 == 2 then { let r = resume(1); r } else 5 } }
+let outerG(m: Int32): Int32 = inner(m) handle { case tick() => { let r = resume(()); r } }
+let outerT(m: Int32): Int32 = inner(m) handle { case tick() => resume(()) }
+echoln(show(outerG(93)))
+echoln(show(outerG(94)))
+echoln(show(outerT(94)))
+echoln(show(outerT(95)))

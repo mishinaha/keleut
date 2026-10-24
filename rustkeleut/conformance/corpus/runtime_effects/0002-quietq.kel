@@ -1,0 +1,5 @@
+let quiet[A, E](body: () => A @ {Console extends E}): A @ E =
+  body() handle {
+    case Console.write(s) => resume({})
+    case return(x) => x
+  }

@@ -1,0 +1,13 @@
+effect Fail = { throw: (String) => Never }
+effect Res = { use: () => Unit }
+effect Mid = { tick: () => Unit }
+let r = (({ perform use(); perform throw("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel res"); perform throw("from cancel") }
+}) handle {
+  case tick() => resume()
+  case cancel => echoln("cancel mid")
+} handle {
+  case throw(e) => { echoln("H clause " + e); 1 }
+}
+echoln(show(r))

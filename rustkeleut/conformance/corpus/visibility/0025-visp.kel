@@ -1,0 +1,6 @@
+module M {
+  let a(): Int32 = 1
+  pub let go(): Int32 = a()
+}
+let (a, b) = (fn() => 99, "x")
+echoln(show(M.go()))

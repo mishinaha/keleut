@@ -1,0 +1,1 @@
+let g = if true then fn(x: Int32) => x + 1 else fn(x: Int32) => x - 1

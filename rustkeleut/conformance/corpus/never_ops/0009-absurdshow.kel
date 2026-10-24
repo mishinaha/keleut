@@ -1,0 +1,3 @@
+let h = fn(y) => { echoln(show(y)); y match {} }
+let k(x) = { echoln(show(x)); x match {} }
+echoln("ok")

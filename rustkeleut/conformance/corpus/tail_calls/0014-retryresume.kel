@@ -1,0 +1,7 @@
+effect Again = { again: () => Unit }
+let rec retry(n: Int32): Int32 =
+  (if n == 0 then 0 else { perform again(); 1 }) handle {
+    case again() => retry(n - 1)
+  }
+echoln(show(retry(1000)))
+echoln(show(retry(100000)))

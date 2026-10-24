@@ -1,0 +1,2 @@
+let read_[A: Show](s: String): A = ???
+let s = show(read_("1"))

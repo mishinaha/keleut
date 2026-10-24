@@ -1,0 +1,5 @@
+type Unit = {}
+effect A = { opa: () => Unit }
+type Thunk = () => Unit
+let pure_ok(t: Thunk): Unit = t()
+let bad(): Thunk = fn() => perform opa()

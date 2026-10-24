@@ -1,0 +1,2 @@
+effect Weird = { op: (String) => Unit @ Print }
+let f(): Unit @ Weird = perform op("a")

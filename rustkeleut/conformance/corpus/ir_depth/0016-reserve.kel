@@ -1,0 +1,4 @@
+effect Ask = { ask: () => Int32 }
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let c1(m: Int32): Int32 = f(1000) handle { case ask() => resume(0) case cancel => echoln(show(f(m))) }
+echoln(show(c1(1121)))

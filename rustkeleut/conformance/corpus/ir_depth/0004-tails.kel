@@ -1,0 +1,8 @@
+let rec even(n: Int32): Boolean = if n == 0 then true else odd(n - 1)
+and odd(n: Int32): Boolean = if n == 0 then false else even(n - 1)
+type class Step[A] { val step: (A, Int32) => Int32 }
+type instance Step[Int32] { let rec step(x, n) = if n == 0 then x else step(x, n - 1) }
+let rec count[A: Eq](x: A, n: Int32): Int32 = if n == 0 then 0 else if x == x then count(x, n - 1) else 1
+echoln(show(even(100000)))
+echoln(show(step(7, 100000)))
+echoln(show(count("a", 100000)))

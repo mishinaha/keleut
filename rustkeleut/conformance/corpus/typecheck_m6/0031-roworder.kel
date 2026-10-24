@@ -1,0 +1,7 @@
+type Unit = {}
+effect E1 = { op1: () => Unit }
+effect E2 = { op2: () => Unit }
+let a[E](k: () => Unit @ {E1, E2 extends E}): Unit @ {E1, E2 extends E} = k()
+let b[E](k: () => Unit @ {E2, E1 extends E}): Unit @ {E1, E2 extends E} = a(k)
+newtype Cb = Cb(() => Unit @ {E1, E2})
+let mk(k: () => Unit @ {E2, E1}): Cb = Cb(k)

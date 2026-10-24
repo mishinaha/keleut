@@ -1,0 +1,8 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype Box[A] = Box(A)
+let a(): Callback[{}] = Callback(fn() => {})
+let b(c: Callback[Print]): Callback[Print] = c
+let d(x: Box[{}]): Box[{}] = x
+let e(): Box[{}] = Box({})

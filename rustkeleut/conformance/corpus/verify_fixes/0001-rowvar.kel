@@ -1,0 +1,10 @@
+let fst2[A, R](t: {_item: A extends R}): A = t._item
+echoln(fst2({_item = "hi", x = 1}))
+echoln(fst2({x = 1, _item = "hi"}))
+let describe[R](v: #Even | #Odd | R): String = v match {
+  case #Even => "even"
+  case #Odd  => "odd"
+  case _     => "unknown"
+}
+echoln(describe(#Even))
+echoln(describe(#Other))

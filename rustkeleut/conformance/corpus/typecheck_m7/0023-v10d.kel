@@ -1,0 +1,2 @@
+let apply2(f: (Boolean) => Int32, b: Boolean): Int32 = f(b)
+let r = apply2(fn(true) => 1, false)

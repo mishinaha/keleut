@@ -1,0 +1,5 @@
+type Unit = {}
+effect A = { opa: () => Unit }
+effect B = { opb: () => Unit }
+let g(): Unit @ A = perform opa()
+let call(f: () => Unit @ A): Unit @ {A, B} = { f(); g(); perform opb() }

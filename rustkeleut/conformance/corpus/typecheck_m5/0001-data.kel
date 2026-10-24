@@ -1,0 +1,15 @@
+newtype Option[A] = None | Some(A)
+newtype List[A] = Nil | Cons(A, tail: List[A])
+newtype UserId(Int32)
+let rec length[A](xs: List[A]): Int32 = xs match {
+  case Nil => 0
+  case Cons(_, tail) => 1 + length(tail)
+}
+let rec map2 = fn(f, xs) => xs match {
+  case Nil => Nil
+  case Cons(head, tail) => Cons(f(head), map2(f, tail))
+}
+let lst = Cons(1, Cons(2, Nil))
+let opt = Some(42)
+let uid = UserId(7)
+let labeled = Cons(1, tail = Nil)

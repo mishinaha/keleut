@@ -1,0 +1,4 @@
+let s = show(42)
+let f = fn(x) => show(x)
+let cmp = fn(x) => lt(x, x)
+let bad = show(fn(x) => x)

@@ -1,0 +1,8 @@
+type IoError = #NotFound | #Denied
+type ParseError = #Unexpected
+type AnyError = IoError | ParseError
+let report(e: AnyError): Int32 = e match {
+  case #NotFound => 1
+  case #Denied => 2
+  case #Unexpected => 3
+}

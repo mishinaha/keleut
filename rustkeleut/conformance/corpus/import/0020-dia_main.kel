@@ -1,0 +1,5 @@
+from "./lib/left" import l
+from "./lib/right"
+  import { r, }
+echoln("init main")
+echoln(show(l + r))

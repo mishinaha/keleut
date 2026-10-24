@@ -1,0 +1,6 @@
+module M {
+  newtype Priv = P(Int32)
+  let helper(x: Priv): Int32 = x match { case P(n) => n }
+  pub let go(n: Int32): Int32 = helper(P(n)) + 1
+}
+echoln(show(M.go(1)))

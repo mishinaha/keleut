@@ -1,0 +1,3 @@
+module A { pub newtype T = TA(Int32) }
+module B { pub newtype T = TB(Int32) }
+let x: T = TA(1)

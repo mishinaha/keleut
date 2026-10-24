@@ -1,0 +1,3 @@
+module M {
+  pub let k: (Int32) => Int32 = fn(x) => { echo("no"); x }
+}

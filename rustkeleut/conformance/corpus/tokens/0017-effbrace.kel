@@ -1,0 +1,6 @@
+effect Print = { print: (String) => {} }
+effect Fs2 = {}
+type R1: EffectRow = {Print}
+type R2: EffectRow = {Print, Fs2}
+let p(m: String): {} @ {Print} = perform print(m)
+let z(): {} @ {} = ()

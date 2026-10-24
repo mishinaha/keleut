@@ -1,0 +1,6 @@
+let x: Float64 = 1.
+let y = 2.e3
+let z = 1.f64
+echoln(show(x))
+echoln(show(y))
+echoln(show(z))

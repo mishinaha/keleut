@@ -1,0 +1,4 @@
+type Unit = {}
+newtype B3[E] = MkB3(() => Unit @ E)
+newtype A3[E] = MkA3(B3[E])
+let f[E](x: A3[E]): A3[E] = x

@@ -1,0 +1,8 @@
+effect Ask = { ask: (Int32) => Int32 }
+effect Tell = { tell: (Int32) => Unit }
+let r =
+  perform Ask.ask(1) handle {
+    case Ask.ask(n) => resume(n)
+    case tell(x) => resume(())
+  }
+echoln(show(r))

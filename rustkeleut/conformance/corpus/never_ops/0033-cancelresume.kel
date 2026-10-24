@@ -1,0 +1,10 @@
+effect Mixed = { ask: () => Int32, throw: (String) => Never }
+effect Res = { use: () => Unit }
+let r = ({ perform use(); perform throw("first") }) handle {
+  case use() => resume()
+  case cancel => { echoln("cancel res"); let a = perform ask(); echoln("cancel got " + show(a)) }
+} handle {
+  case ask() => { let x = resume(5); echoln("ask clause got " + show(x)); x + 1000 }
+  case throw(e) => { echoln("H clause " + e); 7 }
+}
+echoln(show(r))

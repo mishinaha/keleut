@@ -1,0 +1,4 @@
+module M {
+  pub let rec f[A](x: A, n: Int32): Int32 @ Print = { println("a"); g(n) }
+  and g[B](n: Int32): Int32 = n
+}

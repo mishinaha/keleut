@@ -1,0 +1,3 @@
+extern "prim" let foo[A: Show](x: A): String
+let g[B: Show](y: B): String = foo(y)
+echoln(g(1))

@@ -1,0 +1,8 @@
+let negate[A: Neg](x: A): A = -x
+let modulo[A: Rem](x: A, y: A): A = x % y
+echoln(show(negate(7)))
+echoln(show(negate(5i64)))
+echoln(show(negate(1.5)))
+echoln(show(modulo(7, 3)))
+echoln(show(modulo(-7, 3)))
+echoln(show(modulo(17i64, 5i64)))

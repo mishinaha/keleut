@@ -1,0 +1,7 @@
+type class Sz[A] { val sz: (A) => Int32; val k: (A) => Int32 }
+newtype B(Int32)
+type instance Sz[B] {
+  let sz(b) = 1
+  let k = { let n = sz(B(1)); fn(b) => n }
+}
+echoln(show(k(B(2))))

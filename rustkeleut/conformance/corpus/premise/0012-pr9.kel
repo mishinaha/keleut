@@ -1,0 +1,2 @@
+newtype List[A] = Cons(A, tail: List[A]) | Nil
+type instance[A: Integral] Eq[List[_]] { let rec eq(xs, ys) = true }

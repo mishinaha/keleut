@@ -1,0 +1,6 @@
+let a = g(1) { k }
+let b = g(1, fn() => k)
+let c = M.f { x => x }
+let d = M.f(fn(x) => x)
+let e = f { case Some(y) => y }
+let h = g(1)(2) { k }

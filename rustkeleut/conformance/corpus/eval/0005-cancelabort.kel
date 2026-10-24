@@ -1,0 +1,13 @@
+effect A = { a: () => Unit }
+effect B = { b: () => Unit }
+effect Fail = { fail: () => Unit }
+let r = ((perform fail() handle {
+    case a() => resume()
+    case cancel => { echoln("inner cancel start"); __panic("boom"); echoln("inner cancel rest") }
+  }) handle {
+  case b() => resume()
+  case cancel => echoln("outer cancel")
+}) handle {
+  case fail() => echoln("caught")
+}
+echoln("after")

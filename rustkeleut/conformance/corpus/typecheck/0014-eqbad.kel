@@ -1,0 +1,1 @@
+let same[R](p: {x: Int32 extends R}, q: {x: Int32 extends R}): Boolean = p == q

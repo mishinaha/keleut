@@ -1,0 +1,8 @@
+let empty = {}
+let ext = {extends r}
+let rcd = {x = 1}
+let pan = {a, b}
+let upd = {p with x = 1}
+let blk1 = {x}
+let blk2 = { f(); g() }
+type P = {x: Float64}

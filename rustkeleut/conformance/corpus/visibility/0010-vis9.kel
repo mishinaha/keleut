@@ -1,0 +1,2 @@
+module M { type A = Int32 }
+let f(x: M.A): Int32 = x

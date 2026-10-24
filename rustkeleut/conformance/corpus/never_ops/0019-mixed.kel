@@ -1,0 +1,17 @@
+effect Parser = { next: () => Int32, fail: (String) => Never }
+let parse(): Int32 @ Parser = {
+  let a = perform next()
+  if a < 0 then perform fail("negative") else a * 2
+}
+let r1 = parse() handle {
+  case next() => resume(21)
+  case fail(m) => { echoln("fail " + m); 0 - 1 }
+  case return(x) => x
+}
+echoln(show(r1))
+let r2 = parse() handle {
+  case next() => resume(0 - 1)
+  case fail(m) => { echoln("fail " + m); 0 - 1 }
+  case return(x) => x
+}
+echoln(show(r2))

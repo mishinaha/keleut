@@ -1,0 +1,9 @@
+newtype Empt
+newtype Absurd = MkA(Empt)
+let elimA[A](MkA(n)): A = n match {}
+let elimB[A](a: Absurd): A = a match { case MkA(n) => n match {} }
+let pick(r: #Ok(Int32) | #Err(Absurd)): Int32 = r match {
+  case #Ok(n) => n
+  case #Err(a) => elimA(a)
+}
+echo(show(pick(#Ok(41)) + 1))

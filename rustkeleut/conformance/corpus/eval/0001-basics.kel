@@ -1,0 +1,28 @@
+echoln("hello, keleut")
+let x = 1 + 2
+echoln(show(x * 10))
+let (a, b) = (10, "ten")
+echoln(b + "=" + show(a))
+let r = {x = 1, y = 2}
+echoln(show(r.x + r.y))
+let upd = {r with x = 100}
+echoln(show(upd.x + upd.y))
+let t = (1, "two", true)
+echoln(t._1)
+newtype MyList[A] = MyNil | MyCons(A, tail: MyList[A])
+let rec sum_l(xs: MyList[Int32]): Int32 = xs match {
+  case MyNil => 0
+  case MyCons(h, t) => h + sum_l(t)
+}
+echoln(show(sum_l(MyCons(1, MyCons(2, MyCons(3, MyNil))))))
+let frozen = run h {
+  let a = MutableArray.new(3, 0)
+  MutableArray.set(a, 0, 10)
+  MutableArray.set(a, 2, 30)
+  MutableArray.freeze(a)
+}
+echoln(show(Array.get(frozen, 0) + Array.get(frozen, 2)))
+echoln(show((1, "a") == (1, "a")))
+echoln(show({p = 1, q = 2} == {q = 2, p = 1}))
+echoln(show(1.5 + 2.5))
+echoln(show(7 / 2))

@@ -1,0 +1,6 @@
+let a: (Int32) = 1
+let b: (Int32,) = (1,)
+let c: ((Int32, String)) = (1, "x")
+let d: (((Int32))) = 2
+let e: (Int32, (String)) = (1, "y")
+let v: #Foo((Int32)) = #Foo(1)

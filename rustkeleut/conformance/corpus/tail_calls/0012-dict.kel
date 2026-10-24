@@ -1,0 +1,5 @@
+let rec go[A: Add](n: Int32, x: A, acc: A): A = (n == 0) match { case true => acc case false => go(n - 1, x, acc + x) }
+echoln(show(go(100000, 1, 0)))
+let rec ev(n: Int32, a) = n == 0 || od(n - 1, a)
+and od(n: Int32, a) = n != 0 && a == a && ev(n - 1, a)
+echoln(show(ev(100000, "x")))

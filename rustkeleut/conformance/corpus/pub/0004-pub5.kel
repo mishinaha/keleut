@@ -1,0 +1,3 @@
+pub let twice(x: Int32): Int32 = x + x
+let use[E](): Int32 @ E = twice(21)
+echoln(show(use()))

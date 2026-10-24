@@ -1,0 +1,2 @@
+let apply2(a: Int32, b: Int32, f: (Int32, Int32) => Int32): Int32 = f(a, b)
+let r = apply2(1, 2) { case (a, b) => a + b }

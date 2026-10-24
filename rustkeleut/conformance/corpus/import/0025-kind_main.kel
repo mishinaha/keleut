@@ -1,0 +1,9 @@
+from "./lib/k" import { Box, Pair, Log, Named, M, swap, run_log }
+newtype Mine = Mine(Int32)
+type instance Named[Mine] { let name(m) = "mine" }
+let p: Pair[Int32] = swap((1, 2))
+echoln(p match { case (a, b) => show(a) + show(b) })
+echoln(name(Box(1)) + " " + Named.name(Mine(3)))
+let mm: M = M.Mk(4)
+echoln(show(M.get(mm)))
+with_stdout { run_log { perform log("logged"); 0 } }

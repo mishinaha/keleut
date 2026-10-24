@@ -1,0 +1,7 @@
+newtype OBox = MkO(Option[Int32])
+effect Ask = { ask: (OBox) => Int32 }
+let r = perform ask(MkO(Some(1))) handle {
+  case ask(MkO(Some(n))) => resume(n)
+  case return(x) => x
+}
+echoln(show(r))

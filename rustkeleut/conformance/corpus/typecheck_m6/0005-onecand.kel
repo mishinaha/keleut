@@ -1,0 +1,3 @@
+type Unit = {}
+effect A1 = { op1: (String) => Unit }
+let f() = perform op1("x")

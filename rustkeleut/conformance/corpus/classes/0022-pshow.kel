@@ -1,0 +1,9 @@
+let empty(): List[Int32] = Nil
+let none(): Option[Int32] = None
+echoln(show(Cons(1, Cons(2, Cons(3, Nil)))))
+echoln(show(Cons(1, Nil)))
+echoln(show(empty()))
+echoln(show(Some(1)))
+echoln(show(none()))
+echoln(show(Cons(Some(1), Cons(None, Nil))))
+echoln(show(Cons("a", Cons("b", Nil))))

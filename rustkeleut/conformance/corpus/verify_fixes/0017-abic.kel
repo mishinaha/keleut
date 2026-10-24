@@ -1,0 +1,2 @@
+extern "C" let cos(x: Float64): Float64
+echoln(show(cos(0.0)))

@@ -1,0 +1,8 @@
+newtype List[X] = Cons(X, tail: List[X]) | Nil
+type instance[A: Eq] Eq[List[_]] {
+  let rec eq[A](xs: List[A], ys: List[A]): Boolean = (xs, ys) match {
+    case (Nil, Nil) => true
+    case (Cons(x, xt), Cons(y, yt)) => x == y && eq(xt, yt)
+    case _ => false
+  }
+}

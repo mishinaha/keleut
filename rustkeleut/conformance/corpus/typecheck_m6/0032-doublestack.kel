@@ -1,0 +1,12 @@
+effect Tag = { tag: (String) => {} }
+let with_tag[A, E](name: String, body: () => A @ {Tag, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case tag(s) => resume(echo(name + ":" + s + "\n"))
+    case return(x) => x
+  }
+let go(): {} @ {Console} = {
+  with _ = with_tag("outer")
+  with _ = with_tag("inner")
+  perform tag("hi")
+}
+go()

@@ -1,0 +1,14 @@
+effect Ask = { ask: () => Int32 }
+let inner = (perform ask() + perform ask()) handle {
+  case ask() => resume(1)
+  case return(x) => x
+}
+echoln(show(inner))
+let nested = ((perform ask()) handle {
+  case ask() => resume(10)
+  case return(x) => x
+}) handle {
+  case ask() => resume(20)
+  case return(x) => x
+}
+echoln(show(nested))

@@ -1,0 +1,4 @@
+let h = fn(x) => x match {
+  case 0.0 => 1i32
+  case 1.0 => 2i32
+}

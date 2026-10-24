@@ -1,0 +1,1 @@
+let rec g[B](r: {a: B, b: Int32}): Int32 = g({a = 1i32, b = 2i32})

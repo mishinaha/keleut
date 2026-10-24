@@ -1,0 +1,5 @@
+let f[A, E](b: () => A @ {Blocking extends E}): A @ E =
+  b() handle {
+    case Blocking.nope() => resume({})
+    case return(x) => x
+  }

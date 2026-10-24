@@ -1,0 +1,2 @@
+let k: (Int32) => Int32 @ Console = fn(x) => { echo("v"); x }
+let pure_use(): Int32 @ {} = k(1)

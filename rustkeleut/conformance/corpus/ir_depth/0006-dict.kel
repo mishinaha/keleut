@@ -1,0 +1,3 @@
+let rec g[A: Eq](x: A, n: Int32): Int32 = if n == 0 then 0 else { let r = g(x, n - 1); if x == x then r + 1 else r }
+echoln(show(g(1, 50)))
+echoln(show(g(1, 1000)))

@@ -1,0 +1,8 @@
+newtype Resp = R(String)
+effect ReqId  = { req_id: () => String }
+effect Logger = { log: (String) => Unit }
+module Db { pub let query(q: String): Resp = ??? }
+pub let handle_req(q: String): Resp @ {ReqId, Logger} = {
+  perform log("handling " + perform req_id())
+  Db.query(q)
+}

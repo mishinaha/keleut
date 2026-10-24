@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let call0[R, E](f: () => R @ E): R @ E = f()
+let r = (perform ask() + 1) handle {
+  case ask() => resume(call0 { (perform ask() * 2) handle { case ask() => resume(20) } })
+}
+echoln(show(r))

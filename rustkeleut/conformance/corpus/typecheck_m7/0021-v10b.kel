@@ -1,0 +1,2 @@
+newtype Pair = P(Boolean, Boolean)
+let f(P(true, b): Pair): Boolean = b

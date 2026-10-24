@@ -1,0 +1,5 @@
+let z = (v match {
+  case a if fn => 1
+  case _ => 0
+})
+let p = 1

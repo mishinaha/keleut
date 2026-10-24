@@ -1,0 +1,5 @@
+echoln(show(1.0e16))
+echoln(show(12345678901234568.0))
+echoln(show(1.0e300))
+echoln(show(1.0e-5))
+echoln(show(0.0 - 1.0e16))

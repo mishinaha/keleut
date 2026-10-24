@@ -1,0 +1,3 @@
+newtype Box = Box(Int32)
+type class R3[T] { val r3[E]: (T, () => Unit @ E) => Unit @ E }
+type instance R3[Box] { let r3(b, f) = { echo("x"); () } }

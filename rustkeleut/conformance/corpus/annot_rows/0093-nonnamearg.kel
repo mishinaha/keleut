@@ -1,0 +1,4 @@
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let take(r: {go: () => Int32 @ Console}): Int32 @ Console = r.go()
+let use(): Int32 @ Console = take({go = mkp()})

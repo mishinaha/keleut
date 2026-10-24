@@ -1,0 +1,2 @@
+let user(): Int32 @ {Console, Print} = { println("p"); k(1) }
+let k: (Int32) => Int32 @ Console = fn(x) => { echoln("v"); x }

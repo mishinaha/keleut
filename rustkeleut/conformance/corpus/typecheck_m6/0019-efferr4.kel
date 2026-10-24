@@ -1,0 +1,6 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+let bad = fn(body) => body() handle {
+  case print(m) => fn() => resume(())
+  case return(x) => x
+}

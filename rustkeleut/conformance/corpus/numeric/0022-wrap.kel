@@ -1,0 +1,6 @@
+let maxi = 2147483647
+let mini = 0 - maxi - 1
+echoln(show(maxi + 1))
+echoln(show(mini - 1))
+echoln(show(maxi * 2))
+echoln(show(9223372036854775807i64 + 1i64))

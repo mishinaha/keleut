@@ -1,0 +1,7 @@
+type class C[A] { val m: (A) => Int32 }
+module M {
+  pub newtype T = Mk(Int32)
+  pub let mk(n: Int32): T = Mk(n)
+}
+type instance C[M.T] { let m(x) = 42 }
+echoln(show(C.m(M.mk(1))))

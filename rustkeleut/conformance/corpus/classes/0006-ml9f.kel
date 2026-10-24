@@ -1,0 +1,2 @@
+let ne = 1 != 2
+let z = show(1 + 1)

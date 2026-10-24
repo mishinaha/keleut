@@ -1,0 +1,6 @@
+newtype Box = Box(Int32)
+type class Pr[T] { val pr: (T) => Unit @ Console }
+type instance Pr[Box] { let pr(b) = b match { case Box(x) => echo("n") } }
+let use(b: Box): Unit @ {Console, Print} = pr(b)
+let use2(b: Box): Unit @ Console = pr(b)
+use2(Box(1))

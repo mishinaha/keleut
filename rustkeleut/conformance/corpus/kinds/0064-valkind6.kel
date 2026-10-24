@@ -1,0 +1,2 @@
+type P: EffectRow = {Print}
+type class C2[A] { val m: (A) => P }

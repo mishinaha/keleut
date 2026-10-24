@@ -1,0 +1,5 @@
+let g(v) = v match {
+  case x if fn(y) => y
+    (1) => x
+  case _ => 0
+}

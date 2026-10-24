@@ -1,0 +1,4 @@
+let fma[A: Add + Mul](x: A, y: A, z: A): A = x * y + z
+let lt3 = fn(x) => x < x
+let ne = 1 != 2
+let logic = true && !false || 1 == 1

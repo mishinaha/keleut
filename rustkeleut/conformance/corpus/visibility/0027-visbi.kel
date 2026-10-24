@@ -1,0 +1,3 @@
+module MutableArray {
+  pub let set[A](a: A, i: Int32, x: A): Unit = {}
+}

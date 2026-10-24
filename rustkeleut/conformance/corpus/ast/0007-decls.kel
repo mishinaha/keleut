@@ -1,0 +1,13 @@
+type Pair = (Int32, String)
+type Req: EffectRow = {ReqId, Logger}
+newtype UserId(Int32)
+newtype List[A] = Nil | Cons(A, tail: List[A])
+effect Console = { read: () => String, write: (String) => Unit }
+type class Eq[A] {
+  val eq: (A, A) => Boolean
+}
+type instance Eq[Point] {
+  let eq(a, b) = true
+}
+extern "prim" let __int32_add(x: Int32, y: Int32): Int32
+pub newtype Parser[A]

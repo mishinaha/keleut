@@ -1,0 +1,3 @@
+let b = 1
+let r = {a = b}
+echoln(show(r.a))

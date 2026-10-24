@@ -1,0 +1,5 @@
+let demo(): Int32 = run h {
+  let a = MutableArray.new(4, 0)
+  MutableArray.length(a)
+}
+echoln(show(demo()))

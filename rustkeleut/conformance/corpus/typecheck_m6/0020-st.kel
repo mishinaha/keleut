@@ -1,0 +1,3 @@
+let ok1 = run h { let r = Ref.new(0); Ref.set(r, 42); Ref.get(r) }
+let ok2 = run h { let x = run h2 { Ref.get(Ref.new(1)) }; x + 1 }
+let poly = fn(u) => Ref.new(0)

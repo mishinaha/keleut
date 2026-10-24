@@ -1,0 +1,2 @@
+let rec b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }
+and a[E](n: Int32): Int32 @ {Console extends E} = b(n)

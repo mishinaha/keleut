@@ -1,0 +1,3 @@
+echo(__string_sub("\u00e9", 0, 1))
+echo("|")
+echo(__string_sub("\U0001F600", 1, 2))

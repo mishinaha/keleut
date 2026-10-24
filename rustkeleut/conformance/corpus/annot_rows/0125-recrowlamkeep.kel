@@ -1,0 +1,3 @@
+let keep(f: () => Int32 @ Console): Int32 = 0
+let rec a(n: Int32): Int32 @ Console = keep(fn() => b(n))
+and b[F](n: Int32): Int32 @ {Console extends F} = { echo("b"); n }

@@ -1,0 +1,10 @@
+let pmap[A, B](xs: Array[A], f: (A) => B @ {}): Array[B] = ???
+newtype Cb = Cb((Int32) => Int32)
+let wrap(f: (Int32) => Int32 @ Console): Cb = Cb(f)
+let unwrap(c: Cb): (Int32) => Int32 @ {} = c match { case Cb(f) => f }
+let go(c: Cb): Int32 = run h {
+  let a = MutableArray.freeze(MutableArray.new(3, 7))
+  let b = pmap(a, unwrap(c))
+  Array.get(b, 0)
+}
+echoln(show(go(wrap(fn(x) => { echo("side!"); x + 1 }))))

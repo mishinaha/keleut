@@ -1,0 +1,5 @@
+type class C[A] {
+  val f: (A) => A
+  val g: (A) => A
+}
+type instance C[Int32] { let f(x) = x }

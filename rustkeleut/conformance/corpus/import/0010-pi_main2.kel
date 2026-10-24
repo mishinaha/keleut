@@ -1,0 +1,2 @@
+from "./lib" import { Describe, Box, describe }
+echoln(describe(Box(1i32)))

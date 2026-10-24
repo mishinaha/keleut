@@ -1,0 +1,2 @@
+newtype List[A] = Nil | Cons(A, tail: List[A])
+let bad = Cons(1)

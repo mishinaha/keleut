@@ -1,0 +1,1 @@
+let f[A](xs: List[A], ys: List[A]): Boolean = xs == ys

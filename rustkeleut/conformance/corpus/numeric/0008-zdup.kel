@@ -1,0 +1,7 @@
+let g(x: Float64): Int32 = x match {
+  case 0.0  => 1
+  case -0.0 => 2
+  case _    => 3
+}
+echoln(show(g(-0.0)))
+echoln(show(g(0.0)))

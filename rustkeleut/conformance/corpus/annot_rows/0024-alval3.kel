@@ -1,0 +1,3 @@
+type F = (Int32) => Int32
+let k: F = fn(x) => x
+let pure_use(): Int32 @ {} = k(1)

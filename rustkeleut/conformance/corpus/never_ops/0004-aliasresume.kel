@@ -1,0 +1,3 @@
+type Boom = Never
+effect Fail = { throw: (String) => Boom }
+let r = { perform throw("x"); 1 } handle { case throw(e) => resume(???) }

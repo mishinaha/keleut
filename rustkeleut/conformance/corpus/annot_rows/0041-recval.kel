@@ -1,0 +1,2 @@
+let rec k: (Int32) => Int32 @ Console = fn(n) => n match { case 0 => 0 case m => { echo("."); k(m - 1) } }
+let use(): Int32 @ {Console, Print} = { println("p"); k(3) }

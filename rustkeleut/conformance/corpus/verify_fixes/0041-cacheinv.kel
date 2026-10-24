@@ -1,0 +1,5 @@
+type class Pick2[A] { val pick2: (Int32, A) => Int32 }
+type instance Pick2[Int32] { let pick2(n, a) = a }
+echoln(show(pick2(0, 7)))
+type instance Pick2[String] { let pick2(n, a) = n }
+echoln(show(pick2(5, "x")))

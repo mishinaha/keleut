@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let with_ask(body: () => Int32 @ {Ask}): Int32 = body() handle { case ask() => resume(1) }
+echoln("before")
+let r = if false then with_ask(fn() => perform ask()) else 0
+echoln(show(r))
+echoln(show(with_ask(fn() => perform ask())))

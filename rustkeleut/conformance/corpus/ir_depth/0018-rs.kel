@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+effect Fail = { fail: () => Never }
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let inner() = { perform fail(); 0 } handle { case ask() => resume(0) case cancel => echoln(show(f(200))) }
+let r = inner() handle { case fail() => 7 }
+echoln(show(r))
+echoln(show(f(500)))

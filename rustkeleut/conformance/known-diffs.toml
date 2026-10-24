@@ -1,0 +1,253 @@
+# 既知の差の一覧(計画 261024-1 の 8.1 節)。
+# kconform は、ここに無い差が 1 件でもあれば失敗する。
+# 各項目は、試験のパスの末尾、`  $ ` の行の番号、組、理由、台帳の番号を持つ。
+#
+# V213: OCAMLRUNPARAM=l=... で OCaml のスタックの上限を絞るブロックは、
+# Diktor の木の評価器のスタックの限度を試すもので、語数を写さない。
+# 同じ意図の試験は conformance/depth/ と conformance/frontend-depth/ に作り直す。
+# 組 dk は本物の diktor をそのまま走らせるので、これらの項目に当たらない。
+
+[[diff]]
+file = "diktor/test/if.t"
+line = 259
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/if.t"
+line = 280
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/if.t"
+line = 298
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 168
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 170
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 176
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 180
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 185
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 195
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 206
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 208
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/run_exit.t"
+line = 215
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 12
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 23
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 33
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 46
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 60
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 71
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 82
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 97
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 124
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 138
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 149
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 163
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 180
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 191
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 219
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 221
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 243
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 245
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 260
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 262
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 285
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 287
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+ledger = "V213"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 307
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+ledger = "V213"

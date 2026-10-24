@@ -1,0 +1,5 @@
+effect Ask = { ask: () => Int32 }
+let call0[R, E](f: () => R @ E): R @ E = f()
+let r = (perform ask() + 1) handle {
+  case ask() => call0 { resume(41) }
+}

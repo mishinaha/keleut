@@ -1,0 +1,5 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+effect Fs = {}
+type WithPrint[E]: EffectRow = {Print extends E}
+let f[E](x: Int32): Int32 @ {Fs, WithPrint[E]} = x

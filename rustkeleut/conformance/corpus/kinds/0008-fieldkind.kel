@@ -1,0 +1,2 @@
+type Unit = {}
+newtype Bad[E] = Bad(() => Unit @ E, E)

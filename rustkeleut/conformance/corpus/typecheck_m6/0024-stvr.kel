@@ -1,0 +1,6 @@
+type Unit = {}
+let bad = run h {
+  let r = Ref.new(fn(x) => x)
+  Ref.set(r, fn(n) => n + 1)
+  Ref.get(r)(true)
+}

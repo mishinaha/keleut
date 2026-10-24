@@ -1,0 +1,4 @@
+let add(a: Int32, b: Int32): Int32 = a + b
+let rec f(n: Int32): Int32 = n match { case 0 => add(1, 2) case _ => 1 + f(n - 1) }
+echoln(show(f(98)))
+echoln(show(f(99)))

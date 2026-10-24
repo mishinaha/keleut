@@ -1,0 +1,6 @@
+module M {
+  pub newtype A9[X] = MkA9(B9[{Print extends X}])
+  pub newtype B9[Y] = MkB9(C9[Y])
+  pub newtype C9[E] = MkC9(() => Unit @ E)
+}
+let f[E](x: M.A9[E]): M.A9[E] = x

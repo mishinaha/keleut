@@ -1,0 +1,3 @@
+let k: (Int32) => Int32 @ Console = fn(x) => { echoln("v"); x }
+let use(): Int32 @ {Console, Print} = { println("p"); k(1) }
+with_stdout(fn() => use())

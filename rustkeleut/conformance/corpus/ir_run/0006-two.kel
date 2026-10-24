@@ -1,0 +1,4 @@
+effect Two = { a: () => Int32, b: () => Int32 }
+let x(): Int32 @ {Two} = perform a() + perform b()
+let inner(): Int32 @ {Two} = x() handle { case a() => resume(1) case b() => resume(2) }
+let main: Int32 = inner() handle { case a() => resume(100) case b() => resume(20) }

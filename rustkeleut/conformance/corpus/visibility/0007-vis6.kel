@@ -1,0 +1,6 @@
+module Big {
+  pub newtype Big = Small(Int32)
+  pub let mk(n: Int32): Big = Small(n)
+}
+type MyBig = Big
+let v(): MyBig = Big.mk(1)

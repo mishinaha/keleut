@@ -1,0 +1,2 @@
+newtype List[A] = Cons(A, tail: List[A]) | Nil
+type instance[A: Eq] Eq[List[_]] { let rec eq(xs: List[A], ys: List[A]): Boolean = true }

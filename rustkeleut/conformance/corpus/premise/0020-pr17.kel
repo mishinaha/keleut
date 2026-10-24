@@ -1,0 +1,9 @@
+newtype Pair[A, B] = MkPair(fst: A, snd: B)
+newtype Opaque = MkOpaque(Int32)
+type class Sh[A] { val sh: (A) => String }
+type instance Sh[Int32] { let sh(x) = "i" }
+type instance[A: Eq, B: Sh] Eq[Pair[_, _]] {
+  let eq(p, q) = (p, q) match { case (MkPair(a, b), MkPair(c, d)) => a == c && sh(b) == sh(d) }
+}
+let ok(p: Pair[Int32, Int32], q: Pair[Int32, Int32]): Boolean = p == q
+let ng1(p: Pair[Int32, Opaque], q: Pair[Int32, Opaque]): Boolean = p == q

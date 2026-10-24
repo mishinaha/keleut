@@ -1,0 +1,2 @@
+pub newtype P = P(Int32)
+type instance Show[P] { let show(p) = p match { case P(n) => "P" + show(n) } }

@@ -1,0 +1,5 @@
+module M {
+  let rec f(): Int32 = { let _ = g(???); 0 }
+  and g(y) = show(y)
+  pub let u(): Int32 = f()
+}

@@ -1,0 +1,5 @@
+module M {
+  pub newtype Pub = Q(Int32)
+}
+let x = M.Q(1)
+let y(v: M.Pub): Int32 = v match { case M.Q(n) => n }

@@ -1,0 +1,6 @@
+effect Nop = { nop: () => Int32 }
+let g(t: #A | #B | #C): Int32 = t match { case #A => 1  case #B => 2  case #C => 3 }
+let f(v) = v handle {
+  case nop() => resume(1)
+  case return(#A) => { let z = 1; g(v) }
+}

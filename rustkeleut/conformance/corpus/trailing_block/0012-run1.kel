@@ -1,0 +1,7 @@
+let each[A, E](xs: Array[A], f: (A) => Unit @ E): Unit @ E = Array.each(xs, f)
+let sum(xs: Array[Int32]): Int32 = run h {
+  let acc = Ref.new(0)
+  each(xs) { x => Ref.set(acc, Ref.get(acc) + x) }
+  Ref.get(acc)
+}
+echoln(show(sum(run h { MutableArray.freeze(MutableArray.new(4, 5)) })))

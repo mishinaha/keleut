@@ -1,0 +1,10 @@
+newtype List[A] = Cons(A, tail: List[A]) | Nil
+newtype Opaque = MkOpaque(Int32)
+type instance[A: Eq] Eq[List[_]] {
+  let rec eq(xs, ys) = (xs, ys) match {
+    case (Nil, Nil)                 => true
+    case (Cons(x, xt), Cons(y, yt)) => x == y && eq(xt, yt)
+    case _                          => false
+  }
+}
+let ng = Cons(MkOpaque(1i32), Nil) == Cons(MkOpaque(1i32), Nil)

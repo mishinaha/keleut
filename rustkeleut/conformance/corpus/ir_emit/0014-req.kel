@@ -1,0 +1,5 @@
+newtype Y = Y(Int32)
+type instance Eq[Y] { let eq(a, b) = ??? }
+let r = {a = 1, b = Y(1)} == {a = 2, b = Y(1)}
+echoln(show(r))
+let r2 = {a = 1, b = Y(1)} == {a = 1, b = Y(1)}

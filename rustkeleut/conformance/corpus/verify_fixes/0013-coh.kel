@@ -1,0 +1,2 @@
+type instance Add[Int32] { let add(x, y) = __int32_sub(x, y) }
+echoln(show(2 + 3))

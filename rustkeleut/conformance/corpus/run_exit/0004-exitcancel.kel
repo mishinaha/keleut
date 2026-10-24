@@ -1,0 +1,8 @@
+effect Ask = { ask: () => Int32 }
+let z = 0
+echoln("start")
+let r = (perform ask() / z) handle {
+  case ask() => resume(1)
+  case cancel => echoln("cancel ran")
+}
+echoln("after")

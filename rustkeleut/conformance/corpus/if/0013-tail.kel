@@ -1,0 +1,13 @@
+let rec loop(n: Int32, acc: Int32): Int32 = if n == 0 then acc else loop(n - 1, acc + 1)
+let rec down(n: Int32): Int32 = if n != 0 then down(n - 1) else 0
+let rec even(n: Int32): Boolean = if n == 0 then true else if n == 1 then false else odd(n - 1)
+and odd(n: Int32): Boolean = if n == 0 then false else even(n - 1)
+let rec blk(n: Int32): Unit = {
+  let m = n - 1
+  if n == 0 then () else { let k = m; blk(k) }
+}
+echoln(show(loop(100000, 0)))
+echoln(show(down(100000)))
+echoln(show(even(100000)))
+blk(100000)
+echoln("ok")

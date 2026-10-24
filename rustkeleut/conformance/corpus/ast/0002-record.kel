@@ -1,0 +1,6 @@
+let r = {x = 1, y = 2}
+let pan = {x, y}
+let upd = {r with x = 3}
+let ext = {z = 4 extends r}
+let res = r \ x
+let sel = r.x

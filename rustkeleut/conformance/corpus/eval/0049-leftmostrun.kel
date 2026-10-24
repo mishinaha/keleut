@@ -1,0 +1,14 @@
+effect E1 = { op: (String) => {} }
+effect E2 = { op: (String) => {} }
+let f[E](): {} @ {E1, E2 extends E} = perform E1.op("f")
+let h1[A, E](b: () => A @ {E1, Console extends E}): A @ {Console extends E} =
+  b() handle {
+    case E1.op(s) => resume(echo("E1:" + s + "\n"))
+    case return(x) => x
+  }
+let h2[A, E](b: () => A @ {E2, Console extends E}): A @ {Console extends E} =
+  b() handle {
+    case E2.op(s) => resume(echo("E2:" + s + "\n"))
+    case return(x) => x
+  }
+h1(fn() => h2(fn() => f()))

@@ -1,0 +1,9 @@
+let getx = fn(r) => r.x + 1
+let shadow = {
+  let r = {x = 1, y = true}
+  let r2 = {x = "hello" extends r}
+  {outer = r2.x, inner = (r2 \ x).x}
+}
+let fst2[A, R](t: {_item: A extends R}): A = t._0
+let swap[A, B](p: (A, B)): (B, A) = (p._1, p._0)
+let update = fn(p) => {p with x = 1.5}

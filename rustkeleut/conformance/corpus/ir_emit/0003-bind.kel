@@ -1,0 +1,6 @@
+let f((a, b): (Int32, Int32), _: String, c: Int32): Int32 = {
+  let (x, y) = (b, a)
+  let rec even(n: Int32): Boolean = if n == 0 then true else odd(n - 1)
+  and odd(n: Int32): Boolean = if n == 0 then false else even(n - 1)
+  if even(c) then x else y
+}

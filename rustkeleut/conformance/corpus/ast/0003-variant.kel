@@ -1,0 +1,6 @@
+let v = #Point(1, 2)
+let e = #Empty
+let m = v match {
+  case #Point(x, y) if x == y => x
+  case _ => 0
+}

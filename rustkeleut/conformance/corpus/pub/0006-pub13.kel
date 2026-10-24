@@ -1,0 +1,3 @@
+pub let rec ping(n: Int32): Int32 = n match { case 0 => 0 case m => pong(m - 1) }
+and pong(n: Int32): Int32 = n match { case 0 => 1 case m => ping(m - 1) }
+echoln(show(ping(5)))

@@ -1,0 +1,2 @@
+newtype Pair[A, B] = MkPair(fst: A, snd: B)
+type instance[A: Eq] Eq[Pair[_]] { let eq(p, q) = true }

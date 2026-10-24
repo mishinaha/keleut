@@ -1,0 +1,2 @@
+type class Alpha[A] { val sz: (A) => Int32 }
+type class Beta[A]  { val sz: (A) => Int32 }

@@ -1,0 +1,4 @@
+type class Pick[A] { val pick: (Int32, A) => Int32 }
+type instance Pick[Int32]  { let pick(n, a) = a }
+type instance Pick[String] { let pick(n, a) = n }
+echoln(show(pick(0, "boom")))

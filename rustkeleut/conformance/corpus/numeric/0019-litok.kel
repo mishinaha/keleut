@@ -1,0 +1,12 @@
+let f(x: Int32): Int32 = x match {
+  case 2147483647 => 1
+  case -2147483648 => 2
+  case 0xFFFFFFFF => 3
+  case _ => 4
+}
+let id[A](y: A): A = y
+let g(n: Int64): Int32 = {
+  let k = id(fn(x) => x match { case 4294967295 => 1  case _ => 2 })
+  k(n)
+}
+echoln(show(f(0 - 1)) + show(g(4294967295i64)))

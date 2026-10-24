@@ -1,0 +1,5 @@
+effect Parser = { next: () => Int32, fail: (String) => Never }
+let r = ({ perform next() }) handle {
+  case next() => resume(1)
+  case fail(m) => resume(???)
+}

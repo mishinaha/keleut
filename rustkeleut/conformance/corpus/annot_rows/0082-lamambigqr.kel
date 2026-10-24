@@ -1,0 +1,3 @@
+effect File = { read: () => String, write: (String) => Unit }
+effect G = { get: () => () => Unit @ {Console, File} }
+let use(): Unit = { let f = perform get(); () } handle { case get() => resume(fn() => { echoln("a"); perform write("b") }) }

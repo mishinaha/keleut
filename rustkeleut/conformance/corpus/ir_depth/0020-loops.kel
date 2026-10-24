@@ -1,0 +1,9 @@
+effect Tick = { tick: () => Unit }
+effect Fail = { fail: () => Never }
+let rec ticks(n: Int32): Unit @ {Tick} = if n == 0 then () else { perform tick(); ticks(n - 1) }
+let rec retry(n: Int32): Int32 = (if n == 0 then 0 else { perform fail(); 1 }) handle { case fail() => retry(n - 1) }
+ticks(100000) handle { case tick() => resume(()) }
+echoln("T")
+ticks(100000) handle { case tick() => if false then { let r = resume(()); r } else resume(()) }
+echoln("G")
+echoln(show(retry(100000)))

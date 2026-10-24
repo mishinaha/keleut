@@ -1,0 +1,2 @@
+let v: Int32 = { 5; let g(n: Int32): Int32 = n }
+echoln(show(v))

@@ -1,0 +1,7 @@
+effect Ask = { ask: () => Int32 }
+effect Tick = { tick: () => Unit }
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
+let inner(n: Int32): Int32 @ {Tick} = { perform tick(); 0 } handle { case ask() => resume(0) case return(v) => f(n) }
+let outer(n: Int32): Int32 = inner(n) handle { case tick() => { let r = resume(()); r } }
+echoln(show(outer(95)))
+echoln(show(outer(96)))

@@ -1,0 +1,7 @@
+type Unit = {}
+effect Console = { write: (String) => Unit }
+let echoln(message: String): Unit @ Console = perform write(message + "\n")
+module PM {
+  let foo: Int32 = 1
+  pub let get(): Int32 = foo
+}

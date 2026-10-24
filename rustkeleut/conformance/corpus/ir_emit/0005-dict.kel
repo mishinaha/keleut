@@ -1,0 +1,15 @@
+type class Pretty[A] {
+  val pretty: (A) => String
+  val both[B: Show]: (A, B) => String
+}
+newtype Box[A] = Box(A)
+type instance[A: Show] Pretty[Box[_]] {
+  let pretty(b) = b match { case Box(x) => show(x) }
+  let both(b, y) = pretty(b) + show(y)
+}
+let twice[A: Pretty](x: A): String = pretty(x) + pretty(x)
+let dbl = fn(x) => x + x
+let nine = dbl(4.5)
+let s = twice(Box(1))
+let ne = (1, true) != (2, false)
+let m = -(2.5)

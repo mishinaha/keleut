@@ -1,0 +1,7 @@
+let t = (1, "a", true)
+let one = (1,)
+let grouped = (1)
+let first = t._0
+let second = t._1
+let f = fn(x, y) => x
+let call = f(1, 2)

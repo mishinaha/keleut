@@ -1,0 +1,14 @@
+type class C1[A] { val a: (A) => Int32 }
+type class C2[A] { val b: (A) => Int32; val c: (A) => Int32 }
+newtype T = T
+type instance C1[T] { let a(t: T): Int32 = 1 }
+type instance C2[T] { let b(t: T): Int32 = 2; let c(t: T): Int32 = 3 }
+effect Out = { write: (String) => Int32 }
+extern "prim" let __int32_neg[A: Show](x: A): Int32
+let twice[A: Add](x: A): A = x + x
+let f(x: Int32): Int32 = { let p = x + 1; let q = p * 2; q }
+let o(): Int32 @ {Out} = perform write("x")
+let r: Int32 = a(T) + b(T) + twice(1) + f(2) + __int32_neg(1)
+newtype U = U1(Int32) | U2(Int32)
+let m(u: U): Int32 = u match { case U1(x) => x case U2(y) => y }
+let e: Boolean = {a = m(U1(1))} == {a = 1}

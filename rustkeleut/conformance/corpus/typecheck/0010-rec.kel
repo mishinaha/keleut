@@ -1,0 +1,4 @@
+let rec even(n) = n == 0 || odd(n - 1)
+and odd(n) = !(n == 0) && even(n - 1)
+let forward(x: Int32): Int32 @ {} = helper(x)
+let helper(y: Int32): Int32 @ {} = y + 1

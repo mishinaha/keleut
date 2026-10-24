@@ -1,0 +1,6 @@
+let a: Float64 = 12345678901234568.0
+let b: Float64 = 1e16
+let c: Float64 = 1e-5
+echoln(show(a))
+echoln(show(b))
+echoln(show(c))

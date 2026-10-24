@@ -1,0 +1,4 @@
+type P: EffectRow = {Print}
+newtype Box = Box(Int32)
+type class C[A] { val m: (A) => Int32 }
+type instance C[Box] { let m(b): P = ??? }

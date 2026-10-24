@@ -1,0 +1,2 @@
+type P: EffectRow = {Print}
+let rec f(x: Int32): P = f(x)

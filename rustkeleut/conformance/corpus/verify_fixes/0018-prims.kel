@@ -1,0 +1,4 @@
+echoln(show(__string_le("a","b")) + show(__string_gt("a","b")) + show(__string_ge("a","a")))
+echoln(show(__int64_le(1i64,2i64)) + show(__int64_gt(1i64,2i64)) + show(__int64_ge(2i64,2i64)))
+echoln(show(__float64_le(1.0,2.0)) + show(__float64_gt(1.0,2.0)) + show(__float64_ge(2.0,2.0)))
+echoln(__show_int32(42))

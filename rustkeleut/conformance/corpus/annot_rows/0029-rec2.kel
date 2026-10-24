@@ -1,0 +1,2 @@
+let rec loop(f: (Int32) => Int32, n: Int32): Int32 = n match { case 0 => 0 case m => loop(f, m - 1) + f(m) }
+let r(): Int32 @ Console = loop(fn(x) => x, 3)

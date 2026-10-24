@@ -1,0 +1,3 @@
+let each3[E](f: (Int32) => Unit @ E): Unit @ E = { f(1); f(2); f(3) }
+each3 { x => }
+echoln("done")

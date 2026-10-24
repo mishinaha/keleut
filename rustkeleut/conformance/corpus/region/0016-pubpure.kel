@@ -1,0 +1,1 @@
+pub let wipe[h](a: MutableArray[h, Int32]): Unit = run h2 { MutableArray.set(a, 0, 7) }

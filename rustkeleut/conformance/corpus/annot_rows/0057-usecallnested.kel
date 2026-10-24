@@ -1,0 +1,3 @@
+let a(): Unit @ {} = ()
+let app[E](mk: () => () => Unit @ E): Unit @ E = { let g = mk(); g() }
+let use(): Unit @ Console = app(fn() => a)

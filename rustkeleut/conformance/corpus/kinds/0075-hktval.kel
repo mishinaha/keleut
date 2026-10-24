@@ -1,0 +1,2 @@
+type Unit = {}
+newtype W[F[_]] = MkW((F, Int32))

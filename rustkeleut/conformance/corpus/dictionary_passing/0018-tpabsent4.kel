@@ -1,0 +1,1 @@
+extern "prim" let f[A: Show](x: Int32): Int32

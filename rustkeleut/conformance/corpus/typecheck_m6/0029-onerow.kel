@@ -1,0 +1,6 @@
+type Unit = {}
+effect E1 = { op: (String) => Unit }
+effect E2 = { op: (String) => Unit }
+let f(): Unit @ {E1, E1, E2} = perform E2.op("x")
+let g(): Unit @ {E1, E1} = perform op("g")
+let h[E](): Unit @ {E2 extends E} = perform op("h")

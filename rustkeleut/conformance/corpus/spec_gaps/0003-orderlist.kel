@@ -1,0 +1,5 @@
+let h = fn(f, r: {k: () => Unit}) => {
+  let xs = Cons(f, Cons(r.k, Nil))
+  f()
+  echoln("x")
+}

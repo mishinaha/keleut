@@ -1,0 +1,3 @@
+type Unit = {}
+newtype Box[A] = Box(A)
+let f[E](g: () => Unit @ E): Box[E] = ???

@@ -1,0 +1,4 @@
+effect A = { a: (() => Unit @ {B}) => Unit }
+type class C[T] { val m: (T) => Unit @ {B} }
+effect B = { b: () => Unit }
+let g(): Unit @ {A} = perform a(fn() => {})

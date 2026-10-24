@@ -1,0 +1,4 @@
+let twice2[E](f: () => Unit @ E, g: () => Unit @ E): Unit @ E = { f(); g() }
+let pure_fn(): Unit @ {} = ()
+let printer(): Unit @ Console = echoln("p")
+let t(): Unit @ Console = twice2(pure_fn, printer)

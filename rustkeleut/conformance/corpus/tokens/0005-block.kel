@@ -1,0 +1,8 @@
+let g = fn(v) => {
+  let w = v \ tag
+  w match {
+    case Some(x)
+      if x == 1 => x
+    case _ => 0
+  }
+}

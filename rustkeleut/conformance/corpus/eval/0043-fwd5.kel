@@ -1,0 +1,4 @@
+let f[E](): Int32 @ E = g(1)
+let show(x: Int32): String = "SHADOW"
+let g[E](x: Int32): Int32 @ E = x + 1
+echoln(f() match { case 2 => "two" case _ => "other" })

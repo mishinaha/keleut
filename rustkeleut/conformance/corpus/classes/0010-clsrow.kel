@@ -1,0 +1,8 @@
+type Unit = {}
+newtype Box[A] = Box(A)
+type class Mapper2[F[_]] {
+  val fmap2[X, Y]: (F[X], (X) => Y) => F[Y]
+}
+type instance Mapper2[Box[_]] {
+  let fmap2(b, f) = b match { case Box(x) => Box(f(x)) }
+}

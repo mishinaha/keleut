@@ -1,0 +1,13 @@
+effect St = { get: () => Int32, put: (Int32) => {}, quit: (Int32) => Never }
+let st(init: Int32, body: () => Int32 @ {St}): Int32 = {
+  let base = init
+  body() handle {
+    case get() => resume(base)
+    case put(n) if n < 0 => { let r = resume(()); r + n }
+    case put(n) => resume(())
+    case quit(code) => code + base
+    case return(v) => v
+    case cancel => ()
+  }
+}
+let prog(): Int32 = st(1, fn() => { perform put(perform get() + 1); perform quit(7) })

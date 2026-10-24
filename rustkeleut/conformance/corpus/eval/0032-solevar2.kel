@@ -1,0 +1,7 @@
+type AB = #A(Int32) | #B
+effect Ask = { ask: (AB) => Int32 }
+let r = perform ask(#A(3)) handle {
+  case ask(#A(n)) => resume(n)
+  case return(x) => x
+}
+echoln(show(r))

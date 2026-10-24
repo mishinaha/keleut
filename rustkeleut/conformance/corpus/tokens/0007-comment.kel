@@ -1,0 +1,5 @@
+#!/usr/bin/env diktor
+let a = 1 // 行コメント
+let b = /* 入れ子 /* の */ コメント */ 2
+let c = 3 /* 改行入り
+  コメント */ let d = 4

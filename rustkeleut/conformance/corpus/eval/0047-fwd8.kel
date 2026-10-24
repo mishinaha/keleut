@@ -1,0 +1,3 @@
+let f(): Int32 = show(42)
+let show[E](x: Int32): Int32 @ E = 99
+echoln(Show.show(f() + 1))

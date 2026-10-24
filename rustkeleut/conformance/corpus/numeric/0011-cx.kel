@@ -1,0 +1,15 @@
+let g(s: String): Int32 = s match {
+  case "a" => 1
+  case "b" => 2
+}
+let h(x: Float64): Int32 = x match {
+  case 0.0 => 1
+  case 1.0 => 2
+}
+let k(n: Int32): Int32 = n match {
+  case 0 => 1
+  case 1 => 2
+}
+let e(s: String): Int32 = s match {
+  case "" => 1
+}

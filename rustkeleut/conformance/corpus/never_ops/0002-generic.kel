@@ -1,0 +1,6 @@
+effect Fail = { throw: (String) => Never }
+let abort[A](m: String): A @ Fail = perform throw(m)
+let n: Int32 = abort("x") handle { case throw(e) => 42 }
+echoln(show(n))
+let s: String = abort("y") handle { case throw(e) => "s:" + e }
+echoln(s)

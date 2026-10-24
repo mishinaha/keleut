@@ -1,0 +1,9 @@
+effect Log = { log: (String) => Unit }
+newtype A = MkA(B[{}])
+newtype B[E] = MkB((() => Unit @ E, () => Unit @ {Log}))
+let main() = {
+  let a = MkA(MkB((fn() => {}, fn() => perform log("x"))))
+  a match { case MkA(MkB((g, _))) => g() }
+  echoln("ok")
+}
+main()

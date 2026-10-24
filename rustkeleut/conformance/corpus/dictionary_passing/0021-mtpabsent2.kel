@@ -1,0 +1,1 @@
+type class Pp[F[_]] { val pp[A, B: Show + Eq]: (F[A]) => String }

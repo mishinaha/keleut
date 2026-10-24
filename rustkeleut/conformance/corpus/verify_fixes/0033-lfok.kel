@@ -1,0 +1,15 @@
+effect Ask = { ask: () => Int32 }
+effect Ask2 = { ask2: () => Int32 }
+let r = (perform ask() + 1) handle {
+  case ask() => {
+    let one() = 1
+    let g() = (perform ask2() + 1) handle {
+      case ask2() => resume(38)
+      case return(y) => y
+    }
+    let v = resume(g() + one() + 1)
+    v
+  }
+  case return(x) => x
+}
+echoln(show(r))

@@ -1,0 +1,6 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype A7[X] = MkA7(B7[{Print extends X}])
+newtype B7[Y] = MkB7(C7[Y])
+newtype C7[E] = MkC7(() => Unit @ E)
+let f[E](x: A7[E]): A7[E] = x

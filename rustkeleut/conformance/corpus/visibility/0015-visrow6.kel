@@ -1,0 +1,8 @@
+type W: EffectRow = {Console}
+type T = String
+module M {
+  pub type W: EffectRow = {Print}
+  pub type T = Int32
+  let f(x: T): T @ W = x
+}
+let g(x: T): T @ W = x

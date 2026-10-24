@@ -1,0 +1,6 @@
+pub newtype Shape = Circle(Float64) | Square(Float64)
+let helper(x: Float64): Float64 = x * x
+pub let area(s: Shape): Float64 = s match {
+  case Circle(r) => 3.0 * helper(r)
+  case Square(a) => helper(a)
+}

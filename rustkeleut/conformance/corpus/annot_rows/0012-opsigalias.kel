@@ -1,0 +1,3 @@
+type P: EffectRow = {}
+effect Reg = { reg: (() => Unit @ P) => Unit }
+let use(f: () => Unit @ Console): Unit @ Reg = perform reg(f)

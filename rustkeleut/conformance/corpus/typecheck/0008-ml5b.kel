@@ -1,0 +1,1 @@
+let bad[A](x: A): A = x + 1

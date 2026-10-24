@@ -1,0 +1,20 @@
+effect Res = { use: (String) => Unit }
+effect Ask = { ask: (Int32) => Int32 }
+let with_res[A, E](name: String, body: () => A @ {Res, Console extends E}): A @ {Console extends E} =
+  body() handle {
+    case use(s)    => resume(echoln(name + " uses " + s))
+    case return(x) => { echoln("close " + name); x }
+    case cancel    => echoln("cancel " + name)
+  }
+let main() = {
+  with _ = with_res("r1")
+  perform use("a")
+  let n = perform ask(1)
+  echoln("got " + show(n))
+} handle {
+  case ask(n) if ??? => resume(n)
+  case ask(n) => resume(n * 10)
+  case return(x) => x
+  case cancel => echoln("cancel outer")
+}
+main()

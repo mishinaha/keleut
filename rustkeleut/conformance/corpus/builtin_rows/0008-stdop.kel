@@ -1,0 +1,4 @@
+let f(): Int32 @ Console = { echoln("a"); 1 + 2 * 3 - -4 }
+let s(): String @ Print = { println("b"); show(1 < 2) + show(3 % 2) }
+echoln(with_stdout(fn() => s()))
+echoln(show(f()))

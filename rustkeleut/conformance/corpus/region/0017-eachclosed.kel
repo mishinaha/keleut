@@ -1,0 +1,2 @@
+let g(x: Int32): {} @ {} = {}
+let use(xs: Array[Int32]): {} = run h { Array.each(xs, g) }

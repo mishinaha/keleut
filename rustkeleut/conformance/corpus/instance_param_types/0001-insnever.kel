@@ -1,0 +1,6 @@
+type class D1[A] { val d1: (A) => String }
+type class D2[A] { val d2: (A) => String }
+type class D3[A] { val d3: (A) => String }
+type instance D1[Never] { let d1(n) = n match {} }
+type instance D2[Never] { let d2 = fn(n) => n match {} }
+type instance D3[Never] { let rec d3(n) = n match {} }

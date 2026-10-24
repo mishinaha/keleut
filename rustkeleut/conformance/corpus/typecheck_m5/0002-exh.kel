@@ -1,0 +1,16 @@
+newtype Option[A] = None | Some(A)
+let partial = fn(o) => o match { case Some(x) => x }
+let deep = fn(o) => o match {
+  case Some(Some(x)) => x
+  case None => 0
+}
+let bools = fn(a, b) => (a, b) match {
+  case (true, _) => 1
+  case (false, true) => 2
+}
+let redundant = fn(a, b) => (a, b) match {
+  case (true, _) => 1
+  case (_, true) => 2
+  case (false, false) => 3
+  case (true, true) => 4
+}

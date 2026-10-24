@@ -1,0 +1,2 @@
+echoln(show(__string_length("あ")))
+echoln(__string_sub("あい", 0, 3))

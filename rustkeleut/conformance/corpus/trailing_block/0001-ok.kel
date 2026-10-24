@@ -1,0 +1,32 @@
+let call_with[A, B, E](x: A, f: (A) => B @ E): B @ E = f(x)
+let after[R, E](msg: String, f: () => R @ {Console extends E}): R @ {Console extends E} = {
+  echoln(msg)
+  f()
+}
+let twice[E](f: () => Unit @ E): Unit @ E = {
+  f()
+  f()
+}
+let apply3[R, E](f: (Int32) => R @ E): R @ E = f(3)
+module M {
+  pub let call0[R, E](f: () => R @ E): R @ E = f()
+  pub let apply7[R, E](f: (Int32) => R @ E): R @ E = f(7)
+}
+echoln(show(after("call") { 5 }))
+echoln(show(call_with(20) { x => x + 1 }))
+echoln(call_with(Some(3)) {
+  case Some(n) => show(n)
+  case None => "none"
+})
+echoln(show(M.call0 { 1 + 2 }))
+echoln(show(M.apply7 { x => x * 2 }))
+echoln(M.apply7 { case 7 => "seven"
+  case _ => "other" })
+twice { echoln("twice") }
+echoln(show(apply3 { x => x * 100 }))
+echoln(apply3 { case 0 => "zero"
+  case _ => "nonzero" })
+echoln(show(call_with(1) { x =>
+  let y = x + 1
+  call_with(y) { z => z * 10 }
+}))

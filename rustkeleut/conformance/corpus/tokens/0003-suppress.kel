@@ -1,0 +1,6 @@
+let s = f(a,
+          b)
+let r = {x = 1,
+         y = 2}
+let l = xs[
+  0]

@@ -1,0 +1,8 @@
+extern "C" let sin(x: Float64): Float64 @ {}
+pub extern "C" let cos[E](x: Float64): Float64 @ E
+let pure(x: Float64): Float64 @ {} = sin(x)
+let loud(x: Float64): Float64 @ Console = { echo("x "); cos(x) }
+pub let wrap(x: Float64): Float64 = sin(x) + cos(x)
+echoln(show(pure(0.0)))
+echoln(show(loud(0.0)))
+echoln(show(wrap(0.0)))

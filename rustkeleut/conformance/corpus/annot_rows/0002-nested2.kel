@@ -1,0 +1,4 @@
+type Unit = {}
+effect A = { opa: () => Unit }
+let call_pure(f: () => Unit): Unit = f()
+let bad(): Unit @ A = call_pure(fn() => perform opa())

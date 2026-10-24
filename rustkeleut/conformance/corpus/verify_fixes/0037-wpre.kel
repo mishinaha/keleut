@@ -1,0 +1,2 @@
+newtype Opt3[A] = None3 | Some3(A)
+let pf = fn(o) => o match { case Some3(x) => x }

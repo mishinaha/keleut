@@ -1,0 +1,1 @@
+let f[G](v: #A(Int32) | G[Int32]): Int32 = 0

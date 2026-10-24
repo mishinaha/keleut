@@ -1,0 +1,3 @@
+let f(v: #Even | #Odd): Int32 = v match {
+  case #Even | #Odd => 1
+}

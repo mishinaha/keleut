@@ -1,0 +1,2 @@
+extern "C" let __nosuch_prim_name(x: Int32): Int32
+echoln(show(__nosuch_prim_name(1)))

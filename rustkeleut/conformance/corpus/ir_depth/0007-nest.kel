@@ -1,0 +1,3 @@
+let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + { let a = { let b = { let c = { let d = { let e = { let g = { let h = { let i = f(n - 1); i }; h }; g }; e }; d }; c }; b }; a }
+echoln(show(f(98)))
+echoln(show(f(99)))

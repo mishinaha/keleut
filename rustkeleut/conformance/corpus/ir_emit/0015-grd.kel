@@ -1,0 +1,6 @@
+effect Ask = { ask: () => Int32 }
+let f(body: () => Int32 @ {Ask}): Int32 = body() handle {
+  case ask() => 1 match { case _ if resume(1) == 2 => 3
+                          case _ => 4 }
+}
+echoln(show(f(fn() => perform ask() + 1)))

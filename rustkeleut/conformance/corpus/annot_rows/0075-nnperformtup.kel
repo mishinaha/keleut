@@ -1,0 +1,6 @@
+effect Reg = { reg: ((() => Unit @ Console, Int32)) => Unit }
+effect Reg2 = { reg2: (() => Unit @ Console) => Unit }
+let a(): Unit @ {} = ()
+let mk(): () => Unit @ {} = a
+let use(): Unit @ Reg = perform reg((mk(), 1))
+let use2(r: {go: () => Unit @ {}}): Unit @ Reg2 = perform reg2(r.go)

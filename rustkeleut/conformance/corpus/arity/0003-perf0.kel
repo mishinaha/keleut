@@ -1,0 +1,2 @@
+effect Ask = { ask: (Int32) => Int32 }
+let f(): Int32 @ Ask = perform ask()

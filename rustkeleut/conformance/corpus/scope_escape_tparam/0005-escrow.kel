@@ -1,0 +1,4 @@
+let bad = fn(y) => {
+  let f[E](go: () => Unit @ E): Unit @ E = { y(go); go() }
+  f
+}

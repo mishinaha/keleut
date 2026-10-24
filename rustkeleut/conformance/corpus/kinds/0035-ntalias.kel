@@ -1,0 +1,8 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback22[E] = MkCb22(() => Unit @ E)
+type Cb22[E] = Callback22[E]
+newtype N22 = MkN22(Cb22[{Print}])
+newtype M22 = MkM22(A22[{}])
+type A22[E] = (Int32) => Unit @ E
+let f(n: N22, m: M22): Int32 = 0

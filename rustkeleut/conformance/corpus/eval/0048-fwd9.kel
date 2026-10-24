@@ -1,0 +1,3 @@
+type class W[A] { val __string_length: (A) => Int32 }
+type instance W[String] { let __string_length(x) = 999 }
+echoln(show(__string_length("abcdefgh")))

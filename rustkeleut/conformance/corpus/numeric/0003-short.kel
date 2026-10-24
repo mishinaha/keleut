@@ -1,0 +1,5 @@
+echoln(show(0.0001))
+echoln(show(0.00001))
+echoln(show(0.000123))
+echoln(show(100000.0))
+echoln(show(1.0e15))

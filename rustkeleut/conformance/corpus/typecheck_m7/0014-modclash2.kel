@@ -1,0 +1,5 @@
+module A { pub newtype T = TA(Int32) }
+module B { pub newtype T = TB(Int32) }
+let x: A.T = TA(1)
+let y: B.T = TB(2)
+echoln(show(x match { case TA(n) => n }) + show(y match { case TB(n) => n }))

@@ -1,0 +1,5 @@
+type Unit = {}
+effect ReqId  = { req_id: () => String }
+effect Logger = { log: (String) => Unit }
+type Request: EffectRow = {ReqId, Logger}
+let logged(): Unit @ Request = perform log(perform req_id())

@@ -1,0 +1,2 @@
+let a(): Int32 @ {} = 1
+let mk(): {go: () => Int32 @ Console} = {go = a}

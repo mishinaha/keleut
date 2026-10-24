@@ -1,0 +1,4 @@
+newtype Two[R] = Two(() => Int32 @ R, () => Int32 @ R)
+let mkp(): () => Int32 = fn() => 1
+let b(): Int32 @ Console = { echo("b"); 2 }
+let t = Two(mkp(), b)

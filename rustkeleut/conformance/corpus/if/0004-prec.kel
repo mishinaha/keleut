@@ -1,0 +1,4 @@
+echoln(show(if true then 1 else 2 + 10))
+echoln(show((if true then 1 else 2) + 10))
+echoln(show(if true then Some(1) else None match { case Some(x) => Some(x + 1) case None => None }))
+echoln(if 1 < 2 && 2 < 3 then "both" else "not")

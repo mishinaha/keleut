@@ -1,0 +1,5 @@
+module Cb {
+  pub newtype Callback[E] = Callback(() => Unit @ E)
+  pub let mk[E](f: () => Unit @ E): Callback[E] = Callback(f)
+}
+let g(c: Cb.Callback[{Print}]): Int32 = 0

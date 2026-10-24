@@ -1,0 +1,3 @@
+let rec f(): String = g(Nil)
+and g(ys) = show(ys)
+echoln(f())

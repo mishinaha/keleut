@@ -1,0 +1,5 @@
+let a = Some(1)
+let b = Cons(tail = Nil)
+let c = Parser.bind(p, f)
+let d = Parser.Parser(g)
+let e = Db.Conn.exec(q)

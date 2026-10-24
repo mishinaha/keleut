@@ -1,0 +1,7 @@
+let f = fn() => {
+  let a = 1
+  g(a)
+  let (x, y) = pair()
+  h(x)
+  y
+}

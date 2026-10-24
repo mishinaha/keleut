@@ -1,0 +1,14 @@
+let outer[A: Show](x: A): String = {
+  let both(y) = show(y) + "/" + show(x)
+  both(1) + " " + both(true)
+}
+echoln(outer("s"))
+let rec sa[A: Show](xs: List[A]): String = xs match { case Nil => "." case Cons(h, t) => show(h) + sr(t) }
+and sr(t) = sa(t)
+echoln(sa(Cons(1, Cons(2, Nil))))
+let outer2[A: Show](x: A): String = {
+  let rec la(xs: List[A]): String = xs match { case Nil => "." case Cons(h, t) => show(h) + lr(t) }
+  and lr(t: List[A]): String = la(t)
+  la(Cons(x, Cons(x, Nil)))
+}
+echoln(outer2(7))

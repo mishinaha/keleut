@@ -1,0 +1,8 @@
+newtype P2[A, B] = MkP2(fst: A, snd: B)
+newtype Opaque = MkOpaque(Int32)
+type class Functor[F[_]] { val map[A, B, E]: (F[A], (A) => B @ E) => F[B] @ E }
+type instance[A: Eq] Functor[P2[_, _]] {
+  let map(p, f) = p match { case MkP2(a, b) => MkP2(a, f(b)) }
+}
+let use1(p: P2[Int32, Int32]): P2[Int32, Int32] = map(p, fn(x) => x)
+let use2(p: P2[Opaque, Int32]): P2[Opaque, Int32] = map(p, fn(x) => x)

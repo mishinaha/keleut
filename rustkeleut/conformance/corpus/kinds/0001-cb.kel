@@ -1,0 +1,8 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+let mk[E](f: () => Unit @ E): Callback[E] = Callback(f)
+let run_cb[E](c: Callback[E]): Unit @ E = c match { case Callback(f) => f() }
+let println(message: String): Unit @ Print = perform print(message)
+let pure_cb(): Callback[{}] = Callback(fn() => {})
+let print_cb(): Callback[{Print}] = Callback(fn() => println("x"))

@@ -1,0 +1,2 @@
+newtype Opaque = Op(Int32)
+echoln(show(Cons(Op(1), Nil)))

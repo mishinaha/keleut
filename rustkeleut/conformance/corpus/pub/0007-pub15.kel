@@ -1,0 +1,2 @@
+let (helper, k) = (fn(x: Int32) => x, 0)
+pub let go(n: Int32): Int32 = helper(n)

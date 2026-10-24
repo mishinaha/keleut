@@ -1,0 +1,2 @@
+effect Console = { write: (Int32) => Int32 }
+let r = perform write(42)

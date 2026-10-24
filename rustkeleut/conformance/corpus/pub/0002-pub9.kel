@@ -1,0 +1,2 @@
+effect Logger = { log: (String) => Unit }
+pub let rec f(n: Int32): Int32 = { perform log("x"); n }

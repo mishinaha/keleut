@@ -1,0 +1,6 @@
+type Unit = {}
+effect Print = { print: (String) => Unit }
+newtype Callback[E] = Callback(() => Unit @ E)
+newtype Ph[E] = MkPh(Int32)
+newtype N[X] = MkN(Ph[X], Callback[X])
+let f(x: Ph[{Print}]): Int32 = 0
