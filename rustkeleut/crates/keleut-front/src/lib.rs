@@ -1,6 +1,7 @@
 //! RustKeleut のフロントエンドである(計画 261024-1 の 7 節)。
 //!
-//! M96 では、字句解析、構文解析と脱糖、`keleut dump tokens|ast` の印字を持つ。
+//! M96 で、字句解析、構文解析と脱糖、`keleut dump tokens|ast` の印字を、
+//! M97 で、型検査(`keleut check`)を足した。
 //! どれも Diktor(参照インタプリタ)と同じ結果を出すことを目標にしている。
 //!
 //! | モジュール | Diktor の対応 | 中身 |
@@ -12,6 +13,7 @@
 //! | [`ast`] | syntax.ml | 脱糖した木 |
 //! | [`dump`] | dump.ml | S 式の印字 |
 //! | [`oformat`] | OCaml の `Format` | hov 箱の整形 |
+//! | [`types`] | decls.ml、unify.ml、show.ml、exhaust.ml、elab.ml、driver.ml の型検査の手順 | 宣言表、単一化、型の表示、網羅性、精緻化(M97) |
 //!
 //! 構文解析は表で駆動する LR(1) の自動機械で、スタックはヒープの上の明示的な配列である。
 //! スタックの段の数には限度を設けず、平らな長い列は Diktor と同じく受理する。
@@ -32,6 +34,7 @@ pub mod pos;
 #[allow(dead_code)]
 mod tables;
 pub mod token;
+pub mod types;
 
 pub use parser::{DEFAULT_MAX_NEST, ParseError};
 pub use pos::{FileId, Files, Pos, Span};
