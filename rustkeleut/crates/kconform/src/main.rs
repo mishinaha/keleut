@@ -34,11 +34,12 @@ usage: kconform [OPTIONS] [--pairs P,...] [--suite all|depth] [--extra=FLAG...] 
        kconform extract-corpus [--from DIR] [--corpus DIR] [--check]
 
 options:
-  --pairs P,...       the pairs to run (default: all available pairs: dk, dk-ir, kf)
+  --pairs P,...       the pairs to run (default: all available pairs: dk, dk-ir, kf, ki;
+                      --suite depth leaves out dk and kf and rejects them)
   --root DIR          the rustkeleut directory (default: the one kconform was built from)
   --diktor PATH       the real diktor (default: $KELEUT_DIKTOR, else ROOT/../diktor/_build/install/default/bin/diktor)
   --keleut PATH       the real keleut (default: $KCONFORM_KELEUT, else keleut next to kconform)
-  --known-diffs FILE  the list of known differences (default: ROOT/conformance/known-diffs.toml)
+  --known-diffs FILE  the list of known differences (default: ROOT/conformance/known-diffs.toml and known-diffs-*.toml)
   --jobs N            number of parallel jobs (default: number of CPUs)
   --timeout SECS      time limit of one .t file (default: 600)
   --check-shim        fail if a command mentions diktor but never reaches the shim
@@ -204,10 +205,31 @@ impl Options {
             .unwrap_or_else(|| self.conformance().join("corpus"))
     }
 
-    fn known_diffs_path(&self) -> PathBuf {
-        self.known_diffs
-            .clone()
-            .unwrap_or_else(|| self.conformance().join("known-diffs.toml"))
+    /// 読む既知の差の一覧である。
+    ///
+    /// `--known-diffs` を与えなければ、`conformance/known-diffs.toml` と、
+    /// その横の `known-diffs-*.toml`(名前の順。一時の登録を分けて置くもの)を読む。
+    fn known_diffs_paths(&self) -> Vec<PathBuf> {
+        if let Some(p) = &self.known_diffs {
+            return vec![p.clone()];
+        }
+        let dir = self.conformance();
+        let mut extra: Vec<PathBuf> = std::fs::read_dir(&dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| {
+                        p.is_file()
+                            && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                                n.starts_with("known-diffs-") && n.ends_with(".toml")
+                            })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        extra.sort();
+        let mut v = vec![dir.join("known-diffs.toml")];
+        v.extend(extra);
+        v
     }
 }
 
@@ -310,6 +332,8 @@ struct Difference {
     pair: String,
     /// 比べた相手(`記録` か、基準の組の名前)である。
     against: String,
+    /// 比較の種類(既知の差の `against` の照合に使う)である。
+    cmp: known_diffs::Comparison,
     want: Vec<Vec<u8>>,
     got: Vec<Vec<u8>>,
 }
@@ -318,6 +342,70 @@ fn show(lines: &[Vec<u8>], mark: char) {
     for l in lines {
         println!("{mark}{}", String::from_utf8_lossy(l));
     }
+}
+
+/// 組の間の比較の基準にする組の、`run_pairs` の中の位置を返す。
+///
+/// 計画 8.2 節のとおり `dk` を基準にする。
+/// `dk` が無ければ `dk-ir`(組 `depth` の試験群など)、それも無ければ最初の組である。
+/// `--pairs` に書いた順に依らずに、同じ既知の差の一覧が当たるようにするためである。
+fn base_index(run_pairs: &[Pair]) -> usize {
+    ["dk", "dk-ir"]
+        .iter()
+        .find_map(|n| run_pairs.iter().position(|p| p.name == *n))
+        .unwrap_or(0)
+}
+
+/// 深さの試験群(`--suite depth`)で走らせない組である。
+///
+/// 計画 8.2 節のとおり、深さの試験は `dk-ir` と RustKeleut の組で比べ、`dk` とは比べない。
+/// `kf` も Diktor の木の評価器で走り、`keleut run --max-depth` の限度を持たないので除く。
+const NOT_IN_DEPTH: &[&str] = &["dk", "kf"];
+
+/// 深さの試験群を走らせるかどうかを返す。
+fn depth_suite(o: &Options) -> bool {
+    o.suite.as_deref() == Some("depth")
+}
+
+/// RustKeleut の後段の組の間の差を集める(計画 8.2 節、D499)。
+///
+/// 実行系が [`Engine::Keleut`] の組(`ka` と `km` の種ごとの実体を含む)のうち、誤りの無い最初の組を基準にする。
+/// ほかの組の各コマンドの結果を、正規化をせずに基準の組と比べる。
+/// 後段の間は完全に一致しなければならないからである。
+/// 誤りのある組は [`report`] が失敗として数えるので、ここでは比べない。
+/// 返す差は [`known_diffs::Comparison::Backend`] の比較で、当たる既知の差の項目は、
+/// 未実装に届く一時の項目(`when = "unimplemented"`)だけである([`known_diffs::Comparison::Backend`] を見よ)。
+fn backend_diffs(
+    case: usize,
+    run_pairs: &[Pair],
+    rs: &[CaseResult],
+    commands: usize,
+) -> Vec<Difference> {
+    let ks: Vec<usize> = (0..run_pairs.len())
+        .filter(|&pi| run_pairs[pi].engine == Engine::Keleut && rs[pi].error.is_none())
+        .collect();
+    let Some((&r0, rest)) = ks.split_first() else {
+        return Vec::new();
+    };
+    let mut v = Vec::new();
+    for &pi in rest {
+        for k in 0..commands {
+            let want = cram::render(&rs[r0].outcomes[k]);
+            let got = cram::render(&rs[pi].outcomes[k]);
+            if want != got {
+                v.push(Difference {
+                    case,
+                    command: k,
+                    pair: run_pairs[pi].label.clone(),
+                    against: format!("後段の組 {} ", run_pairs[r0].label),
+                    cmp: known_diffs::Comparison::Backend,
+                    want,
+                    got,
+                });
+            }
+        }
+    }
+    v
 }
 
 /// 走らせた結果を比べ、報告し、終了状態を返す。
@@ -332,11 +420,29 @@ fn report(
     let mut diffs = Vec::new();
     let mut failures = Vec::new();
     let mut exact_mismatch = 0usize;
+    // 正規化の後は一致するが、前は違うもの(`--verbose` で印字する)。
+    let mut exact_only = Vec::new();
     let mut compared = 0usize;
     let mut commands_total = 0usize;
     let mut invocations = 0usize;
     let mut diktor_commands = 0usize;
     let mut bypass = Vec::new();
+    let base_i = base_index(run_pairs);
+    let depth = depth_suite(o);
+    // 後段の組の間の差(未実装の一時の項目にだけ照らす)。
+    let mut backend = Vec::new();
+    // どのコマンドにも付かない期待の出力の行(dune は捨てるので、記録との差になる)。
+    let mut dropped = 0usize;
+    for case in cases.iter().filter(|c| c.has_expectations) {
+        for (line, text) in cram::dropped(&case.items) {
+            dropped += 1;
+            println!(
+                "差: {}:{line}: どのコマンドの期待の出力にも付かない行(dune はこの行を捨てる)",
+                case.name
+            );
+            println!("-{}", String::from_utf8_lossy(text));
+        }
+    }
     for (ci, case) in cases.iter().enumerate() {
         let cmds = cram::commands(&case.items);
         commands_total += cmds.len();
@@ -362,6 +468,13 @@ fn report(
                         who.join(",")
                     );
                 }
+                // 深さの試験では、予備の検査の終了状態 70 を失敗にする(計画 8.2 節)。
+                if depth && matches!(r.outcomes[k], cram::Outcome::Ran { code: 70, .. }) {
+                    failures.push(format!(
+                        "{}:{} [{}]: 終了状態 70(深さの試験では予備の検査を失敗にする)",
+                        case.name, c.line, pair.label
+                    ));
+                }
                 let reached = !matches!(r.outcomes[k], cram::Outcome::Unreachable);
                 if reached && runner::mentions(c, "diktor") {
                     diktor_commands += 1;
@@ -383,12 +496,25 @@ fn report(
                 if got != c.expected {
                     exact_mismatch += 1;
                 }
-                if normalize::lines(&got) != normalize::lines(&c.expected) {
+                let same = normalize::lines(&got) == normalize::lines(&c.expected);
+                if same && got != c.expected && o.verbose {
+                    exact_only.push(Difference {
+                        case: ci,
+                        command: k,
+                        pair: pair.label.clone(),
+                        against: "記録".to_string(),
+                        cmp: known_diffs::Comparison::Record,
+                        want: c.expected.clone(),
+                        got: got.clone(),
+                    });
+                }
+                if !same {
                     diffs.push(Difference {
                         case: ci,
                         command: k,
                         pair: pair.label.clone(),
                         against: "記録".to_string(),
+                        cmp: known_diffs::Comparison::Record,
                         want: c.expected.clone(),
                         got,
                     });
@@ -396,8 +522,11 @@ fn report(
             }
         }
         if compare_pairs && run_pairs.len() > 1 {
-            let base = &results[ci][0];
-            for (pi, pair) in run_pairs.iter().enumerate().skip(1) {
+            let base = &results[ci][base_i];
+            for (pi, pair) in run_pairs.iter().enumerate() {
+                if pi == base_i {
+                    continue;
+                }
                 let r = &results[ci][pi];
                 if r.error.is_some() || base.error.is_some() {
                     continue;
@@ -405,18 +534,34 @@ fn report(
                 for k in 0..cmds.len() {
                     let want = cram::render(&base.outcomes[k]);
                     let got = cram::render(&r.outcomes[k]);
-                    if normalize::lines(&want) != normalize::lines(&got) {
+                    let same = normalize::lines(&want) == normalize::lines(&got);
+                    if same && want != got && o.verbose {
+                        exact_only.push(Difference {
+                            case: ci,
+                            command: k,
+                            pair: pair.label.clone(),
+                            against: format!("組 {} ", run_pairs[base_i].label),
+                            cmp: known_diffs::Comparison::Pair,
+                            want: want.clone(),
+                            got: got.clone(),
+                        });
+                    }
+                    if !same {
                         diffs.push(Difference {
                             case: ci,
                             command: k,
                             pair: pair.label.clone(),
-                            against: format!("組 {} ", run_pairs[0].label),
+                            against: format!("組 {} ", run_pairs[base_i].label),
+                            cmp: known_diffs::Comparison::Pair,
                             want,
                             got,
                         });
                     }
                 }
             }
+        }
+        if compare_pairs {
+            backend.extend(backend_diffs(ci, run_pairs, &results[ci], cmds.len()));
         }
     }
     let mut used = vec![false; known.len()];
@@ -430,7 +575,7 @@ fn report(
             .map_or("", |p| p.name);
         let hit = known
             .iter()
-            .position(|e| e.matches(&case.key, c.line, pair_name));
+            .position(|e| e.matches(&case.key, c.line, pair_name, d.cmp, &d.want, &d.got));
         if let Some(h) = hit {
             used[h] = true;
             if !o.verbose {
@@ -447,6 +592,51 @@ fn report(
                 case.name, c.line, d.pair, d.against
             );
         }
+        println!("  $ {}", c.display());
+        show(&d.want, '-');
+        show(&d.got, '+');
+    }
+    // 後段の組の間の差は、未実装の一時の項目に当たるものを除き、すべて登録の無い差に数える(D499)。
+    let mut backend_unknown = 0usize;
+    for d in &backend {
+        let case = &cases[d.case];
+        let c = cram::commands(&case.items)[d.command];
+        let pair_name = run_pairs
+            .iter()
+            .find(|p| p.label == d.pair)
+            .map_or("", |p| p.name);
+        let hit = known
+            .iter()
+            .position(|e| e.matches(&case.key, c.line, pair_name, d.cmp, &d.want, &d.got));
+        if let Some(h) = hit {
+            used[h] = true;
+            if o.verbose {
+                println!(
+                    "既知の差: {}:{} [{}]({} {}): {}との差",
+                    case.name, c.line, d.pair, known[h].ledger, known[h].reason, d.against
+                );
+                println!("  $ {}", c.display());
+                show(&d.want, '-');
+                show(&d.got, '+');
+            }
+            continue;
+        }
+        backend_unknown += 1;
+        println!(
+            "差: {}:{} [{}]: {}との差(後段の間は既知の差に関係なく一致しなければならない)",
+            case.name, c.line, d.pair, d.against
+        );
+        println!("  $ {}", c.display());
+        show(&d.want, '-');
+        show(&d.got, '+');
+    }
+    for d in &exact_only {
+        let case = &cases[d.case];
+        let c = cram::commands(&case.items)[d.command];
+        println!(
+            "正規化の前の不一致: {}:{} [{}]: {}との不一致",
+            case.name, c.line, d.pair, d.against
+        );
         println!("  $ {}", c.display());
         show(&d.want, '-');
         show(&d.got, '+');
@@ -481,12 +671,18 @@ fn report(
         }
     }
     let labels: Vec<&str> = run_pairs.iter().map(|p| p.label.as_str()).collect();
+    let diffs_known = diffs.len() - unknown + backend.len() - backend_unknown;
+    unknown += dropped + backend_unknown;
+    let base_note = if compare_pairs && run_pairs.len() > 1 {
+        format!("(基準 {})", run_pairs[base_i].label)
+    } else {
+        String::new()
+    };
     println!(
-        "kconform: 組 {}、{} 個の試験、{} 個のコマンド(記録と比べた {compared} 個)、差 {unknown} 件、既知の差 {} 件、失敗 {} 件",
+        "kconform: 組 {}{base_note}、{} 個の試験、{} 個のコマンド(記録と比べた {compared} 個)、差 {unknown} 件、既知の差 {diffs_known} 件、失敗 {} 件",
         labels.join(","),
         cases.len(),
         commands_total,
-        diffs.len() - unknown,
         failures.len()
     );
     println!(
@@ -548,6 +744,23 @@ fn collect_cases(o: &Options, include_corpus: bool) -> Result<Vec<Case>, String>
     Ok(cases)
 }
 
+/// 既知の差の項目が指しうる、すべての試験のファイルのパスである。
+///
+/// diktor/test の `.t`、`conformance/` の下のすべての `.t`(`depth/` と `frontend-depth/` を含む)、
+/// コーパスの `.kel` である。
+fn all_test_keys(o: &Options) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = t_files_in(&o.root.join("../diktor/test"))
+        .into_iter()
+        .chain(conformance_files(&o.conformance(), &[]))
+        .map(|p| absolute(&p))
+        .collect();
+    let corpus = o.corpus_dir();
+    if let Ok(es) = corpus::read_index(&corpus) {
+        v.extend(es.iter().map(|e| absolute(&corpus.join(&e.path))));
+    }
+    v
+}
+
 fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
     let include_corpus = compare_pairs && run_pairs.len() > 1;
     let cases = match collect_cases(o, include_corpus) {
@@ -557,13 +770,50 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
             return 64;
         }
     };
-    let known = match known_diffs::load(&o.known_diffs_path()) {
-        Ok(k) => k,
-        Err(e) => {
-            eprintln!("kconform: {e}");
+    // 試験が 1 つも無ければ、何も確かめていないので失敗にする(`conformance/depth/` が無いときなど)。
+    if cases.is_empty() {
+        eprintln!("kconform: 走らせる試験がありません");
+        return 1;
+    }
+    let mut known = Vec::new();
+    for p in o.known_diffs_paths() {
+        match known_diffs::load(&p) {
+            Ok(k) => known.extend(k),
+            Err(e) => {
+                eprintln!("kconform: {e}");
+                return 64;
+            }
+        }
+    }
+    let errs = known_diffs::validate(&known);
+    for e in &errs {
+        eprintln!("kconform: {e}");
+    }
+    if !errs.is_empty() {
+        return 64;
+    }
+    // 試験群を走らせるときは、どの試験のファイルにも当たらない項目を誤りにする(ファイルの名前の誤りに気づく)。
+    // 走らせない組の項目や、この試験群で集めないコーパスと `depth` の試験の項目も確かめる。
+    if o.files.is_empty() {
+        let universe = all_test_keys(o);
+        let mut orphan = 0;
+        for e in &known {
+            if !universe.iter().any(|k| k.ends_with(Path::new(&e.file))) {
+                eprintln!(
+                    "kconform: {} の {} 行の項目 {}:{} は、どの試験のファイルにも当たりません",
+                    e.origin, e.source_line, e.file, e.line
+                );
+                orphan += 1;
+            }
+        }
+        if orphan > 0 {
             return 64;
         }
-    };
+    }
+    // `kconform expect` は記録とだけ比べるので、基準の組との差だけを許す項目を使わない。
+    if !compare_pairs {
+        known.retain(|e| e.against != known_diffs::Against::Pair);
+    }
     // 一覧の項目が、走らせる試験のコマンドの行を指していることを確かめる(試験の行がずれたら気づく)。
     let mut stale = 0;
     for e in &known {
@@ -573,8 +823,8 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
                 .any(|cmd| cmd.line == e.line)
             {
                 eprintln!(
-                    "kconform: 既知の差の {} 行の項目 {}:{} はコマンドの行ではありません",
-                    e.source_line, e.file, e.line
+                    "kconform: {} の {} 行の項目 {}:{} はコマンドの行ではありません",
+                    e.origin, e.source_line, e.file, e.line
                 );
                 stale += 1;
             }
@@ -644,12 +894,22 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
 }
 
 fn main_default(o: &Options) -> u8 {
-    let names: Vec<String> = o
-        .pairs
-        .clone()
-        .unwrap_or_else(|| pairs::DEFAULT.iter().map(|s| s.to_string()).collect());
+    let depth = depth_suite(o);
+    let names: Vec<String> = o.pairs.clone().unwrap_or_else(|| {
+        pairs::DEFAULT
+            .iter()
+            .filter(|n| !depth || !NOT_IN_DEPTH.contains(n))
+            .map(|s| s.to_string())
+            .collect()
+    });
     let mut run_pairs = Vec::new();
     for n in &names {
+        if depth && NOT_IN_DEPTH.contains(&n.as_str()) {
+            eprintln!(
+                "kconform: 組 {n} は深さの試験では走らせません(深さの試験は dk-ir と RustKeleut の組で比べる)"
+            );
+            return 64;
+        }
         let Some(ps) = pairs::expand(n) else {
             eprintln!(
                 "kconform: unknown pair: {n} (pairs: {})",
@@ -794,4 +1054,81 @@ fn main() -> ExitCode {
         "extract-corpus" => main_extract(&o),
         _ => main_default(&o),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ran(text: &str, code: i32) -> cram::Outcome {
+        cram::Outcome::Ran {
+            output: text.as_bytes().to_vec(),
+            code,
+        }
+    }
+
+    fn result(outcomes: Vec<cram::Outcome>) -> CaseResult {
+        CaseResult {
+            invocations: outcomes.iter().map(|_| Vec::new()).collect(),
+            outcomes,
+            timed_out: false,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn 後段の組の間の差は既知の差の項目でも許さない() {
+        let mut ps = pairs::expand("dk").unwrap();
+        ps.extend(pairs::expand("ki").unwrap());
+        ps.extend(pairs::expand("km").unwrap());
+        let mut rs = vec![result(vec![ran("a\n", 0)])];
+        rs.push(result(vec![ran("x\n", 0)]));
+        for out in ["x\n", "y\n", "x\n", "x\n"] {
+            rs.push(result(vec![ran(out, 0)]));
+        }
+        // 組 dk との差は後段の間の差ではない。
+        let d = backend_diffs(0, &ps, &rs, 1);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].pair, "km=2");
+        assert_eq!(d[0].cmp, known_diffs::Comparison::Backend);
+        // 両方の組を挙げた項目も、すべての組の項目も当たらない。
+        let es = known_diffs::parse(
+            "[[diff]]\nfile = \"a.t\"\nline = 1\npairs = [\"ki\", \"km\"]\nreason = \"r\"\nledger = \"V1\"\n\n[[diff]]\nfile = \"a.t\"\nline = 1\npairs = [\"*\"]\nreason = \"r\"\nledger = \"V1\"\nagainst = \"pair\"\n",
+        )
+        .unwrap();
+        for e in &es {
+            assert!(!e.matches(
+                Path::new("/x/a.t"),
+                1,
+                "km",
+                d[0].cmp,
+                &d[0].want,
+                &d[0].got
+            ));
+            assert!(e.matches(
+                Path::new("/x/a.t"),
+                1,
+                "km",
+                known_diffs::Comparison::Pair,
+                &d[0].want,
+                &d[0].got
+            ));
+        }
+        // 正規化で消える違いも差にする。
+        let ps2 = [pairs::expand("ki").unwrap(), pairs::expand("km").unwrap()].concat();
+        let rs2: Vec<CaseResult> = ["x.kel:1:1: 型エラー: 甲\n", "x.kel:1:1: 型エラー: 乙\n"]
+            .iter()
+            .chain(["x.kel:1:1: 型エラー: 甲\n"; 3].iter())
+            .map(|t| result(vec![ran(t, 1)]))
+            .collect();
+        assert_eq!(backend_diffs(0, &ps2, &rs2, 1).len(), 1);
+        // 誤りのある組は比べない。
+        let mut rs3 = rs2;
+        rs3[1].error = Some("e".to_string());
+        assert!(backend_diffs(0, &ps2, &rs3, 1).is_empty());
+        // 基準の組に誤りがあれば、誤りの無い次の組を基準にする。
+        rs3[1].error = None;
+        rs3[0].error = Some("e".to_string());
+        assert_eq!(backend_diffs(0, &ps2, &rs3, 1).len(), 3);
+    }
 }

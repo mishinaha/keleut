@@ -229,3 +229,16 @@ fn ヒアドキュメントからコーパスを抜き出す() {
     let (code, out) = kconform(&d.0, &fake, &a);
     assert_eq!(code, 1, "{out}");
 }
+
+#[test]
+fn 深さの試験群は_dk_と_kf_を走らせず_試験が無ければ失敗にする() {
+    let d = Dir::new("depth");
+    let fake = setup(&d.0);
+    for p in ["dk", "kf", "dk-ir,dk"] {
+        let (code, _) = kconform(&d.0, &fake, &["--pairs", p, "--suite", "depth"]);
+        assert_eq!(code, 64, "{p}");
+    }
+    // conformance/depth/ が無ければ、走らせる試験が無いので失敗にする。
+    let (code, out) = kconform(&d.0, &fake, &["--pairs", "dk-ir", "--suite", "depth"]);
+    assert_eq!(code, 1, "{out}");
+}
