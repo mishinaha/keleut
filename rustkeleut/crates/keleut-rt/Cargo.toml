@@ -1,0 +1,11 @@
+[package]
+name = "keleut-rt"
+description = "RustKeleut の実行時(値、確保、分割値スタック、出力、実行時エラー、診断の印字)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+keleut-lir = { path = "../keleut-lir" }
+keleut-rtcore = { path = "../keleut-rtcore" }
