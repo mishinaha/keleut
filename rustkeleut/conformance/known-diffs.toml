@@ -12,7 +12,7 @@
 [[diff]]
 file = "diktor/test/if.t"
 line = 259
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -33,14 +33,14 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 168
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 170
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -75,7 +75,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 206
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -96,7 +96,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 12
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -187,7 +187,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 191
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -266,7 +266,7 @@ reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 # 組 ki の実行の呼び出し(M88 から keleut run)も、標準出力に書けないときの診断の接頭辞は keleut: である。
-# conformance/bytes/ の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf)のほうが記録と違う。
+# conformance/bytes/ の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf、x-ir)のほうが記録と違う。
 # これらの組の項目は against = "record" とし、記録との差だけを許す。
 # 組 ki は記録と一致し、基準の組 dk と違うので、別の項目を against = "pair" として置く。
 # sinkfail.t:26 の組 ki は、M89 までは評価が handle に届いて 4 で終わるので、known-diffs-unimplemented.toml に当たる。
@@ -282,7 +282,7 @@ ledger = "V217"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 57
-pairs = ["dk", "dk-ir", "kf"]
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "record"
@@ -298,7 +298,7 @@ against = "pair"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 63
-pairs = ["dk", "dk-ir", "kf"]
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "record"
@@ -314,7 +314,7 @@ against = "pair"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 70
-pairs = ["dk", "dk-ir", "kf"]
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "record"
@@ -330,7 +330,7 @@ against = "pair"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 73
-pairs = ["dk", "dk-ir", "kf"]
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "record"
@@ -346,20 +346,20 @@ against = "pair"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 26
-pairs = ["dk", "dk-ir", "kf"]
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "record"
 
 # V218: 標準出力が非ブロッキングのパイプのとき、Diktor は書き込みの EAGAIN を Sys_blocked_io の例外で受けて、
 # 内部エラーの後に 2 で終わる。keleut run は計画 6.5 節の出力の規約のとおり待って書き直し、0 で終わる。
-# bytes.t の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf)が記録と違い(against = "record")、
+# bytes.t の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf、x-ir)が記録と違い(against = "record")、
 # 組 ki が組 dk と違う(against = "pair")。
 
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 50
-pairs = ["dk", "dk-ir", "kf"]
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
 ledger = "V218"
 against = "record"
@@ -378,36 +378,87 @@ against = "pair"
 [[diff]]
 file = "diktor/test/import.t"
 line = 298
-pairs = ["kf"]
+pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 339
-pairs = ["kf"]
+pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 668
-pairs = ["kf"]
+pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# コーパスの、--prelude に開けないファイルを渡す 2 本。組 kf は keleut が型検査の前にプレリュードを読む。
+# 組 x-ir は、KIR を書き出すだけの diktor の呼び出しも keleut emit-kir で走らせるので、書き出しの段の診断の接頭辞が違う。
+
+[[diff]]
+file = "diktor/test/ir_emit.t"
+line = 14
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/ir_emit.t"
+line = 829
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/ir_run.t"
+line = 127
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/ir_run.t"
+line = 133
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/ir_run.t"
+line = 136
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/ir_run.t"
+line = 383
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/ir_run.t"
+line = 387
+pairs = ["x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+# コーパスの、--prelude に開けないファイルを渡す 2 本。組 kf と x-ir は keleut が型検査の前にプレリュードを読む。
 
 [[diff]]
 file = "corpus/ir_run/0005-hw.kel"
 line = 1
-pairs = ["kf"]
+pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 [[diff]]
 file = "corpus/resolved_names/0002-pmuse.kel"
 line = 1
-pairs = ["kf"]
+pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
