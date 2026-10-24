@@ -10,10 +10,11 @@
 //! 5. `keleut kir dis` でバイナリから印字したテキストが、Diktor のテキストと一致する。
 //! 6. `keleut kir asm` でテキストから組んだバイナリが、Diktor のバイナリと一致する。
 //! 7. 6 のバイナリを `keleut kir dis` で印字したテキストが、Diktor のテキストと一致する(テキスト → バイナリ → テキストの往復)。
+//! 8. 同じ旗の `keleut emit-kir` と `keleut emit-kir --text` が 0 で終わり、書いたバイナリとテキストが Diktor のものと一致する。
 //!
 //! 旗は索引のものを使う。
 //! 索引の旗が `?` のときは、旗なしで書き出し、型検査の誤り(1)なら `--no-prelude` で試し直す。
-//! `--diktor-only` では 4〜7 を行わない(RustKeleut の側がまだ無いときの確認に使う)。
+//! `--diktor-only` では 4〜8 を行わない(RustKeleut の側がまだ無いときの確認に使う)。
 
 use crate::corpus::{self, Entry};
 use crate::util::{TempDir, par_map, wait_timeout};
@@ -181,6 +182,33 @@ fn check_inner(e: &Entry, cfg: &Config) -> std::io::Result<Verdict> {
         return Ok(Verdict::Fail(
             "roundtrip",
             "テキスト → バイナリ → テキストが一致しない".to_string(),
+        ));
+    }
+    let emit = |extra: &[&'static str]| -> Vec<&str> {
+        let mut v = vec!["emit-kir"];
+        v.extend_from_slice(extra);
+        v.extend(base.iter().copied());
+        v.push(name.as_str());
+        v
+    };
+    let r = k(&emit(&["-o", "k.kir"]))?;
+    if r.code != Some(0) {
+        return Ok(Verdict::Fail("emit-kir", describe(&r)));
+    }
+    if std::fs::read(dir.join("k.kir"))? != a {
+        return Ok(Verdict::Fail(
+            "emit-kir",
+            "keleut emit-kir のバイナリが diktor --emit-ir と一致しない".to_string(),
+        ));
+    }
+    let r = k(&emit(&["--text", "-o", "k.kirt"]))?;
+    if r.code != Some(0) {
+        return Ok(Verdict::Fail("emit-kir-text", describe(&r)));
+    }
+    if std::fs::read(dir.join("k.kirt"))? != text {
+        return Ok(Verdict::Fail(
+            "emit-kir-text",
+            "keleut emit-kir --text のテキストが diktor --emit-ir-text と一致しない".to_string(),
         ));
     }
     Ok(Verdict::Pass)
