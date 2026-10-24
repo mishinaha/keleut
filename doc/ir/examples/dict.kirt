@@ -1,4 +1,4 @@
-(kir 0 2 0)
+(kir 0 3 0)
 (unit "builtin" (paths))
 (unit "prelude" (paths))
 (unit "main" (paths "dict.kel"))
