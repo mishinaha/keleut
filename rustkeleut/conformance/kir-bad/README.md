@@ -10,7 +10,8 @@ target/release/kconform expect conformance/kir-bad/*.t
 ```
 
 各 `.t` には、`keleut kir verify` の標準エラーの文面と `[65]` を記録してある。
-文面は Diktor の `diktor --run-ir` と同じで、違うのは先頭の `keleut:` だけである(v09-resume-cyclic-handlebody を除く。後述)。
+文面は、Diktor が読めるバイナリの入力(binary.t の b の試料、verify.t の v の試料を `keleut kir asm --no-verify` でバイナリにしたもの、deep.t のバイナリの入力)では Diktor の `diktor --run-ir` と同じで、違うのは先頭の `keleut:` だけである。
+text.t の t の試料と deep.t のテキストの入力は RustKeleut だけのものである(後述)。
 kconform は比べる前に行を正規化する。
 診断の種別の語(型エラーなど)に `: ` が続けばその後ろを切り、先頭が `⚠ ` の行は `⚠` だけにする。
 KIR の診断の文面はどちらにも当たらないので、正規化しても文面は全体のまま比べられ、各試料がどの検査で拒否されたかまで固定される。
@@ -97,9 +98,9 @@ Diktor はテキストを読まないので、この 4 本は RustKeleut だけ�
 | v13-builtin-tables | 13 組み込みの表 | 組み込みの型の名前を変えた |
 | v14-runtime-mark | 14 操作の印 | `prelude/Console` でない操作に `runtime` の印を付けた |
 
-v09-resume-cyclic-handlebody は、Diktor 2f9300a の検証器が止まらない入力である(持ち主をたどる鎖が輪になる)。
-`diktor --run-ir` には渡さない。
-ほかの v の試料は、`keleut kir asm --no-verify` でバイナリにして `diktor --run-ir` に渡すと、同じ文面で 65 になる。
+v09-resume-cyclic-handlebody は、持ち主をたどる鎖が輪になる入力である。
+Diktor 2f9300a の検証器はこの入力で止まらなかったが、diktor 8636889 からは `keleut kir verify` と同じ文面で 65 を出す。
+v の試料はどれも、`keleut kir asm --no-verify` でバイナリにして `diktor --run-ir` に渡すと、同じ文面で 65 になる。
 
 ### 入れ子の限度(IRSpec 13.9 節。`deep.t`)
 
