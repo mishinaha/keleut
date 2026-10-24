@@ -300,13 +300,9 @@ fn dump_to_keleut(real_diktor: &OsString, args: &[OsString]) -> u8 {
     exec(&real, "keleut", &v)
 }
 
-/// `keleut check --kf-fallback` が、移していない段を要する入力で返す終了状態である。
-pub const KF_FALLBACK: u8 = 86;
-
 /// 組 `kf` の実行と型検査の呼び出しを、Diktor の旗のまま `keleut check` の引数に写す。
 ///
 /// モードと、`keleut check` に渡す引数(旗とファイル)を返す。
-/// `--import-path` は写さない(import を書いた入力は `keleut check` が移していない段として断り、本物の diktor に渡る)。
 /// 使い方の誤りになる呼び出しと、UTF-8 でない引数を含む呼び出しは `None` を返す(本物の diktor に渡す)。
 fn kf_check_args(args: &[OsString]) -> Option<(Mode, Vec<OsString>)> {
     let mut mode = Mode::Run;
@@ -323,10 +319,8 @@ fn kf_check_args(args: &[OsString]) -> Option<(Mode, Vec<OsString>)> {
             "--no-prelude" | "--strict-exhaustive" => flags.push(OsString::from(a)),
             "--prelude" | "--import-path" => {
                 let v = args.get(i + 1)?.to_str()?;
-                if a == "--prelude" {
-                    flags.push(OsString::from(a));
-                    flags.push(OsString::from(v));
-                }
+                flags.push(OsString::from(a));
+                flags.push(OsString::from(v));
                 i += 1;
             }
             _ if a.starts_with('-') => return None,
@@ -362,9 +356,8 @@ fn log_kf(outcome: &str) {
 ///
 /// 型検査の呼び出し(`--type-check`)は `keleut check` に振り向け、その出力と終了状態を返す。
 /// 実行の呼び出しは、先に `keleut check --quiet` を走らせ、Diktor が実行の前段の型検査で止まる入力
-/// (字句、構文、型の誤り、`--strict-exhaustive` の警告)では、その診断と終了状態を返す。
+/// (読めない入力、字句、構文、型、import の誤り、`--strict-exhaustive` の警告)では、その診断と終了状態を返す。
 /// 型検査を通った入力は、本物の diktor に渡して実行する(警告は diktor が出し直す)。
-/// どちらも、`keleut check` が移していない段を要する入力として断ったとき([`KF_FALLBACK`])は、本物の diktor に渡す。
 fn kf_check(real_diktor: &OsString, args: &[OsString]) -> u8 {
     let (mode, kargs) = match kf_check_args(args) {
         Some((m @ (Mode::Run | Mode::TypeCheck), k)) => (m, k),
@@ -375,20 +368,13 @@ fn kf_check(real_diktor: &OsString, args: &[OsString]) -> u8 {
         Err(c) => return c,
     };
     let mut cmd = Command::new(&real);
-    cmd.arg0("keleut")
-        .arg("check")
-        .arg("--kf-fallback")
-        .arg(KF_FALLBACK.to_string());
+    cmd.arg0("keleut").arg("check");
     if mode == Mode::Run {
         cmd.arg("--quiet");
     }
     cmd.args(&kargs);
     if mode == Mode::TypeCheck {
         match cmd.status() {
-            Ok(st) if st.code() == Some(KF_FALLBACK as i32) => {
-                log_kf("fallback");
-                exec(real_diktor, "diktor", args)
-            }
             Ok(st) => {
                 log_kf("keleut");
                 st.code().map_or(70, |c| c as u8)
@@ -402,10 +388,6 @@ fn kf_check(real_diktor: &OsString, args: &[OsString]) -> u8 {
             .stderr(std::process::Stdio::piped())
             .output();
         match out {
-            Ok(o) if o.status.code() == Some(KF_FALLBACK as i32) => {
-                log_kf("fallback");
-                exec(real_diktor, "diktor", args)
-            }
             Ok(o) if o.status.success() => {
                 log_kf("keleut-pass");
                 exec(real_diktor, "diktor", args)
