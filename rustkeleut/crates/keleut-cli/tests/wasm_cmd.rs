@@ -330,6 +330,82 @@ fn 何度も呼ぶ大きな関数を_interp_と比べる() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+#[test]
+fn g_の節の取り出しと再開を_interp_と比べる() {
+    let Ok(diktor) = std::env::var("KELEUT_DIKTOR") else {
+        return;
+    };
+    if !have_node() {
+        return;
+    }
+    let d = scratch("gres");
+    let gen_src = "effect Gen = { yield: (Int32) => Unit }\n\
+               let rec count(i: Int32, n: Int32): Unit @ {Gen} = if i == n then () else { perform yield(i); count(i + 1, n) }\n";
+    // 300 個の値を生かしたまま、既定の L の近くまで末尾でない resume を重ねる節。
+    // 論理的な 1 段に節とハンドラと rt_resume のフレームが重なるので、節は予算(B_wasm からその 2 つを引いたもの)に収め、
+    // 大きなフレームの形の節は小さな部分に分ける。
+    // 予算を B_wasm のままにすると 150 個の値で、部分に分けずに大きなフレームの形にすると 180 個の値で、
+    // 限度の近くで V8 の RangeError の 70 になった(interp は 0)。
+    let lets: Vec<String> = (0..300)
+        .map(|k| format!("let a{k} = x * {}", k + 3))
+        .collect();
+    let sum: Vec<String> = (0..300).map(|k| format!("a{k}")).collect();
+    let src = format!(
+        "{gen_src}let total(n: Int32): Int32 = count(0, n) handle {{ case yield(x) => {{ {}; let r = resume(()); r + 1 + ({}) - ({}) }} case return(u) => 0 }}\n\
+         echoln(show(total(1048560)))\n",
+        lets.join("; "),
+        sum.join(" + "),
+        sum.join(" + ")
+    );
+    same_on_both(&diktor, &d, "bigclause", &src, &[]);
+    // 1,400 個の perform を持つ関数(部分に分ける)を G の節の下で 200 回呼ぶ。
+    // どの perform も継続を取り出し、部分の再開の入口から続ける。
+    let lets: Vec<String> = (0..1400)
+        .map(|i| format!("let v{i} = perform ask({i}) + n"))
+        .collect();
+    let sum: Vec<String> = (0..1400).map(|i| format!("v{i}")).collect();
+    same_on_both(
+        &diktor,
+        &d,
+        "hotg",
+        &hot_src(
+            "effect Ask = { ask: (Int32) => Int32 }\n",
+            &lets,
+            &sum.join(" + "),
+            200,
+            " handle { case ask(x) => { let r = resume(x + 1); r } }",
+        ),
+        &[],
+    );
+    // 800 個の値を生かす部分に分けた関数と、170 個の値を生かす大きなフレームの形の関数を 1,000 段重ね、
+    // その上で 50 回 yield する。どの継続も 1,000 段のフレームを持ち、再開のたびにすべてを再開の入口から続ける。
+    for (name, nv) in [("splitg", 800), ("bigg", 170)] {
+        let mut src = String::from(
+            "effect Ask = { ask: (Int32) => Int32 }\n\
+             let rec ys(i: Int32): Int32 @ {Ask} = if i == 0 then 0 else perform ask(i) + ys(i - 1)\n\
+             let rec f(n: Int32): Int32 @ {Ask} = if n == 0 then ys(50) else {\n",
+        );
+        for k in 0..nv {
+            src.push_str(&format!("  let a{k} = n * {k} + 1\n"));
+        }
+        src.push_str("  let r = f(n - 1)\n  r + 1 + 0 * (a0");
+        for k in 1..nv {
+            src.push_str(&format!(" + a{k}"));
+        }
+        src.push_str(
+            ")\n}\necholn(show(f(1000) handle { case ask(x) => { let r = resume(x % 7); r } }))\n",
+        );
+        same_on_both(&diktor, &d, name, &src, &[]);
+    }
+    // 限度を超える再開(depth_limit)。継続を使っていないので、cancel 節が走る。
+    let src = format!(
+        "{gen_src}let t(n: Int32): Int32 = count(0, n) handle {{ case yield(x) => {{ let r = resume(()); r + 1 }} case return(u) => 0 case cancel => echoln(\"cancel\") }}\n\
+         echoln(show(t(4000)))\necholn(show(t(6000)))\n"
+    );
+    same_on_both(&diktor, &d, "chainlimit", &src, &["--max-depth", "5000"]);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// 引数の数が 1〜`nk` のクロージャを値として呼びながら、`nv` 個の値を生かして `depth` 段まで再帰する `.kel`。
 fn closures_src(nv: usize, nk: usize, depth: u64) -> String {
     let mut s = String::new();
