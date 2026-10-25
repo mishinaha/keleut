@@ -6,6 +6,7 @@
 
 use std::process::ExitCode;
 
+mod build_cmd;
 mod check_cmd;
 mod dump_cmd;
 mod emit_kir_cmd;
@@ -52,7 +53,7 @@ const COMMANDS: &[(&str, Handler)] = &[
     ("check", check_cmd::main),
     ("emit-kir", emit_kir_cmd::main),
     ("kir", kir_cmd::main),
-    ("build", unimplemented_command),
+    ("build", build_cmd::main),
     ("dump", dump_cmd::main),
     ("repl", unimplemented_command),
     ("compat-diktor", unimplemented_command),
@@ -124,7 +125,7 @@ mod tests {
     #[test]
     fn 中身の無いサブコマンドは未実装になる() {
         for (name, _) in COMMANDS {
-            if !["kir", "dump", "check", "run", "emit-kir"].contains(name) {
+            if !["kir", "dump", "check", "run", "emit-kir", "build"].contains(name) {
                 assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
             }
         }

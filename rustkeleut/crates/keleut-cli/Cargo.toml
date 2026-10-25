@@ -15,4 +15,5 @@ keleut-front = { path = "../keleut-front" }
 keleut-interp = { path = "../keleut-interp" }
 keleut-lir = { path = "../keleut-lir" }
 keleut-rt = { path = "../keleut-rt" }
+keleut-wasm = { path = "../keleut-wasm" }
 kir = { path = "../kir" }

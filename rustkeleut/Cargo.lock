@@ -42,6 +42,7 @@ dependencies = [
  "keleut-interp",
  "keleut-lir",
  "keleut-rt",
+ "keleut-wasm",
  "kir",
 ]
 

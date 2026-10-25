@@ -10,7 +10,7 @@
 //!   Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
 //!
 //! 読み込んだ KIR を検証し、LIR に下ろして、後段で実行する。
-//! M87 の後段はインタプリタ(`--backend interp`)だけで、`jit` と `wasm` は未実装(4)である。
+//! 後段はインタプリタ(`--backend interp`)と WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)で、`jit` は未実装(4)である。
 //! LLVM の後段がまだ無いので、既定の後段は `interp` である。
 //!
 //! `keleut dump bytecode` も同じ読み方で入力を LIR にし、インタプリタのバイトコードを印字する([`dump_bytecode`])。
@@ -28,12 +28,14 @@ pub const USAGE: &str = "\
 usage: keleut run [OPTIONS] FILE.kel... | FILE.kir
 
 options:
-  --backend interp|jit|wasm   back end (default: interp; jit and wasm are not implemented yet)
+  --backend interp|jit|wasm   back end (default: interp; jit is not implemented yet)
   --tier MODE                 interp-only|jit-only|threshold=N|alternating=SEED|mixed=SEED
   --max-depth N               logical depth limit L (default 1048576)
-  --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k)
+  --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k;
+                              interp only, ignored by --backend wasm)
   --gc-stress                 collect garbage at the first allocation of every allocation site
-                              and then at short jittered intervals (for testing)
+                              and then at short jittered intervals (for testing;
+                              interp only, ignored by --backend wasm)
   --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
   --frontend diktor|rust      front end for .kel files (default: diktor via $KELEUT_DIKTOR)
   --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
@@ -41,9 +43,9 @@ options:
 
 /// 解釈したコマンド行である。
 #[derive(Debug, PartialEq, Eq)]
-struct Options {
+pub(crate) struct Options {
     backend: String,
-    max_depth: u64,
+    pub(crate) max_depth: u64,
     native_stack: Option<u64>,
     gc_stress: bool,
     yield_prune: bool,
@@ -73,7 +75,7 @@ fn valid_tier(s: &str) -> bool {
     }
 }
 
-fn parse(args: &[String]) -> Result<Options, String> {
+pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
         backend: "interp".to_string(),
         max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
@@ -216,6 +218,21 @@ fn emit_with_diktor(o: &Options) -> Result<Vec<u8>, u8> {
 }
 
 fn run(o: &Options) -> u8 {
+    if o.backend == "wasm" {
+        // WasmGC の後段(M94)。Node を子プロセスで起動する(crate keleut-wasm の launch)。
+        let lp = match load(o) {
+            Ok(p) => p,
+            Err(c) => return c,
+        };
+        let closed = keleut_rt::out::STDOUT_WAS_CLOSED.load(std::sync::atomic::Ordering::Relaxed);
+        return keleut_wasm::launch::run(
+            &lp,
+            &keleut_wasm::launch::RunOptions {
+                max_depth: o.max_depth,
+                stdout_closed: closed,
+            },
+        );
+    }
     if o.backend != "interp" {
         eprintln!("keleut: 未実装: 後段 {}", o.backend);
         return exit::UNIMPLEMENTED;
@@ -236,7 +253,7 @@ fn run(o: &Options) -> u8 {
 
 /// 入力を読み(`.kel` ならフロントエンドを通し)、KIR を検証して LIR に下ろす。
 /// 失敗すれば、診断を標準エラーに書いて終了状態を返す。
-fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
+pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
     let data = if is_kir(&o.files[0]) {
         match std::fs::read(&o.files[0]) {
             Ok(d) => d,
