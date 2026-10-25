@@ -14,6 +14,7 @@ RustKeleut の差分試験の材料である。
 | `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
 | `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |
 | `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215) |
+| `stack/` | ネイティブのスタックの試験。`--native-stack 512k` で、JIT の関数の深い末尾でない再帰の後の構造的な `Eq` の比べ方と、20 万段の構造的な `Eq` の入れ子が、どの後段でも同じ結果になることを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
 `effects/`、`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
@@ -24,7 +25,7 @@ RustKeleut の差分試験の材料である。
 ## 組
 
 組は KIR の書き手と実行系の組である(計画 8.2 節)。
-`--pairs` を省くと、いま使える組をすべて走らせる。
+`--pairs` を省くと、いま使える組のうち `kj` を除いたすべてを走らせる(下の `kj` の段落を見よ)。
 基準の組は、`--pairs` に書いた順に依らず、`dk` があれば `dk`、無ければ `dk-ir`、それも無ければ最初に挙げた組である。
 ほかの組は基準の組と比べる。
 要約の行の「基準」が、選んだ組を示す。
@@ -36,6 +37,7 @@ RustKeleut の差分試験の材料である。
 | `dk-ir` | `diktor --emit-ir` の後の `diktor --run-ir` | 同じく |
 | `kf` | 先に `keleut check` を通し、型検査で止まる入力はその結果を返す。通れば本物の diktor | Diktor の対応する呼び出し |
 | `ki` | 本物の `diktor --emit-ir` が 0 なら `keleut run --backend interp --tier interp-only FILE.kir`、0 でなければその出力と終了状態 | `keleut run --backend interp --tier interp-only` |
+| `kj` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend jit --tier jit-only FILE.kir` | `keleut run --backend jit --tier jit-only` |
 | `kw` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend wasm FILE.kir` | `keleut run --backend wasm` |
 | `x-ir` | `keleut emit-kir` の後の `diktor --run-ir` | 同じく |
 
@@ -43,6 +45,12 @@ RustKeleut の差分試験の材料である。
 組 `ki` は Diktor が書いた KIR を RustKeleut のインタプリタで走らせ、後段だけを比べる。
 組 `kw` は同じ KIR を WasmGC の後段(crate `keleut-wasm`。Node 26.9.0 以上で走る)で走らせる(M94)。
 `kw` の shim の振り分けは `ki` と同じである。
+組 `kj` は同じ KIR を LLVM の JIT の後段(crate `keleut-llvm`)で走らせる(M91)。
+`handle`、`resume`、`perform` を含む関数はインタプリタで走り、ほかの関数は初めて呼ぶときに翻訳した JIT のコードで走る。
+`kj` の shim の振り分けは `ki` と同じである。
+`kj` は feature `llvm` を付けて組んだ `keleut`(`cargo build --release --features llvm`)でだけ走り、付けずに組んだ `keleut` ではどのコマンドも未実装の 4 で終わる。
+そのため、`--pairs` を省いたときの組に `kj` を入れていない。
+`kconform --pairs ki,kj` のように名を挙げて走らせる。
 `kw` で V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut run` は 3 でなく 70 で終わる。
 このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
 `ERROR(OutOfMemory)` と終了状態 3 になるのは `N_alloc_max` を超える確保だけで、`oom/` はそれを確かめる。
@@ -57,7 +65,7 @@ Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む�
 `keleut run --gc-stress` は、確保の場所(最上段のフレームの関数と点の組)を初めて通る確保で必ず回収し、それ以外では前の回収の手間の 64 分の 1 ほどの確保の回数ごとに回収する(間隔は擬似乱数で揺らす)。
 実行したどの確保の場所でも少なくとも 1 回は回収するが、確保のたびには回収しない。
 呼び出し元のフレームの根が試されるのは、そのフレームが止まっている間に回収が起こったときだけである。
-`--gc-stress` と `--native-stack` が効くのはインタプリタ(`--backend interp`)だけである。
+`--gc-stress` と `--native-stack` が効くのはインタプリタと JIT(`--backend interp` と `jit`)だけである。
 `--backend wasm` はどちらも受け付けて無視する(回収は V8 が行い、Node のスタックは L から決める)。
 そのため、`--extra=--gc-stress` を付けても組 `kw` の回収は試されない。
 `keleut run` を Diktor で走らせる組(`dk`、`dk-ir`、`kf`、`x-ir`)では、テキストの KIR(`.kirt`)の実行を shim が断り、4 で終わる。
@@ -167,7 +175,8 @@ dune はこれらの行を捨てるので、kconform もこれらを記録との
 ```sh
 cargo build --release
 target/release/kconform --pairs dk,ki --suite all              # Diktor と keleut run を比べる
-target/release/kconform                                        # 使える組をすべて走らせる
+target/release/kconform                                        # 使える組のうち kj を除いてすべて走らせる
+target/release/kconform --pairs ki,kj --suite all              # JIT をインタプリタと比べる(--features llvm で組む)
 target/release/kconform --pairs dk --check-shim ../diktor/test/*.t  # shim が本物の diktor に渡すことの自己検査
 target/release/kconform expect conformance/kir-bad/*.t         # 記録した期待とだけ比べる
 target/release/kconform kir-roundtrip                          # コーパスの全件で KIR を往復させる
