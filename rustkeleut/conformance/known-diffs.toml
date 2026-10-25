@@ -462,3 +462,23 @@ line = 1
 pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
+
+# 限度は I: 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックを絞ると、
+# Diktor の KIR の評価器は論理的な深さが限度に届く前にスタックオーバーフロー(3)で止まる(IRSpec 11.5 節)。
+# conformance/depth/limit.t の記録は keleut run の結果である。
+
+[[diff]]
+file = "conformance/depth/limit.t"
+line = 23
+pairs = ["dk-ir", "x-ir"]
+reason = "限度は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
+ledger = "V213"
+against = "record"
+
+[[diff]]
+file = "conformance/depth/limit.t"
+line = 23
+pairs = ["ki"]
+reason = "限度は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
+ledger = "V213"
+against = "pair"
