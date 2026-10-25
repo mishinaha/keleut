@@ -357,6 +357,62 @@ impl P<'_> {
             UnimplementedValue { dst, what } => {
                 format!("{}unimplemented_value {}", d(dst), bytes(what.as_bytes()))
             }
+            Fx { op, dst, args } => {
+                let head = dst.as_ref().map(d).unwrap_or_default();
+                format!("{head}{}{} ({})", op.name(), self.fx_detail(op), regs(args))
+            }
+        }
+    }
+
+    fn effect(&self, e: u32) -> String {
+        match self.p.effects.get(e as usize) {
+            Some(x) => bytes(x.sym.as_bytes()),
+            None => format!("?{e}"),
+        }
+    }
+
+    fn effect_op(&self, e: u32, op: u32) -> String {
+        let name = self
+            .p
+            .effects
+            .get(e as usize)
+            .and_then(|x| x.ops.get(op as usize))
+            .map(|o| o.0.clone())
+            .unwrap_or_else(|| format!("?{op}"));
+        format!("{} {name}", self.effect(e))
+    }
+
+    fn fx_detail(&self, op: &FxOp) -> String {
+        match op {
+            FxOp::HandlerNew {
+                effect,
+                ops,
+                has_ret,
+                has_cancel,
+            } => {
+                let os: Vec<String> = ops
+                    .iter()
+                    .map(|(o, c)| format!("({} {})", self.effect_op(*effect, *o), c.name()))
+                    .collect();
+                format!(
+                    " {} [{}]{}{}",
+                    self.effect(*effect),
+                    os.join(" "),
+                    if *has_ret { " ret" } else { "" },
+                    if *has_cancel { " cancel" } else { "" }
+                )
+            }
+            FxOp::HandlerFind { effect, op } => format!(" {}", self.effect_op(*effect, *op)),
+            FxOp::Perform { effect, op } => format!(" {}", self.effect_op(*effect, *op)),
+            FxOp::ContCheck { nontail } => {
+                if *nontail {
+                    " ntail".into()
+                } else {
+                    " tail".into()
+                }
+            }
+            FxOp::HandlerHas(part) | FxOp::HandlerGet(part) => format!(" {}", part.name()),
+            _ => String::new(),
         }
     }
 
@@ -416,6 +472,13 @@ impl P<'_> {
                 format!("error {}{detail}{op}", self.p.error_number(kind))
             }
             Term::Unimplemented { what } => format!("unimplemented {}", bytes(what.as_bytes())),
+            Term::Fx { op, args } => {
+                let detail = match op {
+                    FxTermOp::TailCallClause { op } => format!(" {op}"),
+                    _ => String::new(),
+                };
+                format!("{}{detail} ({})", op.name(), regs(args))
+            }
         }
     }
 
@@ -449,9 +512,14 @@ impl P<'_> {
                 fr.any_slots, fr.raw_slots
             );
             for (n, (pt, live)) in fr.resume_points.iter().enumerate() {
+                let y = if fr.yield_points.get(n).copied().unwrap_or(true) {
+                    "yield"
+                } else {
+                    "noyield"
+                };
                 let _ = writeln!(
                     out,
-                    "  (resume {n} b{} {} (live {}))",
+                    "  (resume {n} b{} {} {y} (live {}))",
                     pt.block.0,
                     pt.index,
                     regs(&live)

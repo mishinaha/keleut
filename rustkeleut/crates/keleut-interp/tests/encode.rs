@@ -55,10 +55,16 @@ fn すべての関数の命令の列をたどれる() {
                             | op::DICT_APP
                             | op::TAIL_VALUE
                             | op::TAIL_METHOD
+                            | op::FX
                     ),
                     "{}: 関数 {i} の再開点が呼び出しを指さない",
                     path.display()
                 );
+                if o == op::FX {
+                    // エフェクトの命令の再開点は、呼び出しの一種(perform と番兵を受け取る呼び出し)を指す。
+                    let sub = (code.words[r.call_pc as usize] >> 8) as usize;
+                    assert!(code.fx[sub].is_call(), "{}: 関数 {i}", path.display());
+                }
                 if r.pc_after != u32::MAX {
                     assert!(
                         starts.contains(&r.pc_after) || r.pc_after as usize == code.words.len()

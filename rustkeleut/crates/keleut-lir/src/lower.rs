@@ -1,4 +1,4 @@
-//! KIR から LIR への下ろし(計画 261024-1 の 6.4 節のパス 1〜7、9、10)。
+//! KIR から LIR への下ろし(計画 261024-1 の 6.4 節のパス 1〜10。パス 11 と 12 は別の走査)。
 //!
 //! 1 回の走査で、KIR の木を基本ブロックのグラフにする。
 //! 各パスの受け持ちは次のとおりである。
@@ -12,12 +12,11 @@
 //! | 5 辞書の定数化 | `dbuiltin` と `dinst` の辞書のメソッドの呼び出しを、プリミティブと直の呼び出しにする | [`crate::dict`] |
 //! | 6 レコードの形 | 形の分かるレコードの操作の位置を定数にする | [`crate::record`] |
 //! | 7 数値の検査 | プリミティブの前の検査 | [`crate::numeric`] |
+//! | 8 エフェクト | `handle`、利用者の操作の `perform`、`resume`、操作節の関数の入口 | [`crate::effect`] |
 //! | 9 初期化の検査の省略 | 大域を読む前の検査を置くかどうか | [`crate::initck`] と本ファイルの [`Low::global_check`] |
 //! | 10 深さの命令 | 入口の `depth_enter`、呼び出しの前後の `depth_push` と `depth_restore`、`depth_check` | [`crate::depth`] |
 //!
-//! パス 12(生存区間とスロット)は [`crate::frame`] が、下ろした後のグラフに対して行う。
-//! `handle`、利用者の操作の `perform`、`resume` は、M89 のパス 8 までのあいだ `unimplemented_value` に下ろす。
-//! この命令はブロックを終えないので、後に続く KIR も下ろして検証する。
+//! パス 11(yield の刈り込み)とパス 12(生存区間とスロット)は [`crate::frame`] が、下ろした後のグラフに対して行う。
 
 use std::collections::HashMap;
 
@@ -55,6 +54,10 @@ pub(crate) struct Prog<'k> {
     pub global_func: Vec<Option<FuncId>>,
     /// `Array.each` の内側のループの関数。
     pub each_loop: Option<FuncId>,
+    /// 操作節の関数ごとの分類(パス 8。操作節でない関数は `None`)。
+    pub clause_class: Vec<Option<(u32, kir::ClauseClass)>>,
+    /// ハンドラのフレームの関数 `$rt_handle`(パス 8)。
+    pub rt_handle: Option<FuncId>,
     /// 下ろしの途中で見つけた内部の誤り。
     pub bug: Option<String>,
 }
@@ -72,6 +75,8 @@ impl<'k> Prog<'k> {
             init: initck::analyze(k),
             global_func: vec![None; k.globals.len()],
             each_loop: None,
+            clause_class: crate::effect::clause_classes(k),
+            rt_handle: None,
             bug: None,
         };
         p.shape(Vec::new());
@@ -139,6 +144,12 @@ pub(crate) struct Low<'p, 'k> {
     pub envs: Vec<Reg>,
     /// 形の分かるレコードのレジスタ(パス 6)。
     pub known: HashMap<Reg, Layout>,
+    /// 操作節の関数なら、その分類(パス 8。末尾の値と末尾の `resume` の下ろし方を決める)。
+    pub clause: Option<kir::ClauseClass>,
+    /// この関数の中の `resume` が再開する継続のレジスタ(パス 8)。
+    ///
+    /// G の節の本体では隠れた引数の継続、ハンドラ式の本体では隠れた引数の受け継いだ継続である。
+    pub resumption: Option<Reg>,
 }
 
 impl<'p, 'k> Low<'p, 'k> {
@@ -161,6 +172,8 @@ impl<'p, 'k> Low<'p, 'k> {
             dparams: Vec::new(),
             envs: Vec::new(),
             known: HashMap::new(),
+            clause: None,
+            resumption: None,
         }
     }
 
@@ -211,9 +224,18 @@ impl<'p, 'k> Low<'p, 'k> {
     }
 
     /// 値を返してブロックを終える。
+    ///
+    /// T の節の本体の末尾の値は、`resume` しない節の値なので `clause_value` にする(パス 8)。
     pub(crate) fn ret(&mut self, v: V) {
         let r = self.boxed(v);
-        self.b.terminate(Term::Return(r));
+        if self.clause == Some(kir::ClauseClass::T) {
+            self.b.terminate(Term::Fx {
+                op: FxTermOp::ClauseValue,
+                args: vec![r],
+            });
+        } else {
+            self.b.terminate(Term::Return(r));
+        }
     }
 
     /// 末尾の位置なら値を返して終え、そうでなければ値をそのまま渡す。
@@ -521,15 +543,11 @@ impl<'p, 'k> Low<'p, 'k> {
                 let v = self.perform(*effect, *op, args);
                 self.finish(v, tail)
             }
-            Exp::Handle(_) => {
-                let v = self.unimplemented_value("handle");
+            Exp::Handle(h) => {
+                let v = self.handle(h, tail)?;
                 self.finish(Some(v), tail)
             }
-            Exp::Resume { value, .. } => {
-                self.exp(*value, false)?;
-                let v = self.unimplemented_value("resume");
-                self.finish(Some(v), tail)
-            }
+            Exp::Resume { tail: t, value } => self.resume(*t && tail, *value, tail),
             Exp::Hole => {
                 self.b.terminate(Term::Error {
                     kind: RtError::Hole,
@@ -1032,17 +1050,64 @@ impl<'p, 'k> Low<'p, 'k> {
             self.b.emit(Inst::ConsoleWrite { dst, s });
             return Some(V::any(dst));
         }
-        Some(self.unimplemented_value("perform"))
+        let args: Vec<Reg> = vs.into_iter().map(|v| self.boxed(v)).collect();
+        Some(crate::effect::perform(self, effect.0, op, args))
     }
 
-    /// 評価したら未実装(終了状態 4)で終わる値。続きの KIR も下ろして検証できるよう、ブロックを終えない。
-    fn unimplemented_value(&mut self, what: &str) -> V {
-        let dst = self.b.reg(Rep::Any);
-        self.b.emit(Inst::UnimplementedValue {
-            dst,
-            what: what.to_string(),
-        });
-        V::any(dst)
+    /// ハンドラ式(パス 8)。
+    #[inline(never)]
+    fn handle(&mut self, h: &kir::Handle, tail: bool) -> Option<V> {
+        let body = self.closure(&h.body)?;
+        let mut clauses = Vec::with_capacity(h.ops.len());
+        for o in &h.ops {
+            clauses.push(self.closure(&o.part)?.reg);
+        }
+        let ret = match &h.ret {
+            Some(p) => Some(self.closure(p)?.reg),
+            None => None,
+        };
+        let cancel = match &h.cancel {
+            Some(p) => Some(self.closure(p)?.reg),
+            None => None,
+        };
+        let res = match self.resumption {
+            Some(r) => r,
+            None => self.b.konst(Const::Unit),
+        };
+        let ops = h.ops.iter().map(|o| (o.op, o.class)).collect();
+        crate::effect::handle(
+            self,
+            h.effect.0,
+            body.reg,
+            res,
+            ops,
+            clauses,
+            ret,
+            cancel,
+            h.tail && tail,
+        )
+    }
+
+    /// `resume`(パス 8)。`tail` は背骨の上の末尾の `resume` として下ろすか、`ret` は値を返して終えるか。
+    #[inline(never)]
+    fn resume(&mut self, tail: bool, value: ExpId, ret: bool) -> Option<V> {
+        let v = self.exp(value, false)?;
+        let v = self.boxed(v);
+        if tail {
+            match self.clause {
+                Some(kir::ClauseClass::T) => self.b.terminate(Term::Return(v)),
+                _ => self.b.terminate(Term::Fx {
+                    op: FxTermOp::TailResume,
+                    args: vec![v],
+                }),
+            }
+            return None;
+        }
+        let Some(k) = self.resumption else {
+            return self.bug("継続を持たない関数の中の resume");
+        };
+        let r = crate::effect::resume(self, k, v)?;
+        self.finish(Some(r), ret)
     }
 }
 

@@ -10,6 +10,7 @@ use keleut_lir::{
 };
 use keleut_rtcore::{ShapeId as RtShape, ShapeTable};
 
+use crate::effect::{Cont, HandlerRec, Pending};
 use crate::error::Stop;
 use crate::heap::{Heap, Roots};
 use crate::out::Out;
@@ -35,8 +36,22 @@ pub struct Rt<'p> {
     pub shapes: ShapeTable,
     /// 文脈の深さ `ctx.depth`。
     pub depth: u64,
-    /// 限度 `L`。
+    /// 今の限度(ふだんは `L`。`depth_limit` の伝播中は `L + R`。IRSpec 11.5 節)。
     pub limit: u64,
+    /// 限度 `L`。
+    pub max_depth: u64,
+    /// ハンドラ記録の表(箱 [`Kind::Handler`] の 1 番の語が添字)。
+    pub handlers: Vec<HandlerRec>,
+    /// 継続の表(箱 [`Kind::Cont`] の 1 番の語が添字)。
+    pub conts: Vec<Cont>,
+    /// 退避した状態語の表(箱 [`Kind::Pending`] の 1 番の語が添字)。
+    pub saved: Vec<Pending>,
+    /// 有効なハンドラの連鎖 `ctx.handlers` の先頭(無ければ Unit)。
+    pub chain: Word,
+    /// 状態語 `ctx.pending`。
+    pub pending: Pending,
+    /// 次に作るハンドラ記録の起動の番号。
+    pub next_handler: u64,
     /// 大域の値。
     pub globals: Vec<Word>,
     /// 大域の初期化済みの印。
@@ -123,6 +138,13 @@ impl<'p> Rt<'p> {
             shapes,
             depth: 0,
             limit,
+            max_depth: limit,
+            handlers: Vec::new(),
+            conts: Vec::new(),
+            saved: Vec::new(),
+            chain: Word::UNIT,
+            pending: Pending::None,
+            next_handler: 1,
             globals: vec![Word::UNIT; prog.globals.len()],
             global_init: vec![false; prog.globals.len()],
             inst_init: vec![false; prog.instances.len()],
@@ -649,6 +671,126 @@ impl<'p> Rt<'p> {
         Ok(Word::from_ptr(p))
     }
 
+    // ---- エフェクト ----
+
+    fn index_box(&mut self, kind: Kind, i: usize) -> Result<Word, Stop> {
+        let p = self.alloc_obj(kind, 0, 2)?;
+        // SAFETY: p は 2 語の新しい箱である。
+        unsafe { *p.add(1) = i as u64 };
+        Ok(Word::from_ptr(p))
+    }
+
+    /// 語が種類 `kind` の箱か。
+    pub fn is_kind(&self, w: Word, kind: Kind) -> bool {
+        // SAFETY: ポインタの語は生きている箱を指す。
+        w.is_ptr() && unsafe { value::kind_of(w) } == Some(kind)
+    }
+
+    fn index_of(w: Word) -> usize {
+        // SAFETY: 呼び出し側が箱の種類を確かめている。
+        unsafe { value::get(w, 1) as usize }
+    }
+
+    /// 表に項目を足してから、その添字の箱を作る。箱を作れなければ項目を外して失敗を返す。
+    ///
+    /// 箱の確保(M90 では安全点)の間も、項目は表(根)の中にある。
+    /// 表を広げられないときも、プロセスを止めずにメモリの不足を返す。
+    fn table_push<T>(
+        &mut self,
+        table: fn(&mut Self) -> &mut Vec<T>,
+        kind: Kind,
+        x: T,
+    ) -> Result<Word, Stop> {
+        let t = table(self);
+        t.try_reserve(1).map_err(|_| Stop::OutOfMemory)?;
+        let i = t.len();
+        t.push(x);
+        match self.index_box(kind, i) {
+            Ok(w) => Ok(w),
+            Err(e) => {
+                table(self).pop();
+                Err(e)
+            }
+        }
+    }
+
+    /// ハンドラ記録を作る。起動の番号を振る。
+    pub fn handler_new(&mut self, mut rec: HandlerRec) -> Result<Word, Stop> {
+        rec.id = self.next_handler;
+        let w = self.table_push(|r| &mut r.handlers, Kind::Handler, rec)?;
+        self.next_handler += 1;
+        Ok(w)
+    }
+
+    /// ハンドラ記録の箱の添字。ハンドラ記録でなければ内部の誤り。
+    pub fn hr_index(&self, w: Word) -> Result<usize, Stop> {
+        if self.is_kind(w, Kind::Handler) {
+            Ok(Self::index_of(w))
+        } else {
+            Err(Stop::Internal(format!(
+                "ハンドラ記録でない値: {}",
+                String::from_utf8_lossy(&self.show(w))
+            )))
+        }
+    }
+
+    /// ハンドラ記録。
+    pub fn hr(&self, w: Word) -> Result<&HandlerRec, Stop> {
+        let i = self.hr_index(w)?;
+        Ok(&self.handlers[i])
+    }
+
+    /// 書き換えるハンドラ記録。
+    pub fn hr_mut(&mut self, w: Word) -> Result<&mut HandlerRec, Stop> {
+        let i = self.hr_index(w)?;
+        Ok(&mut self.handlers[i])
+    }
+
+    /// 継続を作る。
+    pub fn cont_new(&mut self, c: Cont) -> Result<Word, Stop> {
+        self.table_push(|r| &mut r.conts, Kind::Cont, c)
+    }
+
+    /// 継続の箱の添字。継続でなければ内部の誤り。
+    pub fn cont_index(&self, w: Word) -> Result<usize, Stop> {
+        if self.is_kind(w, Kind::Cont) {
+            Ok(Self::index_of(w))
+        } else {
+            Err(Stop::Internal("継続でない値".into()))
+        }
+    }
+
+    /// 状態語を退避した値にする。
+    pub fn pending_box(&mut self, p: Pending) -> Result<Word, Stop> {
+        self.table_push(|r| &mut r.saved, Kind::Pending, p)
+    }
+
+    /// 退避した値から状態語を取り出す(表の項目は空にする)。
+    pub fn pending_unbox(&mut self, w: Word) -> Result<Pending, Stop> {
+        if !self.is_kind(w, Kind::Pending) {
+            return Err(Stop::Internal("退避した状態語でない値".into()));
+        }
+        Ok(std::mem::take(&mut self.saved[Self::index_of(w)]))
+    }
+
+    /// `depth_limit` の誤りを作り、限度を予備の分だけ広げる(IRSpec 11.5 節)。
+    pub fn depth_error(&mut self) -> Stop {
+        self.limit = self.max_depth + crate::reserve(self.max_depth);
+        Stop::DepthLimit(self.max_depth)
+    }
+
+    /// 実行時エラーを状態語にする。巻き戻さずに止まる誤りはそのまま返す。
+    pub fn raise(&mut self, s: Stop) -> Result<(), Stop> {
+        match s {
+            Stop::Pending => Ok(()),
+            s if s.is_fatal() => Err(s),
+            s => {
+                self.pending = Pending::Error(s);
+                Ok(())
+            }
+        }
+    }
+
     // ---- 診断 ----
 
     /// 付録 B の 2 番の文面。
@@ -804,6 +946,7 @@ impl<'p> Rt<'p> {
                 Some(Kind::DictInst | Kind::DictRecord | Kind::DictVariant) => {
                     out.extend_from_slice(b"<dict>")
                 }
+                Some(Kind::Handler | Kind::Cont | Kind::Pending) => out.extend_from_slice(b"<?>"),
                 None => out.extend_from_slice(b"<?>"),
             }
         }

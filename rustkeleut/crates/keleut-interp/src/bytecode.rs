@@ -111,6 +111,20 @@ pub mod op {
     pub const TAIL_METHOD: u8 = 82;
     pub const ERROR: u8 = 83;
     pub const UNIMPLEMENTED: u8 = 84;
+    pub const FX: u8 = 85;
+    pub const FX_TERM: u8 = 86;
+}
+
+/// 再開点の表の行の種類。
+pub mod rk {
+    /// ふつうの末尾でない呼び出し。番兵で戻ったら呼び出し元も番兵で戻る(伝播)。
+    pub const ORDINARY: u8 = 0;
+    /// 番兵を受け取る呼び出し(`call_body`、`cont_resume`、`call_clause`、`call_cancel`)。番兵を結果に書いて続ける。
+    pub const CATCH: u8 = 1;
+    /// `perform`。
+    pub const PERFORM: u8 = 2;
+    /// メソッドの値を末尾で呼ぶ命令の行(実装の関数を評価する間だけ使う)。
+    pub const TAIL: u8 = 3;
 }
 
 /// 再開点の表の 1 行。
@@ -122,6 +136,10 @@ pub struct ResumeEntry {
     pub pc_after: u32,
     /// 戻り値を書くスロット(末尾の呼び出しの行では使わない)。
     pub dst: u32,
+    /// 行の種類([`rk`])。
+    pub kind: u8,
+    /// yield を受け取りうるか(パス 11。`doc/lir.md` の 17 節)。
+    pub yields: bool,
 }
 
 /// 1 つの関数のバイトコード。
@@ -147,6 +165,10 @@ pub struct Code {
     pub errors: Vec<RtError>,
     /// `unimplemented` の文面。
     pub texts: Vec<String>,
+    /// エフェクトの命令の種類(`FX` の細目が添字)。
+    pub fx: Vec<keleut_lir::FxOp>,
+    /// エフェクトのブロックの終わりの種類(`FX_TERM` の細目が添字)。
+    pub fx_terms: Vec<keleut_lir::FxTermOp>,
 }
 
 struct Enc<'a> {
@@ -157,6 +179,8 @@ struct Enc<'a> {
     resume: Vec<ResumeEntry>,
     errors: Vec<RtError>,
     texts: Vec<String>,
+    fx: Vec<keleut_lir::FxOp>,
+    fx_terms: Vec<keleut_lir::FxTermOp>,
     block_pc: Vec<u32>,
     fixups: Vec<(usize, BlockId)>,
 }
@@ -309,11 +333,15 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
                 call_pc: u32::MAX,
                 pc_after: u32::MAX,
                 dst: u32::MAX,
+                kind: rk::ORDINARY,
+                yields: true,
             };
             nrp
         ],
         errors: Vec::new(),
         texts: Vec::new(),
+        fx: Vec::new(),
+        fx_terms: Vec::new(),
         block_pc: vec![0; f.blocks.len()],
         fixups: Vec::new(),
     };
@@ -327,10 +355,20 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
                 let rp = rp.ok_or_else(|| {
                     format!("{}: b{bi} の {ii} 番の呼び出しに再開点がありません", f.sym)
                 })?;
+                let kind = match inst {
+                    Inst::Fx {
+                        op: keleut_lir::FxOp::Perform { .. },
+                        ..
+                    } => rk::PERFORM,
+                    Inst::Fx { op, .. } if op.catches() => rk::CATCH,
+                    _ => rk::ORDINARY,
+                };
                 e.resume[rp as usize] = ResumeEntry {
                     call_pc: start,
                     pc_after: e.words.len() as u32,
                     dst: e.s(inst.def().expect("呼び出しは書き先を持つ")),
+                    kind,
+                    yields: frame.yield_points.get(rp as usize).copied().unwrap_or(true),
                 };
             }
         }
@@ -352,6 +390,8 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
         frame_words: HEADER_WORDS + (any + frame.raw_slots) as usize,
         errors: e.errors,
         texts: e.texts,
+        fx: e.fx,
+        fx_terms: e.fx_terms,
     })
 }
 
@@ -793,6 +833,16 @@ fn encode_inst(e: &mut Enc<'_>, rt: &Rt<'_>, inst: &Inst, rp: Option<u32>) -> Re
             e.texts.push(what.clone());
             e.op(UNIMPL_VALUE, (e.texts.len() - 1) as u32);
         }
+        Inst::Fx { op, dst, args } => {
+            e.fx.push(op.clone());
+            e.op(FX, (e.fx.len() - 1) as u32);
+            e.w(if op.is_call() { rp()? } else { u32::MAX });
+            match dst {
+                Some(d) => e.r(*d),
+                None => e.w(u32::MAX),
+            }
+            e.regs(args);
+        }
     }
     Ok(())
 }
@@ -802,6 +852,8 @@ fn tail_entry(e: &mut Enc<'_>, start: usize) -> u32 {
         call_pc: start as u32,
         pc_after: u32::MAX,
         dst: u32::MAX,
+        kind: rk::TAIL,
+        yields: true,
     });
     (e.resume.len() - 1) as u32
 }
@@ -865,6 +917,11 @@ fn encode_term(e: &mut Enc<'_>, t: &Term) -> Result<(), String> {
             e.texts.push(what.clone());
             e.op(UNIMPLEMENTED, (e.texts.len() - 1) as u32);
         }
+        Term::Fx { op, args } => {
+            e.fx_terms.push(op.clone());
+            e.op(FX_TERM, (e.fx_terms.len() - 1) as u32);
+            e.regs(args);
+        }
     }
     Ok(())
 }
@@ -881,8 +938,12 @@ pub fn disasm(code: &Code) -> String {
     );
     for (i, r) in code.resume.iter().enumerate() {
         s.push_str(&format!(
-            "  resume {i}: call {} after {} dst {}\n",
-            r.call_pc, r.pc_after as i64, r.dst as i64
+            "  resume {i}: call {} after {} dst {} kind {}{}\n",
+            r.call_pc,
+            r.pc_after as i64,
+            r.dst as i64,
+            r.kind,
+            if r.yields { "" } else { " noyield" }
         ));
     }
     let mut pc = 0;
@@ -890,9 +951,15 @@ pub fn disasm(code: &Code) -> String {
     while pc < w.len() {
         let op = (w[pc] & 0xff) as u8;
         let len = inst_len(w, pc);
+        let sub = (w[pc] >> 8) as usize;
+        let name = match op {
+            op::FX => code.fx.get(sub).map_or("fx", |x| x.name()),
+            op::FX_TERM => code.fx_terms.get(sub).map_or("fx_term", |x| x.name()),
+            _ => op_name(op),
+        };
         s.push_str(&format!(
             "  {pc:5}: {} sub={} {:?}\n",
-            op_name(op),
+            name,
             w[pc] >> 8,
             &w[pc + 1..pc + len]
         ));
@@ -930,6 +997,8 @@ pub fn inst_len(w: &[u32], pc: usize) -> usize {
         }
         TAIL_DIRECT => 3 + at(2),
         TAIL_VALUE => 4 + at(3),
+        FX => 4 + at(3),
+        FX_TERM => 2 + at(1),
         _ => 1,
     }
 }

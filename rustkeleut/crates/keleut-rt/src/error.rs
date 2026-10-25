@@ -4,8 +4,9 @@ use crate::out::WriteError;
 
 /// 評価が止まる理由。
 ///
-/// M87 にはハンドラが無いので、どれも最上位へそのまま届く。
-/// M89 は、これを状態語 `ctx.pending` の `ERROR(kind, 文面)` にして巻き戻す。
+/// 実行時エラー、`depth_limit`、メモリの不足、出力の失敗、未処理の操作は、後段が状態語 `ctx.pending` の
+/// `ERROR(kind, 文面)` にして巻き戻す(計画 6.6 節)。
+/// 未実装、内部の誤り、防壁の flush の失敗は巻き戻さずに止まる。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stop {
     /// 実行時エラー(付録 B)。文面は `実行時エラー: ` の後ろに書くバイト列である。
@@ -16,10 +17,19 @@ pub enum Stop {
     OutOfMemory,
     /// 標準出力に書けない(74)。
     Io(String),
+    /// 標準出力に書けず、巻き戻さずに止まる(74)。
+    ///
+    /// 防壁が抑制した例外を記録する前の flush の失敗である(Diktor の `flush_stdout_or_die` と同じく、すぐに止まる)。
+    /// 文面は [`Stop::Io`] と同じである。
+    IoAbort(String),
+    /// どのハンドラも処理しない利用者の操作(3)。文面は操作の名前である。
+    Unhandled(String),
     /// 未実装の機能に届いた(4)。
     Unimplemented(String),
     /// 処理系の内部の誤り(70)。
     Internal(String),
+    /// 状態語 `ctx.pending` が立っている(後段の中だけで使う。巻き戻しを続ける)。
+    Pending,
 }
 
 impl From<WriteError> for Stop {
@@ -43,11 +53,19 @@ impl Stop {
     /// 終了状態。
     pub fn exit_code(&self) -> u8 {
         match self {
-            Stop::Runtime(_) | Stop::DepthLimit(_) | Stop::OutOfMemory => 3,
-            Stop::Io(_) => 74,
+            Stop::Runtime(_) | Stop::DepthLimit(_) | Stop::OutOfMemory | Stop::Unhandled(_) => 3,
+            Stop::Io(_) | Stop::IoAbort(_) => 74,
             Stop::Unimplemented(_) => 4,
-            Stop::Internal(_) => 70,
+            Stop::Internal(_) | Stop::Pending => 70,
         }
+    }
+
+    /// 巻き戻さずに止まる誤り(未実装、内部の誤り、防壁の flush の失敗)か。
+    pub fn is_fatal(&self) -> bool {
+        matches!(
+            self,
+            Stop::Unimplemented(_) | Stop::Internal(_) | Stop::IoAbort(_)
+        )
     }
 
     /// 標準エラーに書く診断(改行を含む)。
@@ -62,13 +80,19 @@ impl Stop {
                 format!("実行時エラー: 論理的な深さが限度 {l} を超えました").as_bytes(),
             ),
             Stop::OutOfMemory => m.extend_from_slice("実行時エラー: メモリ不足です".as_bytes()),
-            Stop::Io(s) => {
+            Stop::Io(s) | Stop::IoAbort(s) => {
                 m.extend_from_slice(format!("keleut: 標準出力に書き出せません: {s}").as_bytes())
             }
             Stop::Unimplemented(s) => {
                 m.extend_from_slice(format!("keleut: 未実装: {s}").as_bytes())
             }
+            Stop::Unhandled(s) => {
+                m.extend_from_slice(format!("未処理のエフェクト操作: {s}").as_bytes())
+            }
             Stop::Internal(s) => m.extend_from_slice(format!("keleut: 内部エラー: {s}").as_bytes()),
+            Stop::Pending => {
+                m.extend_from_slice("keleut: 内部エラー: 状態語が最上位で残りました".as_bytes())
+            }
         }
         m.push(b'\n');
         m
@@ -98,6 +122,8 @@ mod tests {
         );
         assert_eq!(Stop::OutOfMemory.exit_code(), 3);
         assert_eq!(Stop::Io(String::new()).exit_code(), 74);
+        assert_eq!(Stop::IoAbort(String::new()).exit_code(), 74);
+        assert!(Stop::IoAbort(String::new()).is_fatal());
         assert_eq!(Stop::Unimplemented(String::new()).exit_code(), 4);
         assert_eq!(Stop::Internal(String::new()).exit_code(), 70);
     }

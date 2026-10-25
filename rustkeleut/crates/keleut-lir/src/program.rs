@@ -11,7 +11,7 @@
 //! `def_value` などの式は `thunk` の関数を直に呼んで評価し、深さを増やさない
 //! (初期化の手順の深さは 0。IRSpec 11.2 節)。
 
-use kir::{FnKind, GlobalKind as KG, Step};
+use kir::{GlobalKind as KG, Step};
 
 use crate::builder::Builder;
 use crate::ir::*;
@@ -27,6 +27,7 @@ enum Extra {
     Extern(Prim),
     BuiltinMethod(Prim),
     Init(usize),
+    RtHandle,
 }
 
 /// 組み立てを関数にする。
@@ -51,53 +52,11 @@ fn lower_kir_fn(prog: &mut Prog, i: usize) -> Func {
     let f = &k.functions[i];
     let mut lw = Low::new(prog, Some((kir::FnId(i as u32), f)));
     lw.entry();
-    if f.kind == FnKind::Opclause {
-        // 節の選択は M89 のパス 8 が受け持つ。ここでは照合とガードを本体の前に置き、
-        // 一致しなければ未実装で終える。
-        let fail = lw.b.block();
-        for (j, &pat) in f.pats.iter().enumerate() {
-            if let Some(reg) = lw.slots[j] {
-                let v = V {
-                    reg,
-                    rep: lw.slot_rep[j],
-                };
-                lw.pattern(pat, v, fail, &Target::Slots);
-            }
+    if !crate::effect::lower_entry(&mut lw, f, i) {
+        lw.exp(f.body, true);
+        if lw.b.current().is_some() {
+            lw.bug(format!("関数 {} の本体がブロックを終えなかった", f.sym));
         }
-        if let Some(g) = f.guard
-            && let Some(gv) = lw.exp(g, false)
-        {
-            let cond = lw.coerce(gv, Rep::Bool);
-            let body = lw.b.block();
-            lw.b.terminate(Term::Branch {
-                cond,
-                then: body,
-                else_: fail,
-            });
-            lw.b.switch_to(body);
-        }
-        let cont = lw.b.current();
-        lw.b.switch_to(fail);
-        lw.b.terminate(Term::Unimplemented {
-            what: "操作節の選択".to_string(),
-        });
-        match cont {
-            Some(c) => lw.b.switch_to(c),
-            None => {
-                let b = std::mem::replace(&mut lw.b, Builder::new());
-                return func_of(
-                    f.sym.clone(),
-                    FuncKind::Kir(f.kind),
-                    f.yields,
-                    f.caps.len() as u32,
-                    b,
-                );
-            }
-        }
-    }
-    lw.exp(f.body, true);
-    if lw.b.current().is_some() {
-        lw.bug(format!("関数 {} の本体がブロックを終えなかった", f.sym));
     }
     let b = std::mem::replace(&mut lw.b, Builder::new());
     func_of(
@@ -292,6 +251,16 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
             func: f,
         });
     }
+    if prog.clause_class.iter().any(|c| c.is_some()) {
+        let f = alloc(
+            &mut extras,
+            "$rt_handle".to_string(),
+            FuncKind::Handler,
+            true,
+            Extra::RtHandle,
+        );
+        prog.rt_handle = Some(f);
+    }
     let mut init = Vec::new();
     for (ui, u) in k.units.iter().enumerate() {
         let f = alloc(
@@ -329,6 +298,7 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
                 func_of(sym, kind, yields, 0, wrappers::prim_body(p))
             }
             Extra::Init(u) => lower_init(&mut prog, u),
+            Extra::RtHandle => func_of(sym, kind, yields, 0, crate::effect::rt_handle_body(me)),
         };
         funcs.push(f);
     }
@@ -410,6 +380,16 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
         shapes: std::mem::take(&mut prog.shapes),
         strings: std::mem::take(&mut prog.strings),
         init,
+        effects: k
+            .effects
+            .iter()
+            .map(|e| EffectInfo {
+                sym: e.sym.clone(),
+                display: display_name(&e.sym),
+                ops: e.ops.iter().map(|o| (o.name.clone(), o.arity)).collect(),
+            })
+            .collect(),
+        rt_handle: prog.rt_handle,
     })
 }
 

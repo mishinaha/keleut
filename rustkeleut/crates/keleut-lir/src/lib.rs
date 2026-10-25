@@ -7,16 +7,16 @@
 //!
 //! | 入口 | 働き |
 //! |---|---|
-//! | [`lower`] | 検証済みの KIR を LIR にし(パス 1〜7、9、10、12)、各段の後で LIR を検証する |
-//! | [`lower_unassigned`] | パス 12 の前の LIR を作って検証する |
-//! | [`assign_frames`] | パス 12(生存区間、再開点、スロット)を行う |
+//! | [`lower`] | 検証済みの KIR を LIR にし(パス 1〜12)、各段の後で LIR を検証する |
+//! | [`lower_opts`] | yield の刈り込み(パス 11)を外せる [`lower`] |
+//! | [`lower_unassigned`] | パス 11 の前の LIR を作って検証する |
+//! | [`assign_frames`] | パス 11(yield の刈り込み)と 12(生存区間、再開点、スロット)を行う |
 //! | [`verify()`] | LIR を検証する |
 //! | [`print()`] | LIR を印字する |
 //!
-//! エフェクトの下ろし(パス 8)と yield の刈り込み(パス 11)は M89 で足す。
-//! それまでは、`handle`、利用者の操作の `perform`、`resume` を、評価したら未実装(終了状態 4)で終わる
-//! `unimplemented_value` に下ろす。
-//! この命令はブロックを終えないので、後に続く KIR も下ろして検証する。
+//! エフェクトの下ろし(パス 8)は [`effect`] にある。
+//! `handle`、利用者の操作の `perform`、`resume` を、すべての後段が共有するハンドラのフレームの関数
+//! `$rt_handle` とエフェクトの命令に下ろす(`doc/lir.md` の 16 節)。
 //! プレリュードの `Console.write`(`runtime` の印の付いた操作)の `perform` は、実行時の直の呼び出し
 //! `console_write` に下ろす。
 
@@ -24,6 +24,7 @@ mod bits;
 mod builder;
 mod depth;
 mod dict;
+pub mod effect;
 mod frame;
 mod initck;
 pub mod ir;
@@ -140,23 +141,33 @@ pub fn lower_unassigned(p: &kir::Program, max_nest: usize) -> Result<Program, Er
     Ok(lp)
 }
 
-/// パス 12 を行い、検証する。
+/// パス 11 と 12 を行い、検証する。
 pub fn assign_frames(p: &mut Program) -> Result<(), Error> {
+    assign_frames_with(p, true)
+}
+
+/// パス 11 と 12 を行い、検証する。`yield_prune` が偽なら yield を刈り込まない(`--no-yield-prune`)。
+pub fn assign_frames_with(p: &mut Program, yield_prune: bool) -> Result<(), Error> {
     for f in &mut p.funcs {
-        frame::assign(f);
+        frame::assign(f, yield_prune);
     }
     verify(p)
 }
 
-/// 検証済みの KIR を LIR にする(パス 1〜7、9、10、12)。下ろしの後とパス 12 の後に検証する。
+/// 検証済みの KIR を LIR にする(パス 1〜12)。下ろしの後とパス 12 の後に検証する。
 pub fn lower(p: &kir::Program) -> Result<Program, Error> {
     lower_with(p, kir::N_NEST)
 }
 
 /// 深さの上限を与えて [`lower`] を行う。
 pub fn lower_with(p: &kir::Program, max_nest: usize) -> Result<Program, Error> {
+    lower_opts(p, max_nest, true)
+}
+
+/// 深さの上限と yield の刈り込みの有無を与えて [`lower`] を行う。
+pub fn lower_opts(p: &kir::Program, max_nest: usize, yield_prune: bool) -> Result<Program, Error> {
     let mut lp = lower_unassigned(p, max_nest)?;
-    assign_frames(&mut lp)?;
+    assign_frames_with(&mut lp, yield_prune)?;
     Ok(lp)
 }
 

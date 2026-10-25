@@ -193,6 +193,12 @@ fn map_inst_regs(i: &mut Inst, f: &impl Fn(Reg) -> Reg) {
             m(dst);
             m(s);
         }
+        Fx { dst, args, .. } => {
+            if let Some(d) = dst {
+                m(d);
+            }
+            mv(args);
+        }
     }
 }
 
@@ -220,6 +226,7 @@ fn map_term_regs(t: &mut Term, f: &impl Fn(Reg) -> Reg) {
                 *r = f(*r);
             }
         }
+        Term::Fx { args, .. } => mv(args),
     }
 }
 
@@ -593,8 +600,22 @@ pub(crate) fn points_counted(func: &Func) -> (Points, Points, u64) {
     (r.out.finish(), s.out.finish(), work)
 }
 
-/// パス 12 を関数に行う。
-pub(crate) fn assign(func: &mut Func) {
+/// パス 11(yield の刈り込み。D534)。再開点ごとに、yield を受け取りうるかを決める。
+///
+/// `prune` が真なら、呼び出しの `yield` の印(KIR の `may_yield`)をそのまま使う。
+/// 偽(`--no-yield-prune`)なら、すべての再開点を受け取りうるとする。
+/// インタプリタはすべての再開点からフレームを続けられるので、この印は yield が印の偽の再開点に届いたことを
+/// 見つけるのに使う(`doc/lir.md` の 17 節)。
+pub(crate) fn yield_points(func: &Func, points: &Points, prune: bool) -> Vec<bool> {
+    points
+        .points()
+        .iter()
+        .map(|p| !prune || func.blocks[p.block.index()].insts[p.index as usize].call_yields())
+        .collect()
+}
+
+/// パス 11 と 12 を関数に行う。
+pub(crate) fn assign(func: &mut Func, prune: bool) {
     compact(func);
     let iv = intervals(func);
     let n = func.regs.len();
@@ -638,11 +659,13 @@ pub(crate) fn assign(func: &mut Func) {
         counts[class] = next;
     }
     let (resume_points, safepoints) = points(func);
+    let yield_points = yield_points(func, &resume_points, prune);
     func.frame = Some(Frame {
         slot,
         any_slots: counts[0],
         raw_slots: counts[1],
         resume_points,
         safepoints,
+        yield_points,
     });
 }

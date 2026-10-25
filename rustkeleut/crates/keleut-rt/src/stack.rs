@@ -24,7 +24,9 @@
 //! 塊を取れないとき(システムの確保の失敗)は、プロセスを止めずに [`OutOfMemory`] を返す。
 //! 呼び出し側はこれをヒープと同じくメモリの不足(付録 B の 19 番)にする。
 //! 最初の塊も最初のフレームを置くときに取るので、空の値スタックを作る操作は失敗しない。
-//! `cancel` の節がフレームを積めるように予備の塊を残すことは、M89 で決める。
+//! 最初の塊を取るときに予備の塊(1 MiB)も取っておく。
+//! 塊を取れなかったら、予備を次に使える塊にしてから [`OutOfMemory`] を返す。
+//! メモリの不足の誤りを巻き戻す間に走る `cancel` 節は、予備にフレームを積める(計画 6.5 節)。
 
 use std::alloc::{Layout, alloc_zeroed};
 
@@ -49,6 +51,10 @@ pub struct ValueStack {
     chunks: Vec<Chunk>,
     /// 使っている最後の塊。
     cur: usize,
+    /// 取っておいた予備の塊。
+    spare: Option<Box<[u64]>>,
+    /// 塊を取れなかった後に、次に使う予備の塊。
+    armed: Option<Box<[u64]>>,
 }
 
 impl Default for ValueStack {
@@ -75,6 +81,27 @@ impl ValueStack {
         ValueStack {
             chunks: Vec::new(),
             cur: 0,
+            spare: None,
+            armed: None,
+        }
+    }
+
+    /// 新しい塊の領域。取れなければ予備を次に使える塊にして失敗を返し、予備があればそれを使う。
+    fn take_mem(&mut self, words: usize) -> Result<Box<[u64]>, OutOfMemory> {
+        if let Some(m) = self.armed.take() {
+            if m.len() >= words {
+                return Ok(m);
+            }
+            self.armed = Some(m);
+        }
+        match new_mem(words.max(CHUNK_WORDS)) {
+            Ok(m) => Ok(m),
+            Err(e) => {
+                if let Some(sp) = self.spare.take() {
+                    self.armed = Some(sp);
+                }
+                Err(e)
+            }
         }
     }
 
@@ -113,7 +140,10 @@ impl ValueStack {
     pub fn place(&mut self, top: u64, words: usize) -> Result<u64, OutOfMemory> {
         if self.chunks.is_empty() {
             debug_assert_eq!(top, 0);
-            let mem = new_mem(words.max(CHUNK_WORDS))?;
+            if self.spare.is_none() && self.armed.is_none() {
+                self.spare = Some(new_mem(CHUNK_WORDS)?);
+            }
+            let mem = self.take_mem(words)?;
             self.chunks.push(Chunk { mem, base: 0 });
             self.cur = 0;
             return Ok(0);
@@ -139,7 +169,7 @@ impl ValueStack {
             self.chunks[i].base = next_base;
             self.chunks.truncate(i + 1);
         } else {
-            let mem = new_mem(words.max(CHUNK_WORDS))?;
+            let mem = self.take_mem(words)?;
             self.chunks.truncate(i);
             self.chunks.push(Chunk {
                 mem,
@@ -190,5 +220,18 @@ mod tests {
         assert_eq!(s.place(10, usize::MAX / 4), Err(OutOfMemory));
         assert_eq!(s.chunk_count(), 1);
         assert_eq!(s.place(10, 10), Ok(10));
+    }
+
+    #[test]
+    fn 塊を取れなかった後は予備の塊にフレームを置ける() {
+        let mut s = ValueStack::new();
+        assert_eq!(s.place(0, 10), Ok(0));
+        assert!(s.spare.is_some());
+        assert_eq!(s.place(10, usize::MAX / 4), Err(OutOfMemory));
+        assert!(s.armed.is_some() && s.spare.is_none());
+        // 今の塊に入らないフレームは、予備の塊に置く。
+        assert_eq!(s.place(10, CHUNK_WORDS), Ok(CHUNK_WORDS as u64));
+        assert!(s.armed.is_none());
+        assert_eq!(s.chunk_count(), 2);
     }
 }

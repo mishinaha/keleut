@@ -3,7 +3,7 @@
 //! 小さな KIR のテキストを下ろし、各パスが出す命令の形を確かめる。
 //! 土台は `conformance/kir-bad/deep-base.kirt` の組み込みの表の部分である。
 
-use keleut_lir::{FuncKind, Inst, Program, RtError, Term};
+use keleut_lir::{FuncKind, FxOp, Inst, Program, RtError, Term};
 use std::path::PathBuf;
 
 /// 組み込みの表(型、クラス、組み込みの値)までの部分。
@@ -200,34 +200,115 @@ fn 形の分かるレコードは位置で読む() {
     );
 }
 
-#[test]
-fn ハンドラと_resume_と利用者の操作は未実装に下ろす() {
+fn ex_handle(prune: bool) -> Program {
     let src = std::fs::read(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../kir/tests/fixtures/ex_handle.kir"),
     )
     .unwrap();
     let k = kir::load(&src).unwrap();
-    let p = keleut_lir::lower(&k).unwrap();
-    let mut whats: std::collections::BTreeSet<String> = p
+    keleut_lir::lower_opts(&k, kir::N_NEST, prune).unwrap()
+}
+
+#[test]
+fn ハンドラと_resume_と利用者の操作をエフェクトの命令に下ろす() {
+    let p = ex_handle(true);
+    // 未実装の命令は残らない。
+    for f in &p.funcs {
+        for b in &f.blocks {
+            assert!(!matches!(b.term, Term::Unimplemented { .. }), "{}", f.sym);
+            for i in &b.insts {
+                assert!(!matches!(i, Inst::UnimplementedValue { .. }), "{}", f.sym);
+            }
+        }
+    }
+    let h = p.rt_handle.expect("$rt_handle");
+    let hf = &p.funcs[h.index()];
+    assert_eq!(hf.kind, FuncKind::Handler);
+    assert_eq!(hf.params.len(), 3);
+    // ハンドラ式はハンドラ記録を作って $rt_handle を呼ぶ。
+    let all: Vec<&Inst> = p.funcs.iter().flat_map(insts).collect();
+    let new = all
+        .iter()
+        .filter(|i| {
+            matches!(
+                i,
+                Inst::Fx {
+                    op: FxOp::HandlerNew { .. },
+                    ..
+                }
+            )
+        })
+        .count();
+    assert!(new > 0);
+    let calls_h = p
         .funcs
         .iter()
-        .flat_map(|f| f.blocks.iter())
-        .filter_map(|b| match &b.term {
-            Term::Unimplemented { what } => Some(what.clone()),
-            _ => None,
+        .flat_map(|f| {
+            f.blocks.iter().flat_map(|b| {
+                b.insts
+                    .iter()
+                    .filter(|i| matches!(i, Inst::CallDirect { func, .. } if *func == h))
+                    .count()
+                    .checked_add(usize::from(
+                        matches!(&b.term, Term::TailCallDirect { func, .. } if *func == h),
+                    ))
+            })
         })
-        .collect();
-    whats.extend(p.funcs.iter().flat_map(insts).filter_map(|i| match i {
-        Inst::UnimplementedValue { what, .. } => Some(what.clone()),
-        _ => None,
-    }));
-    assert!(whats.contains("handle"), "{whats:?}");
-    for w in &whats {
-        assert!(
-            ["handle", "perform", "resume", "操作節の選択"].contains(&w.as_str()),
-            "{w}"
-        );
+        .sum::<usize>();
+    assert!(calls_h >= new, "{calls_h} {new}");
+    assert!(all.iter().any(|i| matches!(
+        i,
+        Inst::Fx {
+            op: FxOp::Perform { .. },
+            ..
+        }
+    )));
+    // 操作節の関数は隠れた引数を 2 つ持つ(照合が外れうる節は、次の候補を tail_call_clause で末尾で呼ぶ)。
+    for f in p
+        .funcs
+        .iter()
+        .filter(|f| f.kind == FuncKind::Kir(kir::FnKind::Opclause))
+    {
+        assert!(f.params.len() >= 2, "{}", f.sym);
     }
+    // ハンドラ式の本体の関数は、受け継ぐ継続を隠れた引数に持つ。
+    for f in p
+        .funcs
+        .iter()
+        .filter(|f| f.kind == FuncKind::Kir(kir::FnKind::Handlebody))
+    {
+        assert_eq!(f.params.len(), 1, "{}", f.sym);
+    }
+}
+
+#[test]
+fn yield_の刈り込みは呼び出しの印に従い外すとすべての再開点が受け取る() {
+    let pruned = ex_handle(true);
+    let kept = ex_handle(false);
+    let mut noyield = 0;
+    for (f, g) in pruned.funcs.iter().zip(&kept.funcs) {
+        let (fr, gr) = (f.frame.as_ref().unwrap(), g.frame.as_ref().unwrap());
+        assert!(gr.yield_points.iter().all(|&y| y), "{}", g.sym);
+        for (i, pt) in fr.resume_points.points().iter().enumerate() {
+            let inst = &f.blocks[pt.block.index()].insts[pt.index as usize];
+            assert_eq!(fr.yield_points[i], inst.call_yields(), "{}", f.sym);
+            noyield += usize::from(!fr.yield_points[i]);
+        }
+    }
+    assert!(noyield > 0);
+    // yield の印の付いた呼び出しの再開点を受け取らないとしたら、検証器が拒否する。
+    let mut bad = pruned.clone();
+    let (fi, ri) = bad
+        .funcs
+        .iter()
+        .enumerate()
+        .find_map(|(fi, f)| {
+            let fr = f.frame.as_ref()?;
+            fr.yield_points.iter().position(|&y| y).map(|ri| (fi, ri))
+        })
+        .unwrap();
+    bad.funcs[fi].frame.as_mut().unwrap().yield_points[ri] = false;
+    rejects(&bad, "yield の印の付いた呼び出し");
 }
 
 /// 検証に通る小さなプログラム(`main/f` は引数の符号で分ける)。
@@ -454,33 +535,6 @@ fn 捕獲は入口で読み再開点の集合に入る() {
     let fr = f.frame.as_ref().unwrap();
     assert_eq!(fr.resume_points.len(), 1);
     assert!(fr.resume_points.live(0).contains(&env));
-}
-
-#[test]
-fn ハンドラの後の式も下ろす() {
-    let src = std::fs::read(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../kir/tests/fixtures/ex_handle.kir"),
-    )
-    .unwrap();
-    let k = kir::load(&src).unwrap();
-    let p = keleut_lir::lower(&k).unwrap();
-    // unimplemented_value はブロックを終えないので、その値を読む続きの命令も下ろしてある。
-    let (mut n, mut used) = (0, 0);
-    for f in &p.funcs {
-        for b in &f.blocks {
-            for (ii, i) in b.insts.iter().enumerate() {
-                if let Inst::UnimplementedValue { dst, .. } = i {
-                    n += 1;
-                    let later = b.insts[ii + 1..].iter().any(|x| x.uses().contains(dst))
-                        || b.term.uses().contains(dst);
-                    if later {
-                        used += 1;
-                    }
-                }
-            }
-        }
-    }
-    assert!(n > 0 && used > 0, "{n} {used}");
 }
 
 /// 検証器が `p` を、`what` を含む文面で拒否することを確かめる。

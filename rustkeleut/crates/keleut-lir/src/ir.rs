@@ -12,7 +12,7 @@
 //! - 関数の境目は一様で、引数も戻り値も `any` である(D503)。
 
 pub use crate::live::{Point, Points};
-pub use kir::{Abi, ClassId, FnKind, GlobalId, InstanceId, Rep, TypeId};
+pub use kir::{Abi, ClassId, ClauseClass, FnKind, GlobalId, InstanceId, Rep, TypeId};
 
 macro_rules! id_type {
     ($(#[$doc:meta])* $name:ident) => {
@@ -574,8 +574,265 @@ pub enum Inst {
     ConsoleWrite { dst: Reg, s: Reg },
     /// 未実装の機能に届いた(終了状態 4)。`dst`(`any`)は続きの下ろしのための値で、書かれることはない。
     ///
-    /// M89 でエフェクトの下ろしに置き換える。
+    /// いまの下ろしは出さない(M86 の置き場。パス 8 がエフェクトの命令に置き換えた)。
     UnimplementedValue { dst: Reg, what: String },
+    /// エフェクトの命令(パス 8。`doc/lir.md` の 16 節)。
+    ///
+    /// 被演算子の数と Rep、結果の有無と Rep は [`FxOp::sig`] が決める。
+    Fx {
+        op: FxOp,
+        dst: Option<Reg>,
+        args: Vec<Reg>,
+    },
+}
+
+/// ハンドラ記録の節の欄。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HandlerPart {
+    /// `return` 節。
+    Ret,
+    /// `cancel` 節。
+    Cancel,
+}
+
+impl HandlerPart {
+    /// 印字の綴り。
+    pub fn name(self) -> &'static str {
+        match self {
+            HandlerPart::Ret => "ret",
+            HandlerPart::Cancel => "cancel",
+        }
+    }
+}
+
+/// [`Inst::Fx`] の種類。
+///
+/// 意味は `doc/lir.md` の 16 節にある。
+/// `hr` はハンドラ記録、`k` は継続、`p` は退避した状態語の値で、どれも `any` の語である。
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FxOp {
+    /// `hr = handler_new E (op class)… [ret] [cancel]`。被演算子は本体、受け継ぐ継続、節の関数の値(書いた順)、
+    /// `return` 節(`has_ret` のとき)、`cancel` 節(`has_cancel` のとき)である。
+    HandlerNew {
+        effect: u32,
+        ops: Vec<(u32, kir::ClauseClass)>,
+        has_ret: bool,
+        has_cancel: bool,
+    },
+    /// `hr = handler_find E op`。連鎖の中でエフェクトが `E` である最も内側のハンドラ記録。
+    /// `op` は、見つからないときの文面に書く操作である。
+    HandlerFind { effect: u32, op: u32 },
+    /// `saved = handlers_get`。今の連鎖の先頭(空なら Unit)。
+    HandlersGet,
+    /// `r = perform E op hr saved (a…)`。末尾でない呼び出しの一種で、再開点を持つ。
+    Perform { effect: u32, op: u32 },
+    /// `cont_check k`。`nontail` なら、節の外でないこと、再開済みでないこと、再開した `perform` の深さを確かめる。
+    /// そうでなければ再開済みでないことだけを確かめる。
+    ContCheck { nontail: bool },
+    /// `b = is_cont x`。
+    IsCont,
+    /// `hr = cont_hr k`。
+    ContHr,
+    /// `handler_install hr`。
+    HandlerInstall,
+    /// `handler_uninstall hr`。
+    HandlerUninstall,
+    /// `r = call_body hr`。番兵を受け取る呼び出し。
+    CallBody,
+    /// `r = cont_resume k v`。番兵を受け取る呼び出しの一種で、継続を写し戻して続ける。
+    ContResume,
+    /// `b = is_pending r`。
+    IsPending,
+    /// `c = pending_class hr`。
+    PendingClass,
+    /// `p = pending_take`。
+    PendingTake,
+    /// `pending_restore p`。
+    PendingRestore,
+    /// `v = pending_value p`。
+    PendingValue,
+    /// `p = pending_discard hr v`。
+    PendingDiscard,
+    /// `pending_suppress`。
+    PendingSuppress,
+    /// `k = cont_make hr`。
+    ContMake,
+    /// `r = call_clause k`。番兵を受け取る呼び出し。
+    CallClause,
+    /// `cont_kill k`。
+    ContKill,
+    /// `b = cont_used k`。
+    ContUsed,
+    /// `b = handler_has hr ret|cancel`。
+    HandlerHas(HandlerPart),
+    /// `f = handler_get hr ret|cancel`。
+    HandlerGet(HandlerPart),
+    /// `r = call_cancel f`。番兵を受け取る呼び出し。
+    CallCancel,
+    /// `l = limit_get`(`i64`)。
+    LimitGet,
+    /// `limit_set l`。
+    LimitSet,
+}
+
+/// [`FxOp`] の被演算子の決まり。
+pub enum FxArgs {
+    /// 数の決まった被演算子(Rep の列)。
+    Fixed(&'static [Rep]),
+    /// 少なくともこの数で、どれも `any`。
+    AtLeast(usize),
+}
+
+impl FxOp {
+    /// 印字の綴り。
+    pub fn name(&self) -> &'static str {
+        match self {
+            FxOp::HandlerNew { .. } => "handler_new",
+            FxOp::HandlerFind { .. } => "handler_find",
+            FxOp::HandlersGet => "handlers_get",
+            FxOp::Perform { .. } => "perform",
+            FxOp::ContCheck { .. } => "cont_check",
+            FxOp::IsCont => "is_cont",
+            FxOp::ContHr => "cont_hr",
+            FxOp::HandlerInstall => "handler_install",
+            FxOp::HandlerUninstall => "handler_uninstall",
+            FxOp::CallBody => "call_body",
+            FxOp::ContResume => "cont_resume",
+            FxOp::IsPending => "is_pending",
+            FxOp::PendingClass => "pending_class",
+            FxOp::PendingTake => "pending_take",
+            FxOp::PendingRestore => "pending_restore",
+            FxOp::PendingValue => "pending_value",
+            FxOp::PendingDiscard => "pending_discard",
+            FxOp::PendingSuppress => "pending_suppress",
+            FxOp::ContMake => "cont_make",
+            FxOp::CallClause => "call_clause",
+            FxOp::ContKill => "cont_kill",
+            FxOp::ContUsed => "cont_used",
+            FxOp::HandlerHas(_) => "handler_has",
+            FxOp::HandlerGet(_) => "handler_get",
+            FxOp::CallCancel => "call_cancel",
+            FxOp::LimitGet => "limit_get",
+            FxOp::LimitSet => "limit_set",
+        }
+    }
+
+    /// 被演算子の決まりと、結果の Rep(結果を持たなければ `None`)。
+    pub fn sig(&self) -> (FxArgs, Option<Rep>) {
+        use FxArgs::*;
+        const A: &[Rep] = &[Rep::Any];
+        const AA: &[Rep] = &[Rep::Any, Rep::Any];
+        match self {
+            FxOp::HandlerNew {
+                ops,
+                has_ret,
+                has_cancel,
+                ..
+            } => (
+                AtLeast(2 + ops.len() + usize::from(*has_ret) + usize::from(*has_cancel)),
+                Some(Rep::Any),
+            ),
+            FxOp::HandlerFind { .. } | FxOp::HandlersGet | FxOp::PendingTake | FxOp::LimitGet => (
+                Fixed(&[]),
+                Some(if matches!(self, FxOp::LimitGet) {
+                    Rep::I64
+                } else {
+                    Rep::Any
+                }),
+            ),
+            FxOp::Perform { .. } => (AtLeast(2), Some(Rep::Any)),
+            FxOp::ContCheck { .. }
+            | FxOp::HandlerInstall
+            | FxOp::HandlerUninstall
+            | FxOp::PendingRestore
+            | FxOp::ContKill => (Fixed(A), None),
+            FxOp::IsCont | FxOp::IsPending | FxOp::ContUsed | FxOp::HandlerHas(_) => {
+                (Fixed(A), Some(Rep::Bool))
+            }
+            FxOp::PendingClass => (Fixed(A), Some(Rep::I32)),
+            FxOp::ContHr
+            | FxOp::CallBody
+            | FxOp::PendingValue
+            | FxOp::ContMake
+            | FxOp::CallClause
+            | FxOp::HandlerGet(_)
+            | FxOp::CallCancel => (Fixed(A), Some(Rep::Any)),
+            FxOp::ContResume | FxOp::PendingDiscard => (Fixed(AA), Some(Rep::Any)),
+            FxOp::PendingSuppress => (Fixed(&[]), None),
+            FxOp::LimitSet => (Fixed(&[Rep::I64]), None),
+        }
+    }
+
+    /// 末尾でない呼び出しの一種(再開点を持つ)か。
+    pub fn is_call(&self) -> bool {
+        matches!(
+            self,
+            FxOp::Perform { .. }
+                | FxOp::CallBody
+                | FxOp::ContResume
+                | FxOp::CallClause
+                | FxOp::CallCancel
+        )
+    }
+
+    /// 呼ばれた側が番兵で戻ったとき、伝播せずに番兵を結果に書く呼び出しか。
+    pub fn catches(&self) -> bool {
+        matches!(
+            self,
+            FxOp::CallBody | FxOp::ContResume | FxOp::CallClause | FxOp::CallCancel
+        )
+    }
+
+    /// ヒープに確保しうるか。
+    pub fn allocates(&self) -> bool {
+        matches!(
+            self,
+            FxOp::HandlerNew { .. } | FxOp::ContMake | FxOp::PendingTake | FxOp::PendingDiscard
+        )
+    }
+}
+
+/// [`Term::Fx`] の種類(`doc/lir.md` の 16 節)。
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FxTermOp {
+    /// `propagate`。状態語が立っているときに、番兵で戻る。
+    Propagate,
+    /// `tail_call_never p`。退避した `DISCARD(hr, NeverBody)` の節の本体を末尾で呼ぶ。
+    TailCallNever,
+    /// `clause_value r`。T の節が `resume` せずに値 `r` になった。
+    ClauseValue,
+    /// `clause_matched sel`。N か G の節が選ばれた。
+    ClauseMatched,
+    /// `tail_resume v`。G の節の末尾の `resume(v)`。
+    TailResume,
+    /// `tail_call_clause op hr sel (a…)`。次の候補の節を末尾で呼ぶ。
+    TailCallClause { op: u32 },
+}
+
+impl FxTermOp {
+    /// 印字の綴り。
+    pub fn name(&self) -> &'static str {
+        match self {
+            FxTermOp::Propagate => "propagate",
+            FxTermOp::TailCallNever => "tail_call_never",
+            FxTermOp::ClauseValue => "clause_value",
+            FxTermOp::ClauseMatched => "clause_matched",
+            FxTermOp::TailResume => "tail_resume",
+            FxTermOp::TailCallClause { .. } => "tail_call_clause",
+        }
+    }
+
+    /// 被演算子の数の決まり(どれも `any`)。`(最小, 固定か)`。
+    pub fn arity(&self) -> (usize, bool) {
+        match self {
+            FxTermOp::Propagate => (0, true),
+            FxTermOp::TailCallNever
+            | FxTermOp::ClauseValue
+            | FxTermOp::ClauseMatched
+            | FxTermOp::TailResume => (1, true),
+            FxTermOp::TailCallClause { .. } => (2, false),
+        }
+    }
 }
 
 /// 実行時エラーの種類(IRSpec の付録 B)。
@@ -690,8 +947,10 @@ pub enum Term {
     },
     /// 実行時エラーを起こす。
     Error { kind: RtError, operand: Option<Reg> },
-    /// 未実装の機能に届いた(終了状態 4)。M89 でエフェクトの下ろしに置き換える。
+    /// 未実装の機能に届いた(終了状態 4)。
     Unimplemented { what: String },
+    /// エフェクトのブロックの終わり(パス 8。`doc/lir.md` の 16 節)。被演算子はどれも `any` である。
+    Fx { op: FxTermOp, args: Vec<Reg> },
 }
 
 impl Term {
@@ -737,6 +996,7 @@ impl Term {
                 v
             }
             Term::Error { operand, .. } => operand.iter().copied().collect(),
+            Term::Fx { args, .. } => args.clone(),
         }
     }
 }
@@ -804,6 +1064,7 @@ impl Inst {
             | DictApp { dst, .. }
             | ConsoleWrite { dst, .. }
             | UnimplementedValue { dst, .. } => Some(*dst),
+            Fx { dst, .. } => *dst,
             DepthEnter
             | DepthCheck
             | DepthPush
@@ -903,18 +1164,34 @@ impl Inst {
                 v
             }
             ConsoleWrite { s, .. } => vec![*s],
+            Fx { args, .. } => args.clone(),
         }
     }
 
     /// 末尾でない呼び出しか(再開点を持つ命令)。
     pub fn is_call(&self) -> bool {
-        matches!(
-            self,
+        match self {
             Inst::CallDirect { .. }
-                | Inst::CallValue { .. }
-                | Inst::CallMethod { .. }
-                | Inst::DictApp { .. }
-        )
+            | Inst::CallValue { .. }
+            | Inst::CallMethod { .. }
+            | Inst::DictApp { .. } => true,
+            Inst::Fx { op, .. } => op.is_call(),
+            _ => false,
+        }
+    }
+
+    /// 末尾でない呼び出しで、再開点で yield を受け取りうると印の付いたものか(パス 11 の前の印)。
+    ///
+    /// エフェクトの呼び出しの一種はどれも受け取りうる。
+    pub fn call_yields(&self) -> bool {
+        match self {
+            Inst::CallDirect { yields, .. }
+            | Inst::CallValue { yields, .. }
+            | Inst::CallMethod { yields, .. } => *yields,
+            Inst::DictApp { .. } => true,
+            Inst::Fx { op, .. } => op.is_call(),
+            _ => false,
+        }
     }
 
     /// ヒープに確保しうるか(GC の安全点)。`regs` はレジスタの Rep の表。
@@ -939,6 +1216,7 @@ impl Inst {
             | RefNew { .. }
             | MArrayNew { .. }
             | MArrayFreeze { .. } => true,
+            Fx { op, .. } => op.allocates(),
             _ => false,
         }
     }
@@ -966,6 +1244,8 @@ pub enum FuncKind {
     Builtin,
     /// 組み込みのインスタンスのメソッドの本体。
     BuiltinMethod,
+    /// ハンドラのフレームの関数 `$rt_handle`(パス 8。`doc/lir.md` の 16 節)。
+    Handler,
 }
 
 impl FuncKind {
@@ -977,6 +1257,7 @@ impl FuncKind {
             FuncKind::Extern => "extern",
             FuncKind::Builtin => "builtin",
             FuncKind::BuiltinMethod => "builtin_method",
+            FuncKind::Handler => "handler",
         }
     }
 }
@@ -1008,6 +1289,10 @@ pub struct Frame {
     /// 各点の集合は、確保をまたいで生きているレジスタである。
     /// 命令の後で生きているもの(命令が書くレジスタを除く)と、命令の被演算子からなる。
     pub safepoints: Points,
+    /// 再開点ごとの、yield を受け取りうるか(パス 11。`doc/lir.md` の 17 節)。
+    ///
+    /// 偽の再開点で待っているフレームに yield が届くのは、`may_yield` の印の誤りである。
+    pub yield_points: Vec<bool>,
 }
 
 /// LIR の関数。
@@ -1159,6 +1444,21 @@ pub struct Program {
     pub strings: Vec<Vec<u8>>,
     /// 単位の初期化の関数(初期化の順)。
     pub init: Vec<FuncId>,
+    /// エフェクト(KIR と同じ添字)。
+    pub effects: Vec<EffectInfo>,
+    /// ハンドラのフレームの関数 `$rt_handle`(プログラムが `handle` を持たなければ `None`)。
+    pub rt_handle: Option<FuncId>,
+}
+
+/// エフェクト。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EffectInfo {
+    /// 記号。
+    pub sym: String,
+    /// 付録 B の 9 番の文面に書く名前(単位の鍵を除いた修飾名)。
+    pub display: String,
+    /// 操作の名前と引数の数。
+    pub ops: Vec<(String, u32)>,
 }
 
 /// 1 回の確保で作れる要素の数の上限 `N_alloc_max`(IRSpec 11.6 節)。

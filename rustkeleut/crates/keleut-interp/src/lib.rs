@@ -6,8 +6,8 @@
 //! | [`bytecode::encode`] | 1 つの関数をバイトコードにする |
 //! | [`interp::Interp`] | インタプリタ(フレームは分割値スタックに置く) |
 //!
-//! エフェクト(`handle`、利用者の操作の `perform`、`resume`)は M89 で足す。
-//! それまでは、これらに下ろした `unimplemented_value` に届くと終了状態 4 で終わる。
+//! エフェクト(`handle`、利用者の操作の `perform`、`resume`)は、`doc/lir.md` の 16 節の規約で実行する
+//! ([`interp`] の冒頭)。
 
 pub mod bytecode;
 pub mod interp;
@@ -65,9 +65,21 @@ fn run_on_thread(prog: &Program, opts: &RunOptions) -> u8 {
     let mut it = Interp::new(rt, low);
     let mut r: Result<(), Stop> = Ok(());
     for &f in &prog.init {
-        if let Err(e) = it.run(f, Word(0), &[], 0) {
-            r = Err(e);
-            break;
+        match it.run(f, Word(0), &[], 0) {
+            Ok(v) if v == Word::SENTINEL => {
+                // 状態語が最上位に届いた。実行時エラーならその文面で止まる。
+                r = Err(match std::mem::take(&mut it.rt.pending) {
+                    keleut_rt::effect::Pending::Error(s) => s,
+                    p => Stop::Internal(format!("最上位に届いた状態語: {p:?}")),
+                });
+                it.rt.limit = it.rt.max_depth;
+                break;
+            }
+            Ok(_) => {}
+            Err(e) => {
+                r = Err(e);
+                break;
+            }
         }
     }
     match r {

@@ -48,6 +48,11 @@ impl Builder {
         r
     }
 
+    /// これまでに足した引数のレジスタ。
+    pub(crate) fn params(&self) -> &[Reg] {
+        &self.params
+    }
+
     /// 新しいブロック(まだ移らない)。
     pub(crate) fn block(&mut self) -> BlockId {
         self.blocks.push(Open {

@@ -14,7 +14,8 @@
 //! | 辞書 | `dict_builtin` の組は組み込みのメソッドの表にある。`dict_inst` の前提は 1 つ以上ある。`inst_get_value` と `inst_set_value` のメソッドは辞書を受け取らない |
 //! | 表 | 大域の関数は捕獲を持たず、種類が大域の種類に合う。インスタンスはクラスのメソッドの数だけ実装を持ち、実装の関数の引数の数が辞書の数に等しい。初期化の関数は引数を持たない |
 //! | 実行時エラー | `error` の被演算子が番号に合う。19 番(メモリの不足)は `error` に使わない |
-//! | フレーム | スロットの区画が Rep に合い、区間の重なるレジスタが同じスロットを使わない。再開点と安全点の位置と集合が、パス 12 の生存解析([`frame::points`])で計算し直したものと一致する |
+//! | エフェクト | エフェクトの命令とブロックの終わりの被演算子の数と Rep が合い、エフェクトと操作の番号が範囲にある。`$rt_handle` は引数を 3 つ取る |
+//! | フレーム | スロットの区画が Rep に合い、区間の重なるレジスタが同じスロットを使わない。再開点と安全点の位置と集合が、パス 12 の生存解析([`frame::points`])で計算し直したものと一致する。yield を受け取らないとした再開点は `noyield` の呼び出しである |
 //!
 //! フレームの最後の検査は、パス 12 と同じ生存解析で計算し直して比べる。
 //! そのため、割り当ての後でフレームを書き換えたことは見つけるが、生存解析そのものの誤りは見つけない。
@@ -328,7 +329,14 @@ impl Cx<'_> {
                 ensure!(
                     matches!(
                         t.kind,
-                        FuncKind::Kir(FnKind::Lambda) | FuncKind::Kir(FnKind::Dictabs)
+                        FuncKind::Kir(
+                            FnKind::Lambda
+                                | FnKind::Dictabs
+                                | FnKind::Opclause
+                                | FnKind::Retclause
+                                | FnKind::Cancelclause
+                                | FnKind::Handlebody
+                        )
                     ),
                     "クロージャにできない種類の関数 {}",
                     t.sym
@@ -478,6 +486,85 @@ impl Cx<'_> {
                 self.is(*s, Str)?;
             }
             UnimplementedValue { dst, .. } => self.is(*dst, Any)?,
+            Fx { op, dst, args } => self.fx(op, *dst, args)?,
+        }
+        Ok(())
+    }
+
+    fn effect_op(&self, e: u32, op: Option<u32>) -> VResult {
+        let x = self
+            .p
+            .effects
+            .get(e as usize)
+            .ok_or_else(|| format!("範囲の外のエフェクト {e}"))?;
+        if let Some(op) = op {
+            ensure!(
+                (op as usize) < x.ops.len(),
+                "エフェクト {} に範囲の外の操作 {op}",
+                x.sym
+            );
+        }
+        Ok(())
+    }
+
+    /// エフェクトの命令を確かめる。
+    fn fx(&self, op: &FxOp, dst: Option<Reg>, args: &[Reg]) -> VResult {
+        let (want, res) = op.sig();
+        match want {
+            FxArgs::Fixed(reps) => {
+                ensure!(
+                    reps.len() == args.len(),
+                    "{} の被演算子は {} 個だが {} 個ある",
+                    op.name(),
+                    reps.len(),
+                    args.len()
+                );
+                for (&r, &w) in args.iter().zip(reps) {
+                    self.is(r, w)?;
+                }
+            }
+            FxArgs::AtLeast(n) => {
+                ensure!(
+                    args.len() >= n,
+                    "{} の被演算子が {} 個より少ない",
+                    op.name(),
+                    n
+                );
+                self.all(args, Rep::Any)?;
+            }
+        }
+        match (res, dst) {
+            (None, None) => {}
+            (Some(rep), Some(d)) => self.is(d, rep)?,
+            _ => return Err(format!("{} の結果の有無が合わない", op.name())),
+        }
+        match op {
+            FxOp::HandlerNew {
+                effect,
+                ops,
+                has_ret,
+                has_cancel,
+            } => {
+                self.effect_op(*effect, None)?;
+                ensure!(!ops.is_empty(), "操作節を持たない handler_new");
+                for (o, _) in ops {
+                    self.effect_op(*effect, Some(*o))?;
+                }
+                ensure!(
+                    args.len() == 2 + ops.len() + usize::from(*has_ret) + usize::from(*has_cancel),
+                    "handler_new の被演算子の数が節の数と合わない"
+                );
+            }
+            FxOp::HandlerFind { effect, op } => self.effect_op(*effect, Some(*op))?,
+            FxOp::Perform { effect, op } => {
+                self.effect_op(*effect, Some(*op))?;
+                let arity = self.p.effects[*effect as usize].ops[*op as usize].1 as usize;
+                ensure!(
+                    args.len() == 2 + arity,
+                    "perform の引数の数が操作の引数の数と合わない"
+                );
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -527,6 +614,19 @@ impl Cx<'_> {
                 self.all(own, Rep::Any)?;
                 self.all(args, Rep::Any)?;
                 self.class_method(*class, *method)?;
+            }
+            Term::Fx { op, args } => {
+                let (n, fixed) = op.arity();
+                ensure!(
+                    if fixed {
+                        args.len() == n
+                    } else {
+                        args.len() >= n
+                    },
+                    "{} の被演算子の数が合わない",
+                    op.name()
+                );
+                self.all(args, Rep::Any)?;
             }
             Term::Error { kind, operand } => {
                 match (kind.operand_rep(), operand) {
@@ -621,6 +721,17 @@ impl Cx<'_> {
             sp == fr.safepoints,
             "安全点が、パス 12 の生存解析で計算し直したものと一致しない"
         );
+        ensure!(
+            fr.yield_points.len() == rp.len(),
+            "yield の印の数が再開点の数と合わない"
+        );
+        let honest = frame::yield_points(f, &rp, true);
+        for (i, (&y, &h)) in fr.yield_points.iter().zip(&honest).enumerate() {
+            ensure!(
+                y || !h,
+                "再開点 {i} は yield の印の付いた呼び出しなのに yield を受け取らないとされている"
+            );
+        }
         Ok(())
     }
 }
@@ -804,6 +915,15 @@ pub fn verify(p: &Program) -> VResult {
             fid_ok(f) && p.funcs[f.index()].kind == FuncKind::Init,
             "初期化の関数 {} が不正",
             f.0
+        );
+    }
+    if let Some(h) = p.rt_handle {
+        ensure!(fid_ok(h), "$rt_handle の関数が範囲の外");
+        let t = &p.funcs[h.index()];
+        ensure!(
+            t.kind == FuncKind::Handler && t.ncaps == 0 && t.params.len() == 3,
+            "$rt_handle の関数 {} は引数を 3 つ取る捕獲の無い種類 handler の関数でない",
+            t.sym
         );
     }
     for f in &p.funcs {
