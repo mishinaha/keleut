@@ -41,7 +41,7 @@ pub const NAMES: &[&str] = &[
 /// いま走らせられる組である。
 ///
 /// RustKeleut の後段は M88 から順に加わるので、ここに名前を足していく。
-pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "x-ir"];
+pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "kw", "x-ir"];
 
 /// `--pairs` を省いたときに走らせる組である。
 ///
