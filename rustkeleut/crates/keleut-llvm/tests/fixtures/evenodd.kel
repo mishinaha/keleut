@@ -1,0 +1,3 @@
+let rec even(n: Int32): Boolean = if n == 0 then true else odd(n - 1)
+and odd(n: Int32): Boolean = if n == 0 then false else even(n - 1)
+if even(10000000) && odd(10000001) then () else echoln(show(1 / 0))

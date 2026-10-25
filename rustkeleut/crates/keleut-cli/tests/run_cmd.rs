@@ -96,9 +96,14 @@ fn 使い方の誤りと不正な_kir_と未実装の後段() {
     );
     let num = root().join("tests/fixtures/run/num.kir");
     let num = num.to_str().unwrap();
+    // `--backend jit` は feature `llvm` を付けて組んだときだけ使え(M91)、付けなければ未実装の 4 である。
     let r = keleut_in(&d, &["run", "--backend", "jit", num]);
-    assert_eq!(r.status.code(), Some(4));
-    assert!(r.stdout.is_empty());
+    if cfg!(feature = "llvm") {
+        assert_eq!(r.status.code(), Some(0));
+    } else {
+        assert_eq!(r.status.code(), Some(4));
+        assert!(r.stdout.is_empty());
+    }
     // 小さいネイティブのスタックでも、インタプリタの呼び出しはネイティブのスタックを使わない。
     let deep = root().join("tests/fixtures/run/deep.kir");
     let r = keleut_in(
