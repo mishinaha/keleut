@@ -82,7 +82,6 @@ name = "keleut-rtcore"
 version = "0.1.0"
 
 [[package]]
-[[package]]
 name = "keleut-wasm"
 version = "0.1.0"
 dependencies = [
@@ -93,6 +92,7 @@ dependencies = [
  "wasmparser",
 ]
 
+[[package]]
 name = "kir"
 version = "0.1.0"
 
