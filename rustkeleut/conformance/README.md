@@ -8,13 +8,14 @@ RustKeleut の差分試験の材料である。
 | 場所 | 中身 |
 | --- | --- |
 | `known-diffs.toml` | 既知の差の一覧。ここに無い差が 1 件でもあれば `kconform` は失敗する |
-| `known-diffs-unimplemented.toml` | M89 まで置く一時の既知の差(評価が `handle` に届くブロック。台帳 V219)。M89 で消す |
 | `corpus/` | `kconform extract-corpus` が `diktor/test/*.t` のヒアドキュメントから抜き出した `.kel` と、その索引 `index.tsv` |
 | `kir-bad/` | 不正な KIR。`keleut kir` がどれも 65 で拒否することを確かめる |
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
+| `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
+| `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
-`effects/`、`float/`、`depth/`、`oom/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
+`effects/`、`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
 どれも cram の形の `.t` で書き、`.kel` は `.t` の横か `.t` のヒアドキュメントに置く。
 `.t` のコマンドは `diktor` でなく `keleut` を呼ぶ。
 `keleut run` の呼び出しは、shim が組ごとに振り分ける(次の「組」の節の表の右の欄)。
@@ -57,7 +58,7 @@ Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む�
 `kf` も Diktor の木の評価器で走り、`keleut run --max-depth` の限度を持たないからである。
 `--pairs` に `dk` か `kf` を書くと 64 で終わる。
 深さの試験では、どの組でも終了状態 70(予備の検査)を失敗にする。
-どのスイートでも、走らせる試験が 1 つも無ければ 1 で終わる(`conformance/depth/` が無いときなど)。
+どのスイートでも、走らせる試験が 1 つも無ければ 1 で終わる。
 `FILES` を与えたときは、スイートの代わりにその `.t` と `.kel` を走らせる。
 
 ## 既知の差
@@ -99,8 +100,9 @@ M95 でこの例外を消す。
 `FILES` を与えずにスイートを走らせるときは、どの試験のファイル(`diktor/test`、`conformance/` の全部の `.t`、コーパス)にも当たらない項目も誤りにする。
 `--verbose` は、当たった既知の差、使われなかった既知の差、正規化の前だけの不一致を印字する。
 
-`known-diffs-unimplemented.toml` は、`kconform --pairs dk,ki --suite all` の結果から作った。
-M89 でエフェクトを入れたら、このファイルを消し、`--pairs dk,ki --suite all` が差 0 になることを確かめる。
+M88 は、評価が `handle` に届くブロックを `known-diffs-unimplemented.toml` に `when = "unimplemented"` で一時に登録した(台帳 V219)。
+M89 でエフェクトを入れて、このファイルを消した。
+`kconform --pairs dk,ki --suite all` は、このファイルなしで差 0 件である。
 
 比べる前に、期待と結果の両方の行を計画 8.1 節の規則で正規化する。
 診断の種別の語(型エラー、実行時エラーなど)に `: ` が続けばその後ろを切り、先頭が `⚠ ` の行は `⚠` だけにする。
