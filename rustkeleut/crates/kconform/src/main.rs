@@ -373,8 +373,7 @@ fn depth_suite(o: &Options) -> bool {
 /// ほかの組の各コマンドの結果を、正規化をせずに基準の組と比べる。
 /// 後段の間は完全に一致しなければならないからである。
 /// 誤りのある組は [`report`] が失敗として数えるので、ここでは比べない。
-/// 返す差は [`known_diffs::Comparison::Backend`] の比較で、当たる既知の差の項目は、
-/// 未実装に届く一時の項目(`when = "unimplemented"`)だけである([`known_diffs::Comparison::Backend`] を見よ)。
+/// 返す差は [`known_diffs::Comparison::Backend`] の比較で、どの既知の差の項目にも当たらない。
 fn backend_diffs(
     case: usize,
     run_pairs: &[Pair],
@@ -429,7 +428,7 @@ fn report(
     let mut bypass = Vec::new();
     let base_i = base_index(run_pairs);
     let depth = depth_suite(o);
-    // 後段の組の間の差(未実装の一時の項目にだけ照らす)。
+    // 後段の組の間の差(既知の差の一覧に照らさない)。
     let mut backend = Vec::new();
     // どのコマンドにも付かない期待の出力の行(dune は捨てるので、記録との差になる)。
     let mut dropped = 0usize;
@@ -596,31 +595,11 @@ fn report(
         show(&d.want, '-');
         show(&d.got, '+');
     }
-    // 後段の組の間の差は、未実装の一時の項目に当たるものを除き、すべて登録の無い差に数える(D499)。
+    // 後段の組の間の差は、すべて登録の無い差に数える(D499)。
     let mut backend_unknown = 0usize;
     for d in &backend {
         let case = &cases[d.case];
         let c = cram::commands(&case.items)[d.command];
-        let pair_name = run_pairs
-            .iter()
-            .find(|p| p.label == d.pair)
-            .map_or("", |p| p.name);
-        let hit = known
-            .iter()
-            .position(|e| e.matches(&case.key, c.line, pair_name, d.cmp, &d.want, &d.got));
-        if let Some(h) = hit {
-            used[h] = true;
-            if o.verbose {
-                println!(
-                    "既知の差: {}:{} [{}]({} {}): {}との差",
-                    case.name, c.line, d.pair, known[h].ledger, known[h].reason, d.against
-                );
-                println!("  $ {}", c.display());
-                show(&d.want, '-');
-                show(&d.got, '+');
-            }
-            continue;
-        }
         backend_unknown += 1;
         println!(
             "差: {}:{} [{}]: {}との差(後段の間は既知の差に関係なく一致しなければならない)",

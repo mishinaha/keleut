@@ -93,24 +93,18 @@ pub enum Comparison {
     /// RustKeleut の後段の組(`ki kj kt ka km kw`)の間の比較である。
     ///
     /// 後段の間は既知の差の一覧に関係なく完全に一致しなければならない(計画 8.2 節、D499)ので、
-    /// この比較の差を許すのは、次の一時の例外だけである。
-    /// `when = "unimplemented"` の項目が差のある組を名前で挙げ(`*` では当たらない)、
-    /// `against` が `"record"` でなく、差のある組の結果が `keleut: 未実装` の行を含み、
-    /// その行より前が基準の後段の組の結果の先頭と正規化をせずに一致するときである。
-    /// 計画の M94 で、後段 `kw` が G の節を持つプログラムを 4 で止める一時の登録のための例外であり、M95 で消す。
+    /// この比較の差はどの項目にも当たらない。
     Backend,
 }
 
 impl Against {
-    /// この値の項目が、比較 `c` の差を許すかどうかを返す。
+    /// この値の項目が、比較 `c` の差を許すかどうかを返す。後段の組の間の比較の差は、どの値も許さない。
     pub fn allows(self, c: Comparison) -> bool {
         matches!(
             (self, c),
-            (
-                Against::Both,
-                Comparison::Record | Comparison::Pair | Comparison::Backend
-            ) | (Against::Record, Comparison::Record)
-                | (Against::Pair, Comparison::Pair | Comparison::Backend)
+            (Against::Both, Comparison::Record | Comparison::Pair)
+                | (Against::Record, Comparison::Record)
+                | (Against::Pair, Comparison::Pair)
         )
     }
 }
@@ -131,38 +125,26 @@ impl Entry {
         want: &[Vec<u8>],
         got: &[Vec<u8>],
     ) -> bool {
-        let backend = cmp == Comparison::Backend;
         self.line == line
             && self.against.allows(cmp)
-            && (!backend || self.when == When::Unimplemented)
-            && self
-                .pairs
-                .iter()
-                .any(|p| p == pair || (p == "*" && !backend))
+            && self.pairs.iter().any(|p| p == pair || p == "*")
             && path_ends_with(path, &self.file)
             && match self.when {
                 When::Always => true,
-                When::Unimplemented => unimplemented_after_same_prefix(want, got, !backend),
+                When::Unimplemented => unimplemented_after_same_prefix(want, got),
             }
     }
 }
 
-/// `got` が `keleut: 未実装` の行を含み、その行より前の行が `want` の先頭と一致するかを返す。
-///
-/// `normalize` が真なら正規化の後で比べ、偽なら(後段の間の比較)そのまま比べる。
-fn unimplemented_after_same_prefix(want: &[Vec<u8>], got: &[Vec<u8>], normalize: bool) -> bool {
+/// `got` が `keleut: 未実装` の行を含み、その行より前の行が `want` の先頭と(正規化の後で)一致するかを返す。
+fn unimplemented_after_same_prefix(want: &[Vec<u8>], got: &[Vec<u8>]) -> bool {
     let Some(i) = got
         .iter()
         .position(|l| l.windows(UNIMPLEMENTED.len()).any(|w| w == UNIMPLEMENTED))
     else {
         return false;
     };
-    want.len() >= i
-        && if normalize {
-            crate::normalize::lines(&got[..i]) == crate::normalize::lines(&want[..i])
-        } else {
-            got[..i] == want[..i]
-        }
+    want.len() >= i && crate::normalize::lines(&got[..i]) == crate::normalize::lines(&want[..i])
 }
 
 /// `path` が `suffix` を、パスの部分の境目で終わるかどうかを返す。
@@ -473,10 +455,10 @@ ledger = "V1"
     }
 
     #[test]
-    fn 後段の間の差を許すのは未実装の一時の項目だけである() {
+    fn 後段の間の差はどの項目にも当たらない() {
         let one = |pairs: &str, extra: &str| {
             parse(&format!(
-                "[[diff]]\nfile = \"a.t\"\nline = 3\npairs = [{pairs}]\nreason = \"r\"\nledger = \"V1\"\nwhen = \"unimplemented\"\n{extra}"
+                "[[diff]]\nfile = \"a.t\"\nline = 3\npairs = [{pairs}]\nreason = \"r\"\nledger = \"V1\"\n{extra}"
             ))
             .unwrap()
             .remove(0)
@@ -486,17 +468,19 @@ ledger = "V1"
         let b = Comparison::Backend;
         let base = vec![l("  x"), l("  y")];
         let hit = vec![l("  x"), l("  keleut: 未実装: G"), l("  [4]")];
-        let kw = one("\"kw\"", "");
-        assert!(kw.matches(p, 3, "kw", b, &base, &hit));
-        assert!(one("\"kw\"", "against = \"pair\"\n").matches(p, 3, "kw", b, &base, &hit));
-        // 記録とだけ比べる項目、`*` の項目、ほかの組の項目は当たらない。
-        assert!(!one("\"kw\"", "against = \"record\"\n").matches(p, 3, "kw", b, &base, &hit));
-        assert!(!one("\"*\"", "").matches(p, 3, "kw", b, &base, &hit));
-        assert!(!kw.matches(p, 3, "kj", b, &base, &hit));
-        // 未実装より前は、基準の後段の組と正規化をせずに一致しなければならない。
-        let spaced = vec![l("  x "), l("  keleut: 未実装: G"), l("  [4]")];
-        assert!(!kw.matches(p, 3, "kw", b, &base, &spaced));
-        assert!(!kw.matches(p, 3, "kw", b, &base, &[l("  x"), l("  [4]")]));
+        for e in [
+            one("\"kw\"", "when = \"unimplemented\"\n"),
+            one("\"kw\"", "when = \"unimplemented\"\nagainst = \"pair\"\n"),
+            one("\"kw\"", ""),
+            one("\"*\"", ""),
+        ] {
+            assert!(!e.matches(p, 3, "kw", b, &base, &hit));
+            assert!(!e.matches(p, 3, "kw", b, &base, &base));
+        }
+        // 同じ項目は、記録との差と基準の組との差には当たる。
+        let kw = one("\"kw\"", "when = \"unimplemented\"\n");
+        assert!(kw.matches(p, 3, "kw", Comparison::Record, &base, &hit));
+        assert!(kw.matches(p, 3, "kw", Comparison::Pair, &base, &hit));
     }
 
     #[test]
