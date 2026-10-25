@@ -261,7 +261,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 636
-pairs = ["kf", "ki", "kw"]
+pairs = ["kf", "ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -274,7 +274,7 @@ ledger = "V217"
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 632
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -289,7 +289,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 57
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -305,7 +305,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 63
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -321,7 +321,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 70
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -337,7 +337,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 73
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -353,7 +353,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 26
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -369,7 +369,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 42
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -385,7 +385,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 68
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -401,7 +401,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 77
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -409,7 +409,7 @@ against = "pair"
 [[diff]]
 file = "diktor/test/eval.t"
 line = 845
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -429,7 +429,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 50
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
 ledger = "V218"
 against = "pair"
@@ -540,7 +540,7 @@ against = "record"
 [[diff]]
 file = "conformance/oom/oom.t"
 line = 15
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
 ledger = "V215"
 against = "pair"
@@ -556,7 +556,7 @@ against = "record"
 [[diff]]
 file = "conformance/oom/oom.t"
 line = 31
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
 ledger = "V215"
 against = "pair"
@@ -576,7 +576,7 @@ against = "record"
 [[diff]]
 file = "conformance/depth/limit.t"
 line = 23
-pairs = ["ki", "kw"]
+pairs = ["ki", "kj", "kw"]
 reason = "限度は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
 ledger = "V213"
 against = "pair"
