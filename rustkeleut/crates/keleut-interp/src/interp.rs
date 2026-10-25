@@ -19,7 +19,8 @@
 //! 再帰する名前の付いた型(`Node({k: T})` のようなもの)では、値の入れ子の深さだけ入れ子になる。
 //! 1 段は論理的な深さを 2 つ使い、ネイティブのスタックを約 1.5 KiB 使うので、既定の `S_native` では論理的な深さの限度が先に来る。
 //! 入れ子の入口では、ネイティブのスタックの残りを予備の検査で確かめ、足りなければ内部の誤り(70)にする(計画 6.8 節)。
-//! 小さな `--native-stack` では、この検査が論理的な深さの限度より先に働きうる。
+//! 項目を比べる入口でスタックが下限に近ければ、新しいスタックのスレッドに移って続ける([`Interp::set_stack_hop`])ので、
+//! 小さな `--native-stack` でも、入れ子は論理的な深さの限度まで進む。
 //!
 //! ## エフェクト(`doc/lir.md` の 16 節)
 //!
@@ -147,26 +148,45 @@ impl St {
 pub struct Interp<'p> {
     /// 実行時の文脈。
     pub rt: Rt<'p>,
-    prog: &'p Program,
+    pub(crate) prog: &'p Program,
     codes: Vec<Option<Box<Code>>>,
     builtin_methods: HashMap<(u32, u32, u32), FuncId>,
-    stack_low: usize,
+    pub(crate) stack_low: usize,
     words: Vec<Word>,
     rt_handle: Option<FuncId>,
+    /// ネイティブの後段(M91 の JIT)の入口の表と文脈。無ければインタプリタだけで走る([`crate::native`])。
+    pub native: Option<Box<crate::native::Native>>,
+    /// 今の起動(この [`Interp`] の振り分けのループを走らせているネイティブの呼び出し)の最下段のフレームの位置。
+    ///
+    /// 最下段のフレームが戻るか番兵で戻ると、振り分けのループを抜けてネイティブの呼び出し元へ値を返す。
+    /// 最下段の見出しの 3 番の語は、[`Interp::run`] の起動では [`NATIVE_CALLER`]、
+    /// JIT の関数から入った起動([`crate::native::krt_interp_run`])では呼び出し元の JIT のフレームの位置である。
+    pub(crate) bottom: u64,
+    /// 構造的な `Eq` の入れ子がネイティブのスタックの下限に近づいたときに移る新しいスタックの、大きさと予備の検査の余裕(バイト)。
+    ///
+    /// 無ければ移らず、入れ子の入口の予備の検査で内部の誤り(70)になる([`Interp::set_stack_hop`])。
+    stack_hop: Option<(usize, usize)>,
 }
+
+/// 構造的な `Eq` の項目を比べる入口で、ネイティブのスタックの残りがこの量(バイト)と予備の検査の余裕の和を下回ったら、
+/// 新しいスタックのスレッドに移って続ける([`Interp::set_stack_hop`])。
+///
+/// JIT の関数を入口でインタプリタに移す下限([`crate::native::SOFT_MARGIN`])より上に置き、
+/// 項目の比べ方の 1 段(インタプリタで約 1.5 KiB)と、その中で JIT の関数が下限に届くまでに使う分を残す。
+pub const HOP_MARGIN: usize = 2 * crate::native::SOFT_MARGIN as usize;
 
 /// フレームの見出しの 2 番の語(区画の大きさ)から、見出しを含むフレームの語の数を求める。
 fn frame_words(sz: u64) -> usize {
     HEADER_WORDS + (sz & 0xffff_ffff) as usize + (sz >> 32) as usize
 }
 
-fn approx_sp() -> usize {
+pub(crate) fn approx_sp() -> usize {
     let x = 0u8;
     std::hint::black_box(&x) as *const u8 as usize
 }
 
 /// 付録 B の 17 番と 18 番の文面。
-fn unimpl_prim(prog: &Program, g: keleut_lir::GlobalId) -> Stop {
+pub(crate) fn unimpl_prim(prog: &Program, g: keleut_lir::GlobalId) -> Stop {
     let gl = &prog.globals[g.index()];
     let name = match &gl.kind {
         keleut_lir::GlobalKind::Extern { name, .. } => name.as_str(),
@@ -203,11 +223,88 @@ impl<'p> Interp<'p> {
             stack_low,
             words: Vec::new(),
             rt_handle: prog.rt_handle,
+            native: None,
+            bottom: NATIVE_CALLER,
+            stack_hop: None,
         }
     }
 
+    /// 構造的な `Eq` の入れ子が深くなったときに、大きさ `size` のスタックの新しいスレッドに移って続けるようにする。
+    ///
+    /// `margin` は新しいスタックでの予備の検査の余裕で、下限は新しいスレッドの入口の番地から `size` を引き `margin` を足したものである。
+    /// 構造的な `Eq` の比べ方は値の入れ子の段ごとに [`Interp::run`] を入れ子に呼び、ネイティブのスタックを使う。
+    /// 移れば、入れ子は論理的な深さの限度にだけ縛られ、小さな `--native-stack` でも予備の検査(70)に先に届かない。
+    /// JIT の関数の末尾でない再帰がネイティブのスタックを下限の近くまで使った後でも同じである。
+    pub fn set_stack_hop(&mut self, size: usize, margin: usize) {
+        self.stack_hop = Some((size, margin));
+    }
+
+    /// ネイティブのスタックが下限に近ければ、`f` を新しいスタックのスレッドで走らせる。そうでなければここで走らせる。
+    ///
+    /// 新しいスレッドが走る間、元のスレッドは待つだけで、インタプリタに触れない。
+    /// スタックの下限と、JIT が読む文脈の下限の欄は、移る間だけ新しいスタックのものにし、戻ったら元に戻す。
+    fn maybe_hop<R>(&mut self, f: impl FnOnce(&mut Self) -> Result<R, Stop>) -> Result<R, Stop> {
+        let Some((size, margin)) = self.stack_hop else {
+            return f(self);
+        };
+        if self.stack_low == 0 || approx_sp() >= self.stack_low.saturating_add(HOP_MARGIN) {
+            return f(self);
+        }
+        /// スレッドの間で渡すための包み。元のスレッドは新しいスレッドが終わるまで待つので、同時には触れない。
+        struct Pass<T>(T);
+        // SAFETY: 上の説明のとおり、包んだ値を使うのはどの時点でも 1 つのスレッドだけである。
+        unsafe impl<T> Send for Pass<T> {}
+        impl<T> Pass<T> {
+            fn take(self) -> T {
+                self.0
+            }
+        }
+        let saved_low = self.stack_low;
+        let saved_ctx = self
+            .native
+            .as_ref()
+            .map(|n| (n.ctx.stack_low, n.ctx.stack_soft, n.sp0, n.min_sp));
+        let job = Pass((self as *mut Self, f));
+        let r = std::thread::scope(|s| {
+            let h = std::thread::Builder::new()
+                .name("keleut-mutator".to_string())
+                .stack_size(size)
+                .spawn_scoped(s, move || {
+                    let (me, f) = job.take();
+                    // SAFETY: 元のスレッドは join で待っており、この間 self に触れない。
+                    let it = unsafe { &mut *me };
+                    let sp0 = approx_sp();
+                    it.stack_low = sp0.saturating_sub(size).saturating_add(margin);
+                    if let Some(n) = it.native.as_mut() {
+                        // 実行の統計(`KELEUT_JIT_STATS`)のスタックの番地は、移った先では新しいスタックで測り、
+                        // 戻るときに元の値に戻す(移った先の使用量は数えない)。
+                        n.sp0 = sp0;
+                        n.min_sp = usize::MAX;
+                    }
+                    Pass(f(it))
+                });
+            match h {
+                Ok(h) => match h.join() {
+                    Ok(r) => r.take(),
+                    Err(p) => std::panic::resume_unwind(p),
+                },
+                Err(e) => Err(Stop::Internal(format!(
+                    "新しいスタックのスレッドを作れません({size} バイトのスタック): {e}"
+                ))),
+            }
+        });
+        self.stack_low = saved_low;
+        if let (Some(n), Some((low, soft, sp0, min_sp))) = (self.native.as_mut(), saved_ctx) {
+            n.ctx.stack_low = low;
+            n.ctx.stack_soft = soft;
+            n.sp0 = sp0;
+            n.min_sp = min_sp;
+        }
+        r
+    }
+
     /// 関数のバイトコード(無ければ作る)。
-    fn code(&mut self, f: FuncId) -> Result<*const Code, Stop> {
+    pub(crate) fn code(&mut self, f: FuncId) -> Result<*const Code, Stop> {
         if let Some(c) = &self.codes[f.index()] {
             return Ok(&**c as *const Code);
         }
@@ -225,7 +322,7 @@ impl<'p> Interp<'p> {
         Ok(unsafe { &*p })
     }
 
-    fn check_native_stack(&self) -> Result<(), Stop> {
+    pub(crate) fn check_native_stack(&self) -> Result<(), Stop> {
         if self.stack_low != 0 && approx_sp() < self.stack_low {
             return Err(Stop::Internal(
                 "ネイティブのスタックの予備を使い切りました".to_string(),
@@ -244,7 +341,9 @@ impl<'p> Interp<'p> {
     pub fn run(&mut self, func: FuncId, env: Word, args: &[Word], base: u64) -> Result<Word, Stop> {
         self.check_native_stack()?;
         let saved = self.rt.gc.enter_native();
+        let bottom = self.bottom;
         let r = self.run_inner(func, env, args, base);
+        self.bottom = bottom;
         self.rt.gc.leave_native(saved);
         r
     }
@@ -256,9 +355,8 @@ impl<'p> Interp<'p> {
         args: &[Word],
         base: u64,
     ) -> Result<Word, Stop> {
-        let code = self.code(func)?;
-        // SAFETY: code は生きている Code を指す。
-        let (fw, any, raw) = unsafe { ((*code).frame_words, (*code).any_slots, (*code).raw_slots) };
+        let native = self.native_target(func)?;
+        let (fw, any, raw) = self.frame_shape(func)?;
         let fpos = self.rt.stack.place(base, fw)?;
         let fp = self.rt.stack.ptr_at(fpos);
         // SAFETY: fp からフレームの語の数だけ値スタックの塊の中にある。
@@ -271,6 +369,11 @@ impl<'p> Interp<'p> {
                 *fp.add(HEADER_WORDS + i) = a.0;
             }
         }
+        self.bottom = fpos;
+        if let Some(addr) = native {
+            return self.call_native(addr, func, env, fpos, fp);
+        }
+        let code = self.code(func)?;
         let mut st = St {
             fpos,
             fp,
@@ -278,15 +381,72 @@ impl<'p> Interp<'p> {
             pc: 0,
             env,
         };
-        self.exec(&mut st)
+        let v = self.exec(&mut st)?;
+        if v == crate::native::TAILREQ {
+            // 最下段のフレームが JIT の関数を末尾で呼んだ。フレームは置いてある。
+            return self.call_native_request();
+        }
+        Ok(v)
+    }
+
+    /// JIT の関数から入った起動([`crate::native::krt_interp_run`])。
+    ///
+    /// 関数 `func` のフレームは呼び出し側が位置 `pos`(見出しは `fp`)に置いてある。
+    /// フレームの見出しの 3 番の語は呼び出し元の JIT のフレームの位置なので、
+    /// 継続はこの起動の境目をまたいでフレームをたどれる。
+    /// このフレームを起動の最下段として振り分けのループを回し、最下段が戻った値か番兵、
+    /// または末尾呼び出しの依頼 [`crate::native::TAILREQ`] を返す。
+    pub(crate) fn run_activation(
+        &mut self,
+        func: FuncId,
+        env: Word,
+        pos: u64,
+        fp: *mut u64,
+    ) -> Result<Word, Stop> {
+        self.check_native_stack()?;
+        let code = self.code(func)?;
+        let saved = self.bottom;
+        self.bottom = pos;
+        let mut st = St {
+            fpos: pos,
+            fp,
+            code,
+            pc: 0,
+            env,
+        };
+        let r = self.exec(&mut st);
+        self.bottom = saved;
+        r
+    }
+
+    /// 関数のフレームの形(見出しを含む語の数、`any` と生の区画の大きさ)。
+    pub(crate) fn frame_shape(&self, f: FuncId) -> Result<(usize, u32, u32), Stop> {
+        let fr = self.prog.funcs[f.index()]
+            .frame
+            .as_ref()
+            .ok_or_else(|| Stop::Internal(format!("関数 {} にフレームがありません", f.0)))?;
+        Ok((
+            HEADER_WORDS + (fr.any_slots + fr.raw_slots) as usize,
+            fr.any_slots,
+            fr.raw_slots,
+        ))
     }
 
     /// 今のフレームの上に呼ばれた側のフレームを積み、その入口へ移る。
-    fn enter(&mut self, st: &mut St, func: FuncId, env: Word, args: Args) -> Result<(), Stop> {
+    ///
+    /// 呼ばれた側が JIT の関数なら、フレームを積んだ後にネイティブに呼び、戻った値を今のフレームに渡す
+    /// ([`Interp::native_returned`])。
+    /// そのときは `st` は今のフレームのままで、値を返すのは今のフレームが最下段で末尾の構造的な `Eq` を終えたときだけである。
+    fn enter(
+        &mut self,
+        st: &mut St,
+        func: FuncId,
+        env: Word,
+        args: Args,
+    ) -> Result<Option<Word>, Stop> {
         let top = st.fpos + st.code().frame_words as u64;
-        let code = self.code(func)?;
-        // SAFETY: code は生きている Code を指す。
-        let (fw, any, raw) = unsafe { ((*code).frame_words, (*code).any_slots, (*code).raw_slots) };
+        let native = self.native_target(func)?;
+        let (fw, any, raw) = self.frame_shape(func)?;
         let npos = self.rt.stack.place(top, fw)?;
         let nfp = self.rt.stack.ptr_at(npos);
         // SAFETY: nfp からフレームの語の数だけ塊の中にあり、呼び出し元のフレーム(st.fp)とは重ならない。
@@ -308,6 +468,13 @@ impl<'p> Interp<'p> {
             *nfp.add(2) = u64::from(any) | (u64::from(raw) << 32);
             *nfp.add(3) = st.fpos;
         }
+        if let Some(addr) = native {
+            let v = self.call_native(addr, func, env, npos, nfp)?;
+            // 呼び出しの間に値スタックの使っている塊が動きうるので、今のフレームの位置に戻す。
+            self.rt.stack.ptr_at(st.fpos);
+            return self.native_returned(st, v);
+        }
+        let code = self.code(func)?;
         *st = St {
             fpos: npos,
             fp: nfp,
@@ -315,11 +482,22 @@ impl<'p> Interp<'p> {
             pc: 0,
             env,
         };
-        Ok(())
+        Ok(None)
     }
 
     /// 今のフレームを再利用して、呼ばれた側の入口へ移る(末尾呼び出し)。
-    fn tail_enter(&mut self, st: &mut St, func: FuncId, env: Word, args: Args) -> Result<(), Stop> {
+    ///
+    /// 呼ばれた側が JIT の関数のとき、今のフレームが起動の最下段なら、フレームを置いてから
+    /// 末尾呼び出しの依頼 [`crate::native::TAILREQ`] を返す(ネイティブの呼び出し元が呼ぶ)。
+    /// 最下段でなければ、置いたフレームの呼び出し元(今のフレームの呼び出し元)に戻る呼び出しとして JIT を普通に呼び、
+    /// 戻った値をその呼び出し元に渡す(計画 6.9 節)。
+    fn tail_enter(
+        &mut self,
+        st: &mut St,
+        func: FuncId,
+        env: Word,
+        args: Args,
+    ) -> Result<Option<Word>, Stop> {
         let mut buf = std::mem::take(&mut self.words);
         buf.clear();
         // SAFETY: 引数の出どころは今のフレームのスロットか、生きている語の列である。
@@ -339,9 +517,8 @@ impl<'p> Interp<'p> {
         }
         // SAFETY: fp は今のフレームの見出しを指す。
         let (caller, depth) = unsafe { (*st.fp.add(3), *st.fp.add(1)) };
-        let code = self.code(func)?;
-        // SAFETY: code は生きている Code を指す。
-        let (fw, any, raw) = unsafe { ((*code).frame_words, (*code).any_slots, (*code).raw_slots) };
+        let native = self.native_target(func)?;
+        let (fw, any, raw) = self.frame_shape(func)?;
         let npos = self.rt.stack.place(st.fpos, fw)?;
         let nfp = self.rt.stack.ptr_at(npos);
         // SAFETY: nfp からフレームの語の数だけ塊の中にある。
@@ -355,6 +532,23 @@ impl<'p> Interp<'p> {
             *nfp.add(3) = caller;
         }
         self.words = buf;
+        let at_bottom = st.fpos == self.bottom;
+        if at_bottom {
+            self.bottom = npos;
+        }
+        if let Some(addr) = native {
+            if at_bottom {
+                self.native_request(func, env, npos, nfp);
+                return Ok(Some(crate::native::TAILREQ));
+            }
+            let v = self.call_native(addr, func, env, npos, nfp)?;
+            self.frame_at(st, caller)?;
+            if v == Word::SENTINEL {
+                self.rt.depth = st.depth();
+            }
+            return self.native_returned(st, v);
+        }
+        let code = self.code(func)?;
         *st = St {
             fpos: npos,
             fp: nfp,
@@ -362,26 +556,24 @@ impl<'p> Interp<'p> {
             pc: 0,
             env,
         };
-        Ok(())
+        Ok(None)
     }
 
-    /// 値 `v` で今のフレームから戻る。呼び出し元がネイティブなら `Some(v)` を返す。
+    /// 値 `v` で今のフレームから戻る。今のフレームが起動の最下段なら `Some(v)` を返す。
     fn ret(&mut self, st: &mut St, v: Word) -> Result<Option<Word>, Stop> {
         // SAFETY: fp は今のフレームの見出しを指す。
         let caller = unsafe { *st.fp.add(3) };
-        if caller == NATIVE_CALLER {
+        if caller == NATIVE_CALLER || st.fpos == self.bottom {
             return Ok(Some(v));
         }
-        let cfp = self.rt.stack.ptr_at(caller);
-        // SAFETY: cfp は呼び出し元のフレームの見出しを指す。
-        let h0 = unsafe { *cfp };
-        let func = FuncId(h0 as u32);
-        let rp = (h0 >> 32) as u32;
-        let code = self.code(func)?;
-        st.fpos = caller;
-        st.fp = cfp;
-        st.code = code;
-        st.env = Word(0);
+        self.frame_at(st, caller)?;
+        self.deliver(st, v)
+    }
+
+    /// 呼ばれた側が値 `v` で戻った。今のフレーム `st` の見出しの再開点から続ける。
+    fn deliver(&mut self, st: &mut St, v: Word) -> Result<Option<Word>, Stop> {
+        // SAFETY: fp は今のフレームの見出しを指す。
+        let rp = (unsafe { *st.fp } >> 32) as u32;
         if rp & PHASE != 0 {
             return self.phase2(st, rp & !PHASE, v);
         }
@@ -397,8 +589,23 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
-    /// 呼び出し元のフレーム `pos` に移る。`ctx.depth` はそのフレームの深さにする。
-    fn move_to(&mut self, st: &mut St, pos: u64) -> Result<(), Stop> {
+    /// ネイティブに呼んだ関数が `v` で戻った。`st` はその呼び出し元のフレームである。
+    ///
+    /// 番兵なら、呼び出し元の深さに書き戻して [`Interp::receive`] で受け取る。
+    /// 受け取らないフレームなら `Err(Stop::Pending)` で巻き戻しを続ける(今のフレームも番兵で戻る)。
+    fn native_returned(&mut self, st: &mut St, v: Word) -> Result<Option<Word>, Stop> {
+        if v == Word::SENTINEL {
+            self.rt.depth = st.depth();
+            if self.receive(st)? {
+                return Ok(None);
+            }
+            return Err(Stop::Pending);
+        }
+        self.deliver(st, v)
+    }
+
+    /// 呼び出し元のフレーム `pos` に移る。`ctx.depth` は変えない。
+    fn frame_at(&mut self, st: &mut St, pos: u64) -> Result<(), Stop> {
         let fp = self.rt.stack.ptr_at(pos);
         // SAFETY: fp はフレームの見出しを指す。
         let h0 = unsafe { *fp };
@@ -407,6 +614,12 @@ impl<'p> Interp<'p> {
         st.fp = fp;
         st.code = code;
         st.env = Word(0);
+        Ok(())
+    }
+
+    /// 呼び出し元のフレーム `pos` に移る。`ctx.depth` はそのフレームの深さにする。
+    fn move_to(&mut self, st: &mut St, pos: u64) -> Result<(), Stop> {
+        self.frame_at(st, pos)?;
         self.rt.depth = st.depth();
         Ok(())
     }
@@ -414,44 +627,53 @@ impl<'p> Interp<'p> {
     /// 今のフレームが番兵で戻る(状態語が立っている)。
     ///
     /// 番兵を受け取るフレームに着いたら `None` を返して続ける。
-    /// ネイティブの呼び出し元に着いたら番兵を返す。
+    /// 起動の最下段から戻るときは番兵を返す。
     fn unwind(&mut self, st: &mut St) -> Result<Option<Word>, Stop> {
         loop {
             // SAFETY: fp は今のフレームの見出しを指す。
             let caller = unsafe { *st.fp.add(3) };
-            if caller == NATIVE_CALLER {
+            if caller == NATIVE_CALLER || st.fpos == self.bottom {
                 return Ok(Some(Word::SENTINEL));
             }
             self.move_to(st, caller)?;
-            // SAFETY: fp は今のフレームの見出しを指す。
-            let rp = (unsafe { *st.fp } >> 32) as u32;
-            if rp & PHASE != 0 {
-                continue;
+            if self.receive(st)? {
+                return Ok(None);
             }
-            let e = st.code().resume[(rp & !YIELDED) as usize];
-            match e.kind {
-                rk::CATCH => {
-                    st.set(e.dst, Word::SENTINEL.0);
-                    st.pc = e.pc_after as usize;
-                    return Ok(None);
-                }
-                rk::PERFORM => {
-                    if rp & YIELDED == 0 {
-                        self.perform_unwound(st, e)?;
-                    }
-                }
-                _ => match &self.rt.pending {
-                    Pending::Yield { .. } if !e.yields => {
-                        return Err(bug(
-                            "yield が noyield の再開点に届きました(may_yield の印の誤り)",
-                        ));
-                    }
-                    Pending::Matched(_) | Pending::ClauseValue(_) | Pending::TailResume(_) => {
-                        return Err(bug("節の印がふつうの呼び出しに届きました"));
-                    }
-                    _ => {}
-                },
+        }
+    }
+
+    /// 呼ばれた側が番兵で戻り、今のフレーム `st` に着いた。見出しの再開点の行の種類で扱いを決める。
+    ///
+    /// 番兵を受け取る呼び出しなら結果のスロットに番兵を書いて `true` を返す(そこから続ける)。
+    /// ほかは `false` を返し、今のフレームも番兵で戻る。
+    fn receive(&mut self, st: &mut St) -> Result<bool, Stop> {
+        // SAFETY: fp は今のフレームの見出しを指す。
+        let rp = (unsafe { *st.fp } >> 32) as u32;
+        if rp & PHASE != 0 {
+            return Ok(false);
+        }
+        let e = st.code().resume[(rp & !YIELDED) as usize];
+        match e.kind {
+            rk::CATCH => {
+                st.set(e.dst, Word::SENTINEL.0);
+                st.pc = e.pc_after as usize;
+                Ok(true)
             }
+            rk::PERFORM => {
+                if rp & YIELDED == 0 {
+                    self.perform_unwound(st, e)?;
+                }
+                Ok(false)
+            }
+            _ => match &self.rt.pending {
+                Pending::Yield { .. } if !e.yields => Err(bug(
+                    "yield が noyield の再開点に届きました(may_yield の印の誤り)",
+                )),
+                Pending::Matched(_) | Pending::ClauseValue(_) | Pending::TailResume(_) => {
+                    Err(bug("節の印がふつうの呼び出しに届きました"))
+                }
+                _ => Ok(false),
+            },
         }
     }
 
@@ -566,12 +788,11 @@ impl<'p> Interp<'p> {
         match self.rt.callee_view(f) {
             CalleeView::Closure(func) => {
                 if tail {
-                    self.tail_enter(st, func, f, args)?;
+                    self.tail_enter(st, func, f, args)
                 } else {
                     st.set_resume(rp);
-                    self.enter(st, func, f, args)?;
+                    self.enter(st, func, f, args)
                 }
-                Ok(None)
             }
             CalleeView::ExternUnimpl(g) => Err(unimpl_prim(self.prog, g)),
             CalleeView::Method => {
@@ -602,12 +823,11 @@ impl<'p> Interp<'p> {
             DictView::Builtin(c, t) => {
                 let body = self.builtin_method(c, t, m)?;
                 if tail {
-                    self.tail_enter(st, body, Word(0), args)?;
+                    self.tail_enter(st, body, Word(0), args)
                 } else {
                     st.set_resume(rp);
-                    self.enter(st, body, Word(0), args)?;
+                    self.enter(st, body, Word(0), args)
                 }
-                Ok(None)
             }
             DictView::Inst(i, premises) => {
                 self.check_inst(i)?;
@@ -621,8 +841,7 @@ impl<'p> Interp<'p> {
                 let mut dicts = premises;
                 dicts.extend_from_slice(own);
                 st.set_resume(rp | PHASE);
-                self.enter(st, func, Word(0), Args::Words(dicts.as_ptr(), dicts.len()))?;
-                Ok(None)
+                self.enter(st, func, Word(0), Args::Words(dicts.as_ptr(), dicts.len()))
             }
             DictView::Record(_) | DictView::Variant(_) => {
                 if args.len() != 2 {
@@ -662,7 +881,7 @@ impl<'p> Interp<'p> {
         }
     }
 
-    fn builtin_method(&self, c: ClassId, t: TypeId, m: u32) -> Result<FuncId, Stop> {
+    pub(crate) fn builtin_method(&self, c: ClassId, t: TypeId, m: u32) -> Result<FuncId, Stop> {
         self.builtin_methods
             .get(&(c.0, t.0, m))
             .copied()
@@ -674,7 +893,7 @@ impl<'p> Interp<'p> {
             })
     }
 
-    fn check_inst(&self, i: InstanceId) -> Result<(), Stop> {
+    pub(crate) fn check_inst(&self, i: InstanceId) -> Result<(), Stop> {
         if self.rt.inst_init[i.index()] {
             Ok(())
         } else {
@@ -772,7 +991,7 @@ impl<'p> Interp<'p> {
     ///
     /// 各項目の比較は、深さを 1 つ増やして項目の辞書の `eq`(クラス `class` の 0 番のメソッド)を呼ぶ。
     /// 比べる間、両辺と辞書を根の枠に置く。
-    fn eq_struct(
+    pub(crate) fn eq_struct(
         &mut self,
         class: ClassId,
         d: Word,
@@ -837,7 +1056,7 @@ impl<'p> Interp<'p> {
             return Err(self.rt.depth_error());
         }
         self.rt.depth += 1;
-        let r = self.call_method_nested(class, 0, d, &[], &[x, y], base);
+        let r = self.maybe_hop(|it| it.call_method_nested(class, 0, d, &[], &[x, y], base));
         self.rt.depth = saved;
         Ok(r?.as_bool())
     }
@@ -960,8 +1179,7 @@ impl<'p> Interp<'p> {
                 args.push(Word::i32(j as i32));
                 st.set_resume(rp);
                 let func = self.rt.closure_func(clause);
-                self.enter(st, func, clause, Args::Words(args.as_ptr(), args.len()))?;
-                return Ok(None);
+                return self.enter(st, func, clause, Args::Words(args.as_ptr(), args.len()));
             }
             FxOp::ContCheck { nontail } => {
                 let k = arg(0);
@@ -1000,8 +1218,7 @@ impl<'p> Interp<'p> {
                 let (body, res) = (r.body, r.res);
                 let args = [res];
                 st.pc = next;
-                self.call_value(st, rp, body, Args::Words(args.as_ptr(), 1), false)?;
-                return Ok(None);
+                return self.call_value(st, rp, body, Args::Words(args.as_ptr(), 1), false);
             }
             FxOp::ContResume => {
                 let (k, v) = (arg(0), arg(1));
@@ -1077,8 +1294,7 @@ impl<'p> Interp<'p> {
                 self.rt.depth = d + 1;
                 st.set_resume(rp);
                 let func = self.rt.closure_func(clause);
-                self.enter(st, func, clause, Args::Words(a.as_ptr(), a.len()))?;
-                return Ok(None);
+                return self.enter(st, func, clause, Args::Words(a.as_ptr(), a.len()));
             }
             FxOp::ContKill => {
                 let k = arg(0);
@@ -1107,8 +1323,7 @@ impl<'p> Interp<'p> {
             FxOp::CallCancel => {
                 let f = arg(0);
                 st.pc = next;
-                self.call_value(st, rp, f, Args::Words([].as_ptr(), 0), false)?;
-                return Ok(None);
+                return self.call_value(st, rp, f, Args::Words([].as_ptr(), 0), false);
             }
             FxOp::LimitGet => out = Some(self.rt.limit),
             FxOp::LimitSet => self.rt.limit = st.get(w[pc + 4]),
@@ -1121,7 +1336,7 @@ impl<'p> Interp<'p> {
     }
 
     /// エフェクトのブロックの終わり。
-    fn fx_term(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<(), Stop> {
+    fn fx_term(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
         // SAFETY: Code は self.codes の Box の中にあり、動かない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
@@ -1345,49 +1560,12 @@ impl<'p> Interp<'p> {
 
     fn error(&self, st: &St, idx: u32, operand: u32) -> Stop {
         let kind = &st.code().errors[idx as usize];
-        let opnd = || st.w(operand);
-        let show = |w: Word| self.rt.show(w);
-        let msg: Vec<u8> = match kind {
-            RtError::Hole => "??? に到達しました".into(),
-            RtError::Unbound(g) => return self.rt.unbound(*g),
-            RtError::PatternFail => {
-                let mut m = "パターンに値が一致しません: ".as_bytes().to_vec();
-                m.extend(show(opnd()));
-                m
-            }
-            RtError::MatchFail => {
-                let mut m = "match のどの節にも一致しません: ".as_bytes().to_vec();
-                m.extend(show(opnd()));
-                m
-            }
-            RtError::LitRange(s) => format!("数値リテラルが範囲外です: {s}").into(),
-            RtError::InstanceNotReady(i) => {
-                return keleut_rt::error::instance_not_ready(
-                    &self.prog.instances[i.index()].display,
-                );
-            }
-            RtError::DivZero => "ゼロ除算です".into(),
-            RtError::F64ToIntNan(op) => {
-                format!("{}: NaN は整数に変換できません", conv_name(op)).into()
-            }
-            RtError::F64ToIntRange(op) => format!(
-                "{}: 変換結果が範囲外です: {}",
-                conv_name(op),
-                keleut_rtcore::show_f64(f64::from_bits(st.get(operand)))
-            )
-            .into(),
-            RtError::StrSubRange => "__string_sub: 範囲外です".into(),
-            RtError::Panic => {
-                let mut m = b"panic: ".to_vec();
-                m.extend_from_slice(self.rt.str_bytes(opnd()));
-                m
-            }
-            RtError::ArrayIndex => "配列の範囲外です".into(),
-            RtError::MArrayNegLen => "MutableArray.new: 長さが負です".into(),
-            RtError::UnimplPrim(g) => return unimpl_prim(self.prog, *g),
-            RtError::OutOfMemory => return Stop::OutOfMemory,
+        let opnd = if operand == u32::MAX {
+            0
+        } else {
+            st.get(operand)
         };
-        Stop::Runtime(msg)
+        runtime_error(self.prog, &self.rt, kind, opnd)
     }
 
     /// 振り分けのループ。止まる理由が実行時エラーなら状態語にして巻き戻し、番兵を受け取るフレームから続ける。
@@ -1855,7 +2033,9 @@ impl<'p> Interp<'p> {
                 CALL_DIRECT => {
                     let (args, _) = slots!(3);
                     st.set_resume(a(1));
-                    self.enter(st, FuncId(a(2)), Word(0), args)?;
+                    if let Some(v) = self.enter(st, FuncId(a(2)), Word(0), args)? {
+                        return Ok(v);
+                    }
                 }
                 CALL_VALUE => {
                     let (args, _) = slots!(3);
@@ -1884,7 +2064,9 @@ impl<'p> Interp<'p> {
                         match self.rt.callee_view(f) {
                             CalleeView::Closure(func) => {
                                 st.set_resume(a(1));
-                                self.enter(st, func, f, args)?;
+                                if let Some(v) = self.enter(st, func, f, args)? {
+                                    return Ok(v);
+                                }
                             }
                             _ => {
                                 return Err(Stop::Internal(
@@ -1920,7 +2102,9 @@ impl<'p> Interp<'p> {
                 }
                 TAIL_DIRECT => {
                     let (args, _) = slots!(2);
-                    self.tail_enter(st, FuncId(a(1)), Word(0), args)?;
+                    if let Some(v) = self.tail_enter(st, FuncId(a(1)), Word(0), args)? {
+                        return Ok(v);
+                    }
                 }
                 TAIL_VALUE => {
                     let (args, _) = slots!(3);
@@ -1934,7 +2118,11 @@ impl<'p> Interp<'p> {
                         return Ok(v);
                     }
                 }
-                FX_TERM => self.fx_term(st, pc, sub)?,
+                FX_TERM => {
+                    if let Some(v) = self.fx_term(st, pc, sub)? {
+                        return Ok(v);
+                    }
+                }
                 SAFEPOINT => {
                     self.rt.gc.at_safepoint(st.fpos, sub);
                     st.pc += 1;
@@ -1947,6 +2135,48 @@ impl<'p> Interp<'p> {
             }
         }
     }
+}
+
+/// `error` の命令の実行時エラー(付録 B の文面)。`opnd` は被演算子のスロットの語(無ければ何でもよい)。
+pub(crate) fn runtime_error(prog: &Program, rt: &Rt<'_>, kind: &RtError, opnd: u64) -> Stop {
+    let show = |w: Word| rt.show(w);
+    let msg: Vec<u8> = match kind {
+        RtError::Hole => "??? に到達しました".into(),
+        RtError::Unbound(g) => return rt.unbound(*g),
+        RtError::PatternFail => {
+            let mut m = "パターンに値が一致しません: ".as_bytes().to_vec();
+            m.extend(show(Word(opnd)));
+            m
+        }
+        RtError::MatchFail => {
+            let mut m = "match のどの節にも一致しません: ".as_bytes().to_vec();
+            m.extend(show(Word(opnd)));
+            m
+        }
+        RtError::LitRange(s) => format!("数値リテラルが範囲外です: {s}").into(),
+        RtError::InstanceNotReady(i) => {
+            return keleut_rt::error::instance_not_ready(&prog.instances[i.index()].display);
+        }
+        RtError::DivZero => "ゼロ除算です".into(),
+        RtError::F64ToIntNan(op) => format!("{}: NaN は整数に変換できません", conv_name(op)).into(),
+        RtError::F64ToIntRange(op) => format!(
+            "{}: 変換結果が範囲外です: {}",
+            conv_name(op),
+            keleut_rtcore::show_f64(f64::from_bits(opnd))
+        )
+        .into(),
+        RtError::StrSubRange => "__string_sub: 範囲外です".into(),
+        RtError::Panic => {
+            let mut m = b"panic: ".to_vec();
+            m.extend_from_slice(rt.str_bytes(Word(opnd)));
+            m
+        }
+        RtError::ArrayIndex => "配列の範囲外です".into(),
+        RtError::MArrayNegLen => "MutableArray.new: 長さが負です".into(),
+        RtError::UnimplPrim(g) => return unimpl_prim(prog, *g),
+        RtError::OutOfMemory => return Stop::OutOfMemory,
+    };
+    Stop::Runtime(msg)
 }
 
 /// 比べ方の細目 `sub` を順序の結果に当てる。

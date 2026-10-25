@@ -5,12 +5,14 @@
 //! | [`run_program`] | LIR のプログラムを専用のスレッドで実行し、終了状態を返す |
 //! | [`bytecode::encode`] | 1 つの関数をバイトコードにする |
 //! | [`interp::Interp`] | インタプリタ(フレームは分割値スタックに置く) |
+//! | [`run_program_with`] | ネイティブの後段(M91 の JIT。[`native`])を付けたインタプリタで実行する |
 //!
 //! エフェクト(`handle`、利用者の操作の `perform`、`resume`)は、`doc/lir.md` の 16 節の規約で実行する
 //! ([`interp`] の冒頭)。
 
 pub mod bytecode;
 pub mod interp;
+pub mod native;
 
 use keleut_lir::Program;
 use keleut_rt::{Rt, Stop, Word};
@@ -45,7 +47,10 @@ impl Default for RunOptions {
     }
 }
 
-fn run_on_thread(prog: &Program, opts: &RunOptions) -> u8 {
+/// インタプリタを作った後、初期化を走らせる前に呼ぶ準備(ネイティブの後段を付ける)。
+pub type Setup<'s> = &'s mut (dyn FnMut(&mut Interp<'_>) -> Result<(), Stop> + Send);
+
+fn run_on_thread(prog: &Program, opts: &RunOptions, setup: Option<Setup<'_>>) -> u8 {
     let x = 0u8;
     let sp0 = std::hint::black_box(&x) as *const u8 as usize;
     let low = sp0
@@ -58,10 +63,16 @@ fn run_on_thread(prog: &Program, opts: &RunOptions) -> u8 {
         );
         return 70;
     }
-    run_mutator(prog, opts, low)
+    run_mutator(prog, opts, low, interp::NATIVE_MARGIN, setup)
 }
 
-fn run_mutator(prog: &Program, opts: &RunOptions, low: usize) -> u8 {
+fn run_mutator(
+    prog: &Program,
+    opts: &RunOptions,
+    low: usize,
+    margin: usize,
+    setup: Option<Setup<'_>>,
+) -> u8 {
     let stats = std::env::var_os("KELEUT_GC_STATS").is_some();
     let rt = match Rt::new_with(prog, opts.max_depth, opts.gc_stress) {
         Ok(rt) => rt,
@@ -71,6 +82,16 @@ fn run_mutator(prog: &Program, opts: &RunOptions, low: usize) -> u8 {
         }
     };
     let mut it = Interp::new(rt, low);
+    it.set_stack_hop(
+        usize::try_from(opts.native_stack).unwrap_or(usize::MAX),
+        margin,
+    );
+    if let Some(setup) = setup
+        && let Err(e) = setup(&mut it)
+    {
+        it.rt.out.eprint(&e.message());
+        return e.exit_code();
+    }
     let code = run_init(prog, &mut it);
     if stats {
         let s = it.rt.gc_stats();
@@ -120,12 +141,43 @@ fn run_init(prog: &Program, it: &mut Interp<'_>) -> u8 {
 /// ミューテータは、ネイティブのスタックを `opts.native_stack` バイト予約した専用のスレッドで走らせる(計画 6.11 節)。
 /// 標準出力は終わる前に flush し、止まった理由の診断を標準エラーに書く。
 pub fn run_program(prog: &Program, opts: &RunOptions) -> u8 {
+    run_program_inner(prog, opts, None)
+}
+
+/// [`run_program`] と同じで、インタプリタを作った後、初期化を走らせる前に `setup` を呼ぶ。
+///
+/// ネイティブの後段(M91 の JIT)は `setup` で [`Interp::set_native`] を呼んで付ける。
+/// `setup` は専用のスレッドで呼ばれる。
+pub fn run_program_with(
+    prog: &Program,
+    opts: &RunOptions,
+    setup: &mut (dyn FnMut(&mut Interp<'_>) -> Result<(), Stop> + Send),
+) -> u8 {
+    run_program_inner(prog, opts, Some(setup))
+}
+
+/// 今のスレッドで実行する(試験用)。`margin` は予備の検査の余裕(バイト)。
+pub fn run_program_here(
+    prog: &Program,
+    opts: &RunOptions,
+    margin: usize,
+    setup: Option<Setup<'_>>,
+) -> u8 {
+    let x = 0u8;
+    let sp0 = std::hint::black_box(&x) as *const u8 as usize;
+    let low = sp0
+        .saturating_sub(usize::try_from(opts.native_stack).unwrap_or(usize::MAX))
+        .saturating_add(margin);
+    run_mutator(prog, opts, low, margin, setup)
+}
+
+fn run_program_inner(prog: &Program, opts: &RunOptions, mut setup: Option<Setup<'_>>) -> u8 {
     let size = usize::try_from(opts.native_stack).unwrap_or(usize::MAX);
     std::thread::scope(|s| {
         let h = std::thread::Builder::new()
             .name("keleut-mutator".to_string())
             .stack_size(size)
-            .spawn_scoped(s, || run_on_thread(prog, opts));
+            .spawn_scoped(s, || run_on_thread(prog, opts, setup.take()));
         match h {
             Ok(h) => match h.join() {
                 Ok(code) => code,
