@@ -1,7 +1,11 @@
 //! 実行時の文脈と、値を作り読む操作(計画 261024-1 の 6.5 節、`doc/lir.md` の各命令の意味)。
 //!
 //! [`Rt`] は、ヒープ、根の枠、分割値スタック、標準出力、形の表、深さと限度、
-//! 大域とインスタンスの状態、文字列の定数を持つ。
+//! 大域とインスタンスの状態、文字列の定数、回収の状態を持つ。
+//!
+//! 箱を作る関数はどれも [`Rt::alloc`] で確保し、そこで回収が起こりうる([`crate::gc`])。
+//! 引数で受け取った語は、後段の根(フレームの安全点の集合など)が持っている前提である。
+//! 1 つの関数の中で 2 回以上確保するときは、先に作った箱を根に置いてから次を確保する。
 //! 後段(インタプリタ、M91 の JIT)は、LIR の命令のうち実行時に任せるものをここの関数で行う。
 
 use keleut_lir::{
@@ -12,6 +16,7 @@ use keleut_rtcore::{ShapeId as RtShape, ShapeTable};
 
 use crate::effect::{Cont, HandlerRec, Pending};
 use crate::error::Stop;
+use crate::gc::{GcState, Table};
 use crate::heap::{Heap, Roots};
 use crate::out::Out;
 use crate::stack::ValueStack;
@@ -66,6 +71,8 @@ pub struct Rt<'p> {
     pub func_prim_name: Vec<Option<String>>,
     /// `extern` の大域ごとの、`extern` を本体とする関数(種類 `extern` の値を見分ける)。
     pub extern_funcs: Vec<bool>,
+    /// 回収の状態。
+    pub gc: GcState,
 }
 
 /// 記号から単位の鍵(最後の `/` まで)と末尾の `#n` を除いた名前(IRSpec 3.1 節)。
@@ -102,7 +109,13 @@ impl<'p> Rt<'p> {
     ///
     /// 形の表にプログラムの形を順に入れ、番号が表の添字と一致することを確かめる(`doc/lir.md` の 1.5 節)。
     /// 文字列の定数と、関数を値とする大域のクロージャを先に確保する。
+    /// 作った箱はすぐに表(根)に入れるので、その間の回収で失われない。
     pub fn new(prog: &'p Program, limit: u64) -> Result<Rt<'p>, Stop> {
+        Self::new_with(prog, limit, false)
+    }
+
+    /// [`Rt::new`] と同じで、`stress` が真なら `--gc-stress` の規則で回収する([`crate::gc::STRESS_RATIO`])。
+    pub fn new_with(prog: &'p Program, limit: u64, stress: bool) -> Result<Rt<'p>, Stop> {
         let mut shapes = ShapeTable::new();
         let mut pos = Vec::new();
         for (i, s) in prog.shapes.iter().enumerate() {
@@ -156,7 +169,9 @@ impl<'p> Rt<'p> {
             strings: Vec::with_capacity(prog.strings.len()),
             func_prim_name,
             extern_funcs,
+            gc: GcState::new(prog.funcs.len()),
         };
+        rt.gc.stress = stress;
         for s in &prog.strings {
             let w = rt.new_str(s)?;
             rt.strings.push(w);
@@ -169,7 +184,7 @@ impl<'p> Rt<'p> {
                 }
                 GlobalKind::Extern { func: Some(f), .. } => rt.closure_new(*f, &[])?,
                 GlobalKind::Extern { func: None, .. } => {
-                    let p = rt.heap.alloc(2)?;
+                    let p = rt.alloc(2)?;
                     // SAFETY: p は 2 語の新しい領域である。
                     unsafe {
                         *p = header(Kind::ExternUnimpl, 0);
@@ -185,8 +200,9 @@ impl<'p> Rt<'p> {
         Ok(rt)
     }
 
+    /// 見出しを書いた箱を確保する。残りの語は呼び出し側が、次の確保の前に書く。
     fn alloc_obj(&mut self, kind: Kind, n: u32, words: usize) -> Result<*mut u64, Stop> {
-        let p = self.heap.alloc(words)?;
+        let p = self.alloc(words)?;
         // SAFETY: p は words ≧ 1 語の新しい領域である。
         unsafe { *p = header(kind, n) };
         Ok(p)
@@ -242,7 +258,8 @@ impl<'p> Rt<'p> {
     /// 前提:`w` は文字列である。
     #[inline]
     pub fn str_bytes(&self, w: Word) -> &[u8] {
-        // SAFETY: 前提により w は文字列の箱で、箱は動かず回収されない(M87)。
+        // SAFETY: 前提により w は生きている文字列の箱で、箱は動かない。
+        // 借用の間は self を変えられないので確保も回収も起きない。
         unsafe { value::str_bytes(w) }
     }
 
@@ -693,22 +710,35 @@ impl<'p> Rt<'p> {
 
     /// 表に項目を足してから、その添字の箱を作る。箱を作れなければ項目を外して失敗を返す。
     ///
-    /// 箱の確保(M90 では安全点)の間も、項目は表(根)の中にある。
+    /// 回収で空いた添字があれば使い回す。
+    /// 箱の確保(安全点)の間は、まだ箱の無い項目として根になる([`crate::gc`])。
     /// 表を広げられないときも、プロセスを止めずにメモリの不足を返す。
     fn table_push<T>(
         &mut self,
         table: fn(&mut Self) -> &mut Vec<T>,
+        which: Table,
         kind: Kind,
+        dead: fn() -> T,
         x: T,
     ) -> Result<Word, Stop> {
-        let t = table(self);
-        t.try_reserve(1).map_err(|_| Stop::OutOfMemory)?;
-        let i = t.len();
-        t.push(x);
-        match self.index_box(kind, i) {
+        let len = table(self).len();
+        if self.gc.tables[which as usize].state_len() == len {
+            table(self).try_reserve(1).map_err(|_| Stop::OutOfMemory)?;
+        }
+        let i = self.gc.tables[which as usize].next_index(len)?;
+        if i == len {
+            table(self).push(x);
+        } else {
+            table(self)[i] = x;
+        }
+        self.gc.unboxed = Some((which, i));
+        let r = self.index_box(kind, i);
+        self.gc.unboxed = None;
+        match r {
             Ok(w) => Ok(w),
             Err(e) => {
-                table(self).pop();
+                table(self)[i] = dead();
+                self.gc.tables[which as usize].release(i);
                 Err(e)
             }
         }
@@ -717,7 +747,13 @@ impl<'p> Rt<'p> {
     /// ハンドラ記録を作る。起動の番号を振る。
     pub fn handler_new(&mut self, mut rec: HandlerRec) -> Result<Word, Stop> {
         rec.id = self.next_handler;
-        let w = self.table_push(|r| &mut r.handlers, Kind::Handler, rec)?;
+        let w = self.table_push(
+            |r| &mut r.handlers,
+            Table::Handler,
+            Kind::Handler,
+            HandlerRec::dead,
+            rec,
+        )?;
         self.next_handler += 1;
         Ok(w)
     }
@@ -748,7 +784,7 @@ impl<'p> Rt<'p> {
 
     /// 継続を作る。
     pub fn cont_new(&mut self, c: Cont) -> Result<Word, Stop> {
-        self.table_push(|r| &mut r.conts, Kind::Cont, c)
+        self.table_push(|r| &mut r.conts, Table::Cont, Kind::Cont, Cont::default, c)
     }
 
     /// 継続の箱の添字。継続でなければ内部の誤り。
@@ -762,7 +798,13 @@ impl<'p> Rt<'p> {
 
     /// 状態語を退避した値にする。
     pub fn pending_box(&mut self, p: Pending) -> Result<Word, Stop> {
-        self.table_push(|r| &mut r.saved, Kind::Pending, p)
+        self.table_push(
+            |r| &mut r.saved,
+            Table::Pending,
+            Kind::Pending,
+            Pending::default,
+            p,
+        )
     }
 
     /// 退避した値から状態語を取り出す(表の項目は空にする)。

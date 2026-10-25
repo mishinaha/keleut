@@ -133,6 +133,24 @@ impl ValueStack {
         unsafe { c.mem.as_mut_ptr().add(off) }
     }
 
+    /// 論理的な位置 `pos` の語へのポインタを、使っている塊を変えずに求める(GC がフレームをたどるとき)。
+    ///
+    /// [`ValueStack::ptr_at`] は使っている塊を動かし、それは次の [`ValueStack::place`] の置き場所に効くので、
+    /// 実行の途中の GC はこちらを使う。
+    /// どの塊にも入らない位置は処理系の不具合なので panic にする。
+    pub fn ptr_at_ro(&self, pos: u64) -> *const u64 {
+        let i = self.chunks.partition_point(|c| c.base <= pos);
+        assert!(i > 0, "値スタックの位置 {pos} がどの塊にも入りません");
+        let c = &self.chunks[i - 1];
+        let off = (pos - c.base) as usize;
+        assert!(
+            off < c.mem.len(),
+            "値スタックの位置 {pos} がどの塊にも入りません"
+        );
+        // SAFETY: off は塊の中にある。
+        unsafe { c.mem.as_ptr().add(off) }
+    }
+
     /// 位置 `top`(今のフレームの終わり)の後に `words` 語のフレームを置く場所を決め、その論理的な位置を返す。
     ///
     /// 今の塊に入らなければ次の塊(無ければ新しく作る)の先頭にする。
