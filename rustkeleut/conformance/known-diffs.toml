@@ -269,8 +269,7 @@ ledger = "V217"
 # conformance/bytes/ の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf、x-ir)のほうが記録と違う。
 # これらの組の項目は against = "record" とし、記録との差だけを許す。
 # 組 ki は記録と一致し、基準の組 dk と違うので、別の項目を against = "pair" として置く。
-# sinkfail.t:26 の組 ki は、M89 までは評価が handle に届いて 4 で終わるので、known-diffs-unimplemented.toml に当たる。
-# M89 でその登録を消したら、ここに組 ki の against = "pair" の項目を足す。
+# diktor/test/eval.t:845 の sinkfail.kel は、記録が Diktor の結果なので、組 ki だけが記録とも組 dk とも違う。
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
@@ -350,6 +349,69 @@ pairs = ["dk", "dk-ir", "kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "record"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 26
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 42
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 42
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 68
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 68
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 77
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/sinkfail.t"
+line = 77
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 845
+pairs = ["ki"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
 
 # V218: 標準出力が非ブロッキングのパイプのとき、Diktor は書き込みの EAGAIN を Sys_blocked_io の例外で受けて、
 # 内部エラーの後に 2 で終わる。keleut run は計画 6.5 節の出力の規約のとおり待って書き直し、0 で終わる。
