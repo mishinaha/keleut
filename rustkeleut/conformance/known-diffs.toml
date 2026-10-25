@@ -463,6 +463,42 @@ pairs = ["kf", "x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
+# V215: 1 回の確保の上限 N_alloc_max を超える確保は、keleut run ではメモリの不足(3)になる。
+# Diktor には上限が無く、この機械では確保に成功するので、conformance/oom/ の記録(keleut run の結果)と違う。
+# keleut run を Diktor で走らせる組は記録との差(against = "record")、組 ki は組 dk との差(against = "pair")である。
+
+[[diff]]
+file = "conformance/oom/oom.t"
+line = 15
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+ledger = "V215"
+against = "record"
+
+[[diff]]
+file = "conformance/oom/oom.t"
+line = 15
+pairs = ["ki"]
+reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+ledger = "V215"
+against = "pair"
+
+[[diff]]
+file = "conformance/oom/oom.t"
+line = 31
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+ledger = "V215"
+against = "record"
+
+[[diff]]
+file = "conformance/oom/oom.t"
+line = 31
+pairs = ["ki"]
+reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+ledger = "V215"
+against = "pair"
+
 # 限度は I: 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックを絞ると、
 # Diktor の KIR の評価器は論理的な深さが限度に届く前にスタックオーバーフロー(3)で止まる(IRSpec 11.5 節)。
 # conformance/depth/limit.t の記録は keleut run の結果である。
