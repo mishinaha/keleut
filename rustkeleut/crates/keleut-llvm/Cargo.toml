@@ -1,0 +1,20 @@
+[package]
+name = "keleut-llvm"
+description = "LIR から LLVM IR を作り、LLVM 22 の LLJIT(ORCv2)で走らせる後段"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+keleut-interp = { path = "../keleut-interp" }
+keleut-lir = { path = "../keleut-lir" }
+keleut-rt = { path = "../keleut-rt" }
+llvm-sys = { version = "=221.1.1", features = ["prefer-dynamic"], optional = true }
+
+[features]
+# LLVM 22 の共有ライブラリに結合する。無ければ crate は空になる(`cargo build` は LLVM 抜きで組める)。
+llvm = ["dep:llvm-sys"]
+
+[dev-dependencies]
+kir = { path = "../kir" }
