@@ -7,13 +7,13 @@ RustKeleut の差分試験の材料である。
 
 | 場所 | 中身 |
 | --- | --- |
-| `known-diffs.toml` | 既知の差の一覧。ここに無い差が 1 件でもあれば `kconform` は失敗する |
+| `known-diffs.toml`、`known-diffs-*.toml` | 既知の差の一覧。`kconform` は `known-diffs.toml` と、その横の `known-diffs-*.toml`(一時の登録。いまは `known-diffs-wasm-g.toml`、台帳 V220、M95 で消す)を読み、どれにも無い差が 1 件でもあれば失敗する |
 | `corpus/` | `kconform extract-corpus` が `diktor/test/*.t` のヒアドキュメントから抜き出した `.kel` と、その索引 `index.tsv` |
 | `kir-bad/` | 不正な KIR。`keleut kir` がどれも 65 で拒否することを確かめる |
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
 | `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
 | `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |
-| `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
+| `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215) |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
 `effects/`、`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
@@ -36,20 +36,30 @@ RustKeleut の差分試験の材料である。
 | `dk-ir` | `diktor --emit-ir` の後の `diktor --run-ir` | 同じく |
 | `kf` | 先に `keleut check` を通し、型検査で止まる入力はその結果を返す。通れば本物の diktor | Diktor の対応する呼び出し |
 | `ki` | 本物の `diktor --emit-ir` が 0 なら `keleut run --backend interp --tier interp-only FILE.kir`、0 でなければその出力と終了状態 | `keleut run --backend interp --tier interp-only` |
+| `kw` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend wasm FILE.kir` | `keleut run --backend wasm` |
 | `x-ir` | `keleut emit-kir` の後の `diktor --run-ir` | 同じく |
 
 組 `kf` は、Rust のフロントエンド(crate `keleut-front`。`keleut dump` と `keleut check` が使う)を Diktor と比べるために足した組である(M96)。
 組 `ki` は Diktor が書いた KIR を RustKeleut のインタプリタで走らせ、後段だけを比べる。
+組 `kw` は同じ KIR を WasmGC の後段(crate `keleut-wasm`。Node 26.9.0 以上で走る)で走らせる(M94)。
+`kw` の shim の振り分けは `ki` と同じである。
+`kw` で V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut run` は 3 でなく 70 で終わる。
+このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
+`ERROR(OutOfMemory)` と終了状態 3 になるのは `N_alloc_max` を超える確保だけで、`oom/` はそれを確かめる。
+これは §15.5 からの既知の逸脱(P252、台帳 V215。計画 6.5 節)で、既知の差には登録していない。
 
 `kf` と `ki` では、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump` に、`--type-check` の呼び出しを `keleut check` に振り向ける。
 `dk`、`dk-ir`、`x-ir` は、これらを本物の diktor に渡す。
 `--type-check` を含まず `--strict-exhaustive` を含む呼び出しは、Diktor がプログラムを実行するので、組 `dk-ir` と `ki` では実行の呼び出しとして振り分ける。
 Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む呼び出しと `--repl` は、組 `x-ir` の書き出しを除いて本物の diktor に渡す。
-`--extra=FLAG` は、組 `ki` の `keleut run` のすべての起動に `FLAG` を足す。
+`--extra=FLAG` は、RustKeleut の後段の組(`ki`、`kw` など)の `keleut run` のすべての起動に `FLAG` を足す。
 回収の試験は `--extra=--gc-stress` で回す。
 `keleut run --gc-stress` は、確保の場所(最上段のフレームの関数と点の組)を初めて通る確保で必ず回収し、それ以外では前の回収の手間の 64 分の 1 ほどの確保の回数ごとに回収する(間隔は擬似乱数で揺らす)。
 実行したどの確保の場所でも少なくとも 1 回は回収するが、確保のたびには回収しない。
 呼び出し元のフレームの根が試されるのは、そのフレームが止まっている間に回収が起こったときだけである。
+`--gc-stress` と `--native-stack` が効くのはインタプリタ(`--backend interp`)だけである。
+`--backend wasm` はどちらも受け付けて無視する(回収は V8 が行い、Node のスタックは L から決める)。
+そのため、`--extra=--gc-stress` を付けても組 `kw` の回収は試されない。
 `keleut run` を Diktor で走らせる組(`dk`、`dk-ir`、`kf`、`x-ir`)では、テキストの KIR(`.kirt`)の実行を shim が断り、4 で終わる。
 `diktor --run-ir` はバイナリの KIR しか読まないからである。
 
@@ -108,6 +118,12 @@ M95 でこの例外を消す。
 M88 は、評価が `handle` に届くブロックを `known-diffs-unimplemented.toml` に `when = "unimplemented"` で一時に登録した(台帳 V219)。
 M89 でエフェクトを入れて、このファイルを消した。
 `kconform --pairs dk,ki --suite all` は、このファイルなしで差 0 件である。
+
+M94 は、組 `kw` が G の節を選んで未実装の 4 で止まるブロックを、`known-diffs-wasm-g.toml` に `when = "unimplemented"` で一時に登録した(台帳 V220)。
+項目は、`kconform --pairs ki,kw --suite all` と `--suite depth` の出力から、組 `kw` の結果に `keleut: 未実装` の行があるブロックを集めて作った。
+M95 で G の節を入れたら、このファイルを消す。
+`known-diffs.toml` の、組 `ki` を挙げる項目には組 `kw` も挙げた。
+2 つの後段は互いに一致するので、`ki` と記録や Diktor との差は `kw` にも同じく現れる。
 
 比べる前に、期待と結果の両方の行を計画 8.1 節の規則で正規化する。
 診断の種別の語(型エラー、実行時エラーなど)に `: ` が続けばその後ろを切り、先頭が `⚠ ` の行は `⚠` だけにする。
