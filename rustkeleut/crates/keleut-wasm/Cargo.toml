@@ -1,0 +1,16 @@
+[package]
+name = "keleut-wasm"
+description = "LIR から WasmGC のモジュールを作る後段(wasm-encoder)、wasmparser による検証と trap の検査器、Node の起動"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+keleut-lir = { path = "../keleut-lir" }
+keleut-rtcore = { path = "../keleut-rtcore" }
+wasm-encoder = { version = "=0.262.0", default-features = false, features = ["std"] }
+wasmparser = { version = "=0.262.0", default-features = false, features = ["std", "validate", "features", "simd"] }
+
+[dev-dependencies]
+kir = { path = "../kir" }
