@@ -1,0 +1,515 @@
+# 一時の登録(台帳 V220)。組 kw(WasmGC の後段)は M94 では G の節を選ぶと未実装の 4 で止まる。
+# M95 で G の節を入れたら、このファイルを消す。
+# 生成: kconform --pairs ki,kw --suite all と --suite depth の出力から、組 kw の結果に未実装の行があるブロックを集めた。
+
+[[diff]]
+file = "conformance/corpus/eval/0002-effects.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0009-affine.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0016-clauseresumed.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0017-resumeinner.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0018-resumeinnerdeep.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0019-resumeinnerpre.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0020-resumeret.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0021-resumestop.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/eval/0022-resumeguard.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0008-tg.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0009-tg2.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0010-shift.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0011-shiftt.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0012-k2.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0013-k2drop.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0014-over.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_depth/0020-loops.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/ir_emit/0015-grd.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0018-nontailresume.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0033-cancelresume.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0034-cancelresumevia.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/never_ops/0035-cancelresumetwo.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0001-matchguard.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0002-ifcond.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0003-matchguard2.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0006-nestresume.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/resume_guard/0007-nestresumediv.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0011-nontail_resume.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/tail_calls/0019-retryresumepath.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/typecheck_m6/0001-eff9.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/corpus/verify_fixes/0033-lfok.kel"
+line = 1
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 17
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 30
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 47
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 63
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 81
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 99
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/handlers.t"
+line = 123
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/loops.t"
+line = 17
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/loops.t"
+line = 37
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "conformance/depth/loops.t"
+line = 66
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 99
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 259
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 390
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 409
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 428
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 447
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 466
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 484
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/eval.t"
+line = 502
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/ir_emit.t"
+line = 949
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 270
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 621
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 645
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/never_ops.t"
+line = 678
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 14
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 24
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 40
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 88
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/resume_guard.t"
+line = 103
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 149
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/tail_calls.t"
+line = 307
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/typecheck_sample.t"
+line = 78
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
+
+[[diff]]
+file = "diktor/test/verify_fixes.t"
+line = 585
+pairs = ["kw"]
+reason = "WasmGC の後段は M94 で G の節の取り出しと再開を持たない(M95 で入れる)"
+ledger = "V220"
+when = "unimplemented"
