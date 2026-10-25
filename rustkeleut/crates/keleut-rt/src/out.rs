@@ -4,8 +4,11 @@
 //! - flush するのは、バッファが満ちたとき、標準エラーへ書く直前、終了の前である。
 //! - 書き込みは短い書き込みを繰り返す。
 //!   `EINTR` はすぐに、`EAGAIN`(非ブロッキングのパイプ)は少し待ってから再試行する。
-//! - 最初の書き込みの失敗で、未出力のバッファを捨て、失敗の印を付ける。
-//!   その後の書き込みと flush は何もせず、誤りも起こさない。
+//! - 書き込みに失敗したら誤りを返す。
+//!   誤りが `EBADF`、`EPIPE`、`ECONNRESET` なら、未出力のバッファを捨てる。
+//!   ほかの誤り(`ENOSPC`、`EIO` など)なら、まだ書けていないバイトをバッファに残すので、次の書き出しはそれを改めて書こうとしてまた失敗する。
+//!   どちらの場合も、その後の書き込みはバッファに足し、次の書き出しで改めて書き込みを試み、失敗すればまた誤りを返す。
+//!   これは Diktor が使う OCaml 5.2 のチャネル(`caml_flush_partial`)と同じ振る舞いである。
 //!
 //! 書き込みは記述子 1 に直に行い、`std::io::stdout()`(行ごとに flush する)を通さない。
 //! 診断を標準エラーに書くのは [`Out::eprint`] で、先に標準出力を flush する。
@@ -35,6 +38,12 @@ const F_GETFD: i32 = 1;
 /// `EBADF`。
 const EBADF: i32 = 9;
 
+/// `EPIPE`。
+const EPIPE: i32 = 32;
+
+/// `ECONNRESET`。
+const ECONNRESET: i32 = 104;
+
 /// 記述子 1 が閉じていれば [`STDOUT_WAS_CLOSED`] を立てる。
 ///
 /// `.init_array` から、Rust の実行時の初期化より前に呼ばれる。
@@ -55,6 +64,16 @@ pub const BUFFER_BYTES: usize = 64 * 1024;
 /// 書き込みの失敗。文面は OS の誤りの文(Rust の `(os error N)` の添え書きを除く)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WriteError(pub String);
+
+/// 書き込みの途中の失敗。
+struct Failed {
+    /// 失敗の文。
+    error: WriteError,
+    /// 失敗までに書けたバイトの数。
+    written: usize,
+    /// 未出力のバッファを捨てる誤り(`EBADF`、`EPIPE`、`ECONNRESET`)か。
+    discard: bool,
+}
 
 /// 出力先。
 pub trait Sink {
@@ -104,7 +123,6 @@ pub fn os_message(e: &std::io::Error) -> String {
 pub struct Out<S: Sink = Fd1> {
     sink: S,
     buf: Vec<u8>,
-    failed: bool,
 }
 
 impl Default for Out<Fd1> {
@@ -119,13 +137,7 @@ impl<S: Sink> Out<S> {
         Out {
             sink,
             buf: Vec::with_capacity(BUFFER_BYTES),
-            failed: false,
         }
-    }
-
-    /// 失敗の印が付いているか。
-    pub fn failed(&self) -> bool {
-        self.failed
     }
 
     /// 出力先(試験用)。
@@ -133,15 +145,20 @@ impl<S: Sink> Out<S> {
         &self.sink
     }
 
-    fn write_all(&mut self, mut data: &[u8]) -> Result<(), WriteError> {
+    fn write_all(&mut self, data: &[u8]) -> Result<(), Failed> {
+        let mut written = 0;
         let mut waits = 0u32;
-        while !data.is_empty() {
-            match self.sink.write_some(data) {
+        while written < data.len() {
+            match self.sink.write_some(&data[written..]) {
                 Ok(0) => {
-                    return Err(WriteError("write returned 0".to_string()));
+                    return Err(Failed {
+                        error: WriteError("write returned 0".to_string()),
+                        written,
+                        discard: false,
+                    });
                 }
                 Ok(n) => {
-                    data = &data[n..];
+                    written += n;
                     waits = 0;
                 }
                 Err(e) if e.kind() == ErrorKind::Interrupted => {}
@@ -151,38 +168,47 @@ impl<S: Sink> Out<S> {
                     let ms = u64::from(waits.min(50));
                     std::thread::sleep(std::time::Duration::from_millis(ms));
                 }
-                Err(e) => return Err(WriteError(os_message(&e))),
+                Err(e) => {
+                    let discard = matches!(e.raw_os_error(), Some(EBADF | EPIPE | ECONNRESET));
+                    return Err(Failed {
+                        error: WriteError(os_message(&e)),
+                        written,
+                        discard,
+                    });
+                }
             }
         }
         Ok(())
     }
 
-    fn fail(&mut self, e: WriteError) -> Result<(), WriteError> {
-        self.failed = true;
-        self.buf = Vec::new();
-        Err(e)
-    }
-
     /// バッファを書き出す。
+    ///
+    /// 失敗したとき、捨てる誤りならバッファを空にし、そうでなければ書けなかったバイトを残す。
     pub fn flush(&mut self) -> Result<(), WriteError> {
-        if self.failed || self.buf.is_empty() {
+        if self.buf.is_empty() {
             return Ok(());
         }
         let buf = std::mem::take(&mut self.buf);
         let r = self.write_all(&buf);
         self.buf = buf;
-        self.buf.clear();
         match r {
-            Ok(()) => Ok(()),
-            Err(e) => self.fail(e),
+            Ok(()) => {
+                self.buf.clear();
+                Ok(())
+            }
+            Err(f) => {
+                if f.discard {
+                    self.buf.clear();
+                } else {
+                    self.buf.drain(..f.written);
+                }
+                Err(f.error)
+            }
         }
     }
 
     /// `Console.write` の文字列を足す。満ちたら書き出す。
     pub fn write(&mut self, data: &[u8]) -> Result<(), WriteError> {
-        if self.failed {
-            return Ok(());
-        }
         if self.buf.len() + data.len() < BUFFER_BYTES {
             self.buf.extend_from_slice(data);
             return Ok(());
@@ -194,9 +220,15 @@ impl<S: Sink> Out<S> {
         let rest = &data[room..];
         let big = rest.len() - rest.len() % BUFFER_BYTES;
         if big > 0
-            && let Err(e) = self.write_all(&rest[..big])
+            && let Err(f) = self.write_all(&rest[..big])
         {
-            return self.fail(e);
+            // 捨てない誤りでは、OCaml のチャネルがバッファに入れて残す分(1 つのバッファ)だけ、書けなかったバイトを残す。
+            if !f.discard {
+                let left = &rest[f.written..big];
+                self.buf
+                    .extend_from_slice(&left[..left.len().min(BUFFER_BYTES)]);
+            }
+            return Err(f.error);
         }
         self.buf.extend_from_slice(&rest[big..]);
         if self.buf.len() >= BUFFER_BYTES {
@@ -205,7 +237,19 @@ impl<S: Sink> Out<S> {
         Ok(())
     }
 
-    /// 標準出力を flush してから(失敗は印を付けるだけで捨てる)、`msg` を標準エラーに書く。
+    /// 標準出力を flush してから `msg` を標準エラーに書く。flush の失敗は書かずに返す。
+    ///
+    /// 防壁が抑制した例外の記録に使う(IRSpec 9.6 節)。
+    /// 前の失敗がバッファを捨てる誤りで、その後に書き足したものが無ければ、バッファは空なので flush は成功し、`msg` を書く。
+    pub fn eprint_after_flush(&mut self, msg: &[u8]) -> Result<(), WriteError> {
+        self.flush()?;
+        let mut e = std::io::stderr().lock();
+        let _ = e.write_all(msg);
+        let _ = e.flush();
+        Ok(())
+    }
+
+    /// 標準出力を flush してから(失敗は無視する)、`msg` を標準エラーに書く。
     ///
     /// 標準エラーに書けないときは何もしない(Diktor の `safe_exit` と同じ)。
     pub fn eprint(&mut self, msg: &[u8]) {
@@ -227,6 +271,7 @@ mod tests {
         data: Vec<u8>,
         max: usize,
         fail_after: Option<usize>,
+        errno: i32,
         block_every: usize,
         calls: usize,
     }
@@ -237,7 +282,7 @@ mod tests {
             if let Some(n) = self.fail_after
                 && self.writes.len() >= n
             {
-                return Err(std::io::Error::from_raw_os_error(28));
+                return Err(std::io::Error::from_raw_os_error(self.errno));
             }
             if self.block_every > 0 && self.calls.is_multiple_of(self.block_every) {
                 return Err(ErrorKind::WouldBlock.into());
@@ -269,17 +314,47 @@ mod tests {
     }
 
     #[test]
-    fn 最初の失敗の後は何もしない() {
+    fn 捨てる誤りではバッファを捨て後の書き込みは改めて試す() {
         let mut o = Out::new(Rec {
             fail_after: Some(0),
+            errno: EBADF,
+            ..Rec::default()
+        });
+        o.write(b"hello").unwrap();
+        let e = o.flush().unwrap_err();
+        assert_eq!(e.0, "Bad file descriptor");
+        // 捨てたので、書き足さなければ flush は成功する。
+        o.flush().unwrap();
+        // 書き足したものは改めて書き出しを試み、また失敗する。
+        o.write(b"again").unwrap();
+        assert!(o.flush().is_err());
+        assert!(o.write(&vec![0u8; BUFFER_BYTES * 3]).is_err());
+        o.flush().unwrap();
+        assert!(o.sink().data.is_empty());
+    }
+
+    #[test]
+    fn ほかの誤りでは書けなかったバイトを残す() {
+        let mut o = Out::new(Rec {
+            fail_after: Some(1),
+            errno: 28,
+            max: 2,
             ..Rec::default()
         });
         o.write(b"hello").unwrap();
         let e = o.flush().unwrap_err();
         assert_eq!(e.0, "No space left on device");
-        assert!(o.failed());
-        o.write(&vec![0u8; BUFFER_BYTES * 3]).unwrap();
-        o.flush().unwrap();
-        assert!(o.sink().data.is_empty());
+        assert_eq!(o.sink().data, b"he");
+        // 残したので、書き足さなくても次の flush はまた失敗する。
+        assert!(o.flush().is_err());
+        // 直に書く大きな書き込みの失敗でも、1 つのバッファまでを残す。
+        let mut o = Out::new(Rec {
+            fail_after: Some(1),
+            errno: 28,
+            ..Rec::default()
+        });
+        assert!(o.write(&vec![0u8; BUFFER_BYTES * 3]).is_err());
+        assert_eq!(o.sink().data.len(), BUFFER_BYTES);
+        assert!(o.flush().is_err());
     }
 }
