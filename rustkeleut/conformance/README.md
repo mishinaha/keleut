@@ -13,6 +13,7 @@ RustKeleut の差分試験の材料である。
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
 | `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
 | `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |
+| `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
 `effects/`、`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
@@ -45,6 +46,10 @@ RustKeleut の差分試験の材料である。
 `--type-check` を含まず `--strict-exhaustive` を含む呼び出しは、Diktor がプログラムを実行するので、組 `dk-ir` と `ki` では実行の呼び出しとして振り分ける。
 Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む呼び出しと `--repl` は、組 `x-ir` の書き出しを除いて本物の diktor に渡す。
 `--extra=FLAG` は、組 `ki` の `keleut run` のすべての起動に `FLAG` を足す。
+回収の試験は `--extra=--gc-stress` で回す。
+`keleut run --gc-stress` は、確保の場所(最上段のフレームの関数と点の組)を初めて通る確保で必ず回収し、それ以外では前の回収の手間の 64 分の 1 ほどの確保の回数ごとに回収する(間隔は擬似乱数で揺らす)。
+実行したどの確保の場所でも少なくとも 1 回は回収するが、確保のたびには回収しない。
+呼び出し元のフレームの根が試されるのは、そのフレームが止まっている間に回収が起こったときだけである。
 `keleut run` を Diktor で走らせる組(`dk`、`dk-ir`、`kf`、`x-ir`)では、テキストの KIR(`.kirt`)の実行を shim が断り、4 で終わる。
 `diktor --run-ir` はバイナリの KIR しか読まないからである。
 
