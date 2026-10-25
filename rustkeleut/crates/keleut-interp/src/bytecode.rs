@@ -12,6 +12,11 @@
 //! 計画 6.7 節は、スロットが 256 を超える関数に wide 形を使うとしている。
 //! 本実装は被演算子を最初から 32 ビットの語にするので、wide 形を別に持たない。
 //!
+//! 確保する命令(LIR の安全点)の前には、1 語の命令 `safepoint` を置く。
+//! 細目は LIR の安全点の番号([`keleut_lir::Frame::safepoints`] の位置)である。
+//! インタプリタはこれを、今のフレームの位置と安全点の番号を `rt.gc` に置く命令として実行する
+//! (見出しには書かない。[`keleut_rt::gc::GcState::at_safepoint`])。
+//!
 //! 末尾でない呼び出しの命令は、書き先のスロットを持たない。
 //! 書き先と、呼ばれた側が戻った後に続ける位置は、再開点の番号から引く表 [`Code::resume`] にある。
 //! この表があるので、別の後段が作ったフレームも再開点から続けられる。
@@ -113,6 +118,7 @@ pub mod op {
     pub const UNIMPLEMENTED: u8 = 84;
     pub const FX: u8 = 85;
     pub const FX_TERM: u8 = 86;
+    pub const SAFEPOINT: u8 = 87;
 }
 
 /// 再開点の表の行の種類。
@@ -322,6 +328,10 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
     for (i, p) in frame.resume_points.points().iter().enumerate() {
         rp_of.insert((p.block.0, p.index), i as u32);
     }
+    let mut sp_of: HashMap<(u32, u32), u32> = HashMap::new();
+    for (i, p) in frame.safepoints.points().iter().enumerate() {
+        sp_of.insert((p.block.0, p.index), i as u32);
+    }
     let nrp = frame.resume_points.len();
     let mut e = Enc {
         f,
@@ -348,6 +358,15 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
     for (bi, b) in f.blocks.iter().enumerate() {
         e.block_pc[bi] = e.words.len() as u32;
         for (ii, inst) in b.insts.iter().enumerate() {
+            if inst.allocates(&f.regs) {
+                let sp = sp_of.get(&(bi as u32, ii as u32)).copied().ok_or_else(|| {
+                    format!("{}: b{bi} の {ii} 番の確保に安全点がありません", f.sym)
+                })?;
+                if sp >= 1 << 24 {
+                    return Err(format!("{}: 安全点が多すぎます", f.sym));
+                }
+                e.op(op::SAFEPOINT, sp);
+            }
             let start = e.words.len() as u32;
             let rp = rp_of.get(&(bi as u32, ii as u32)).copied();
             encode_inst(&mut e, rt, inst, rp)?;
@@ -974,7 +993,8 @@ pub fn inst_len(w: &[u32], pc: usize) -> usize {
     let op = (w[pc] & 0xff) as u8;
     let at = |k: usize| w[pc + k] as usize;
     match op {
-        DEPTH_ENTER | DEPTH_CHECK | DEPTH_PUSH | DEPTH_RESTORE | UNIMPL_VALUE | UNIMPLEMENTED => 1,
+        DEPTH_ENTER | DEPTH_CHECK | DEPTH_PUSH | DEPTH_RESTORE | UNIMPL_VALUE | UNIMPLEMENTED
+        | SAFEPOINT => 1,
         GLOBAL_MARK_INIT | INST_MARK_INIT | JUMP | RETURN | ERROR => 2,
         CONST => 4,
         MOVE | BOX_BOOL | BOX_I32 | BOX_I64 | BOX_F64 | UNBOX_BOOL | UNBOX_I32 | UNBOX_I64
@@ -1090,6 +1110,7 @@ fn op_name(op: u8) -> &'static str {
         TAIL_METHOD => "tail_call_method",
         ERROR => "error",
         UNIMPLEMENTED => "unimplemented",
+        SAFEPOINT => "safepoint",
         _ => "?",
     }
 }

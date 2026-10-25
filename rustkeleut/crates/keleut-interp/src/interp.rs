@@ -41,6 +41,22 @@
 //!
 //! 構造的な `Eq` の入れ子の [`Interp::run`] の境目は、`DISCARD` と `ERROR` だけを通す。
 //! `Eq` のメソッドはエフェクトを持たないので、境目の外へ `YIELD` が届くことは無く、届いたら内部の誤りにする。
+//!
+//! ## 回収(`keleut_rt::gc`)
+//!
+//! 回収は実行時の確保の中で起こる。
+//! インタプリタは、確保する前に、今のフレームの位置を `rt.gc.top` に置き、見出しの点を正しくしておく。
+//!
+//! - 確保する命令は、前に置いた命令 `safepoint` が、位置と安全点の番号を `rt.gc` に置く(見出しには書かない)。
+//! - 実行時が命令の外で確保する場合(`perform` の引数の配列を作るとき)は、フレームが `perform` の再開点で止まっているので、
+//!   位置だけを置く。
+//! - 構造的な `Eq` の比べ方の前は、見出しの点を呼び出しの再開点にし、位置を置いてから入れ子の [`Interp::run`] を呼ぶ。
+//!
+//! [`Interp::run`] は、入口で外側の最上段の位置を `rt.gc.outer` に積み、戻るときに外して `rt.gc.top` を元に戻す。
+//! 回収は、最上段から呼び出し元の鎖をたどり、ネイティブの呼び出し元の印に着いたら、積んだ外側の位置から続ける。
+//!
+//! `YIELD` を伝える間、`perform` のフレームから今のフレームの上までのフレームは値スタックに残り、まだ継続に写していない。
+//! 回収はこれを、状態語の `YIELD` が持つ `perform` のフレームの位置からたどる。
 
 use keleut_lir::{ClassId, ConvOp, FuncId, InstanceId, LabelId, Program, RtError, ShapeId, TypeId};
 use keleut_rt::stack::{HEADER_WORDS, NATIVE_CALLER};
@@ -52,11 +68,7 @@ use crate::bytecode::{self, Code, ResumeEntry, op, rk};
 use keleut_lir::{ClauseClass, FxOp, FxTermOp, HandlerPart};
 use keleut_rt::effect::{Cont, HandlerRec, Pending};
 
-/// 再開点の番号に付けて、実装の関数を評価している途中であることを表す印。
-pub const PHASE: u32 = 1 << 31;
-
-/// `perform` の再開点の番号に付けて、そのフレームが G の節に取り出されたこと(継続の最上段)を表す印。
-pub const YIELDED: u32 = 1 << 30;
+pub use keleut_rt::gc::{PHASE, YIELDED};
 
 /// エフェクトの命令の失敗。
 fn bug(m: &str) -> Stop {
@@ -226,8 +238,24 @@ impl<'p> Interp<'p> {
     ///
     /// フレームは論理的な位置 `base`(今のフレームの終わり)の後に積み、最下段に「ネイティブの呼び出し元へ戻る」印を置く。
     /// 深さは変えない(呼ばれた側は `ctx.depth` で始まる)。
+    ///
+    /// 入口で外側の最上段の位置を `rt.gc.outer` に積み、戻るときに外す
+    /// ([`keleut_rt::gc::GcState::enter_native`]、冒頭の回収の節)。
     pub fn run(&mut self, func: FuncId, env: Word, args: &[Word], base: u64) -> Result<Word, Stop> {
         self.check_native_stack()?;
+        let saved = self.rt.gc.enter_native();
+        let r = self.run_inner(func, env, args, base);
+        self.rt.gc.leave_native(saved);
+        r
+    }
+
+    fn run_inner(
+        &mut self,
+        func: FuncId,
+        env: Word,
+        args: &[Word],
+        base: u64,
+    ) -> Result<Word, Stop> {
         let code = self.code(func)?;
         // SAFETY: code は生きている Code を指す。
         let (fw, any, raw) = unsafe { ((*code).frame_words, (*code).any_slots, (*code).raw_slots) };
@@ -440,6 +468,8 @@ impl<'p> Interp<'p> {
         let pc = e.call_pc as usize;
         let n = w[pc + 3] as usize - 2;
         let xs: Vec<Word> = (0..n).map(|i| st.w(w[pc + 6 + i])).collect();
+        // フレームは perform の再開点で止まっていて、引数はその被演算子として根にある。
+        self.rt.gc.at_frame(st.fpos);
         let a = self.rt.array_new(Kind::Array, n, Word::UNIT)?;
         for (i, x) in xs.into_iter().enumerate() {
             // SAFETY: a は n 個の要素を持つ配列の箱である。
@@ -604,6 +634,7 @@ impl<'p> Interp<'p> {
                 // 比べ方は確保し、利用者のコードを呼ぶので、先に見出しの再開点を今の呼び出しにする。
                 // 末尾の形の番号(`tail_entry`)は LIR の生存の集合を持たず、根は Root に置いた両辺と辞書だけである。
                 st.set_resume(rp);
+                self.rt.gc.at_frame(st.fpos);
                 let base = st.fpos + st.code().frame_words as u64;
                 let r = Word::bool(self.eq_struct(class, d, a, b, base)?);
                 if tail {
@@ -1904,6 +1935,10 @@ impl<'p> Interp<'p> {
                     }
                 }
                 FX_TERM => self.fx_term(st, pc, sub)?,
+                SAFEPOINT => {
+                    self.rt.gc.at_safepoint(st.fpos, sub);
+                    st.pc += 1;
+                }
                 _ => {
                     return Err(Stop::Internal(format!(
                         "知らない命令の番号 {opc}(位置 {pc})"
