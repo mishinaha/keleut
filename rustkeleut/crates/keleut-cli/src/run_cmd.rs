@@ -33,7 +33,7 @@ options:
   --max-depth N               logical depth limit L (default 1048576)
   --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k)
   --gc-stress                 collect at every allocation (no collector yet: accepted and ignored)
-  --no-yield-prune            keep every resume point (always the case before M89)
+  --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
   --frontend diktor|rust      front end for .kel files (default: diktor via $KELEUT_DIKTOR)
   --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
 ";
@@ -44,6 +44,7 @@ struct Options {
     backend: String,
     max_depth: u64,
     native_stack: Option<u64>,
+    yield_prune: bool,
     frontend: String,
     front_args: Vec<String>,
     files: Vec<PathBuf>,
@@ -75,6 +76,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         backend: "interp".to_string(),
         max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
         native_stack: None,
+        yield_prune: true,
         frontend: "diktor".to_string(),
         front_args: Vec::new(),
         files: Vec::new(),
@@ -116,7 +118,8 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     _ => return Err(format!("bad --native-stack value: {v}")),
                 };
             }
-            "--gc-stress" | "--no-yield-prune" => {}
+            "--gc-stress" => {}
+            "--no-yield-prune" => o.yield_prune = false,
             "--frontend" => {
                 let v = value(a)?;
                 if !matches!(v.as_str(), "diktor" | "rust") {
@@ -265,7 +268,7 @@ fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
         return Err(e.exit_code() as u8);
     }
     drop(data);
-    keleut_lir::lower(&prog).map_err(|e| {
+    keleut_lir::lower_opts(&prog, kir::N_NEST, o.yield_prune).map_err(|e| {
         eprintln!("keleut: {e}");
         e.exit_code() as u8
     })
@@ -368,6 +371,12 @@ mod tests {
         .unwrap();
         assert_eq!(o.max_depth, 10);
         assert_eq!(o.native_stack, Some(512 << 10));
+        assert!(o.yield_prune);
+        assert!(
+            !parse(&argv(&["--no-yield-prune", "a.kel"]))
+                .unwrap()
+                .yield_prune
+        );
         assert_eq!(o.front_args, argv(&["--no-prelude"]));
         assert_eq!(o.files.len(), 2);
         for a in [

@@ -1,0 +1,7 @@
+effect Gen = { yield_: (Int32) => {} }
+let rec gen(n: Int32): {} @ {Gen} = if n == 0 then {} else { perform yield_(n); gen(n - 1) }
+let total(): Int32 = (gen(3) handle {
+    case yield_(x) => { let r = resume(()); r + x }
+    case return(u) => 0
+  })
+let x = total()

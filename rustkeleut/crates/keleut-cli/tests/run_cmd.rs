@@ -264,6 +264,16 @@ fn コーパスの全件を_diktor_と比べる() {
 }
 
 #[test]
+fn may_yield_の印の誤りは刈り込みのときだけ_70_になる() {
+    let dir = root().join("tests/fixtures/run");
+    let r = keleut_in(&dir, &["run", "noyield.kirt"]);
+    assert_eq!(r.status.code(), Some(70), "{r:?}");
+    assert!(String::from_utf8_lossy(&r.stderr).contains("noyield の再開点"));
+    let r = keleut_in(&dir, &["run", "--no-yield-prune", "noyield.kirt"]);
+    assert_eq!(r.status.code(), Some(0), "{r:?}");
+}
+
+#[test]
 fn dump_bytecode_は各関数の逆アセンブルを印字する() {
     let dir = root().join("tests/fixtures/run");
     let r = keleut_in(&dir, &["dump", "bytecode", "div0.kir"]);
