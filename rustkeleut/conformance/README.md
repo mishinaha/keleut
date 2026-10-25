@@ -7,7 +7,7 @@ RustKeleut の差分試験の材料である。
 
 | 場所 | 中身 |
 | --- | --- |
-| `known-diffs.toml`、`known-diffs-*.toml` | 既知の差の一覧。`kconform` は `known-diffs.toml` と、その横の `known-diffs-*.toml`(一時の登録。いまは `known-diffs-wasm-g.toml`、台帳 V220、M95 で消す)を読み、どれにも無い差が 1 件でもあれば失敗する |
+| `known-diffs.toml`、`known-diffs-*.toml` | 既知の差の一覧。`kconform` は `known-diffs.toml` と、その横の `known-diffs-*.toml`(一時の登録。いまは無い)を読み、どれにも無い差が 1 件でもあれば失敗する |
 | `corpus/` | `kconform extract-corpus` が `diktor/test/*.t` のヒアドキュメントから抜き出した `.kel` と、その索引 `index.tsv` |
 | `kir-bad/` | 不正な KIR。`keleut kir` がどれも 65 で拒否することを確かめる |
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
@@ -15,9 +15,10 @@ RustKeleut の差分試験の材料である。
 | `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |
 | `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215) |
 | `stack/` | ネイティブのスタックの試験。`--native-stack 512k` で、JIT の関数の深い末尾でない再帰の後の構造的な `Eq` の比べ方と、20 万段の構造的な `Eq` の入れ子が、どの後段でも同じ結果になることを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
+| `effects/` | G の節の継続の取り出しと再開の試験(`g.t`。生成器、深い再帰の底の yield、2 回目の resume、再開の間の回収、G と N と T の節の重なり、メソッドの呼び出しと引数の多い関数の中の yield)。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
-`effects/`、`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
+`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
 どれも cram の形の `.t` で書き、`.kel` は `.t` の横か `.t` のヒアドキュメントに置く。
 `.t` のコマンドは `diktor` でなく `keleut` を呼ぶ。
 `keleut run` の呼び出しは、shim が組ごとに振り分ける(次の「組」の節の表の右の欄)。
@@ -103,12 +104,9 @@ against = "record"                # 省略できる。"record" か "pair"
 組の間の差は、基準でない側の組の名前で照らし合わせる。
 RustKeleut の後段の組(`ki kj kt ka km kw`。`ka` と `km` は種ごとの実体)は、既知の差の一覧に関係なく、互いに完全に一致しなければならない(D499)。
 `kconform` は、これらの組のうち誤りの無い最初の組を基準にし、ほかの組の結果を正規化せずに比べる。
-後段の間の差は、次の一時の例外を除いて、すべて登録の無い差に数える。
-例外は、`when = "unimplemented"` の項目が差のある組を名前で挙げ(`*` では当たらない)、`against` が `"record"` でないときである。
-このとき、その組の結果が `keleut: 未実装` の行を含み、その行より前の行が基準の後段の組の結果の先頭の行と正規化をせずに一致すれば、項目が当たる。
-計画の M94 は、後段 `kw` が G の節を持つプログラムを 4 で止めるブロックを登録し、M95 でその登録を消す。
-D499 の文言どおりではこの登録ができないので、この例外を M88 で足した。
-M95 でこの例外を消す。
+後段の間の差は、どの項目にも当たらず、すべて登録の無い差に数える。
+M88 は、M94 の一時の登録(下の V220)のために、`when = "unimplemented"` の項目が後段の間の差にも当たる一時の例外を足した。
+M95 で G の節を入れたので、その登録とともにこの例外を消した。
 `when = "unimplemented"` の項目は、その組の結果が `keleut: 未実装` の行を含み、その行より前の行が比べる相手の先頭の行と(正規化の後で)一致するときだけ当たる。
 未実装の機能に届いて 4 で終わるブロックの一時の登録に使う。
 未実装に届く前の出力の違いと、未実装に届かなくなったブロックの差は隠さない。
@@ -128,8 +126,8 @@ M89 でエフェクトを入れて、このファイルを消した。
 `kconform --pairs dk,ki --suite all` は、このファイルなしで差 0 件である。
 
 M94 は、組 `kw` が G の節を選んで未実装の 4 で止まるブロックを、`known-diffs-wasm-g.toml` に `when = "unimplemented"` で一時に登録した(台帳 V220)。
-項目は、`kconform --pairs ki,kw --suite all` と `--suite depth` の出力から、組 `kw` の結果に `keleut: 未実装` の行があるブロックを集めて作った。
-M95 で G の節を入れたら、このファイルを消す。
+M95 で G の節を入れて、このファイルを消した。
+`kconform --pairs ki,kw --suite all` と `--suite depth` は、このファイルなしで差 0 件である。
 `known-diffs.toml` の、組 `ki` を挙げる項目には組 `kw` も挙げた。
 2 つの後段は互いに一致するので、`ki` と記録や Diktor との差は `kw` にも同じく現れる。
 
