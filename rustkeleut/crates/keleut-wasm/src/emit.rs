@@ -101,10 +101,12 @@ pub struct Tys {
     pub hr: u32,
     /// 退避した状態語。
     pub saved: u32,
-    /// 継続(M95 で中身を足す)。
+    /// 継続。
     pub cont: u32,
-    /// フレームの記録(M95 で中身を足す)。
+    /// フレームの記録の基底(関数ごとの記録はこの部分型)。
     pub frame: u32,
+    /// 再開の入口の型 `(ref $Frame) → eqref`。
+    pub resfn: u32,
     /// 関数の参照の配列。
     pub funcarr: u32,
 }
@@ -121,6 +123,10 @@ pub mod hrf {
     pub const RET: u32 = 7;
     pub const CANCEL: u32 = 8;
     pub const PARENT: u32 = 9;
+    /// ネイティブのハンドラ記録の `h` に当たる位置。
+    ///
+    /// WasmGC の後段はハンドラのフレームの深さを `$rt_handle` の局所に持つので、
+    /// このフィールドは読みも書き換えもしない(作るときの 0 のまま)。
     pub const H: u32 = 10;
 }
 
@@ -132,6 +138,52 @@ pub mod svf {
     pub const CLAUSE: u32 = 3;
     pub const ARGS: u32 = 4;
     pub const MSG: u32 = 5;
+}
+
+/// 継続のフィールドの位置。
+pub mod ctf {
+    /// 取り出したハンドラ記録。
+    pub const HR: u32 = 0;
+    /// フレームの記録の列の先頭(最上段の `perform` のフレーム。再開したら null にする)。
+    pub const FRAMES: u32 = 1;
+    /// 取り出したハンドラのフレームの深さ `h`。
+    pub const H: u32 = 2;
+    /// `Δ = p − h`。
+    pub const DELTA: u32 = 3;
+    /// 連鎖の切り取りの先頭。
+    pub const CUT: u32 = 4;
+    /// 選んだ G の節の候補の番号。
+    pub const CLAUSE: u32 = 5;
+    /// 操作の引数の配列。
+    pub const ARGS: u32 = 6;
+    /// 再開済みか。
+    pub const USED: u32 = 7;
+    /// 節の評価の中か。
+    pub const ALIVE: u32 = 8;
+}
+
+/// フレームの記録のフィールドの位置(基底の部分)。
+pub mod frf {
+    /// 再開する区切り(分けた関数では部分の中の番号)。
+    pub const RP: u32 = 0;
+    /// 再開の入口(`$ResFn`)。
+    pub const ENTRY: u32 = 1;
+    /// 列の次(外側のフレーム)。
+    pub const NEXT: u32 = 2;
+    /// 取り出したときのフレームの深さ。
+    pub const DEPTH: u32 = 3;
+    /// 関数ごとの部分の始まり。
+    pub const BASE: u32 = 4;
+}
+
+/// フレームの記録の基底のフィールド(部分型も同じ並びで始める)。
+fn frame_base_fields(frame: u32, resfn: u32) -> Vec<FieldType> {
+    vec![
+        field(val(I32), false),
+        field(val(rv(false, resfn)), false),
+        field(val(rv(true, frame)), true),
+        field(val(I64), false),
+    ]
 }
 
 /// import する関数の番号。
@@ -437,8 +489,32 @@ impl Mb {
                 field(val(I32), false),
             ]),
         ));
-        let cont = push(sub(true, None, st(vec![field(val(I32), false)])));
-        let frame = push(sub(true, None, st(vec![field(val(I64), false)])));
+        // 継続(フィールドの位置は `ctf`)。群の中の位置は `saved` の後ろの 3 つである。
+        let frame = saved + 2;
+        let resfn = saved + 3;
+        let cont = push(sub(
+            true,
+            None,
+            st(vec![
+                field(val(EQ), false),
+                field(val(rv(true, frame)), true),
+                field(val(I64), false),
+                field(val(I64), false),
+                field(val(EQ), false),
+                field(val(I32), false),
+                field(val(EQ), false),
+                field(val(I32), true),
+                field(val(I32), true),
+            ]),
+        ));
+        // フレームの記録の基底(フィールドの位置は `frf`)と、再開の入口の型。
+        let f_ = push(sub(false, None, st(frame_base_fields(frame, resfn))));
+        let r_ = push(sub(
+            true,
+            None,
+            CompositeInnerType::Func(FuncType::new([rv(false, frame)], [EQ])),
+        ));
+        debug_assert_eq!((cont, f_, r_), (saved + 1, frame, resfn));
         let funcarr = push(sub(
             true,
             None,
@@ -474,6 +550,7 @@ impl Mb {
                 saved,
                 cont,
                 frame,
+                resfn,
                 funcarr,
             },
             fnty: HashMap::new(),
@@ -502,6 +579,17 @@ impl Mb {
         self.add_type(sub(
             true,
             None,
+            CompositeInnerType::Struct(StructType { fields: fs.into() }),
+        ))
+    }
+
+    /// 関数ごとのフレームの記録の型(`$Frame` の部分型。基底の後ろに `fields` を不変のフィールドとして置く)。
+    pub fn add_frame_record(&mut self, fields: &[ValType]) -> u32 {
+        let mut fs = frame_base_fields(self.t.frame, self.t.resfn);
+        fs.extend(fields.iter().map(|t| field(val(*t), false)));
+        self.add_type(sub(
+            true,
+            Some(self.t.frame),
             CompositeInnerType::Struct(StructType { fields: fs.into() }),
         ))
     }

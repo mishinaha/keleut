@@ -3,7 +3,7 @@
 //! ## 関数の型
 //!
 //! 引数が N 個の LIR の関数は `$FnN = (env (ref null $Clo)) (eqref × N) (frame (ref null $Frame)) → eqref` である。
-//! `env` は自分を呼んだクロージャ(直の呼び出しでは null)、`frame` は M95 の再開の入口のための引数で、M94 は常に null を渡す。
+//! `env` は自分を呼んだクロージャ(直の呼び出しでは null)、`frame` は再開の入口で渡すフレームの記録(ふつうの呼び出しでは null)である。
 //! N が [`crate::P_DIRECT`] を超える関数は、`eqref × N` の代わりに、先頭の `P_DIRECT` 個と、残りをまとめた配列 `(ref $anyarr)` を受け取る。
 //! 呼ぶ側は引数を積んだ後で残りを `array.new_fixed` でまとめ、呼ばれた側は入口で配列を読んで残りの引数をふつうのレジスタに置く。
 //! 状態語が立っていれば null(番兵)を返す。
@@ -28,31 +28,58 @@
 //!
 //! ## 重い関数の分割
 //!
-//! 命令の多い関数は、いくつかの Wasm の関数(部分)に分ける。
+//! 命令の多い関数と、フィールドの多い大きなフレームの形にする関数(下の「局所」)は、いくつかの Wasm の関数(部分)に分ける。
 //! V8 の最適化の翻訳は 1 つの関数の大きさについて線形より速く記憶を使い、何度も呼ぶ大きな関数で記憶を使い尽くすからである。
+//! 大きなフレームの形の関数を小さな部分に分けるのは、1 段のスタックを抑えるためである([`piece_max_big`])。
 //! 分ける関数は大きなフレームの形にし、すべてのレジスタを構造体に置く。
 //! LIR のブロックは重さに応じてさらに区切り、区切りを順に部分へ束ねる。
 //! 部分は入口の番号で区切りへ移り、ほかの部分の区切りへは、その部分を末尾で呼んで移る([`generate`])。
+//!
+//! ## 取り出しと再開(計画 6.6 節と 6.10 節)
+//!
+//! yield を受け取る再開点(パス 11 の印。`perform` と番兵を受け取る呼び出しを含む)の呼び出しは、
+//! 前半(結果を積むまで)と後半(結果を受け取る部分)の間で区切る。
+//! 後半の区切りは入れ子の `block` の境目から始まるので、関数の先頭の `br_table` から前向きに届く。
+//!
+//! - 取り出し: 呼び出しが番兵で戻り、状態語が `YIELD` なら、後半は局所(分けない関数では引数と
+//!   スロットの局所、大きなフレームの形では構造体の参照)と深さと再開する区切りを、関数ごとの
+//!   フレームの記録(`$Frame` の部分型)に詰めて大域の列 `yf` の末尾に積み、番兵で戻る。
+//!   列は最上段(G の節を選んだ `perform`)から外側へ並ぶ。
+//!   自分宛ての `YIELD` を受け取った `$rt_handle` の `cont_make` が列を継続 `$Cont` にする。
+//!   `perform` は、取り出された後の再開の区切り(結果は再開の値)を別に持つ。
+//!   `$rt_handle` の `propagate` は、番兵を受け取った最後の呼び出しの後半(`lastrp`)を記録する。
+//! - 再開: `rt_resume` は記録の列を最上段から順に、記録の再開の入口(`$ResFn`。関数ごと、
+//!   分けた関数では部分ごとの小さな関数)で呼ぶ。
+//!   入口は関数を最後の引数に記録を渡して呼び、関数は局所を戻して記録の区切りへ移る。
+//!   渡す値(内側のフレームの結果か番兵)は大域 `$rv` に置く。
+//!   再開したフレームが再び番兵で戻れば、外側のフレームも番兵を受け取り、自分の記録を作り直す。
+//!
+//! yield を受け取る再開点の無い関数は、区切りも再開の入口も持たない。
+//! G の節を持つハンドラがプログラムのどこにも無ければ `YIELD` は立たないので、どの関数も区切りを持たない。
+//! そのときの `perform` は、取り出しの印を見ずに伝播し、`YIELD` が届けば内部の誤りで止まる。
 //!
 //! ## 局所
 //!
 //! レジスタは、パス 12 のスロットと Wasm の型の組ごとに 1 つの局所を使う。
 //! 2 つのレジスタが同じ組を使うのは、区間が重ならないときだけである。
 //! 一時の局所は Wasm の型ごとに 1 つなので、局所の数はスロットと型の組の数に 8 を足した数を超えない。
-//! 1 段のバイト数の推定(`8 × K + 24 × P + 64`。P は Wasm の引数の数)が `B_wasm` を超える関数は、
-//! 直に受け取る引数を除くレジスタを、入口で確保する構造体のフィールドに置く(大きなフレームの形。D544)。
-//! まとめた配列から読む引数もこの構造体に置くので、引数の多い関数でも 1 段が `B_wasm` に収まる。
-//! 書き終えた関数の推定が `B_wasm` を超えたら、翻訳の誤りにする。
+//! 1 段のバイト数の推定(`8 × K + 24 × P + 64`。P は Wasm の引数の数)が関数の予算([`budget_of`])を超える関数は、
+//! レジスタを、入口で確保する構造体のフィールドに置く(大きなフレームの形。D544)。
+//! フィールドが多ければ、関数を小さな部分に分ける([`piece_max_big`])。
+//! 予算はふつう `B_wasm` である。
+//! `$rt_handle` を末尾でなく呼ぶ関数と `cancel` 節では `B_wasm − E_rth − E_rres`、`$rt_handle` 自身では `E_rth` である。
+//! まとめた配列から読む引数もこの構造体に置くので、引数の多い関数でも 1 段が予算に収まる。
+//! 書き終えた関数の推定が予算を超えたら、翻訳の誤りにする。
 
 use std::collections::HashMap;
 
 use keleut_lir::{
-    CmpOp, ConvOp, FloatOp, FuncId, FxOp, FxTermOp, HandlerPart, Inst, IntOp, IntTy, MathFn, Rep,
-    RtError, ShowOp, Slot, Term,
+    CmpOp, ConvOp, FloatOp, FuncId, FuncKind, FxOp, FxTermOp, HandlerPart, Inst, IntOp, IntTy,
+    MathFn, Rep, RtError, ShowOp, Slot, Term,
 };
 use wasm_encoder::{BlockType, Function, HeapType, Ieee64, RefType, ValType};
 
-use crate::emit::{EQ, F64, Fb, HEQ, HI31, I32, I64, hrf, imp, rv, svf};
+use crate::emit::{EQ, F64, Fb, HEQ, HI31, I32, I64, ctf, hrf, imp, rv, svf};
 use crate::meta::{self, arg, kind};
 use crate::rt::{self, H};
 use crate::{B_WASM, Cg, FKey, cls, frame_estimate, pk};
@@ -79,13 +106,59 @@ const BIG_CHUNK: usize = 1000;
 /// 上限は、落ちた最も小さい関数の重さの 6 分の 1 ほどにとる。
 const PIECE_MAX: usize = 4000;
 
-/// 分けた関数の 1 つの区切り。LIR のブロック `block` の命令 `start..end` で、`last` なら終わりの命令を含む。
-#[derive(Clone, Copy)]
+/// 大きなフレームの形の部分の重さの上限の下限。
+const PIECE_BIG_MIN: usize = 32;
+
+/// 大きなフレームの形の関数の、1 つの部分の重さの上限。
+///
+/// V8 の最適化の翻訳は、構造体のフィールドに書いた値を後で読むところへ直に渡し(書いて読む往復を省く)、
+/// 同じ計算を 1 つにまとめる。
+/// そのため 1 つの Wasm の関数の中では、構造体に置いたはずの値がレジスタとスタックの場所に残り、
+/// フレームの大きさが関数の中で同時に生きる値の数(最大で関数の重さ)に比例する。
+/// 200 個の値を生かす節では、フレームが 194 個のスタックの場所(約 1.6 KB)になり、既定の L の近くでスタックが尽きた(M95 の記録)。
+/// 部分の境目は末尾の呼び出しで、部分は構造体を引数で受け取るので、値は境目をまたいでレジスタに残らない。
+/// そこで、1 つの部分の重さを、退避する値を 1 つ 8 バイトとして部分の 1 段が予算に収まる数に抑える。
+/// `nkeys` は構造体のフィールドの数の見積もりである。
+fn piece_max_big(budget: u64, nkeys: usize) -> usize {
+    let chunks = nkeys.div_ceil(BIG_CHUNK) as u64;
+    let base = frame_estimate(TMP_MAX, chunks + 3);
+    ((budget.saturating_sub(base) / 8) as usize).clamp(PIECE_BIG_MIN, PIECE_MAX)
+}
+
+/// 区切りの最初の命令の出し方。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Head {
+    /// ふつうに出す。
+    Full,
+    /// 呼び出しの後半(結果を受け取る部分)だけを出す。結果は一時の局所 `eqref` にある。
+    Post,
+    /// 取り出された `perform` の再開の後半だけを出す(結果は再開の値)。
+    PostY,
+}
+
+/// 区切り。LIR のブロック `block` の命令 `start..end` で、`last` なら終わりの命令を含む。
+///
+/// `head` が `Full` でなければ、`start` の命令はその後半だけを出す。
+/// `pre` なら、`end - 1` の命令は呼び出しの前半(結果を積むまで)だけを出し、結果を一時の局所に置いて `next` へ移る。
+/// `last` でない区切りは、最後に `next` へ移る。
+#[derive(Clone, Copy, Debug)]
 struct Piece {
     block: usize,
     start: usize,
     end: usize,
+    head: Head,
+    pre: bool,
     last: bool,
+    next: usize,
+}
+
+/// yield を受け取る再開点の呼び出し。
+#[derive(Clone, Copy, Debug)]
+struct Site {
+    /// 後半の区切り。
+    post: usize,
+    /// `perform` なら、取り出された後の再開の区切り。
+    posty: Option<usize>,
 }
 
 /// 区切りと、区切りを束ねた Wasm の関数の配置。
@@ -99,61 +172,134 @@ struct Layout {
     part_lo: Vec<usize>,
     /// 部分ごとの Wasm の関数の番号(分けない関数では空)。
     funcs: Vec<u32>,
+    /// ブロックと命令の位置ごとの、yield を受け取る再開点の呼び出し。
+    sites: HashMap<(usize, usize), Site>,
 }
 
 impl Layout {
-    /// 分けない関数の配置(LIR のブロックごとに 1 つの区切り)。
-    fn whole(f: &keleut_lir::Func) -> Layout {
-        let pieces: Vec<Piece> = f
-            .blocks
-            .iter()
-            .enumerate()
-            .map(|(k, b)| Piece {
-                block: k,
-                start: 0,
-                end: b.insts.len(),
-                last: true,
-            })
-            .collect();
-        let n = pieces.len();
-        Layout {
-            pieces,
-            first: (0..n).collect(),
-            part_of: vec![0; n],
-            part_lo: vec![0, n],
-            funcs: Vec::new(),
-        }
-    }
-
-    /// 重さが [`PIECE_MAX`] を超えないように、ブロックの途中でも区切り、区切りを部分に束ねる。
-    fn split(f: &keleut_lir::Func) -> Layout {
-        let mut pieces = Vec::new();
+    /// 区切りを作る。
+    ///
+    /// yield を受け取る再開点の呼び出し(`cuts`)では、呼び出しの前半と後半の間で区切る。
+    /// 再開の入口が後半の区切りへ `br_table` で移れるようにするためである(計画 6.10 節)。
+    /// `perform` は、取り出された後の再開の区切りを後半の区切りの前に置き、続きを別の区切りにする。
+    /// `split` なら、重さが `pmax`([`PIECE_MAX`] か [`piece_max_big`])を超えないようにブロックの途中でも区切り、区切りを部分に束ねる。
+    /// `save_w` は、yield を受け取る再開点ごとに足す重さ(フレームの記録を作る命令)である。
+    fn build(
+        f: &keleut_lir::Func,
+        cuts: &HashMap<(usize, usize), bool>,
+        split: bool,
+        save_w: usize,
+        pmax: usize,
+    ) -> Layout {
+        let mut pieces: Vec<Piece> = Vec::new();
         let mut first = Vec::new();
         let mut weights = Vec::new();
+        let mut sites = HashMap::new();
         for (k, b) in f.blocks.iter().enumerate() {
             first.push(pieces.len());
             let mut start = 0;
+            let mut head = Head::Full;
             let mut w = 0;
             for (i, inst) in b.insts.iter().enumerate() {
                 let iw = 1 + inst.uses().len();
-                if w > 0 && w + iw > PIECE_MAX {
+                if split && w > 0 && w + iw > pmax && !(head != Head::Full && start == i) {
+                    let n = pieces.len();
                     pieces.push(Piece {
                         block: k,
                         start,
                         end: i,
+                        head,
+                        pre: false,
                         last: false,
+                        next: n + 1,
                     });
                     weights.push(w);
                     start = i;
+                    head = Head::Full;
                     w = 0;
                 }
                 w += iw;
+                let Some(&perform) = cuts.get(&(k, i)) else {
+                    continue;
+                };
+                // `perform` の記録を作る命令は 2 組とも後半の区切りにあるので、後半の重さに数える。
+                if !perform {
+                    w += save_w;
+                }
+                let n = pieces.len();
+                if perform {
+                    // 前半、取り出された後の再開、後半、続きの順に置く。
+                    pieces.push(Piece {
+                        block: k,
+                        start,
+                        end: i + 1,
+                        head,
+                        pre: true,
+                        last: false,
+                        next: n + 2,
+                    });
+                    weights.push(w);
+                    pieces.push(Piece {
+                        block: k,
+                        start: i,
+                        end: i + 1,
+                        head: Head::PostY,
+                        pre: false,
+                        last: false,
+                        next: n + 3,
+                    });
+                    weights.push(4);
+                    pieces.push(Piece {
+                        block: k,
+                        start: i,
+                        end: i + 1,
+                        head: Head::Post,
+                        pre: false,
+                        last: false,
+                        next: n + 3,
+                    });
+                    weights.push(2 * save_w + 8);
+                    sites.insert(
+                        (k, i),
+                        Site {
+                            post: n + 2,
+                            posty: Some(n + 1),
+                        },
+                    );
+                    start = i + 1;
+                    head = Head::Full;
+                } else {
+                    pieces.push(Piece {
+                        block: k,
+                        start,
+                        end: i + 1,
+                        head,
+                        pre: true,
+                        last: false,
+                        next: n + 1,
+                    });
+                    weights.push(w);
+                    sites.insert(
+                        (k, i),
+                        Site {
+                            post: n + 1,
+                            posty: None,
+                        },
+                    );
+                    start = i;
+                    head = Head::Post;
+                }
+                w = 0;
             }
+            let n = pieces.len();
             pieces.push(Piece {
                 block: k,
                 start,
                 end: b.insts.len(),
+                head,
+                pre: false,
                 last: true,
+                next: n + 1,
             });
             weights.push(w + 1 + b.term.uses().len());
         }
@@ -161,7 +307,7 @@ impl Layout {
         let mut part_lo = vec![0];
         let mut w = 0;
         for (j, pw) in weights.iter().enumerate() {
-            if w > 0 && w + pw > PIECE_MAX {
+            if split && w > 0 && w + pw > pmax {
                 part_lo.push(j);
                 w = 0;
             }
@@ -175,6 +321,7 @@ impl Layout {
             part_of,
             part_lo,
             funcs: Vec::new(),
+            sites,
         }
     }
 
@@ -191,6 +338,56 @@ fn weight(f: &keleut_lir::Func) -> usize {
             b.insts.iter().map(|i| 1 + i.uses().len()).sum::<usize>() + 1 + b.term.uses().len()
         })
         .sum()
+}
+
+/// yield を受け取る再開点の呼び出し(位置と、`perform` か)。
+fn yield_cuts(f: &keleut_lir::Func, frame: &keleut_lir::Frame) -> HashMap<(usize, usize), bool> {
+    let mut out = HashMap::new();
+    let mut rp = 0usize;
+    for (k, b) in f.blocks.iter().enumerate() {
+        for (i, inst) in b.insts.iter().enumerate() {
+            if inst.is_call() {
+                if frame.yield_points.get(rp).copied().unwrap_or(true) {
+                    out.insert(
+                        (k, i),
+                        matches!(
+                            inst,
+                            Inst::Fx {
+                                op: FxOp::Perform { .. },
+                                ..
+                            }
+                        ),
+                    );
+                }
+                rp += 1;
+            }
+        }
+    }
+    out
+}
+
+/// 呼び出しの命令の出し方。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Mode {
+    /// 前半と後半を続けて出す。
+    Full,
+    /// 前半だけ(結果を積むまで)。
+    Pre,
+    /// 後半だけ(結果を一時の局所から読む)。
+    Post,
+    /// 取り出された `perform` の再開の後半だけ。
+    PostY,
+}
+
+/// フレームの記録の作り方(関数ごと)。
+#[derive(Clone)]
+struct Rec {
+    /// 記録の型(`$Frame` の部分型)。
+    ty: u32,
+    /// 記録に書く局所(基底の後ろのフィールドの順)。
+    saved: Vec<u32>,
+    /// 部分ごとの再開の入口(`$ResFn`)。分けない関数では 1 つ。
+    tramps: Vec<Option<u32>>,
 }
 
 struct Tr<'a, 'p> {
@@ -217,6 +414,52 @@ struct Tr<'a, 'p> {
     packed: Vec<keleut_lir::Reg>,
     /// まとめた配列の引数の局所。
     packed_arr: Option<u32>,
+    /// yield を受け取る再開点があれば、フレームの記録の作り方。
+    rec: Option<std::rc::Rc<Rec>>,
+    /// 分けた関数か。
+    split: bool,
+    /// 番兵を受け取った最後の呼び出しの後半の区切り(`propagate` を持つ関数の i32 の場所)。
+    ///
+    /// 大きなフレームの形の関数では構造体のフィールドに置くので、分けた関数の部分の間でも値が残る。
+    lastrp: Option<Loc>,
+    /// 番兵を受け取る呼び出しの後半の区切り(`propagate` が記録に書く候補)。
+    catch_posts: std::rc::Rc<Vec<usize>>,
+    /// 1 段のバイト数の推定の予算([`budget_of`])。
+    budget: u64,
+}
+
+/// ハンドラのフレームの関数 `$rt_handle` の 1 段のバイト数の推定の上限(翻訳した推定が超えたら翻訳の誤り)。
+const E_RTH: u64 = 320;
+
+/// `rt_resume` の補助関数の 1 段のバイト数の推定(局所 5 個、引数 3 個)。
+const E_RRES: u64 = 8 * 5 + 24 * 3 + 64;
+
+/// 関数の 1 段のバイト数の推定の予算。
+///
+/// 論理的な 1 段の Wasm のフレームの合計が `B_wasm` に収まるようにする。
+/// ハンドラ式と末尾でない `resume` は `$rt_handle` を深さを増やさずに呼び、
+/// 継続の再開ではさらに `rt_resume` が同じ深さにある(`doc/lir.md` の 13 節と 16.2 節)。
+/// そこで `$rt_handle` を末尾でなく呼ぶ関数は、その 2 つのフレームの分を引いた予算に収める。
+/// `cancel` 節も `$rt_handle` と同じ深さで走るので、同じ予算にする。
+/// `$rt_handle` 自身は [`E_RTH`] に収める。
+fn budget_of(prog: &keleut_lir::Program, fid: FuncId) -> u64 {
+    let Some(rh) = prog.rt_handle else {
+        return B_WASM;
+    };
+    if fid == rh {
+        return E_RTH;
+    }
+    let f = &prog.funcs[fid.index()];
+    let calls = f.blocks.iter().any(|b| {
+        b.insts
+            .iter()
+            .any(|i| matches!(i, Inst::CallDirect { func, .. } if *func == rh))
+    });
+    if calls || f.kind == FuncKind::Kir(keleut_lir::FnKind::Cancelclause) {
+        B_WASM - E_RTH - E_RRES
+    } else {
+        B_WASM
+    }
 }
 
 fn ht(idx: u32) -> HeapType {
@@ -236,17 +479,37 @@ fn wtype(cg: &Cg, r: Rep) -> ValType {
 
 /// 一時の局所の数の上限。
 ///
-/// 一時の局所は Wasm の型ごとに 1 つで、使う型は i32、i64、f64、eqref、文字列、`$anyarr`、`$Clo` の 7 つである。
-/// 深さの局所を足して 8 個になる。
-const TMP_MAX: u64 = 8;
+/// 一時の局所は Wasm の型ごとに 1 つで、使う型は i32、i64、f64、eqref、文字列、`$anyarr`、`$Clo` と、
+/// 再開の入口で読むフレームの記録の 8 つである。
+/// 深さの局所と、`propagate` を持つ関数の `lastrp` を足して 10 個になる(大きなフレームの形では多めの見積もり)。
+const TMP_MAX: u64 = 10;
+
+/// yield を受け取る再開点ごとにフレームの記録を作る命令の重さ(記録に書く局所の数を足す)。
+const SAVE_W: usize = 8;
+
+/// `propagate` を終わりに持つブロックがあるか(ハンドラのフレームの関数)。
+fn has_propagate(f: &keleut_lir::Func) -> bool {
+    f.blocks.iter().any(|b| {
+        matches!(
+            b.term,
+            Term::Fx {
+                op: FxTermOp::Propagate,
+                ..
+            }
+        )
+    })
+}
 
 /// LIR の関数を翻訳する。
 ///
 /// 重さが [`PIECE_MAX`] を超える関数は、大きなフレームの形にしたうえで、いくつかの Wasm の関数(部分)に分ける。
+/// 推定が予算を超えて大きなフレームの形にする関数も、フィールドが多ければ、重さが [`piece_max_big`] 以下の部分に分ける。
 /// LIR の関数の入口は構造体を確保して引数を置き、最初の部分を末尾で呼ぶ。
 /// 部分は `(env (ref null $Clo)) (構造体 × C) (深さ i64) (入口 i32) → eqref` を受け取り、入口の区切りへ `br_table` で移る。
 /// 後ろの部分の区切りへの枝は、その部分を末尾で呼ぶ。
 /// 末尾で呼ぶので、論理的な 1 段が持つ Wasm のフレームは、どの時点でも 1 つの部分のフレームだけである。
+///
+/// yield を受け取る再開点を持つ関数には、再開の入口(`$ResFn` の小さな関数)を作る(冒頭の「取り出しと再開」)。
 pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     let prog = cg.prog;
     let f = &prog.funcs[fid.index()];
@@ -262,7 +525,34 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     if packed.iter().any(|p| wt[p.index()] != EQ) {
         return Err("引数のレジスタの型が eqref でありません".into());
     }
-    let split = weight(f) > PIECE_MAX;
+    // G の節がプログラムに無ければ YIELD は立たないので、区切りを作らない([`Cg::has_g`])。
+    let cuts = if cg.has_g {
+        yield_cuts(f, frame)
+    } else {
+        HashMap::new()
+    };
+    let lastrp_needed = cg.has_g && has_propagate(f);
+    // 分けるかの判断は、記録を作る命令の重さも含める。局所の数はスロットと型の組の数で見積もる。
+    let nkeys_est = (0..f.regs.len())
+        .map(|r| (frame.slot[r], wt[r]))
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    let budget = budget_of(prog, fid);
+    let big_est = frame_estimate(nkeys_est as u64 + TMP_MAX, u64::from(w) + 2) > budget;
+    let save_est = if big_est {
+        nkeys_est.div_ceil(BIG_CHUNK) + direct
+    } else {
+        nkeys_est
+    };
+    // `perform` の再開点は記録を作る命令を 2 組持つ。
+    let nsaves = cuts.values().map(|&p| if p { 2 } else { 1 }).sum::<usize>();
+    // 大きなフレームの形にする関数は、構造体のフィールドが 1 つの部分の重さの上限より多ければ、
+    // 重さに依らず小さな部分に分ける([`piece_max_big`])。
+    // フィールドが少なければ、1 つの Wasm の関数の中で同時に生きる値もその数を超えないので、分けない。
+    let pbig = piece_max_big(budget, nkeys_est + 1);
+    let force = big_est && nkeys_est > pbig;
+    let split = force || weight(f) + nsaves * (SAVE_W + save_est) > PIECE_MAX;
+    let pmax = if force { pbig } else { PIECE_MAX };
     // スロットと型の組ごとの局所。分けない関数では、直に受け取る引数は引数の局所を使い、
     // まとめた配列から読む引数はふつうのレジスタと同じく扱う。
     // 分ける関数では、直に受け取る引数も構造体に置く(部分の間で受け渡すため)。
@@ -294,10 +584,18 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     }
     // 推定。局所の数に、深さと一時の局所(TMP_MAX 個)を足す。
     let est = frame_estimate(key_list.len() as u64 + TMP_MAX, u64::from(w) + 2);
-    let big = split || est > B_WASM;
+    let big = split || est > budget;
+    // `lastrp` は、大きなフレームの形ではレジスタと同じく構造体に置く。
+    let lastrp_key = if lastrp_needed && big {
+        key_list.push(I32);
+        Some(key_list.len() - 1)
+    } else {
+        None
+    };
     let mut loc = vec![Loc::Local(0); f.regs.len()];
     let mut bf = Vec::new();
     let mut key_loc: Vec<Loc> = Vec::new();
+    let mut key_locals: Vec<u32> = Vec::new();
     if big {
         for (c, chunk) in key_list.chunks(BIG_CHUNK).enumerate() {
             let ty = cg.m.add_struct(chunk);
@@ -310,7 +608,9 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         cg.stats.big_frames += 1;
     } else {
         for t in &key_list {
-            key_loc.push(Loc::Local(fb.local(*t)));
+            let l = fb.local(*t);
+            key_locals.push(l);
+            key_loc.push(Loc::Local(l));
         }
     }
     for r in 0..f.regs.len() {
@@ -323,26 +623,33 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         };
     }
     let fdepth = fb.local(I64);
+    let lastrp = match (lastrp_needed, lastrp_key) {
+        (true, Some(k)) => Some(key_loc[k]),
+        (true, None) => Some(Loc::Local(fb.local(I32))),
+        _ => None,
+    };
     let nb = f.blocks.len();
     let packed_arr = if packed.is_empty() {
         None
     } else {
         Some(1 + crate::P_DIRECT)
     };
-    let mut lay = if split {
-        Layout::split(f)
-    } else {
-        Layout::whole(f)
-    };
+    let save_w = SAVE_W
+        + if big {
+            bf.len() + if split { 0 } else { direct }
+        } else {
+            key_list.len() + direct
+        };
+    let mut lay = Layout::build(f, &cuts, split, save_w, pmax);
+    let t = cg.m.t;
+    let idx = cg.lir(fid);
+    let base = cg.m.func_name(idx).to_string();
     if split {
         // 部分の関数を宣言する。
-        let t = cg.m.t;
         let mut params = vec![rv(true, t.clo)];
         params.extend(bf.iter().map(|&(_, ty)| rv(true, ty)));
         params.extend([I64, I32]);
         let ty = cg.m.sig(&params, &[EQ]);
-        let idx = cg.lir(fid);
-        let base = cg.m.func_name(idx).to_string();
         for q in 0..lay.nparts() {
             lay.funcs
                 .push(cg.m.declare_func(ty, format!("{base}#p{q}"), false));
@@ -350,6 +657,95 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         cg.stats.split_funcs += 1;
         cg.stats.max_parts = cg.stats.max_parts.max(lay.nparts());
     }
+    // フレームの記録と再開の入口。
+    let rec = if lay.sites.is_empty() {
+        None
+    } else {
+        let (saved, types): (Vec<u32>, Vec<ValType>) = if split {
+            let mut v = vec![(0u32, rv(true, t.clo))];
+            for (i, &(_, ty)) in bf.iter().enumerate() {
+                v.push((1 + i as u32, rv(true, ty)));
+            }
+            v.into_iter().unzip()
+        } else {
+            let mut v = vec![(0u32, rv(true, t.clo))];
+            for i in 0..direct {
+                v.push((1 + i as u32, EQ));
+            }
+            if big {
+                for &(l, ty) in &bf {
+                    v.push((l, rv(true, ty)));
+                }
+            } else {
+                for (k, &l) in key_locals.iter().enumerate() {
+                    v.push((l, key_list[k]));
+                }
+            }
+            v.into_iter().unzip()
+        };
+        let ty = cg.m.add_frame_record(&types);
+        let mut tramps = Vec::new();
+        let nparts = lay.nparts();
+        for q in 0..nparts {
+            let has = lay
+                .sites
+                .values()
+                .any(|s| lay.part_of[s.post] == q || s.posty.is_some_and(|y| lay.part_of[y] == q));
+            if has {
+                let name = if split {
+                    format!("{base}#p{q}#r")
+                } else {
+                    format!("{base}#r")
+                };
+                let fi = cg.m.declare_func(t.resfn, name, false);
+                cg.m.declare_ref(fi);
+                tramps.push(Some(fi));
+            } else {
+                tramps.push(None);
+            }
+        }
+        // 再開の入口の本体。
+        for (q, tr) in tramps.iter().enumerate() {
+            let Some(fi) = *tr else { continue };
+            let mut tb = Fb::new(1);
+            if split {
+                let r = tb.local(rv(true, ty));
+                tb.i().local_get(0).ref_cast_non_null(ht(ty)).local_tee(r);
+                tb.i().struct_get(ty, crate::emit::frf::BASE);
+                for i in 0..bf.len() {
+                    tb.i()
+                        .local_get(r)
+                        .struct_get(ty, crate::emit::frf::BASE + 1 + i as u32);
+                }
+                tb.i()
+                    .global_get(cg.g.depth)
+                    .local_get(r)
+                    .struct_get(ty, crate::emit::frf::RP)
+                    .return_call(lay.funcs[q]);
+            } else {
+                tb.i().ref_null(ht(t.clo));
+                for _ in 0..direct {
+                    tb.i().ref_null(HEQ);
+                }
+                if packed_arr.is_some() {
+                    tb.i().global_get(cg.g.empty);
+                }
+                tb.i().local_get(0).return_call(idx);
+            }
+            cg.m.set_body(fi, tb.finish());
+        }
+        Some(std::rc::Rc::new(Rec { ty, saved, tramps }))
+    };
+    let mut catch_posts: Vec<usize> = lay
+        .sites
+        .iter()
+        .filter(
+            |((k, i), _)| matches!(&f.blocks[*k].insts[*i], Inst::Fx { op, .. } if op.catches()),
+        )
+        .map(|(_, s)| s.post)
+        .collect();
+    catch_posts.sort_unstable();
+    let catch_posts = std::rc::Rc::new(catch_posts);
     let lay = std::rc::Rc::new(lay);
     let nparts = lay.nparts();
     let mut x = Tr {
@@ -369,10 +765,15 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         tmps: HashMap::new(),
         packed,
         packed_arr,
+        rec: rec.clone(),
+        split,
+        lastrp,
+        catch_posts: catch_posts.clone(),
+        budget,
     };
-    x.prologue();
     if split {
         // 入口: 構造体に直に受け取った引数を置き、最初の部分を末尾で呼ぶ。
+        x.prologue();
         for (i, p) in f.params[..direct].iter().enumerate() {
             x.fb.i().local_get(1 + i as u32);
             x.set(*p);
@@ -411,6 +812,11 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
             tmps: HashMap::new(),
             packed: Vec::new(),
             packed_arr: None,
+            rec: rec.clone(),
+            split,
+            lastrp,
+            catch_posts: catch_posts.clone(),
+            budget,
         };
         y.part(true)?;
         let est = y.finish_estimate(u64::from(c) + 3)?;
@@ -437,7 +843,12 @@ impl<'a, 'p> Tr<'a, 'p> {
 
     /// レジスタの値を積む。
     fn get(&mut self, r: keleut_lir::Reg) {
-        match self.loc[r.index()] {
+        self.get_loc(self.loc[r.index()]);
+    }
+
+    /// 場所の値を積む。
+    fn get_loc(&mut self, l: Loc) {
+        match l {
             Loc::Local(l) => {
                 self.fb.i().local_get(l);
             }
@@ -450,13 +861,17 @@ impl<'a, 'p> Tr<'a, 'p> {
 
     /// 積んだ値をレジスタに書く。
     fn set(&mut self, r: keleut_lir::Reg) {
-        match self.loc[r.index()] {
+        self.set_loc(self.loc[r.index()], self.wt[r.index()]);
+    }
+
+    /// 積んだ型 `t` の値を場所に書く。
+    fn set_loc(&mut self, loc: Loc, t: ValType) {
+        match loc {
             Loc::Local(l) => {
                 self.fb.i().local_set(l);
             }
             Loc::Field(c, i) => {
                 let (l, ty) = self.bf[c as usize];
-                let t = self.wt[r.index()];
                 let tl = self.tmp(t);
                 self.fb
                     .i()
@@ -529,16 +944,32 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
     }
 
-    /// 今の部分の区切りを翻訳する。`dispatch` なら、入口の番号で区切りへ移る `br_table` を先に置く。
+    /// 今の部分の区切りを翻訳する。
+    ///
+    /// `dispatch` なら(分けた関数の部分)、入口の番号で区切りへ移る `br_table` を先に置く。
+    /// 偽なら(分けない関数)、入口の手続きを置く。
+    /// yield を受け取る再開点を持つ分けない関数は、その前に、フレームの記録を受け取ったときに
+    /// 局所を戻して区切りへ移る `br_table` を置く(再開の入口)。
     fn part(&mut self, dispatch: bool) -> Result<(), String> {
         let (lo, hi) = (self.lo, self.hi);
+        let resumable = self.rec.is_some();
         let opened = if dispatch { lo } else { lo + 1 };
         for _ in opened..hi {
             self.fb.i().block(BlockType::Empty);
         }
         if let (true, Some(e)) = (dispatch, self.entry) {
+            if resumable {
+                // 再開の入口と、部分をまたぐ呼び出しの後半は、結果を大域 $rv で受け取る。
+                let tl = self.tmp(EQ);
+                self.fb.i().global_get(self.cg.g.rv).local_set(tl);
+            }
             let targets: Vec<u32> = (0..(hi - lo) as u32).collect();
             self.fb.i().local_get(e).br_table(targets, 0).end();
+        } else if !dispatch {
+            if let Some(rec) = self.rec.clone() {
+                self.resume_entry(&rec, (hi - lo) as u32);
+            }
+            self.prologue();
         }
         let f = self.f;
         let lay = self.lay.clone();
@@ -547,13 +978,32 @@ impl<'a, 'p> Tr<'a, 'p> {
             self.extra = 0;
             let pc = lay.pieces[j];
             let b = &f.blocks[pc.block];
-            for i in &b.insts[pc.start..pc.end] {
-                self.inst(i)?;
+            for ii in pc.start..pc.end {
+                let mode = if ii == pc.start && pc.head == Head::Post {
+                    Mode::Post
+                } else if ii == pc.start && pc.head == Head::PostY {
+                    Mode::PostY
+                } else if ii + 1 == pc.end && pc.pre {
+                    Mode::Pre
+                } else {
+                    Mode::Full
+                };
+                let site = lay.sites.get(&(pc.block, ii)).copied();
+                self.inst(&b.insts[ii], mode, site)?;
             }
             if pc.last {
                 self.term(&b.term)?;
             } else {
-                self.goto(j + 1);
+                if pc.pre {
+                    // 前半の結果を後半へ渡す。同じ部分なら一時の局所、ほかの部分なら大域 $rv に置く。
+                    if self.in_part(pc.next) {
+                        let tl = self.tmp(EQ);
+                        self.fb.i().local_set(tl);
+                    } else {
+                        self.fb.i().global_set(self.cg.g.rv);
+                    }
+                }
+                self.goto(pc.next);
             }
             if j + 1 < hi {
                 self.fb.i().end();
@@ -564,13 +1014,106 @@ impl<'a, 'p> Tr<'a, 'p> {
         Ok(())
     }
 
-    /// 書き終えた関数の 1 段のバイト数の推定。[`B_WASM`] を超えたら誤りにする。
+    /// 分けない関数の再開の入口。最後の引数(フレームの記録)が null なら、ふつうの入口へ落ちる。
+    ///
+    /// null でなければ、記録から局所を戻し、深さを大域の深さ(`rt_resume` が置いた)にし、
+    /// 渡された値を一時の局所に置いて、記録の区切りへ `br_table` で移る。
+    fn resume_entry(&mut self, rec: &Rec, npieces: u32) {
+        let g = self.cg.g;
+        let w = crate::wire_arity(self.f.params.len() as u32);
+        let r = self.tmp(rv(true, rec.ty));
+        let tl = self.tmp(EQ);
+        self.fb
+            .i()
+            .block(BlockType::Empty)
+            .local_get(w + 1)
+            .br_on_null(0)
+            .ref_cast_non_null(ht(rec.ty))
+            .local_set(r);
+        for (k, &l) in rec.saved.iter().enumerate() {
+            self.fb
+                .i()
+                .local_get(r)
+                .struct_get(rec.ty, crate::emit::frf::BASE + k as u32)
+                .local_set(l);
+        }
+        let targets: Vec<u32> = (0..npieces).collect();
+        self.fb
+            .i()
+            .global_get(g.depth)
+            .local_set(self.fdepth)
+            .global_get(g.rv)
+            .local_set(tl)
+            .local_get(r)
+            .struct_get(rec.ty, crate::emit::frf::RP)
+            .br_table(targets, 0)
+            .end();
+    }
+
+    /// フレームの記録を作って列に積む(伝播する前に呼ぶ)。`j` は再開する区切りである。
+    fn save(&mut self, j: usize) {
+        let Some(rec) = self.rec.clone() else {
+            return;
+        };
+        let t = self.t();
+        let push = self.cg.func(FKey::H(H::YfPush));
+        let q = self.lay.part_of[j];
+        let rp = if self.split {
+            j - self.lay.part_lo[q]
+        } else {
+            j
+        };
+        let entry = rec.tramps[q].expect("再開の入口の無い部分");
+        self.fb
+            .i()
+            .i32_const(rp as i32)
+            .ref_func(entry)
+            .ref_null(ht(t.frame))
+            .local_get(self.fdepth);
+        for &l in &rec.saved {
+            self.fb.i().local_get(l);
+        }
+        self.fb.i().struct_new(rec.ty).call(push);
+    }
+
+    /// 状態語が `YIELD` なら、フレームの記録を作って積む。
+    fn save_if_yield(&mut self, j: usize) {
+        let g = self.cg.g;
+        self.fb
+            .i()
+            .global_get(g.p_kind)
+            .i32_const(pk::YIELD)
+            .i32_eq()
+            .if_(BlockType::Empty);
+        self.save(j);
+        self.fb.i().end();
+    }
+
+    /// yield を受け取らない再開点に `YIELD` が届いたら、内部の誤りで止まる(`doc/lir.md` の 17 節)。
+    fn fatal_if_yield(&mut self) {
+        let g = self.cg.g;
+        let tp = self
+            .cg
+            .tpl
+            .internal("yield が noyield の再開点に届きました(may_yield の印の誤り)");
+        self.fb
+            .i()
+            .global_get(g.p_kind)
+            .i32_const(pk::YIELD)
+            .i32_eq()
+            .if_(BlockType::Empty)
+            .i32_const(tp as i32)
+            .call(imp::FATAL)
+            .end();
+    }
+
+    /// 書き終えた関数の 1 段のバイト数の推定。関数の予算(`self.budget`。[`budget_of`])を超えたら誤りにする。
     fn finish_estimate(&self, params: u64) -> Result<u64, String> {
         let est = frame_estimate(self.fb.nlocals() as u64, params);
-        if est > B_WASM {
+        if est > self.budget {
             return Err(format!(
-                "関数 {} の 1 段の推定 {est} バイトが B_wasm = {B_WASM} を超えます",
-                self.f.sym
+                "関数 {} の 1 段の推定 {est} バイトが予算 {} を超えます(B_wasm = {B_WASM})",
+                self.f.sym, self.budget
             ));
         }
         Ok(est)
@@ -732,7 +1275,22 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
     }
 
-    fn inst(&mut self, i: &Inst) -> Result<(), String> {
+    fn inst(&mut self, i: &Inst, mode: Mode, site: Option<Site>) -> Result<(), String> {
+        if i.is_call() {
+            if !matches!(mode, Mode::Post | Mode::PostY) {
+                self.call_pre(i)?;
+            }
+            match mode {
+                Mode::Pre => {}
+                Mode::Full => self.call_post(i, Mode::Full, site)?,
+                Mode::Post | Mode::PostY => {
+                    let tl = self.tmp(EQ);
+                    self.fb.i().local_get(tl);
+                    self.call_post(i, mode, site)?;
+                }
+            }
+            return Ok(());
+        }
         let t = self.t();
         let g = self.cg.g;
         use Inst::*;
@@ -1338,9 +1896,31 @@ impl<'a, 'p> Tr<'a, 'p> {
                 self.fb.i().ref_cast_non_null(ht(t.anyarr)).call(h);
                 self.set(*dst);
             }
-            CallDirect {
-                dst, func, args, ..
-            } => {
+            ConsoleWrite { dst, s } => {
+                let h = self.cg.func(FKey::H(H::Write));
+                self.get(*s);
+                self.fb.i().call(h);
+                self.prop_if();
+                self.fb.i().global_get(g.unit);
+                self.set(*dst);
+            }
+            UnimplementedValue { what, .. } => {
+                rt::unimpl(self.cg, &mut self.fb, what);
+            }
+            Fx { op, dst, args } => self.fx(op, *dst, args)?,
+            CallDirect { .. } | CallValue { .. } | CallMethod { .. } | DictApp { .. } => {
+                return Err("呼び出しの命令は call_pre が出す".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// 呼び出しの前半。結果(`eqref`。null は番兵)を積むまでを出す。
+    fn call_pre(&mut self, i: &Inst) -> Result<(), String> {
+        let t = self.t();
+        let g = self.cg.g;
+        match i {
+            Inst::CallDirect { func, args, .. } => {
                 let idx = self.cg.lir(*func);
                 self.fb.i().ref_null(ht(t.clo));
                 for a in args {
@@ -1348,16 +1928,11 @@ impl<'a, 'p> Tr<'a, 'p> {
                 }
                 self.cg.pack_args(&mut self.fb, args.len() as u32);
                 self.fb.i().ref_null(ht(t.frame)).call(idx);
-                self.check_set(*dst);
             }
-            CallValue {
-                dst, callee, args, ..
-            } => {
+            Inst::CallValue { callee, args, .. } => {
                 self.call_value(*callee, args, false);
-                self.check_set(*dst);
             }
-            CallMethod {
-                dst,
+            Inst::CallMethod {
                 class,
                 method,
                 dict,
@@ -1377,9 +1952,8 @@ impl<'a, 'p> Tr<'a, 'p> {
                 }
                 self.cg.pack_args(&mut self.fb, args.len() as u32);
                 self.fb.i().call(h);
-                self.check_set(*dst);
             }
-            DictApp { dst, f, dicts } => {
+            Inst::DictApp { f, dicts, .. } => {
                 let h = self.cg.func(FKey::DictApp(dicts.len() as u32));
                 self.get(*f);
                 for r in dicts {
@@ -1387,20 +1961,180 @@ impl<'a, 'p> Tr<'a, 'p> {
                 }
                 self.cg.pack_args(&mut self.fb, dicts.len() as u32);
                 self.fb.i().call(h);
-                self.check_set(*dst);
             }
-            ConsoleWrite { dst, s } => {
-                let h = self.cg.func(FKey::H(H::Write));
-                self.get(*s);
-                self.fb.i().call(h);
-                self.prop_if();
-                self.fb.i().global_get(g.unit);
+            Inst::Fx { op, args, .. } => match op {
+                FxOp::Perform { effect, op } => {
+                    let (hr, user) = (args[0], &args[2..]);
+                    let find = self.cg.func(FKey::H(H::ClauseFind));
+                    self.depth_check(false);
+                    let tj = self.tmp(I32);
+                    self.hr_cast(hr);
+                    self.fb
+                        .i()
+                        .i32_const(*op as i32)
+                        .i32_const(0)
+                        .call(find)
+                        .local_tee(tj)
+                        .i32_const(0)
+                        .i32_lt_s()
+                        .if_(BlockType::Empty);
+                    self.extra += 1;
+                    self.no_clause(*effect, *op, user);
+                    self.fb.i().end();
+                    self.extra -= 1;
+                    self.hr_cast(hr);
+                    self.fb
+                        .i()
+                        .struct_get(t.hr, hrf::PARENT)
+                        .global_set(g.chain)
+                        .global_get(g.depth)
+                        .i64_const(1)
+                        .i64_add()
+                        .global_set(g.depth);
+                    self.call_clause(hr, tj, user, false);
+                }
+                FxOp::CallBody => {
+                    let callv = self.cg.func(FKey::CallV(1));
+                    self.hr_cast(args[0]);
+                    self.fb.i().struct_get(t.hr, hrf::BODY);
+                    self.hr_cast(args[0]);
+                    self.fb.i().struct_get(t.hr, hrf::RES).call(callv);
+                }
+                FxOp::CallCancel => {
+                    let callv = self.cg.func(FKey::CallV(0));
+                    self.get(args[0]);
+                    self.fb.i().call(callv);
+                }
+                FxOp::ContResume => {
+                    let h = self.cg.func(FKey::H(H::RtResume));
+                    self.get(args[0]);
+                    self.get(args[1]);
+                    self.fb.i().local_get(self.fdepth).call(h);
+                }
+                FxOp::CallClause => {
+                    // 深さ h + 1 が限度を超えたら、節を呼ばずに ERROR を立てて番兵を結果にする。
+                    let raise = self.cg.func(FKey::H(H::RaiseDepth));
+                    let ck = self.cg.func(FKey::ClauseK);
+                    self.fb
+                        .i()
+                        .local_get(self.fdepth)
+                        .i64_const(1)
+                        .i64_add()
+                        .global_get(g.limit)
+                        .i64_gt_u()
+                        .if_(BlockType::Result(EQ))
+                        .call(raise)
+                        .ref_null(HEQ)
+                        .else_()
+                        .local_get(self.fdepth)
+                        .i64_const(1)
+                        .i64_add()
+                        .global_set(g.depth);
+                    self.get(args[0]);
+                    self.fb.i().call(ck).end();
+                }
+                _ => return Err(format!("呼び出しでないエフェクトの命令 {op:?}")),
+            },
+            _ => return Err("呼び出しでない命令".into()),
+        }
+        Ok(())
+    }
+
+    /// 呼び出しの後半。積んだ結果を受け取る。
+    ///
+    /// ふつうの呼び出しは、番兵なら伝播する。
+    /// そのとき状態語が `YIELD` なら、yield を受け取る再開点ではフレームの記録を作って積み、
+    /// 受け取らない再開点では内部の誤りで止まる。
+    /// 番兵を受け取る呼び出しは、結果をレジスタに書いて続ける。
+    fn call_post(&mut self, i: &Inst, mode: Mode, site: Option<Site>) -> Result<(), String> {
+        let g = self.cg.g;
+        match i {
+            Inst::Fx {
+                op: FxOp::Perform { .. },
+                dst,
+                args,
+            } => {
+                let dst = dst.ok_or("perform の結果")?;
+                // 再開点の表に無いのは、G の節がプログラムに無いときだけである。
+                if site.is_none() && self.cg.has_g {
+                    return Err("perform が再開点の表にありません".into());
+                }
+                let tr = self.tmp(EQ);
+                if mode == Mode::PostY {
+                    // 継続の再開。値が perform の結果になる(連鎖と深さは rt_resume が戻した)。
+                    // 番兵なら注入した状態語で、そのまま伝播する。
+                    self.fb
+                        .i()
+                        .local_tee(tr)
+                        .ref_is_null()
+                        .if_(BlockType::Empty);
+                    self.prop_br();
+                    self.fb.i().end().local_get(tr);
+                    self.set(dst);
+                    return Ok(());
+                }
+                let (hr, saved, user) = (args[0], args[1], &args[2..]);
+                let unwound = self.cg.func(FKey::H(H::PerformUnwound));
+                self.fb
+                    .i()
+                    .local_set(tr)
+                    .local_get(self.fdepth)
+                    .global_set(g.depth)
+                    .local_get(tr)
+                    .ref_is_null()
+                    .if_(BlockType::Empty);
+                self.extra += 1;
+                self.get(hr);
+                self.get(saved);
+                self.any_array(user);
+                self.fb.i().call(unwound);
+                if let Some(site) = site {
+                    self.fb.i().if_(BlockType::Empty);
+                    // この perform の G の節が選ばれた: 取り出された印の区切りで記録を作る。
+                    self.save(site.posty.ok_or("perform の再開の区切りがありません")?);
+                    self.fb.i().else_();
+                    // 節の中からほかの宛ての YIELD が届いた: 節の呼び出しの後半で記録を作る。
+                    self.save_if_yield(site.post);
+                    self.fb.i().end();
+                } else {
+                    // G の節が無いので、結果はいつも 0 である。
+                    self.fb.i().drop();
+                    self.fatal_if_yield();
+                }
+                self.prop_br();
+                self.fb.i().end();
+                self.extra -= 1;
+                self.get(saved);
+                self.fb.i().global_set(g.chain).local_get(tr);
+                self.set(dst);
+            }
+            Inst::Fx { op, dst, .. } if op.catches() => {
+                let dst = dst.ok_or("番兵を受け取る呼び出しの結果")?;
+                if let (Some(l), Some(s)) = (self.lastrp, site) {
+                    self.fb.i().i32_const(s.post as i32);
+                    self.set_loc(l, I32);
+                }
+                self.catch_after(dst);
+            }
+            Inst::CallDirect { dst, .. }
+            | Inst::CallValue { dst, .. }
+            | Inst::CallMethod { dst, .. }
+            | Inst::DictApp { dst, .. } => {
+                let tl = self.tmp(EQ);
+                self.fb
+                    .i()
+                    .local_tee(tl)
+                    .ref_is_null()
+                    .if_(BlockType::Empty);
+                match site {
+                    Some(s) => self.save_if_yield(s.post),
+                    None => self.fatal_if_yield(),
+                }
+                self.prop_br();
+                self.fb.i().end().local_get(tl);
                 self.set(*dst);
             }
-            UnimplementedValue { what, .. } => {
-                rt::unimpl(self.cg, &mut self.fb, what);
-            }
-            Fx { op, dst, args } => self.fx(op, *dst, args)?,
+            _ => return Err("呼び出しでない命令".into()),
         }
         Ok(())
     }
@@ -1570,72 +2304,94 @@ impl<'a, 'p> Tr<'a, 'p> {
                 self.fb.i().global_get(g.chain);
                 out(self)?;
             }
-            FxOp::Perform { effect, op } => {
-                let (hr, saved, user) = (args[0], args[1], &args[2..]);
-                let find = self.cg.func(FKey::H(H::ClauseFind));
-                let unwound = self.cg.func(FKey::H(H::PerformUnwound));
-                self.depth_check(false);
-                let tj = self.tmp(I32);
-                self.hr_cast(hr);
+            FxOp::Perform { .. }
+            | FxOp::CallBody
+            | FxOp::CallCancel
+            | FxOp::ContResume
+            | FxOp::CallClause => {
+                return Err(format!(
+                    "呼び出しのエフェクトの命令 {op:?} は call_pre が出す"
+                ));
+            }
+            FxOp::ContCheck { nontail } => {
+                // nontail なら、節の外(8)、再開済み(7)、c + Δ が限度を超えること(depth_limit)を調べる。
+                // tail なら、再開済みかだけを調べる。
+                let k = args[0];
+                if *nontail {
+                    let tp = self.cg.tpl.add(
+                        kind::RT,
+                        arg::NONE,
+                        "resume を節の外で呼び出しました(second-class)",
+                    );
+                    self.get(k);
+                    self.fb
+                        .i()
+                        .ref_cast_non_null(ht(t.cont))
+                        .struct_get(t.cont, ctf::ALIVE)
+                        .i32_eqz()
+                        .if_(BlockType::Empty);
+                    self.raise_with(tp, None, None);
+                    self.fb.i().end();
+                }
+                let tp = self.cg.tpl.add(
+                    kind::RT,
+                    arg::NONE,
+                    "resume は高々1回しか呼べません(アフィン)",
+                );
+                self.get(k);
                 self.fb
                     .i()
-                    .i32_const(*op as i32)
-                    .i32_const(0)
-                    .call(find)
-                    .local_tee(tj)
-                    .i32_const(0)
-                    .i32_lt_s()
+                    .ref_cast_non_null(ht(t.cont))
+                    .struct_get(t.cont, ctf::USED)
                     .if_(BlockType::Empty);
-                self.extra += 1;
-                self.no_clause(*effect, *op, user);
+                self.raise_with(tp, None, None);
                 self.fb.i().end();
-                self.extra -= 1;
-                self.hr_cast(hr);
+                if *nontail {
+                    let raise = self.cg.func(FKey::H(H::RaiseDepth));
+                    self.fb.i().local_get(self.fdepth);
+                    self.get(k);
+                    self.fb
+                        .i()
+                        .ref_cast_non_null(ht(t.cont))
+                        .struct_get(t.cont, ctf::DELTA)
+                        .i64_add()
+                        .global_get(g.limit)
+                        .i64_gt_u()
+                        .if_(BlockType::Empty)
+                        .call(raise);
+                    self.prop_br();
+                    self.fb.i().end();
+                }
+            }
+            FxOp::ContHr => {
+                self.get(args[0]);
                 self.fb
                     .i()
-                    .struct_get(t.hr, hrf::PARENT)
-                    .global_set(g.chain)
-                    .global_get(g.depth)
-                    .i64_const(1)
-                    .i64_add()
-                    .global_set(g.depth);
-                self.call_clause(hr, tj, user, false);
-                let tr = self.tmp(EQ);
-                self.fb
-                    .i()
-                    .local_set(tr)
-                    .local_get(self.fdepth)
-                    .global_set(g.depth)
-                    .local_get(tr)
-                    .ref_is_null()
-                    .if_(BlockType::Empty);
-                self.extra += 1;
-                self.get(hr);
-                self.get(saved);
-                self.any_array(user);
-                self.fb.i().call(unwound);
-                self.prop_br();
-                self.fb.i().end();
-                self.extra -= 1;
-                self.get(saved);
-                self.fb.i().global_set(g.chain).local_get(tr);
+                    .ref_cast_non_null(ht(t.cont))
+                    .struct_get(t.cont, ctf::HR);
                 out(self)?;
             }
-            FxOp::ContCheck { .. }
-            | FxOp::ContHr
-            | FxOp::ContResume
-            | FxOp::ContMake
-            | FxOp::CallClause
-            | FxOp::ContKill
-            | FxOp::ContUsed => {
-                rt::g_unimpl(self.cg, &mut self.fb);
-                if dst.is_some() {
-                    match op {
-                        FxOp::ContUsed => self.fb.i().i32_const(0),
-                        _ => self.fb.i().ref_null(HEQ),
-                    };
-                    out(self)?;
-                }
+            FxOp::ContMake => {
+                let h = self.cg.func(FKey::H(H::ContMake));
+                self.get(args[0]);
+                self.fb.i().local_get(self.fdepth).call(h);
+                out(self)?;
+            }
+            FxOp::ContKill => {
+                self.get(args[0]);
+                self.fb
+                    .i()
+                    .ref_cast_non_null(ht(t.cont))
+                    .i32_const(0)
+                    .struct_set(t.cont, ctf::ALIVE);
+            }
+            FxOp::ContUsed => {
+                self.get(args[0]);
+                self.fb
+                    .i()
+                    .ref_cast_non_null(ht(t.cont))
+                    .struct_get(t.cont, ctf::USED);
+                out(self)?;
             }
             FxOp::IsCont => {
                 self.get(args[0]);
@@ -1648,8 +2404,6 @@ impl<'a, 'p> Tr<'a, 'p> {
                     .i()
                     .global_get(g.chain)
                     .struct_set(t.hr, hrf::PARENT);
-                self.hr_cast(args[0]);
-                self.fb.i().local_get(self.fdepth).struct_set(t.hr, hrf::H);
                 self.get(args[0]);
                 self.fb.i().global_set(g.chain);
             }
@@ -1659,20 +2413,6 @@ impl<'a, 'p> Tr<'a, 'p> {
                     .i()
                     .struct_get(t.hr, hrf::PARENT)
                     .global_set(g.chain);
-            }
-            FxOp::CallBody => {
-                let callv = self.cg.func(FKey::CallV(1));
-                self.hr_cast(args[0]);
-                self.fb.i().struct_get(t.hr, hrf::BODY);
-                self.hr_cast(args[0]);
-                self.fb.i().struct_get(t.hr, hrf::RES).call(callv);
-                self.catch_after(dst.ok_or("call_body の結果")?);
-            }
-            FxOp::CallCancel => {
-                let callv = self.cg.func(FKey::CallV(0));
-                self.get(args[0]);
-                self.fb.i().call(callv);
-                self.catch_after(dst.ok_or("call_cancel の結果")?);
             }
             FxOp::IsPending => {
                 self.get(args[0]);
@@ -1822,6 +2562,27 @@ impl<'a, 'p> Tr<'a, 'p> {
             }
             Term::Fx { op, args } => match op {
                 FxTermOp::Propagate => {
+                    // ほかの宛ての YIELD なら、自分のフレームも継続に含める(再開されたら、
+                    // 番兵を受け取った最後の呼び出しの結果から続ける)。
+                    if let (Some(l), true) = (self.lastrp, self.rec.is_some()) {
+                        self.fb
+                            .i()
+                            .global_get(g.p_kind)
+                            .i32_const(pk::YIELD)
+                            .i32_eq()
+                            .if_(BlockType::Empty);
+                        for j in self.catch_posts.clone().iter().copied() {
+                            self.get_loc(l);
+                            self.fb
+                                .i()
+                                .i32_const(j as i32)
+                                .i32_eq()
+                                .if_(BlockType::Empty);
+                            self.save(j);
+                            self.fb.i().end();
+                        }
+                        self.fb.i().end();
+                    }
                     self.prop_br();
                 }
                 FxTermOp::TailCallNever => {

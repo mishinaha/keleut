@@ -14,8 +14,7 @@
 //! | [`launch`] | `keleut run --backend wasm` と `keleut build` の出力と Node の起動 |
 //!
 //! 値の表現と制御の形は `rt` と `func` の冒頭に書く。
-//! M94 は G の節を持つハンドラの取り出しと再開を扱わない。
-//! G の節が選ばれたら、標準出力を書き終えてから `keleut: 未実装` で 4 で終わる(M95 で入れる)。
+//! G の節の継続は、フレームの記録の列で持つ(`func` の冒頭の「取り出しと再開」)。
 
 pub mod check;
 pub mod emit;
@@ -26,7 +25,7 @@ mod rt;
 
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
-use keleut_lir::{FuncId, FuncKind, GlobalKind, Inst, Program};
+use keleut_lir::{ClauseClass, FuncId, FuncKind, FxOp, GlobalKind, Inst, Program};
 use wasm_encoder::{ConstExpr, ExportKind, Instruction, ValType};
 
 use emit::{EQ, I32, I64, Mb, rv};
@@ -101,6 +100,8 @@ pub(crate) enum FKey {
     DictApp(u32),
     /// 退避した `DISCARD(NeverBody)` の節の本体を末尾で呼ぶ。
     TailNever,
+    /// 継続の G の節の本体を、継続を引数に末尾で呼ぶ(`call_clause`)。
+    ClauseK,
     /// 構造的な `Eq` の比べ方(クラス)。
     EqStruct(u32),
 }
@@ -120,6 +121,13 @@ pub(crate) struct Gl {
     pub p_clause: u32,
     pub p_args: u32,
     pub p_msg: u32,
+    /// `YIELD` の連鎖の切り取りの先頭。
+    pub p_cut: u32,
+    /// 伝播の途中で積んだフレームの記録の列の先頭(最上段)と末尾(最下段)。
+    pub yf_head: u32,
+    pub yf_tail: u32,
+    /// 再開するフレームに渡す値と、部分をまたぐ呼び出しの結果。
+    pub rv: u32,
     pub unit: u32,
     pub true_: u32,
     pub false_: u32,
@@ -156,6 +164,11 @@ pub(crate) struct Cg<'p> {
     pub clause_arities: BTreeSet<u32>,
     /// 実装の無い `extern` の大域。
     pub extern_unimpl: Vec<u32>,
+    /// G の節を持つハンドラがプログラムのどこかにあるか。
+    ///
+    /// 無ければ `YIELD` は立たない(立てるのは G の節を選んだ `perform` だけである)。
+    /// そこでどの関数も取り出しの区切り、フレームの記録、再開の入口を持たない。
+    pub has_g: bool,
     /// 統計。
     pub stats: Stats,
 }
@@ -204,6 +217,18 @@ impl<'p> Cg<'p> {
         let p_clause = i32g(&mut m, "p_clause");
         let p_args = eqg(&mut m, "p_args");
         let p_msg = i32g(&mut m, "p_msg");
+        let p_cut = eqg(&mut m, "p_cut");
+        let frg = |m: &mut Mb, n: &str| {
+            m.global(
+                rv(true, t.frame),
+                true,
+                ConstExpr::ref_null(wasm_encoder::HeapType::Concrete(t.frame)),
+                n,
+            )
+        };
+        let yf_head = frg(&mut m, "yf_head");
+        let yf_tail = frg(&mut m, "yf_tail");
+        let rv_ = eqg(&mut m, "rv");
         let unit = m.global(
             rv(false, t.unit),
             false,
@@ -260,6 +285,10 @@ impl<'p> Cg<'p> {
             p_clause,
             p_args,
             p_msg,
+            p_cut,
+            yf_head,
+            yf_tail,
+            rv: rv_,
             unit,
             true_,
             false_,
@@ -301,17 +330,26 @@ impl<'p> Cg<'p> {
         }
         let mut clause_arities = BTreeSet::new();
         let mut method_vals = BTreeSet::new();
+        let mut has_g = false;
         for f in &prog.funcs {
             if f.kind == FuncKind::Kir(keleut_lir::FnKind::Opclause) {
                 clause_arities.insert(f.params.len() as u32);
             }
             for b in &f.blocks {
                 for i in &b.insts {
-                    if let Inst::MethodNew {
-                        class, method, own, ..
-                    } = i
-                    {
-                        method_vals.insert((class.0, *method, own.len() as u32));
+                    match i {
+                        Inst::MethodNew {
+                            class, method, own, ..
+                        } => {
+                            method_vals.insert((class.0, *method, own.len() as u32));
+                        }
+                        Inst::Fx {
+                            op: FxOp::HandlerNew { ops, .. },
+                            ..
+                        } => {
+                            has_g |= ops.iter().any(|(_, c)| matches!(c, ClauseClass::G));
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -334,6 +372,7 @@ impl<'p> Cg<'p> {
             extern_funcs,
             clause_arities,
             extern_unimpl,
+            has_g,
             stats: Stats::default(),
         }
     }
@@ -403,6 +442,7 @@ impl<'p> Cg<'p> {
                 (p, vec![EQ], format!("dictapp{n}"), false)
             }
             FKey::TailNever => (vec![EQ], vec![EQ], "tail_never".to_string(), false),
+            FKey::ClauseK => (vec![EQ], vec![EQ], "clause_k".to_string(), false),
             FKey::EqStruct(c) => (vec![EQ, EQ, EQ], vec![I32], format!("eq_struct{c}"), false),
         }
     }

@@ -35,7 +35,7 @@
 use keleut_lir::{FuncId, N_ALLOC_MAX};
 use wasm_encoder::{BlockType, Function, HeapType, MemArg, RefType, ValType};
 
-use crate::emit::{EQ, F64, Fb, HEQ, HI31, I32, I64, gimp, hrf, imp, rv, svf};
+use crate::emit::{EQ, F64, Fb, HEQ, HI31, I32, I64, ctf, frf, gimp, hrf, imp, rv, svf};
 use crate::meta::{arg, kind};
 use crate::{Cg, FKey, cls, pk};
 
@@ -75,6 +75,9 @@ pub enum H {
     PendingRestore,
     PerformUnwound,
     Suppress,
+    YfPush,
+    ContMake,
+    RtResume,
     IsExtern,
     I32Div,
     I32Rem,
@@ -174,7 +177,10 @@ pub fn sig(cg: &mut Cg, h: H) -> (Vec<ValType>, Vec<ValType>, bool) {
         PendingClass => (vec![EQ], vec![I32], false),
         PendingTake => (vec![], vec![rv(false, t.saved)], false),
         PendingRestore => (vec![EQ], vec![], false),
-        PerformUnwound => (vec![EQ, EQ, EQ], vec![], false),
+        PerformUnwound => (vec![EQ, EQ, EQ], vec![I32], false),
+        YfPush => (vec![rv(false, t.frame)], vec![], false),
+        ContMake => (vec![EQ, I64], vec![rv(false, t.cont)], false),
+        RtResume => (vec![EQ, EQ, I64], vec![EQ], false),
         IsExtern => (vec![EQ], vec![I32], false),
         I32Div | I32Rem => (vec![I32, I32], vec![I32], true),
         I64Div | I64Rem => (vec![I64, I64], vec![I64], true),
@@ -201,15 +207,6 @@ pub fn unimpl(cg: &mut Cg, fb: &mut Fb, text: &str) {
     fb.i().i32_const(t as i32).call(imp::FATAL).unreachable();
 }
 
-/// G の節に届いた(M94 は未実装の 4 で止まる)。
-pub fn g_unimpl(cg: &mut Cg, fb: &mut Fb) {
-    unimpl(
-        cg,
-        fb,
-        "WasmGC の後段の G の節の取り出しと再開(M95 で入れる)",
-    );
-}
-
 /// 本体を作る。
 pub fn generate(cg: &mut Cg, k: &FKey) -> Function {
     match k {
@@ -217,7 +214,8 @@ pub fn generate(cg: &mut Cg, k: &FKey) -> Function {
         FKey::CallV(n) => gen_callv(cg, *n),
         FKey::CallM(c, m, no, n) => gen_callm(cg, *c, *m, *no, *n),
         FKey::DictApp(n) => gen_dictapp(cg, *n),
-        FKey::TailNever => gen_tail_never(cg),
+        FKey::TailNever => gen_clause_body(cg, false),
+        FKey::ClauseK => gen_clause_body(cg, true),
         FKey::EqStruct(c) => gen_eq_struct(cg, *c),
         FKey::Lir(_) => unreachable!("LIR の関数は func::generate が作る"),
     }
@@ -1139,6 +1137,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .global_set(g.p_args);
         }
         PerformUnwound => {
+            // 結果は、この perform の G の節が選ばれて YIELD を立てたら 1、ほかは 0 である。
             let i32get = cg.func(FKey::H(I32Get));
             let ttr = cg.tpl.internal("末尾の resume の印が perform に届きました");
             let tnone = cg.tpl.internal("状態語の立っていない巻き戻し");
@@ -1163,10 +1162,24 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .global_set(g.p_hr)
                 .local_get(2)
                 .global_set(g.p_args)
+                .i32_const(0)
                 .return_()
-                .end();
-            g_unimpl(cg, &mut fb);
-            fb.i()
+                .end()
+                // G の節: YIELD(hr, 節, 引数, 切り取りの先頭)を立てる。積んだ記録の列は空から始める。
+                .i32_const(pk::YIELD)
+                .global_set(g.p_kind)
+                .local_get(0)
+                .global_set(g.p_hr)
+                .local_get(2)
+                .global_set(g.p_args)
+                .local_get(1)
+                .global_set(g.p_cut)
+                .ref_null(ht(t.frame))
+                .global_set(g.yf_head)
+                .ref_null(ht(t.frame))
+                .global_set(g.yf_tail)
+                .i32_const(1)
+                .return_()
                 .end()
                 .global_get(g.p_kind)
                 .i32_const(pk::CLAUSE_VALUE)
@@ -1178,6 +1191,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .global_set(g.p_kind)
                 .local_get(0)
                 .global_set(g.p_hr)
+                .i32_const(0)
                 .return_()
                 .end()
                 .global_get(g.p_kind)
@@ -1191,6 +1205,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .i32_const(pk::YIELD)
                 .i32_eq()
                 .if_(BlockType::Empty)
+                .i32_const(0)
                 .return_()
                 .end()
                 .global_get(g.p_kind)
@@ -1200,8 +1215,65 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .call(imp::FATAL)
                 .end()
                 .local_get(1)
-                .global_set(g.chain);
+                .global_set(g.chain)
+                .i32_const(0);
         }
+        YfPush => {
+            // 記録の列の末尾(外側)に足す。列は最上段(perform のフレーム)から最下段の順である。
+            fb.i()
+                .global_get(g.yf_tail)
+                .ref_is_null()
+                .if_(BlockType::Empty)
+                .local_get(0)
+                .global_set(g.yf_head)
+                .else_()
+                .global_get(g.yf_tail)
+                .local_get(0)
+                .struct_set(t.frame, frf::NEXT)
+                .end()
+                .local_get(0)
+                .global_set(g.yf_tail);
+        }
+        ContMake => {
+            // 自分宛ての YIELD から継続を作り、状態語を消す。引数はハンドラ記録とハンドラのフレームの深さ h。
+            let tnone = cg.tpl.internal("継続のフレームの記録がありません");
+            let top = fb.local(rv(true, t.frame));
+            fb.i()
+                .global_get(g.yf_head)
+                .local_tee(top)
+                .ref_is_null()
+                .if_(BlockType::Empty)
+                .i32_const(tnone as i32)
+                .call(imp::FATAL)
+                .unreachable()
+                .end()
+                .local_get(0)
+                .local_get(top)
+                .local_get(1)
+                .local_get(top)
+                .struct_get(t.frame, frf::DEPTH)
+                .local_get(1)
+                .i64_sub()
+                .global_get(g.p_cut)
+                .global_get(g.p_clause)
+                .global_get(g.p_args)
+                .i32_const(0)
+                .i32_const(1)
+                .struct_new(t.cont)
+                .i32_const(pk::NONE)
+                .global_set(g.p_kind)
+                .ref_null(HEQ)
+                .global_set(g.p_hr)
+                .ref_null(HEQ)
+                .global_set(g.p_args)
+                .ref_null(HEQ)
+                .global_set(g.p_cut)
+                .ref_null(ht(t.frame))
+                .global_set(g.yf_head)
+                .ref_null(ht(t.frame))
+                .global_set(g.yf_tail);
+        }
+        RtResume => gen_rt_resume(cg, &mut fb),
         IsExtern => {
             let fid = fb.local(I32);
             fb.i()
@@ -1735,12 +1807,23 @@ fn gen_callm(cg: &mut Cg, c: u32, m: u32, no: u32, n: u32) -> Function {
                 fb.i().local_get(1 + k);
             }
             cg.pack_args(&mut fb, inst.premises + no);
+            // 実装の関数の本体はクロージャを作るだけで、yield しない(届いたら内部の誤り)。
+            let ty = cg
+                .tpl
+                .internal("yield がメソッドの実装の関数の評価の外へ届きました");
             fb.i()
                 .ref_null(ht(t.frame))
                 .call(imp_f)
                 .local_tee(tf)
                 .ref_is_null()
                 .if_(BlockType::Empty)
+                .global_get(g.p_kind)
+                .i32_const(pk::YIELD)
+                .i32_eq()
+                .if_(BlockType::Empty)
+                .i32_const(ty as i32)
+                .call(imp::FATAL)
+                .end()
                 .ref_null(HEQ)
                 .return_()
                 .end()
@@ -1821,30 +1904,50 @@ fn gen_dictapp(cg: &mut Cg, n: u32) -> Function {
     fb.finish()
 }
 
-fn gen_tail_never(cg: &mut Cg) -> Function {
+/// G か N の節の本体の段を末尾で呼ぶ。
+///
+/// `with_k` が偽なら引数は退避した `DISCARD(NeverBody)` で、隠れた引数 `x` は Unit である(`tail_call_never`)。
+/// 真なら引数は継続で、`x` は継続である(`call_clause`。呼ぶ側が深さを `h + 1` にしてから呼ぶ)。
+fn gen_clause_body(cg: &mut Cg, with_k: bool) -> Function {
     let t = cg.m.t;
     let g = cg.g;
     let aget = cg.func(FKey::H(H::Aget));
     let mut fb = Fb::new(1);
-    let s = fb.local(rv(true, t.saved));
-    let h = fb.local(rv(true, t.hr));
     let clo = fb.local(EQ);
     let args = fb.local(rv(true, t.anyarr));
     let n = fb.local(I32);
+    if with_k {
+        let k = fb.local(rv(true, t.cont));
+        fb.i()
+            .local_get(0)
+            .ref_cast_non_null(ht(t.cont))
+            .local_tee(k)
+            .struct_get(t.cont, ctf::HR)
+            .ref_cast_non_null(ht(t.hr))
+            .struct_get(t.hr, hrf::CLAUSES)
+            .local_get(k)
+            .struct_get(t.cont, ctf::CLAUSE)
+            .call(aget)
+            .local_set(clo)
+            .local_get(k)
+            .struct_get(t.cont, ctf::ARGS);
+    } else {
+        let s = fb.local(rv(true, t.saved));
+        fb.i()
+            .local_get(0)
+            .ref_cast_non_null(ht(t.saved))
+            .local_tee(s)
+            .struct_get(t.saved, svf::HR)
+            .ref_cast_non_null(ht(t.hr))
+            .struct_get(t.hr, hrf::CLAUSES)
+            .local_get(s)
+            .struct_get(t.saved, svf::CLAUSE)
+            .call(aget)
+            .local_set(clo)
+            .local_get(s)
+            .struct_get(t.saved, svf::ARGS);
+    }
     fb.i()
-        .local_get(0)
-        .ref_cast_non_null(ht(t.saved))
-        .local_tee(s)
-        .struct_get(t.saved, svf::HR)
-        .ref_cast_non_null(ht(t.hr))
-        .local_tee(h)
-        .struct_get(t.hr, hrf::CLAUSES)
-        .local_get(s)
-        .struct_get(t.saved, svf::CLAUSE)
-        .call(aget)
-        .local_set(clo)
-        .local_get(s)
-        .struct_get(t.saved, svf::ARGS)
         .ref_cast_non_null(ht(t.anyarr))
         .local_tee(args)
         .array_len()
@@ -1866,7 +1969,12 @@ fn gen_tail_never(cg: &mut Cg) -> Function {
         for k in 0..a - 2 {
             fb.i().local_get(args).i32_const(k as i32).call(aget);
         }
-        fb.i().global_get(g.unit).i32_const(-1).ref_i31();
+        if with_k {
+            fb.i().local_get(0);
+        } else {
+            fb.i().global_get(g.unit);
+        }
+        fb.i().i32_const(-1).ref_i31();
         cg.pack_args(&mut fb, a);
         fb.i()
             .ref_null(ht(t.frame))
@@ -1875,8 +1983,98 @@ fn gen_tail_never(cg: &mut Cg) -> Function {
             .return_call_ref(fty)
             .end();
     }
-    bail(cg, &mut fb, "N の節の引数の数が翻訳の表にありません");
+    bail(cg, &mut fb, "節の引数の数が翻訳の表にありません");
     fb.finish()
+}
+
+/// `rt_resume(k, v, base)`(`cont_resume`。計画 6.6 節、`doc/lir.md` の 16.4 節)。
+///
+/// `base` は再開するハンドラのフレームの深さ `c` である。
+/// 継続の記録の列を最上段から順に、各フレームの再開の入口で呼ぶ。
+/// 最上段(取り出された `perform`)には `v` を渡し、その後は内側のフレームの結果を外側のフレームに渡す。
+/// `v` が退避した状態語なら、それを状態語にして、最上段に番兵を渡す(注入)。
+/// 各フレームの深さは `base + (取り出したときの深さ − h)` にする(IRSpec 11.4 節のずれ)。
+/// 最下段のフレームは末尾で呼ぶので、再開した計算の Wasm のフレームは、どの時点でも 1 つだけがこの関数の上にある。
+fn gen_rt_resume(cg: &mut Cg, fb: &mut Fb) {
+    let t = cg.m.t;
+    let g = cg.g;
+    let restore = cg.func(FKey::H(H::PendingRestore));
+    let tnone = cg.tpl.internal("フレームの無い継続");
+    let kc = fb.local(rv(true, t.cont));
+    let hr = fb.local(rv(true, t.hr));
+    let f = fb.local(rv(true, t.frame));
+    let nxt = fb.local(rv(true, t.frame));
+    let x = fb.local(EQ);
+    fb.i()
+        .local_get(0)
+        .ref_cast_non_null(ht(t.cont))
+        .local_tee(kc)
+        .i32_const(1)
+        .struct_set(t.cont, ctf::USED)
+        .local_get(kc)
+        .struct_get(t.cont, ctf::HR)
+        .ref_cast_non_null(ht(t.hr))
+        .local_tee(hr)
+        .global_get(g.chain)
+        .struct_set(t.hr, hrf::PARENT)
+        .local_get(kc)
+        .struct_get(t.cont, ctf::CUT)
+        .global_set(g.chain)
+        .local_get(kc)
+        .struct_get(t.cont, ctf::FRAMES)
+        .local_tee(f)
+        .ref_is_null()
+        .if_(BlockType::Empty)
+        .i32_const(tnone as i32)
+        .call(imp::FATAL)
+        .unreachable()
+        .end()
+        .local_get(kc)
+        .ref_null(ht(t.frame))
+        .struct_set(t.cont, ctf::FRAMES)
+        .local_get(1)
+        .local_set(x)
+        .local_get(1)
+        .ref_test_non_null(ht(t.saved))
+        .if_(BlockType::Empty)
+        .local_get(1)
+        .call(restore)
+        .ref_null(HEQ)
+        .local_set(x)
+        .end()
+        .loop_(BlockType::Empty)
+        .local_get(2)
+        .local_get(f)
+        .struct_get(t.frame, frf::DEPTH)
+        .i64_add()
+        .local_get(kc)
+        .struct_get(t.cont, ctf::H)
+        .i64_sub()
+        .global_set(g.depth)
+        .local_get(x)
+        .global_set(g.rv)
+        .local_get(f)
+        .struct_get(t.frame, frf::NEXT)
+        .local_tee(nxt)
+        .ref_is_null()
+        .if_(BlockType::Empty)
+        .local_get(f)
+        .ref_as_non_null()
+        .local_get(f)
+        .struct_get(t.frame, frf::ENTRY)
+        .return_call_ref(t.resfn)
+        .end()
+        .local_get(f)
+        .ref_as_non_null()
+        .local_get(f)
+        .struct_get(t.frame, frf::ENTRY)
+        .call_ref(t.resfn)
+        .local_set(x)
+        .local_get(nxt)
+        .local_set(f)
+        .br(0)
+        .end()
+        .unreachable();
 }
 
 fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
@@ -1899,6 +2097,10 @@ fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
     let xb = fb.local(EQ);
     let sd = fb.local(I64);
     let rv_ = fb.local(EQ);
+    // Eq のメソッドはエフェクトを持たないので、この境目の外へ YIELD は届かない(届いたら内部の誤り。doc/lir.md 16.1 節)。
+    let ty_eq = cg
+        .tpl
+        .internal("yield が構造的な Eq の比べ方の外へ届きました");
     // 項目の辞書 `d`(積んだ形で)で xa と xb を比べ、偽なら 0、番兵なら -1 を返す。
     let eq_item = |fb: &mut Fb| {
         fb.i()
@@ -1928,6 +2130,13 @@ fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
             .local_get(rv_)
             .ref_is_null()
             .if_(BlockType::Empty)
+            .global_get(g.p_kind)
+            .i32_const(pk::YIELD)
+            .i32_eq()
+            .if_(BlockType::Empty)
+            .i32_const(ty_eq as i32)
+            .call(imp::FATAL)
+            .end()
             .i32_const(-1)
             .return_()
             .end()
