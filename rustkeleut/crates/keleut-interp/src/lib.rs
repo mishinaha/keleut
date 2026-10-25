@@ -31,6 +31,8 @@ pub struct RunOptions {
     /// 専用のスレッドのネイティブのスタックの大きさ(バイト)。
     /// [`MIN_NATIVE_STACK`] 以上にする。
     pub native_stack: u64,
+    /// `--gc-stress` の規則で回収するか(`keleut_rt::gc::STRESS_RATIO`)。
+    pub gc_stress: bool,
 }
 
 impl Default for RunOptions {
@@ -38,6 +40,7 @@ impl Default for RunOptions {
         RunOptions {
             max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
             native_stack: keleut_rt::native_stack_for(keleut_rt::DEFAULT_MAX_DEPTH),
+            gc_stress: false,
         }
     }
 }
@@ -55,7 +58,12 @@ fn run_on_thread(prog: &Program, opts: &RunOptions) -> u8 {
         );
         return 70;
     }
-    let rt = match Rt::new(prog, opts.max_depth) {
+    run_mutator(prog, opts, low)
+}
+
+fn run_mutator(prog: &Program, opts: &RunOptions, low: usize) -> u8 {
+    let stats = std::env::var_os("KELEUT_GC_STATS").is_some();
+    let rt = match Rt::new_with(prog, opts.max_depth, opts.gc_stress) {
         Ok(rt) => rt,
         Err(e) => {
             keleut_rt::out::Out::default().eprint(&e.message());
@@ -63,6 +71,15 @@ fn run_on_thread(prog: &Program, opts: &RunOptions) -> u8 {
         }
     };
     let mut it = Interp::new(rt, low);
+    let code = run_init(prog, &mut it);
+    if stats {
+        let s = it.rt.gc_stats();
+        let _ = it.rt.out.eprint_after_flush(s.as_bytes());
+    }
+    code
+}
+
+fn run_init(prog: &Program, it: &mut Interp<'_>) -> u8 {
     let mut r: Result<(), Stop> = Ok(());
     for &f in &prog.init {
         match it.run(f, Word(0), &[], 0) {

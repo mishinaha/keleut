@@ -32,7 +32,8 @@ options:
   --tier MODE                 interp-only|jit-only|threshold=N|alternating=SEED|mixed=SEED
   --max-depth N               logical depth limit L (default 1048576)
   --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k)
-  --gc-stress                 collect at every allocation (no collector yet: accepted and ignored)
+  --gc-stress                 collect garbage at the first allocation of every allocation site
+                              and then at short jittered intervals (for testing)
   --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
   --frontend diktor|rust      front end for .kel files (default: diktor via $KELEUT_DIKTOR)
   --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
@@ -44,6 +45,7 @@ struct Options {
     backend: String,
     max_depth: u64,
     native_stack: Option<u64>,
+    gc_stress: bool,
     yield_prune: bool,
     frontend: String,
     front_args: Vec<String>,
@@ -76,6 +78,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         backend: "interp".to_string(),
         max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
         native_stack: None,
+        gc_stress: false,
         yield_prune: true,
         frontend: "diktor".to_string(),
         front_args: Vec::new(),
@@ -118,7 +121,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     _ => return Err(format!("bad --native-stack value: {v}")),
                 };
             }
-            "--gc-stress" => {}
+            "--gc-stress" => o.gc_stress = true,
             "--no-yield-prune" => o.yield_prune = false,
             "--frontend" => {
                 let v = value(a)?;
@@ -226,6 +229,7 @@ fn run(o: &Options) -> u8 {
         native_stack: o
             .native_stack
             .unwrap_or_else(|| keleut_rt::native_stack_for(o.max_depth)),
+        gc_stress: o.gc_stress,
     };
     keleut_interp::run_program(&lp, &opts)
 }
