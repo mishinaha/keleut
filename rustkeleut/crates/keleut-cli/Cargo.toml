@@ -14,6 +14,11 @@ path = "src/main.rs"
 keleut-front = { path = "../keleut-front" }
 keleut-interp = { path = "../keleut-interp" }
 keleut-lir = { path = "../keleut-lir" }
+keleut-llvm = { path = "../keleut-llvm", optional = true }
 keleut-rt = { path = "../keleut-rt" }
 keleut-wasm = { path = "../keleut-wasm" }
 kir = { path = "../kir" }
+
+[features]
+# LLVM の後段(`keleut run --backend jit`、`keleut dump llvm`)。LLVM 22 の共有ライブラリに結合する。
+llvm = ["dep:keleut-llvm", "keleut-llvm/llvm"]

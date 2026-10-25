@@ -1,7 +1,8 @@
 //! サブコマンド `keleut dump` の振り分けである(計画 261024-1 の 6.2 節)。
 //!
 //! `keleut dump tokens|ast|lir|bytecode|llvm FILE` の 2 語目で、受け持つ関数を選ぶ。
-//! 表に無い名前は使い方の誤り(64)、表にあって中身の無いものは未実装(4)である。
+//! 表に無い名前は使い方の誤り(64)である。
+//! `llvm` は feature `llvm` を付けずに組むと未実装(4)である。
 
 use crate::exit;
 
@@ -19,14 +20,8 @@ const TOOLS: &[(&str, Handler)] = &[
     ("ast", crate::front_cmd::ast),
     ("lir", crate::lir_cmd::main),
     ("bytecode", crate::run_cmd::dump_bytecode),
-    ("llvm", unimplemented_tool),
+    ("llvm", crate::run_cmd::dump_llvm),
 ];
-
-/// まだ中身の無い道具である。
-fn unimplemented_tool(args: &[String]) -> u8 {
-    eprintln!("keleut: 未実装: dump {}", args[0]);
-    exit::UNIMPLEMENTED
-}
 
 /// `keleut dump …` の入口である。引数の先頭は `dump` である。
 pub fn main(args: &[String]) -> u8 {

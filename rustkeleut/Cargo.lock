@@ -63,6 +63,7 @@ dependencies = [
  "keleut-front",
  "keleut-interp",
  "keleut-lir",
+ "keleut-llvm",
  "keleut-rt",
  "keleut-wasm",
  "kir",

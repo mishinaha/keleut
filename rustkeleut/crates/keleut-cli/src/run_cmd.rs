@@ -10,8 +10,10 @@
 //!   Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
 //!
 //! 読み込んだ KIR を検証し、LIR に下ろして、後段で実行する。
-//! 後段はインタプリタ(`--backend interp`)と WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)で、`jit` は未実装(4)である。
-//! LLVM の後段がまだ無いので、既定の後段は `interp` である。
+//! 後段はインタプリタ(`--backend interp`)、WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)、
+//! LLVM の JIT(`--backend jit`。M91。crate keleut-llvm。feature `llvm` で組んだときだけ使え、無ければ未実装の 4)である。
+//! `--backend jit` の段の設定は `--tier jit-only`(既定)と `interp-only` で、ほかは M92 まで未実装(4)である。
+//! 既定の後段は、段の切り替え(M92)が入るまで `interp` である。
 //!
 //! `keleut dump bytecode` も同じ読み方で入力を LIR にし、インタプリタのバイトコードを印字する([`dump_bytecode`])。
 //!
@@ -28,14 +30,15 @@ pub const USAGE: &str = "\
 usage: keleut run [OPTIONS] FILE.kel... | FILE.kir
 
 options:
-  --backend interp|jit|wasm   back end (default: interp; jit is not implemented yet)
+  --backend interp|jit|wasm   back end (default: interp; jit needs a build with the llvm feature)
   --tier MODE                 interp-only|jit-only|threshold=N|alternating=SEED|mixed=SEED
+                              (jit: jit-only (default) or interp-only; the others are not implemented yet)
   --max-depth N               logical depth limit L (default 1048576)
   --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k;
-                              interp only, ignored by --backend wasm)
+                              interp and jit; ignored by --backend wasm)
   --gc-stress                 collect garbage at the first allocation of every allocation site
                               and then at short jittered intervals (for testing;
-                              interp only, ignored by --backend wasm)
+                              interp and jit; ignored by --backend wasm)
   --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
   --frontend diktor|rust      front end for .kel files (default: diktor via $KELEUT_DIKTOR)
   --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
@@ -45,6 +48,7 @@ options:
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Options {
     backend: String,
+    tier: Option<String>,
     pub(crate) max_depth: u64,
     native_stack: Option<u64>,
     gc_stress: bool,
@@ -78,6 +82,7 @@ fn valid_tier(s: &str) -> bool {
 pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
         backend: "interp".to_string(),
+        tier: None,
         max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
         native_stack: None,
         gc_stress: false,
@@ -108,6 +113,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
                 if !valid_tier(&v) {
                     return Err(format!("bad --tier value: {v}"));
                 }
+                o.tier = Some(v);
             }
             "--max-depth" => {
                 let v = value(a)?;
@@ -233,22 +239,53 @@ fn run(o: &Options) -> u8 {
             },
         );
     }
-    if o.backend != "interp" {
-        eprintln!("keleut: 未実装: 後段 {}", o.backend);
-        return exit::UNIMPLEMENTED;
+    if o.backend == "jit" {
+        return run_jit(o);
     }
     let lp = match load(o) {
         Ok(p) => p,
         Err(c) => return c,
     };
-    let opts = keleut_interp::RunOptions {
+    keleut_interp::run_program(&lp, &interp_options(o))
+}
+
+fn interp_options(o: &Options) -> keleut_interp::RunOptions {
+    keleut_interp::RunOptions {
         max_depth: o.max_depth,
         native_stack: o
             .native_stack
             .unwrap_or_else(|| keleut_rt::native_stack_for(o.max_depth)),
         gc_stress: o.gc_stress,
+    }
+}
+
+/// LLVM の後段(M91)で走らせる。
+#[cfg(feature = "llvm")]
+fn run_jit(o: &Options) -> u8 {
+    let tier = match o.tier.as_deref() {
+        None | Some("jit-only") => keleut_llvm::Tier::JitOnly,
+        Some("interp-only") => keleut_llvm::Tier::InterpOnly,
+        Some(t) => {
+            eprintln!("keleut: 未実装: 段の設定 {t}");
+            return exit::UNIMPLEMENTED;
+        }
     };
-    keleut_interp::run_program(&lp, &opts)
+    let lp = match load(o) {
+        Ok(p) => p,
+        Err(c) => return c,
+    };
+    let opts = keleut_llvm::RunOptions {
+        base: interp_options(o),
+        tier,
+        ..Default::default()
+    };
+    keleut_llvm::run_program(&lp, &opts)
+}
+
+#[cfg(not(feature = "llvm"))]
+fn run_jit(_: &Options) -> u8 {
+    eprintln!("keleut: 未実装: 後段 jit(feature llvm を付けずに組みました)");
+    exit::UNIMPLEMENTED
 }
 
 /// 入力を読み(`.kel` ならフロントエンドを通し)、KIR を検証して LIR に下ろす。
@@ -348,6 +385,62 @@ pub fn dump_bytecode(args: &[String]) -> u8 {
             exit::IO
         }
     }
+}
+
+/// `keleut dump llvm` の使い方である。
+pub const DUMP_LLVM_USAGE: &str = "\
+usage: keleut dump llvm [--prelude FILE | --no-prelude] [--import-path DIR] FILE.kel... | FILE.kir
+
+prints the LLVM IR that the jit back end makes for every function it can compile
+(the format is for inspection only; needs a build with the llvm feature)
+";
+
+/// `keleut dump llvm …` の入口である。引数の先頭は `llvm` である。
+///
+/// 入力の読み方は `keleut run` と同じで、LIR に下ろした後、JIT にできる各関数の LLVM IR の文面を印字する。
+pub fn dump_llvm(args: &[String]) -> u8 {
+    let rest = &args[1..];
+    if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {
+        print!("{DUMP_LLVM_USAGE}");
+        return 0;
+    }
+    let o = match parse(rest) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprint!("keleut: {msg}\n{DUMP_LLVM_USAGE}");
+            return exit::USAGE;
+        }
+    };
+    dump_llvm_of(&o)
+}
+
+#[cfg(feature = "llvm")]
+fn dump_llvm_of(o: &Options) -> u8 {
+    let lp = match load(o) {
+        Ok(p) => p,
+        Err(c) => return c,
+    };
+    let text = match keleut_llvm::dump_ir(&lp) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("keleut: 内部エラー: {e}");
+            return 70;
+        }
+    };
+    let mut out = std::io::stdout().lock();
+    match out.write_all(text.as_bytes()).and_then(|()| out.flush()) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("keleut: LLVM IR を書き出せません: {e}");
+            exit::IO
+        }
+    }
+}
+
+#[cfg(not(feature = "llvm"))]
+fn dump_llvm_of(_: &Options) -> u8 {
+    eprintln!("keleut: 未実装: dump llvm(feature llvm を付けずに組みました)");
+    exit::UNIMPLEMENTED
 }
 
 /// `keleut run …` の入口である。引数の先頭は `run` である。
