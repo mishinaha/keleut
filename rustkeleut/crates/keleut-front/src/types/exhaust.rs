@@ -37,6 +37,7 @@ enum Ctor {
 }
 
 /// 待ち行列の項目である。
+#[derive(Clone)]
 pub struct Entry {
     rows: Vec<(Pat, bool)>,
     ty: Ty,

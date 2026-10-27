@@ -25,6 +25,7 @@ pub enum NoResume {
 }
 
 /// 再帰群の記録(Diktor の `group_rec`)である。
+#[derive(Clone)]
 pub struct GroupRec {
     pub(crate) g_pres: Vec<(Ty, NodeId)>,
     pub(crate) g_cur: Option<NodeId>,

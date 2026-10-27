@@ -252,7 +252,7 @@ impl Tc {
         })
     }
 
-    fn unbound_vars(&mut self, acc: &mut Vec<Cell>, t: Ty) -> R<()> {
+    pub(crate) fn unbound_vars(&mut self, acc: &mut Vec<Cell>, t: Ty) -> R<()> {
         guard()?;
         let t = self.repr(t);
         match self.node(t) {

@@ -32,6 +32,7 @@ mod flatten;
 pub mod fx;
 pub mod load;
 pub mod pmap;
+pub mod session;
 mod show;
 mod unify;
 mod units;
@@ -275,6 +276,9 @@ pub enum OutLine {
 }
 
 /// 型検査の文脈である(Diktor の大域の状態のすべて)。
+///
+/// 対話的な実行は、入力の前の写しを取り、受理しなかった入力の後で写しに戻す。
+#[derive(Clone)]
 pub struct Tc {
     // ---- 通し番号と名前 ----
     next_oid: Oid,

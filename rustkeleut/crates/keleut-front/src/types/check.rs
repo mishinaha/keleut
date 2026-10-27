@@ -223,7 +223,7 @@ pub(crate) fn parse_unit(
     }
 }
 
-fn fail_to_error(files: &Files, f: Fail) -> Result<CheckError, String> {
+pub(crate) fn fail_to_error(files: &Files, f: Fail) -> Result<CheckError, String> {
     let show = |s: Span| Some(files.show(s.start));
     Ok(match f {
         Fail::TypeAt(s, m) => CheckError {

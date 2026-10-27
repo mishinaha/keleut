@@ -81,7 +81,7 @@ pub const ROOT_UNIT: UnitId = 0;
 pub const STD_UNIT: UnitId = -1;
 
 /// 宣言表である。
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Decls {
     pub in_prelude: bool,
     pub prelude_keys: HashSet<(&'static str, Oid)>,
