@@ -44,14 +44,16 @@ pub const NAMES: &[&str] = &[
 /// いま走らせられる組である。
 ///
 /// RustKeleut の後段は M88 から順に加わるので、ここに名前を足していく。
-pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "kj", "kw", "x-ir", "kr-ki"];
+pub const AVAILABLE: &[&str] = &[
+    "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki",
+];
 
 /// `--pairs` を省いたときに走らせる組である。
 ///
-/// 計画 8.1 節は [`AVAILABLE`] のすべてを走らせるとするが、組 `kj` は除く。
-/// `kj` は feature `llvm` を付けて組んだ `keleut` でだけ走り(M91 では `llvm` は既定の feature でない)、
+/// 計画 8.1 節は [`AVAILABLE`] のすべてを走らせるとするが、LLVM の後段の組 `kj`、`kt`、`ka`、`km` は除く。
+/// これらは feature `llvm` を付けて組んだ `keleut` でだけ走り(`llvm` は既定の feature でない)、
 /// 付けずに組んだ `keleut` ではどのコマンドも未実装の 4 で終わるからである。
-/// `kj` は `--pairs` で名を挙げて走らせる。
+/// これらの組は `--pairs` で名を挙げて走らせる。
 pub const DEFAULT: &[&str] = &["dk", "dk-ir", "kf", "ki", "kw", "x-ir", "kr-ki"];
 
 /// `kconform expect` が `keleut run` に足す選択肢(組 `ki`)である。
