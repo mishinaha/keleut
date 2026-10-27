@@ -18,13 +18,22 @@ fn keleut_in(dir: Option<&Path>, args: &[&str], input: &str) -> Output {
     if let Some(d) = dir {
         c.current_dir(d);
     }
-    let mut ch = c.spawn().unwrap();
-    ch.stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
-    ch.wait_with_output().unwrap()
+    let ch = c.spawn().unwrap();
+    feed(ch, input)
+}
+
+/// 標準入力を別のスレッドで書き、出力を読みながら終わりを待つ
+/// (出力がパイプの容量を超えても、入力を書き終えるのを待って止まらないようにする)。
+fn feed(mut ch: std::process::Child, input: &str) -> Output {
+    let mut stdin = ch.stdin.take().unwrap();
+    let input = input.as_bytes().to_vec();
+    let w = std::thread::spawn(move || {
+        // 子が入力を読み終える前に終われば書けないが、それは試験の結果で分かる。
+        let _ = stdin.write_all(&input);
+    });
+    let r = ch.wait_with_output().unwrap();
+    w.join().unwrap();
+    r
 }
 
 fn repl(args: &[&str], input: &str) -> (String, Option<i32>) {
@@ -258,7 +267,7 @@ fn 標準入力と受けて捨てる旗() {
 /// 診断を標準エラーに書いてセッションを 70 で終える(`keleut run` と同じ)。
 ///
 /// どのスレッドを作るところで止まるかは構築の種類で変わる
-/// (リリースの構築では KIR の検証のスレッド、最適化なしの構築ではフロントエンドのスレッド)ので、
+/// (リリースの構築では実行のスレッド、最適化なしの構築ではフロントエンドのスレッド)ので、
 /// 診断の文面は先頭だけを比べる。
 #[test]
 fn 資源の不足でセッションを_70_で終える() {
@@ -295,6 +304,265 @@ fn kir_の入れ子の限度を超えた入力は受理しない() {
         "y : Int32 = 1\n<stdin>: 処理系の限度: KIR の書き出しで入れ子が深すぎます\n1\n\
          ! <stdin>:4:1: 型エラー: 未束縛の変数: x\n",
     );
+}
+
+/// `let x1 = 1 + 1` から `let xN = N + 1` までの N 行の入力。
+fn chain(n: usize) -> String {
+    (1..=n).map(|i| format!("let x{i} = {i} + 1\n")).collect()
+}
+
+/// 入力ごとに検証し下ろす量は、前の入力の数に依らない(V222)。
+///
+/// `KELEUT_REPL_STATS` は、入力ごとに、検証した KIR の関数と大域の数と、下ろした LIR の関数の数を書く。
+/// 同じ形の入力では、足した数はどの入力でも同じで、総数だけが伸びる。
+#[test]
+fn 入力ごとに足した単位だけを検証して下ろす() {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_keleut"));
+    c.arg("repl")
+        .env("KELEUT_REPL_STATS", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut ch = c.spawn().unwrap();
+    ch.stdin
+        .take()
+        .unwrap()
+        .write_all(chain(200).as_bytes())
+        .unwrap();
+    let r = ch.wait_with_output().unwrap();
+    assert_eq!(r.status.code(), Some(0));
+    let out = String::from_utf8_lossy(&r.stdout);
+    assert!(out.ends_with("x200 : Int32 = 201\n"), "{out}");
+    let err = String::from_utf8_lossy(&r.stderr);
+    // 1 行目はプレリュード、続く 200 行が入力である。
+    let lines: Vec<&str> = err.lines().collect();
+    assert_eq!(lines.len(), 201, "{err}");
+    let parse = |l: &str| -> Vec<(usize, usize)> {
+        l.trim_start_matches("keleut-repl-stats: ")
+            .split(' ')
+            .map(|kv| {
+                let v = kv.split_once("=+").unwrap().1;
+                let (a, b) = v.split_once('/').unwrap();
+                (a.parse().unwrap(), b.parse().unwrap())
+            })
+            .collect()
+    };
+    let first = parse(lines[1]);
+    let mut prev = first.clone();
+    for l in &lines[2..] {
+        let x = parse(l);
+        for (k, ((add, total), (add0, _))) in x.iter().zip(&first).enumerate() {
+            assert_eq!(add, add0, "{l}");
+            assert_eq!(*total, prev[k].1 + add, "{l}");
+        }
+        prev = x;
+    }
+}
+
+/// `make(n)` の入力の時間が `n` に比例することを確かめる(V222)。
+///
+/// 入力ごとに前の入力の数に比例する手間がかかると、3 倍の入力に 9 倍の時間がかかる。
+/// 比例すれば 3 倍なので、6 倍未満であることを確かめる(並べて走らせる試験の揺れを見込む)。
+/// `last` は、`n` 個の入力の出力の最後の行である。
+fn scales_linearly(n: usize, make: impl Fn(usize) -> String, last: impl Fn(usize) -> String) {
+    let time = |n: usize| {
+        let input = make(n);
+        let t = std::time::Instant::now();
+        let (out, code) = repl(&[], &input);
+        let d = t.elapsed();
+        assert_eq!(code, Some(0));
+        let want = last(n);
+        assert!(out.ends_with(&want), "{want:?} で終わらない: {:?}", {
+            let k = out.len().saturating_sub(300);
+            &out[out.floor_char_boundary(k)..]
+        });
+        d
+    };
+    let t1 = time(n).min(time(n));
+    let t3 = time(3 * n).min(time(3 * n));
+    let ratio = t3.as_secs_f64() / t1.as_secs_f64();
+    assert!(
+        ratio < 6.0,
+        "{n} 個 {t1:?}、{} 個 {t3:?}(比 {ratio:.2})",
+        3 * n
+    );
+}
+
+/// 値を束縛する入力の数に比例する時間で処理する(V222)。
+#[test]
+fn 入力の数に比例する時間で処理する() {
+    let n = if cfg!(debug_assertions) { 300 } else { 1000 };
+    scales_linearly(n, chain, |n| format!("x{n} : Int32 = {}\n", n + 1));
+}
+
+/// 型を宣言する入力と、型エラーと `:type` の入力が続いても、入力の数に比例する時間で処理する。
+///
+/// 型検査の文脈の印は宣言表と名前の表を写さず、受理しなかった入力はノードの番号の表を伸ばし直さない。
+/// 1 つの宣言の後に、実行しない入力(型エラーと `:type`)を 10 個置き、宣言表の大きさに比例する手間を目立たせる。
+#[test]
+fn 宣言と受理しない入力も入力の数に比例する時間で処理する() {
+    let n = if cfg!(debug_assertions) { 200 } else { 1000 };
+    let make = |n: usize| -> String {
+        let mut s = String::new();
+        for i in 1..=n {
+            s.push_str(&format!("newtype T{i} = T{i}(Int32)\n"));
+            for _ in 0..5 {
+                s.push_str(&format!("let r = T{i}(1) + 1\n:type T{i}(1)\n"));
+            }
+        }
+        s
+    };
+    scales_linearly(n, make, |n| format!("T{n}\n"));
+}
+
+/// 型エラーの入力だけが続いても、入力の数に比例する時間で処理する(ノードの番号の表を伸ばし直さない)。
+#[test]
+fn 型エラーの入力だけが続いても入力の数に比例する時間で処理する() {
+    let n = if cfg!(debug_assertions) { 1000 } else { 5000 };
+    let make = |n: usize| -> String {
+        (1..=n)
+            .map(|i| format!("let y{i} = 1 + \"a\"\n"))
+            .collect::<String>()
+            + "echoln(\"end\")\n"
+    };
+    scales_linearly(n, make, |_| "end\n".to_string());
+}
+
+/// 仮想メモリの上限 `kib` KiB の下で `keleut repl ARGS` に `input` を読ませる。
+#[cfg(target_os = "linux")]
+fn repl_ulimit(kib: u64, args: &str, input: &str) -> Output {
+    let mut c = Command::new("sh");
+    c.arg("-c")
+        .arg(format!("ulimit -v {kib} && exec \"$0\" repl {args}"))
+        .arg(env!("CARGO_BIN_EXE_keleut"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    feed(c.spawn().unwrap(), input)
+}
+
+/// 実行時エラーで止まった入力の大域の値は、回収の根から外す。
+///
+/// 30 万要素のリストを束縛してからゼロ除算で止まる入力を 40 回続ける(1 回の約 9 MiB で、残せば合計は約 370 MiB)。
+/// スレッドのスタックの領域の大きさは構築の種類で変わるので、先に、同じ入力を 1 回だけ読ませるセッションが
+/// 最後まで処理できる仮想メモリの上限を 64 MiB の刻みで探す。
+/// その上限に 160 MiB を足した上限の下で 40 回の入力を最後まで処理することを、`--gc-stress` の有無の両方で確かめる。
+/// 値を残せば上限に当たる。
+#[cfg(target_os = "linux")]
+#[test]
+fn 実行時エラーで止まった入力の値は回収する() {
+    const MK: &str = "let rec mk(n: Int32, acc: List[Int32]): List[Int32] = if n == 0 then acc else mk(n - 1, Cons(n, acc))\n";
+    const FAIL: &str = "let b = mk(300000, Nil); 1 / 0\n";
+    let session = |k: usize| format!("{MK}{}mk(3, Nil)\n", FAIL.repeat(k));
+    let want = |k: usize| {
+        format!(
+            "mk : (Int32, List[Int32]) => List[Int32] = <fn>\n{}_ : List[Int32] = [1, 2, 3]\n",
+            "実行時エラー: ゼロ除算です\n".repeat(k)
+        )
+    };
+    let ok = |kib: u64, args: &str, k: usize| {
+        let r = repl_ulimit(kib, args, &session(k));
+        r.status.code() == Some(0) && String::from_utf8_lossy(&r.stdout) == want(k)
+    };
+    for args in ["--native-stack 64m", "--native-stack 64m --gc-stress"] {
+        // 1 回の入力で通る最小の上限を、通る上限と通らない上限の間を半分にして探す。
+        let step = 65536;
+        let (mut lo, mut hi) = (0u64, 512 * step);
+        assert!(ok(hi, args, 1), "上限 {hi} KiB でも通らない");
+        while hi - lo > step {
+            let mid = (lo + hi) / 2;
+            if ok(mid, args, 1) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        let limit = hi + 160 * 1024;
+        let r = repl_ulimit(limit, args, &session(40));
+        assert_eq!(
+            String::from_utf8_lossy(&r.stdout),
+            want(40),
+            "{args}、上限 {limit} KiB: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
+        assert_eq!(r.status.code(), Some(0));
+    }
+}
+
+/// 前の入力のエフェクト、関数、ハンドラ、インスタンスを、後の入力から使う。
+#[test]
+fn 入力をまたいでエフェクトとインスタンスを使う() {
+    check(
+        "effect Log = { log: (String) => Unit }\n\
+         let say(s: String): Unit @ {Log} = perform log(s)\n\
+         let withlog(body: () => Unit @ {Log}): Unit @ Console = body() handle { case log(s) => { echoln(\"L \" + s); resume() } }\n\
+         withlog(fn() => { say(\"a\"); say(\"b\") })\n\
+         type class Sz[X] { val sz: (X) => Int32 }\n\
+         type instance Sz[String] { let sz(s: String): Int32 = 5 }\n\
+         let usesz[A: Sz](x: A): Int32 = Sz.sz(x) + 1\n\
+         newtype Box = Box(Int32)\n\
+         type instance Sz[Box] { let sz(b: Box): Int32 = b match { case Box(n) => n } }\n\
+         usesz(Box(41)) + usesz(\"q\")\n\
+         Some(Box(2))\n",
+        "say : (String) => {} @ {Log} = <fn>\n\
+         withlog : (() => {} @ {Log}) => {} @ {Console} = <fn>\n\
+         L a\nL b\n\
+         usesz : [A: Sz] (A) => Int32 = <fn>\n\
+         _ : Int32 = 48\n\
+         _ : Option[Box] = Some(Box(2))\n",
+    );
+}
+
+/// プレリュードの無いセッションで、後の入力が初めて handle を書く(ハンドラのフレームの関数を後から足す)。
+#[test]
+fn 後の入力で初めて_handle_を書く() {
+    let (out, code) = repl(
+        &["--no-prelude"],
+        "let a = 1\neffect Ask = { ask: () => Int32 }\n\
+         let q(): Int32 @ {Ask} = perform ask() + a\n\
+         let v = q() handle { case ask() => resume(41) }\n\
+         { q() + q() } handle { case ask() => resume(10) }\n",
+    );
+    assert_eq!(
+        out,
+        "a : Int32 = 1\nq : () => Int32 @ {Ask} = <fn>\nv : Int32 = 42\n_ : Int32 = 22\n"
+    );
+    assert_eq!(code, Some(0));
+}
+
+/// 前の入力が実行時に作ったレコードの形と、後の入力の式が書く形が、同じ番号の表を使う。
+/// 前の入力が作った大きな値は、後の入力の確保で回収されない(大域が根になる)。
+#[test]
+fn 前の入力の形と値を後の入力で使う() {
+    let input = "let with_q[R](p: {extends R}): {q: Int32 extends R} = { q = 5 extends p }\n\
+         let t1 = with_q({ aa = 1, bb = \"s\" })\n\
+         let t3 = { q = 9, aa = 3, bb = \"t\" }\n\
+         let same(x: {q: Int32, aa: Int32, bb: String}, y: {q: Int32, aa: Int32, bb: String}): Boolean = x == y\n\
+         same(t1, { q = 5, aa = 1, bb = \"s\" })\n\
+         let rec build(i: Int32, acc: List[Int32]): List[Int32] = if i == 0 then acc else build(i - 1, Cons(i, acc))\n\
+         let big = build(20000, Nil)\n\
+         let rec churn(i: Int32): Int32 = if i == 0 then 0 else { let x = Cons(i, Cons(i, Nil)); churn(i - 1) }\n\
+         churn(100000)\n\
+         let rec sum(l: List[Int32]): Int32 = l match { case Nil => 0 case Cons(h, t) => h + sum(t) }\n\
+         sum(big)\n";
+    let want = "with_q : ({extends R1}) => {q: Int32 extends R1} = <fn>\n\
+         t1 : {q: Int32, aa: Int32, bb: String} = {q = 5, aa = 1, bb = \"s\"}\n\
+         t3 : {q: Int32, aa: Int32, bb: String} = {q = 9, aa = 3, bb = \"t\"}\n\
+         same : ({q: Int32, aa: Int32, bb: String}, {q: Int32, aa: Int32, bb: String}) => Boolean = <fn>\n\
+         _ : Boolean = true\n\
+         build : (Int32, List[Int32]) => List[Int32] = <fn>\n";
+    for args in [&[][..], &["--gc-stress"][..]] {
+        let (out, code) = repl(args, input);
+        assert_eq!(code, Some(0));
+        assert!(out.starts_with(want), "{args:?}\n{out}");
+        assert!(
+            out.ends_with(
+                "churn : (Int32) => Int32 = <fn>\n_ : Int32 = 0\n\
+                 sum : (List[Int32]) => Int32 = <fn>\n_ : Int32 = 200010000\n"
+            ),
+            "{args:?}"
+        );
+    }
 }
 
 /// コーパスの全件を比べる 2 つの試験を順に走らせるための錠である。
