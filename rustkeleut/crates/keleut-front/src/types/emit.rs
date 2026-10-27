@@ -41,6 +41,40 @@ pub struct UnitSrc<'a> {
     pub paths: Vec<Vec<u8>>,
     /// 平坦化と型検査を済ませた宣言の列。
     pub decls: &'a [Decl],
+    /// 対話的な実行の入力の単位の書き出し方(ファイルの単位では `None`)。
+    pub repl: Option<&'a ReplUnit>,
+}
+
+/// 対話的な実行の入力の単位の書き出し方である(Diktor の driver.ml の §16.6b)。
+///
+/// Diktor の対話的な実行は、トップレベルの行に `Print` を足し、最も外側のハンドラが `Print.print` を出力先へ送る。
+/// KIR には実行時が持つ最も外側のハンドラが無いので、この単位の初期化式と式文の `thunk` と、
+/// 辞書を受け取らないメソッドの値の初期化を、書き手が作る `Print` のハンドラ式で包む。
+/// ハンドラは `print(s)` を `resume(perform Console.write(s))` に翻訳するので、印字される文字列は同じである。
+/// プレリュードの `with_stdout` は使わないので、`--prelude` のプレリュードが `with_stdout` を持たなくても、
+/// 違う `with_stdout` を持っても、結果は同じである。
+#[derive(Clone, Debug, Default)]
+pub struct ReplUnit {
+    /// `Print` をハンドラ式で処理する(プレリュードが、引数 1 個の操作 `print` を持つ `Print` と、
+    /// 実行時が処理する `Console.write` を持つときだけ効く)。
+    pub print: bool,
+    /// 結果を表示する入力か。
+    /// 真なら、式文の値を隠れた大域(`$it`)に束縛し、辞書を受け取る式文は辞書を受け取る大域にする。
+    pub display: bool,
+    /// `Show.show` で表示する値ごとの、`Show` の証拠と、証拠の中の決まっていない部分の辞書の引数。
+    /// 値ごとに隠れた大域(`$show`)を作る。
+    /// 辞書の引数が無ければ種類 `fn` の関数(値を受け取って文字列を返す)、あれば種類 `dictabs` の関数
+    /// (辞書を受け取って、値を受け取る関数を返す)である。
+    pub shows: Vec<(Evidence, Vec<DKey>)>,
+}
+
+/// 対話的な実行の入力の単位を書き出した結果である。
+#[derive(Clone, Debug, Default)]
+pub struct ReplOut {
+    /// 束縛のノードの番号と名前から大域へ(式文はノードの番号と `$it`)。
+    pub globals: Vec<((NodeId, String), GlobalId)>,
+    /// [`ReplUnit::shows`] の順の、`$show` の大域。
+    pub shows: Vec<GlobalId>,
 }
 
 /// 型検査を済ませたプログラムを KIR にする(Diktor の driver.ml の `ir_program`)。
@@ -74,18 +108,21 @@ pub fn program_of_checked(
         key: "prelude".to_string(),
         paths: prelude_paths,
         decls: prelude,
+        repl: None,
     }];
     for ((k, d), ds) in keys.iter().zip(units.iter()) {
         srcs.push(UnitSrc {
             key: k.clone(),
             paths: vec![d.clone().into_bytes()],
             decls: ds,
+            repl: None,
         });
     }
     srcs.push(UnitSrc {
         key: "main".to_string(),
         paths: opts.files.iter().map(|f| f.clone().into_bytes()).collect(),
         decls: units.last().map(|v| v.as_slice()).unwrap_or(&[]),
+        repl: None,
     });
     program(tc, &srcs)
 }
@@ -303,6 +340,10 @@ enum Body<'b> {
     Binding(&'b LetBinding),
     /// let rec の群を書き、その中の名前 `x` を読む(インスタンスのメソッド)。
     RecGroup(&'b [LetBinding], String),
+    /// 対話的な実行の表示:引数のスロット 0 の値に、証拠の辞書の `Show.show` を末尾で呼ぶ(種類 `fn` の根の関数)。
+    ReplShowCall(Evidence),
+    /// 対話的な実行の表示:[`Body::ReplShowCall`] を本体とするラムダを作る(種類 `dictabs` の根の関数)。
+    ReplShowLambda(Evidence),
 }
 
 /// 根の関数を書く仕事である。
@@ -317,6 +358,8 @@ struct Job<'b> {
     body: Body<'b>,
     /// 書いた本体に辞書を適用する(インスタンスのメソッドの適合器)。
     adapter: Vec<HoleId>,
+    /// 本体を `Print` のハンドラ式で包む([`ReplUnit::print`])。
+    print: bool,
 }
 
 /// 書き手の状態である。
@@ -332,10 +375,28 @@ struct W<'t> {
     functions: Vec<(kir::Function, String)>,
     /// 関数の記号から、その記号の最初の関数の添字へ(Diktor の符号化の索引と同じく、最初の項目を指す)。
     fn_first: HashMap<String, FnId>,
+    /// 対話的な実行で `Print` を処理するハンドラ式が使う、エフェクトと操作([`ReplUnit::print`])。
+    repl_print: Option<ReplPrint>,
+    /// 対話的な実行の入力の単位を書き出した結果。
+    repl_out: ReplOut,
+}
+
+/// 対話的な実行で `Print` を処理するハンドラ式が使う、エフェクトと操作の位置である。
+#[derive(Clone, Copy, Debug)]
+struct ReplPrint {
+    /// エフェクト `Print` と、その操作 `print`。
+    print: (EffectId, u32),
+    /// エフェクト `Console` と、その操作 `write`。
+    write: (EffectId, u32),
 }
 
 /// 型検査を済ませた単位の列を KIR にする(Diktor の `program`)。
 pub fn program(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<kir::Program> {
+    program_repl(tc, units).map(|(p, _)| p)
+}
+
+/// [`program`] と同じで、対話的な実行の入力の単位([`UnitSrc::repl`])を書き出した結果も返す。
+pub fn program_repl(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<(kir::Program, ReplOut)> {
     let mut w = W {
         tc,
         tb: Tables::default(),
@@ -345,8 +406,11 @@ pub fn program(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<kir::Program> {
         final_cap: HashMap::default(),
         functions: Vec::new(),
         fn_first: HashMap::default(),
+        repl_print: None,
+        repl_out: ReplOut::default(),
     };
-    w.program(units)
+    let p = w.program(units)?;
+    Ok((p, w.repl_out))
 }
 
 impl<'t> W<'t> {
@@ -1095,7 +1159,128 @@ impl<'t> W<'t> {
                 let body = self.push(kir::Exp::Local(slot));
                 Ok(self.push(kir::Exp::Letrec { items, body }))
             }
+            Body::ReplShowCall(ev) => {
+                let d = self.dict(env, ev)?;
+                let show = self.tc.intern("Show");
+                let class = self.class_id(show)?;
+                let method = self.method_index(class, "show")?;
+                let m = self.push(kir::Exp::Method {
+                    class,
+                    method,
+                    dict: d,
+                    own: Vec::new(),
+                });
+                let x = self.push(kir::Exp::Local(0));
+                Ok(self.push(kir::Exp::Call {
+                    tail: env.tail,
+                    yields: true,
+                    func: m,
+                    args: vec![x],
+                }))
+            }
+            Body::ReplShowLambda(ev) => {
+                let n = self.next_site();
+                let sym = format!("{}${n}", self.root.sym);
+                let fr = self.new_frame(Some(env.fr), sym, FnKind::Lambda, vec![Rep::Any], None);
+                let env0 = GEnv {
+                    fr,
+                    tail: true,
+                    spine: false,
+                    ..env.clone()
+                };
+                let b = self.body(&env0, &Body::ReplShowCall(ev.clone()))?;
+                let pd = Pending {
+                    yields: true,
+                    dicts: 0,
+                    result: Rep::Str,
+                    pats: Vec::new(),
+                    guard: None,
+                    body: b,
+                };
+                self.finish(fr, (n, 0), pd);
+                Ok(self.push_part_exp(kir::Exp::Closure(Self::part(fr))))
+            }
         }
+    }
+
+    /// 本体を、`Print` のハンドラ式で包む([`ReplUnit::print`])。
+    ///
+    /// プレリュードの `with_stdout` と同じく、`print(s)` の操作節は `resume(perform Console.write(s))` である
+    /// (操作節の `resume` は末尾にあるので、分類は T である)。
+    /// ハンドラ式は、本体を書く前に場所の番号を取り、本体、操作節の順に関数を作る。
+    fn print_wrapped(&mut self, env: &GEnv, rp: ReplPrint, b: &Body<'_>, result: Rep) -> R<ExpId> {
+        let n = self.next_site();
+        let base = format!("{}$h{n}", self.root.sym);
+        let owner = self.root.frames[env.fr].owner;
+        let body_fr = self.new_frame(
+            Some(env.fr),
+            format!("{base}.body"),
+            FnKind::Handlebody,
+            Vec::new(),
+            owner,
+        );
+        let env0 = GEnv {
+            fr: body_fr,
+            tail: false,
+            spine: false,
+            ..env.clone()
+        };
+        // メソッドの値の束縛は、`binding_value` と同じく末尾位置の外で書く。
+        let inner = match b {
+            Body::Binding(lb) if lb.params.is_none() => {
+                self.body(&env0, &Body::Exp(&lb.body, false))?
+            }
+            b => self.body(&env0, b)?,
+        };
+        let pd = Pending {
+            yields: true,
+            dicts: 0,
+            result,
+            pats: Vec::new(),
+            guard: None,
+            body: inner,
+        };
+        self.finish(body_fr, (n, 0), pd);
+        let op_fr = self.new_frame(
+            Some(env.fr),
+            format!("{base}.op.print"),
+            FnKind::Opclause,
+            vec![Rep::Any],
+            None,
+        );
+        self.root.frames[op_fr].owner = Some(op_fr);
+        let msg = self.push(kir::Exp::Local(0));
+        let write = self.push(kir::Exp::Perform {
+            effect: rp.write.0,
+            op: rp.write.1,
+            args: vec![msg],
+        });
+        let resume = self.push(kir::Exp::Resume {
+            tail: true,
+            value: write,
+        });
+        let pat = self.nodes.push_pat(kir::Pat::Wild);
+        let pd = Pending {
+            yields: true,
+            dicts: 0,
+            result,
+            pats: vec![pat],
+            guard: None,
+            body: resume,
+        };
+        self.finish(op_fr, (n, 1), pd);
+        Ok(self.push_part_exp(kir::Exp::Handle(Box::new(kir::Handle {
+            tail: env.tail,
+            effect: rp.print.0,
+            body: Self::part(body_fr),
+            ops: vec![HandlerOp {
+                op: rp.print.1,
+                class: ClauseClass::T,
+                part: Self::part(op_fr),
+            }],
+            ret: None,
+            cancel: None,
+        }))))
     }
 
     /// 束縛の値(Diktor の `binding_value`)。
@@ -1557,7 +1742,10 @@ impl<'t> W<'t> {
             spine: false,
         }
         .bind_dkeys(&job.dkeys, 0);
-        let mut body = self.body(&env, &job.body)?;
+        let mut body = match (job.print, self.repl_print) {
+            (true, Some(rp)) => self.print_wrapped(&env, rp, &job.body, job.result)?,
+            _ => self.body(&env, &job.body)?,
+        };
         if !job.adapter.is_empty() {
             let mut ds = Vec::with_capacity(job.adapter.len());
             for h in &job.adapter {
@@ -1765,6 +1953,23 @@ impl<'t> W<'t> {
         for u in units {
             let steps = self.collect_unit(u, &mut globals, &mut instances, &mut jobs)?;
             unit_steps.push(steps);
+        }
+        if units.iter().any(|u| u.repl.is_some_and(|r| r.print)) {
+            // 引数 1 個の操作 `print` を持つ `Print` と、実行時が処理する `Console.write` があるときだけ包む。
+            let find = |sym: &str, op: &str| -> Option<(EffectId, u32)> {
+                let e = effects.iter().position(|e| e.sym == sym)?;
+                let o = effects[e].ops.iter().position(|o| {
+                    o.name == op && o.arity == 1 && !o.never && (op != "write" || o.runtime)
+                })?;
+                Some((EffectId(e as u32), o as u32))
+            };
+            self.repl_print = match (
+                find("prelude/Print", "print"),
+                find("prelude/Console", "write"),
+            ) {
+                (Some(print), Some(write)) => Some(ReplPrint { print, write }),
+                _ => None,
+            };
         }
         // 2 段目:根の関数。
         for job in jobs {
@@ -1974,6 +2179,13 @@ impl<'t> W<'t> {
         jobs: &mut Vec<Job<'b>>,
     ) -> R<Vec<PendingStep>> {
         let key = &u.key;
+        let print = u.repl.is_some_and(|r| r.print);
+        let display = u.repl.is_some_and(|r| r.display);
+        let thunk = |sym: String, result: Rep, body: Body<'b>| -> Job<'b> {
+            let mut j = thunk_job(sym, result, body);
+            j.print = print;
+            j
+        };
         let mut counts: HashMap<String, u32> = HashMap::default();
         let mut inst_counts: HashMap<String, u32> = HashMap::default();
         let numbered = |tbl: &mut HashMap<String, u32>, q: &str| -> String {
@@ -1997,6 +2209,9 @@ impl<'t> W<'t> {
             let g = format!("{key}/{}", numbered(counts, super::display(x)));
             let id = GlobalId(globals.len() as u32);
             w.tb.globals.insert((oid, x.to_string()), id);
+            if display {
+                w.repl_out.globals.push(((oid, x.to_string()), id));
+            }
             let k = match kind {
                 GKind::Fn => PendingGlobal::Fn(g.clone()),
                 GKind::Dictabs => PendingGlobal::Dictabs(g.clone()),
@@ -2052,6 +2267,7 @@ impl<'t> W<'t> {
                                 result,
                                 body: Body::Exp(&b.body, false),
                                 adapter: Vec::new(),
+                                print: false,
                             });
                         }
                         (None, PatKind::Var(x)) => {
@@ -2067,7 +2283,7 @@ impl<'t> W<'t> {
                             let s = gsym(globals, g);
                             steps.push(PendingStep::DefValue(g, s.clone()));
                             let result = self.rep_of_node(b.body.meta.id);
-                            jobs.push(thunk_job(s, result, Body::Exp(&b.body, false)));
+                            jobs.push(thunk(s, result, Body::Exp(&b.body, false)));
                         }
                         (None, _) => {
                             let f = format!("{key}/$init{}", steps.len());
@@ -2088,9 +2304,9 @@ impl<'t> W<'t> {
                             steps.push(PendingStep::DefPattern(f.clone(), gs, p));
                             let result = self.rep_of_node(b.body.meta.id);
                             let job = if ks.is_empty() {
-                                thunk_job(f, result, Body::Exp(&b.body, false))
+                                thunk(f, result, Body::Exp(&b.body, false))
                             } else {
-                                thunk_job(f, Rep::Any, Body::DictabsExp(ks, result, &b.body))
+                                thunk(f, Rep::Any, Body::DictabsExp(ks, result, &b.body))
                             };
                             jobs.push(job);
                         }
@@ -2137,12 +2353,55 @@ impl<'t> W<'t> {
                     let g = new_global(self, globals, &mut counts, d.meta.id, &ex.name, kind);
                     steps.push(PendingStep::DefFns(vec![g]));
                 }
+                DeclKind::Exp(e) if display => {
+                    // 対話的な実行の表示のため、式文の値を隠れた大域に束縛する。
+                    let result = self.rep_of_node(e.meta.id);
+                    match self.tc.dict.get(&d.meta.id) {
+                        Some(DictInfo::Abs(ks)) => {
+                            let ks = ks.clone();
+                            let g = new_global(
+                                self,
+                                globals,
+                                &mut counts,
+                                d.meta.id,
+                                "$it",
+                                GKind::Dictabs,
+                            );
+                            steps.push(PendingStep::DefDictabs(g));
+                            jobs.push(Job {
+                                sym: gsym(globals, g),
+                                kind: FnKind::Dictabs,
+                                params: Vec::new(),
+                                dkeys: ks,
+                                tail: false,
+                                yields: true,
+                                result,
+                                body: Body::Exp(e, false),
+                                adapter: Vec::new(),
+                                print: false,
+                            });
+                        }
+                        _ => {
+                            let g = new_global(
+                                self,
+                                globals,
+                                &mut counts,
+                                d.meta.id,
+                                "$it",
+                                GKind::Value(result),
+                            );
+                            let s = gsym(globals, g);
+                            steps.push(PendingStep::DefValue(g, s.clone()));
+                            jobs.push(thunk(s, result, Body::Exp(e, false)));
+                        }
+                    }
+                }
                 DeclKind::Exp(e) => {
                     if !matches!(self.tc.dict.get(&d.meta.id), Some(DictInfo::Abs(_))) {
                         let f = format!("{key}/$init{}", steps.len());
                         steps.push(PendingStep::RunExp(f.clone()));
                         let result = self.rep_of_node(e.meta.id);
-                        jobs.push(thunk_job(f, result, Body::Exp(e, false)));
+                        jobs.push(thunk(f, result, Body::Exp(e, false)));
                     }
                 }
                 DeclKind::Instance(i) => {
@@ -2176,6 +2435,8 @@ impl<'t> W<'t> {
                             methods.push((m, mk.len() as u32, fsym.clone()));
                             let mut dkeys = pk.clone();
                             dkeys.extend(mk);
+                            let value_init = matches!(body, Body::Binding(b) if b.params.is_none());
+                            let print = print && value_init && dkeys.is_empty();
                             jobs.push(Job {
                                 sym: fsym,
                                 kind: FnKind::Dictabs,
@@ -2186,6 +2447,7 @@ impl<'t> W<'t> {
                                 result: Rep::Any,
                                 body,
                                 adapter,
+                                print,
                             });
                             Ok(())
                         };
@@ -2224,6 +2486,43 @@ impl<'t> W<'t> {
                 }
             }
         }
+        if let Some(r) = u.repl.filter(|r| r.display) {
+            // 対話的な実行の表示に使う、Show.show を呼ぶ関数。
+            for (ev, ks) in &r.shows {
+                let (kind, gk, body) = if ks.is_empty() {
+                    (FnKind::Lambda, GKind::Fn, Body::ReplShowCall(ev.clone()))
+                } else {
+                    (
+                        FnKind::Dictabs,
+                        GKind::Dictabs,
+                        Body::ReplShowLambda(ev.clone()),
+                    )
+                };
+                let g = new_global(self, globals, &mut counts, 0, "$show", gk);
+                steps.push(if ks.is_empty() {
+                    PendingStep::DefFns(vec![g])
+                } else {
+                    PendingStep::DefDictabs(g)
+                });
+                self.repl_out.shows.push(g);
+                jobs.push(Job {
+                    sym: gsym(globals, g),
+                    kind,
+                    params: if ks.is_empty() {
+                        vec![Rep::Any]
+                    } else {
+                        Vec::new()
+                    },
+                    dkeys: ks.clone(),
+                    tail: ks.is_empty(),
+                    yields: true,
+                    result: if ks.is_empty() { Rep::Str } else { Rep::Any },
+                    body,
+                    adapter: Vec::new(),
+                    print: false,
+                });
+            }
+        }
         Ok(steps)
     }
 
@@ -2249,6 +2548,7 @@ impl<'t> W<'t> {
                 result: self.rep_of_node(body.meta.id),
                 body: Body::Params(params, body),
                 adapter: Vec::new(),
+                print: false,
             }
         } else {
             Job {
@@ -2261,6 +2561,7 @@ impl<'t> W<'t> {
                 result: Rep::Any,
                 body: Body::Lambda(params, body, fn_node),
                 adapter: Vec::new(),
+                print: false,
             }
         }
     }
@@ -2278,6 +2579,7 @@ fn thunk_job(sym: String, result: Rep, body: Body<'_>) -> Job<'_> {
         result,
         body,
         adapter: Vec::new(),
+        print: false,
     }
 }
 
