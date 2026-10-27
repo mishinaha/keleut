@@ -23,7 +23,8 @@
 確保の量の合計が仮想メモリの上限 512 MiB を大きく超えるプログラムが、上限の下で完走する。
 1 MiB の文字列を 1,000 回作り、10 万要素のリストを 30 回作る(合計は約 1.1 GiB)。
 Node は仮想メモリの上限 512 MiB の下では起動できないので、上限を置く 2 つのコマンドは `--backend interp` を書く。
-後に書いた旗が効くので、組 `kw` でもインタプリタで走る。
+後に書いた旗が効くので、組 `kw` でもインタプリタで走る(kconform は「組の後段の上書き」として報告する)。
+LLVM の後段の組 `kj`、`kt`、`ka`、`km` では、kconform の shim がこの旗を除くので、組の段で走る。
 
   $ cat > mem.kel <<'EOF'
   > let rec grow(s: String, n: Int32): String = if n == 0 then s else grow(s + s, n - 1)
