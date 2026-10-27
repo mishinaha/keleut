@@ -34,9 +34,7 @@ impl Tc {
                     let res = self.new_kind_var();
                     let arg = self.new_kind_var();
                     let ar = self.k_arrow2(arg, res);
-                    if let super::KNode::Var(id, _) = self.kinds[r.0 as usize] {
-                        self.kinds[r.0 as usize] = super::KNode::Var(id, Some(ar));
-                    }
+                    self.set_klink(r, ar);
                     k = res;
                 }
                 KView::Star | KView::Row => {
@@ -1171,7 +1169,7 @@ impl Tc {
                     Some(TVar::Rigid(i)) if !params.contains(&(i.vid, hc)) => self.note_hole(h),
                     _ => {
                         let ev = self.evidence_of(hl, params, h, hc, ht)?;
-                        self.holes_arena[h.0 as usize].h_sol = Some(ev);
+                        self.set_hole_sol(h, ev);
                     }
                 }
             }

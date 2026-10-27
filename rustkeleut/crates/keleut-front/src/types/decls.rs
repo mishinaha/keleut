@@ -3,7 +3,7 @@
 //! 型の名前空間、別名、データ型、エフェクト、型クラス、インスタンス、単位と module の同義語、可視性の表と、
 //! 組み込みの登録を持つ。
 
-use super::fx::{HashMap, HashSet};
+use super::fx::{HashMap, JMap, JSet};
 use super::{GRef, Kind, Oid, R, Tc, Ty, TyNode, UnitId, VarInfo, display, terr};
 use crate::ast::{NodeId, TypeExp, TypeParam};
 use std::rc::Rc;
@@ -84,40 +84,118 @@ pub const STD_UNIT: UnitId = -1;
 #[derive(Clone, Default)]
 pub struct Decls {
     pub in_prelude: bool,
-    pub prelude_keys: HashSet<(&'static str, Oid)>,
-    pub type_namespace: HashMap<Oid, &'static str>,
-    pub externs: HashSet<Oid>,
-    pub con_kinds: HashMap<Oid, Kind>,
-    pub reserved_type_names: HashSet<Oid>,
+    pub prelude_keys: JSet<(&'static str, Oid)>,
+    pub type_namespace: JMap<Oid, &'static str>,
+    pub externs: JSet<Oid>,
+    pub con_kinds: JMap<Oid, Kind>,
+    pub reserved_type_names: JSet<Oid>,
     pub current_module: Option<String>,
     pub current_unit: UnitId,
-    pub unit_paths: HashMap<UnitId, String>,
-    pub decl_unit: HashMap<NodeId, UnitId>,
-    pub unit_synonyms: HashMap<(UnitId, Oid), Oid>,
-    pub unit_ctors: HashMap<(UnitId, Oid), Oid>,
-    pub unit_classes: HashMap<(UnitId, Oid), Oid>,
-    pub unit_qualifiers: HashMap<(UnitId, String), String>,
-    pub con_synonyms: HashMap<Oid, Vec<Oid>>,
-    pub module_con_synonyms: HashMap<(String, Oid), Oid>,
-    pub module_val_synonyms: HashMap<(String, Oid), Oid>,
-    pub con_hints: HashMap<Oid, Vec<Oid>>,
-    pub val_synonyms: HashMap<Oid, Vec<Oid>>,
-    pub value_visibility: HashMap<Oid, Visibility>,
-    pub con_visibility: HashMap<Oid, Visibility>,
-    pub decl_module: HashMap<NodeId, String>,
-    pub aliases: HashMap<Oid, Rc<AliasInfo>>,
-    pub datas: HashMap<Oid, Rc<DataInfo>>,
-    pub ctor_owner: HashMap<Oid, Oid>,
-    pub effects: HashMap<Oid, Rc<EffectInfo>>,
-    pub op_index: HashMap<Oid, Vec<Oid>>,
-    pub classes: HashMap<Oid, Rc<ClassInfo>>,
+    pub unit_paths: JMap<UnitId, String>,
+    pub decl_unit: JMap<NodeId, UnitId>,
+    pub unit_synonyms: JMap<(UnitId, Oid), Oid>,
+    pub unit_ctors: JMap<(UnitId, Oid), Oid>,
+    pub unit_classes: JMap<(UnitId, Oid), Oid>,
+    pub unit_qualifiers: JMap<(UnitId, String), String>,
+    pub con_synonyms: JMap<Oid, Vec<Oid>>,
+    pub module_con_synonyms: JMap<(String, Oid), Oid>,
+    pub module_val_synonyms: JMap<(String, Oid), Oid>,
+    pub con_hints: JMap<Oid, Vec<Oid>>,
+    pub val_synonyms: JMap<Oid, Vec<Oid>>,
+    pub value_visibility: JMap<Oid, Visibility>,
+    pub con_visibility: JMap<Oid, Visibility>,
+    pub decl_module: JMap<NodeId, String>,
+    pub aliases: JMap<Oid, Rc<AliasInfo>>,
+    pub datas: JMap<Oid, Rc<DataInfo>>,
+    pub ctor_owner: JMap<Oid, Oid>,
+    pub effects: JMap<Oid, Rc<EffectInfo>>,
+    pub op_index: JMap<Oid, Vec<Oid>>,
+    pub classes: JMap<Oid, Rc<ClassInfo>>,
     /// クラスを登録した順(Diktor の `Hashtbl` の走査の代わりに、登録の順で走査する)。
     pub class_order: Vec<Oid>,
-    pub class_ranks: HashMap<Oid, i64>,
+    pub class_ranks: JMap<Oid, i64>,
     pub class_count: i64,
-    pub instances: HashMap<(Oid, Oid), InstanceInfo>,
-    pub reserved_predicates: HashSet<Oid>,
+    pub instances: JMap<(Oid, Oid), InstanceInfo>,
+    pub reserved_predicates: JSet<Oid>,
     pub builtin_ops: Vec<(String, Ty)>,
+}
+
+/// [`Decls::begin`] で取る、表でない欄の値である。
+pub struct DeclsMark {
+    in_prelude: bool,
+    current_module: Option<String>,
+    current_unit: UnitId,
+    class_order: usize,
+    class_count: i64,
+    builtin_ops: Vec<(String, Ty)>,
+}
+
+/// 宣言表のすべての表に同じ操作をする([`JMap`] と [`JSet`] の印)。
+macro_rules! each_table {
+    ($self:ident, $op:ident) => {
+        $self.prelude_keys.$op();
+        $self.type_namespace.$op();
+        $self.externs.$op();
+        $self.con_kinds.$op();
+        $self.reserved_type_names.$op();
+        $self.unit_paths.$op();
+        $self.decl_unit.$op();
+        $self.unit_synonyms.$op();
+        $self.unit_ctors.$op();
+        $self.unit_classes.$op();
+        $self.unit_qualifiers.$op();
+        $self.con_synonyms.$op();
+        $self.module_con_synonyms.$op();
+        $self.module_val_synonyms.$op();
+        $self.con_hints.$op();
+        $self.val_synonyms.$op();
+        $self.value_visibility.$op();
+        $self.con_visibility.$op();
+        $self.decl_module.$op();
+        $self.aliases.$op();
+        $self.datas.$op();
+        $self.ctor_owner.$op();
+        $self.effects.$op();
+        $self.op_index.$op();
+        $self.classes.$op();
+        $self.class_ranks.$op();
+        $self.instances.$op();
+        $self.reserved_predicates.$op();
+    };
+}
+
+impl Decls {
+    /// 書き換えの記録の印を置く(対話的な実行の入力の取り消し。[`Tc::snapshot`])。
+    ///
+    /// 表は書き換えを記録し、表でない欄は値を写す。
+    /// 手間は表の大きさに依らない(`class_order` は長さだけを覚える。足すだけだからである)。
+    pub fn begin(&mut self) -> DeclsMark {
+        each_table!(self, begin);
+        DeclsMark {
+            in_prelude: self.in_prelude,
+            current_module: self.current_module.clone(),
+            current_unit: self.current_unit,
+            class_order: self.class_order.len(),
+            class_count: self.class_count,
+            builtin_ops: self.builtin_ops.clone(),
+        }
+    }
+
+    /// 最も内側の印を外し、印の後の書き換えを残す。
+    pub fn commit(&mut self) {
+        each_table!(self, commit);
+    }
+
+    /// 印 `m` の時点に戻す。
+    pub fn rollback(&mut self, m: DeclsMark) {
+        each_table!(self, rollback);
+        self.in_prelude = m.in_prelude;
+        self.current_module = m.current_module;
+        self.current_unit = m.current_unit;
+        self.class_order.truncate(m.class_order);
+        self.class_count = m.class_count;
+        self.builtin_ops = m.builtin_ops;
+    }
 }
 
 /// 単位の印の付いた綴りの単位(Diktor の `unit_of_spelling`)。
@@ -304,7 +382,7 @@ impl Tc {
 
     /// 型の同義語を足す(Diktor の `add_con_synonym`)。
     pub(crate) fn add_con_synonym(&mut self, short: Oid, qual: Oid) {
-        let prev = self.d.con_synonyms.entry(short).or_default();
+        let prev = self.d.con_synonyms.get_or_insert_with(short, Vec::new);
         if !prev.contains(&qual) {
             prev.push(qual);
         }
@@ -342,7 +420,7 @@ impl Tc {
 
     /// 型の候補の手掛かりを足す(Diktor の `add_con_hint`)。
     pub(crate) fn add_con_hint(&mut self, short: Oid, qual: Oid) {
-        let prev = self.d.con_hints.entry(short).or_default();
+        let prev = self.d.con_hints.get_or_insert_with(short, Vec::new);
         if !prev.contains(&qual) {
             prev.push(qual);
         }
@@ -369,7 +447,7 @@ impl Tc {
 
     /// 値の同義語を足す(Diktor の `add_val_synonym`)。
     pub(crate) fn add_val_synonym(&mut self, short: Oid, qual: Oid) {
-        let prev = self.d.val_synonyms.entry(short).or_default();
+        let prev = self.d.val_synonyms.get_or_insert_with(short, Vec::new);
         if !prev.contains(&qual) {
             prev.push(qual);
         }
@@ -570,7 +648,7 @@ impl Tc {
         let ops: Vec<Oid> = info.ef_ops.iter().map(|(o, _)| *o).collect();
         self.d.effects.insert(name, Rc::new(info));
         for op in ops {
-            self.d.op_index.entry(op).or_default().push(name);
+            self.d.op_index.get_or_insert_with(op, Vec::new).push(name);
         }
     }
 

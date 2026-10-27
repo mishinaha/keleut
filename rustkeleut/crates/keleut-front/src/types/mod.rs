@@ -277,13 +277,13 @@ pub enum OutLine {
 
 /// 型検査の文脈である(Diktor の大域の状態のすべて)。
 ///
-/// 対話的な実行は、入力の前の写しを取り、受理しなかった入力の後で写しに戻す。
+/// 対話的な実行は、入力の前に印を取り、受理しなかった入力の後で印の時点に戻す(`Tc::snapshot`)。
 #[derive(Clone)]
 pub struct Tc {
     // ---- 通し番号と名前 ----
     next_oid: Oid,
-    intern_map: HashMap<Rc<str>, Oid>,
-    name_map: HashMap<Oid, Rc<str>>,
+    intern_map: fx::JMap<Rc<str>, Oid>,
+    name_map: fx::JMap<Oid, Rc<str>>,
 
     // ---- 型、セル、カインド ----
     tys: Vec<TyNode>,
@@ -320,12 +320,16 @@ pub struct Tc {
     pub(crate) resolved: fx::NodeMap<Resolved>,
     pub(crate) dict: fx::NodeMap<DictInfo>,
     pub(crate) holes_arena: Vec<Hole>,
+    /// セルと穴の書き換えの記録(対話的な実行の入力の取り消し。[`Tc::snapshot`])。
+    cell_trail: fx::Trail<TVar>,
+    hole_trail: fx::Trail<Hole>,
+    kind_trail: fx::Trail<KNode>,
 
     // ---- 宣言表(decls.ml) ----
     pub(crate) d: decls::Decls,
 
     // ---- 単一化(unify.ml) ----
-    pub(crate) rigid_tparams: HashMap<Oid, String>,
+    pub(crate) rigid_tparams: fx::JMap<Oid, String>,
     pub(crate) class_vars: Vec<(i64, Cell)>,
     class_seq: i64,
     pub(crate) literal_origins: Vec<(Cell, Oid, Span)>,
@@ -370,8 +374,8 @@ impl Tc {
     pub fn new() -> Tc {
         let mut tc = Tc {
             next_oid: 0,
-            intern_map: HashMap::default(),
-            name_map: HashMap::default(),
+            intern_map: fx::JMap::default(),
+            name_map: fx::JMap::default(),
             tys: Vec::new(),
             cells: Vec::new(),
             kinds: Vec::new(),
@@ -402,8 +406,11 @@ impl Tc {
             resolved: fx::NodeMap::default(),
             dict: fx::NodeMap::default(),
             holes_arena: Vec::new(),
+            cell_trail: fx::Trail::default(),
+            hole_trail: fx::Trail::default(),
+            kind_trail: fx::Trail::default(),
             d: decls::Decls::default(),
-            rigid_tparams: HashMap::default(),
+            rigid_tparams: fx::JMap::default(),
             class_vars: Vec::new(),
             class_seq: 0,
             literal_origins: Vec::new(),
@@ -541,6 +548,7 @@ impl Tc {
 
     /// セルを書き換える(Diktor の `set_tv`)。
     pub(crate) fn set_tv(&mut self, c: Cell, v: TVar) {
+        self.cell_trail.record(&self.cells, c.0 as usize);
         self.cells[c.0 as usize] = v;
     }
 
@@ -777,6 +785,7 @@ impl Tc {
             KNode::Var(id, Some(next)) => {
                 let k2 = self.kind_repr(next);
                 if k2 != next {
+                    self.kind_trail.record(&self.kinds, k.0 as usize);
                     self.kinds[k.0 as usize] = KNode::Var(id, Some(k2));
                 }
                 k2
@@ -796,8 +805,9 @@ impl Tc {
         }
     }
 
-    fn set_klink(&mut self, k: Kind, to: Kind) {
+    pub(crate) fn set_klink(&mut self, k: Kind, to: Kind) {
         if let KNode::Var(id, _) = self.kinds[k.0 as usize] {
+            self.kind_trail.record(&self.kinds, k.0 as usize);
             self.kinds[k.0 as usize] = KNode::Var(id, Some(to));
         }
     }
@@ -895,6 +905,12 @@ impl Tc {
 
     pub(crate) fn hole(&self, h: HoleId) -> &Hole {
         &self.holes_arena[h.0 as usize]
+    }
+
+    /// 穴の解を書く。
+    pub(crate) fn set_hole_sol(&mut self, h: HoleId, ev: Evidence) {
+        self.hole_trail.record(&self.holes_arena, h.0 as usize);
+        self.holes_arena[h.0 as usize].h_sol = Some(ev);
     }
 
     pub(crate) fn add_hole(&mut self, h: Hole) -> HoleId {

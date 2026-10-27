@@ -10,15 +10,20 @@
 //! プロンプトは、標準入力が端末のときだけ出す。
 //! 入力の終わりか `:quit` で 0 で終わり、型エラーや実行時エラーではセッションを終えない。
 //!
-//! 型検査は keleut-front の [`Session`] が行い、受理した入力ごとに KIR の単位を 1 つ足したプログラムを作る。
-//! 実行はインタプリタで行う。
+//! 型検査は keleut-front の [`Session`] が行い、型検査に通った入力ごとに KIR の単位を 1 つ、
+//! セッションのプログラムの後ろに足す。
+//! 実行はインタプリタで行い、実行時の状態(ヒープ、大域、インスタンス、形の表)はセッションの間ずっと持つ。
+//! 入力ごとに、足した単位だけを検証し(`kir::verify_extension`)、LIR に下ろして LIR のプログラムの後ろに足し
+//! (`keleut_lir::Extender`)、実行時の表を伸ばして([`Rt::grow`])、その単位の初期化だけを実行する。
+//! 前の入力の大域は、足した単位から同じ添字で読む。
+//! 1 つの入力の手間は、その入力の大きさにほぼ比例し、前の入力の数にはほぼ依らない
+//! (宣言したクラスの数と、module の中の値の数に比例する部分が残る。Diktor も同じである)。
+//! 実行は専用のスレッド(`keleut-mutator`)で行い、型検査のスレッドとは依頼と返事でやりとりする。
 //! 始めるとき(と `:reset` の後)に、プレリュードの初期化を 1 回実行する。
 //! 止まれば、Diktor と同じく診断を標準エラーに書いて、その誤りの終了状態(実行時エラーなら 3)で終わる。
-//! 実行時の状態は入力をまたいで持たず、入力ごとに、プレリュードと受理した前の入力の初期化を、
-//! 出力を捨てながらやり直してから、この入力の初期化を実行する(Keleut の評価は入力を読まないので、やり直しは同じ値を作る)。
-//! そのため、時間は入力の数の 2 乗で伸び、重い計算をした前の入力は、後の入力のたびに計算し直す。
-//! やり直しが止まったら、内部の誤りとして 70 で終わる。
 //! 実行時エラーで止まった入力が止まるまでに書いた出力は残す(LangSpec §6.6、§18.5)。
+//! その入力は捨てる(後の入力から名前が見えない)。
+//! その入力の単位はプログラムに残すが、単位が足した大域とインスタンスの値は捨て、回収の根から外す。
 //!
 //! `OPTIONS` は次のとおりである。
 //!
@@ -34,13 +39,15 @@ use crate::exit;
 use crate::front_cmd::{MAX_STACK_BYTES, parse_bytes};
 use keleut_front::types::check::{Stop as FrontStop, check_limits, on_check_stack};
 use keleut_front::types::session::{
-    Layout, Layouts, Outcome, Parsed, Session, SessionOptions, Shown, StartError,
+    Finish, Layout, Layouts, Outcome, Parsed, Session, SessionOptions, Shown, StartError,
 };
+use keleut_interp::Interp;
 use keleut_rt::ctx::display_name;
 use keleut_rt::effect::Pending;
 use keleut_rt::value::{self, ImmKind, Kind};
 use keleut_rt::{Rt, Stop, Word};
 use std::io::{BufRead, IsTerminal, Write};
+use std::sync::mpsc;
 
 /// 使い方である。
 pub const USAGE: &str = "\
@@ -57,8 +64,6 @@ options:
   --backend B, --tier MODE, --frontend F, --strict-exhaustive
                          accepted for kconform and diktor --repl; no effect
                          (inputs always run on the interpreter)
-note: every input re-runs the prelude and all earlier accepted inputs, so the time
-grows with the square of the number of inputs
 ";
 
 /// プロセスが始まったときに標準入力(fd 0)が閉じていたかどうかである。
@@ -91,6 +96,7 @@ mod stdin_probe {
     static PROBE: extern "C" fn() = probe;
 }
 
+#[derive(Clone)]
 struct Options {
     session: SessionOptions,
     front_stack: Option<usize>,
@@ -212,8 +218,8 @@ enum Exec {
     Failed,
     /// 標準出力に書けない(診断は標準エラーに書いた)。
     Io,
-    /// プレリュードの初期化か、前の入力の初期化のやり直しが止まったか、
-    /// KIR の検証、LIR への下ろし、実行時の環境の準備が内部の誤りか資源の不足で失敗したか、
+    /// プレリュードの初期化が止まったか、
+    /// KIR の検証、LIR への下ろし、実行時の表の準備が内部の誤りか資源の不足で失敗したか、
     /// 実行のスレッドを作れないか落ちた。
     /// 診断は標準エラーに書いた。セッションをこの終了状態で終える。
     Exit(u8),
@@ -222,9 +228,9 @@ enum Exec {
 /// 実行の種類である。
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
-    /// 始めるときのプレリュードの初期化。すべての単位の出力を出し、止まればセッションを終える。
+    /// 始めるときのプレリュードの初期化。止まればセッションを終える。
     Start,
-    /// 入力の実行。前の単位の出力は捨て、最後の単位(この入力)の結果を表示する。
+    /// 入力の実行。足した単位(この入力)の初期化を実行し、結果を表示する。
     Input,
 }
 
@@ -274,9 +280,10 @@ fn session_loop(o: &Options) -> u8 {
         Err(e) => return front_stop(e),
     };
     let mut out = Output { buf: Vec::new() };
-    if let Err(c) = start_run(o, &mut sess, &mut out) {
-        return c;
-    }
+    let mut live = match start_run(o, &mut sess, &mut out) {
+        Ok(l) => l,
+        Err(c) => return c,
+    };
     if STDIN_CLOSED.load(std::sync::atomic::Ordering::Relaxed) {
         let e = std::io::Error::from_raw_os_error(9);
         eprintln!(
@@ -339,13 +346,16 @@ fn session_loop(o: &Options) -> u8 {
                     Err(c) => c,
                 };
             } else if cmd == b":reset" {
+                // 前の実行時の状態を捨ててから、プレリュードだけのセッションを始め直す。
+                drop(live);
                 if let Err(e) = sess.reset() {
                     let _ = out.flush();
                     return front_stop(e);
                 }
-                if let Err(c) = start_run(o, &mut sess, &mut out) {
-                    return c;
-                }
+                live = match start_run(o, &mut sess, &mut out) {
+                    Ok(l) => l,
+                    Err(c) => return c,
+                };
             } else if cmd.len() > 6 && &cmd[..6] == b":type " {
                 let s = sess.type_of(&cmd[6..], line_no, 6);
                 out.line(&s);
@@ -368,7 +378,7 @@ fn session_loop(o: &Options) -> u8 {
                 }
                 Parsed::Complete(ds) => {
                     buf.clear();
-                    match process(o, &mut sess, ds, &mut out) {
+                    match process(&mut live, &mut sess, ds, &mut out) {
                         Ok(()) => {}
                         Err(c) => return c,
                     }
@@ -400,42 +410,336 @@ fn front_stop(e: StartError) -> u8 {
             eprintln!("{m}");
             3
         }
+        StartError::Emit(m) => {
+            eprintln!("keleut: 内部エラー: プレリュードを初期化できません: {m}");
+            70
+        }
+    }
+}
+
+/// 実行のスレッドへの依頼。
+struct Job {
+    /// セッションのプログラム。最後の単位(始めるときはプレリュードまでの単位)を足したもの。
+    program: Box<kir::Program>,
+    shown: Vec<Shown>,
+    layouts: Layouts,
+    mode: Mode,
+}
+
+/// 実行のスレッドからの返事。
+struct Reply {
+    /// 依頼で渡したプログラム(型検査の側に返す)。
+    program: Box<kir::Program>,
+    exec: Exec,
+    /// LIR に下ろして足した関数の数と、LIR の関数の総数(`KELEUT_REPL_STATS`)。
+    lir: (usize, usize),
+}
+
+/// 生きている実行時の状態を持つ、実行のスレッドとの窓口である。
+///
+/// 捨てると依頼の口を閉じ、スレッドの終わりを待つ(ヒープと表を手放す)。
+struct Live {
+    jobs: Option<mpsc::Sender<Job>>,
+    replies: mpsc::Receiver<Reply>,
+    thread: Option<std::thread::JoinHandle<()>>,
+    /// 足した単位の KIR の検証の状態。
+    verified: kir::verify::Extension,
+}
+
+impl Drop for Live {
+    fn drop(&mut self) {
+        self.jobs = None;
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// 実行の依頼の結果。
+enum Ran {
+    /// 実行した(またはセッションを終える誤りで止まった)。
+    Ran(Exec),
+    /// 入れ子が KIR の限度 `N_nest` を超えたので、実行しなかった。標準出力に書く 1 行の診断。
+    Limit(String),
+}
+
+impl Live {
+    /// 実行のスレッドを作る。作れなければ、診断を標準エラーに書いて 70 を返す(`keleut run` と同じ)。
+    fn spawn(o: &Options) -> Result<Live, u8> {
+        let native = keleut_rt::native_stack_for(o.max_depth);
+        let size = usize::try_from(native).unwrap_or(usize::MAX);
+        let (jtx, jrx) = mpsc::channel::<Job>();
+        let (rtx, rrx) = mpsc::channel::<Reply>();
+        let oc = o.clone();
+        let h = std::thread::Builder::new()
+            .name("keleut-mutator".to_string())
+            .stack_size(size)
+            .spawn(move || mutator(&oc, native, jrx, rtx));
+        match h {
+            Ok(t) => Ok(Live {
+                jobs: Some(jtx),
+                replies: rrx,
+                thread: Some(t),
+                verified: kir::verify::Extension::new(),
+            }),
+            Err(e) => {
+                eprintln!(
+                    "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
+                );
+                Err(70)
+            }
+        }
+    }
+
+    /// プログラムに足した単位を検証し、実行のスレッドで実行する。
+    ///
+    /// 入れ子が KIR の限度 `N_nest` を超えた単位は、処理系の限度として実行しない([`Ran::Limit`])。
+    /// `keleut run --frontend rust` が KIR の書き出しで止まるのと同じ限度である。
+    /// それ以外の検証の失敗は内部の誤りなので、診断を標準エラーに書いて [`Exec::Exit`] の 70 を返す。
+    /// プログラムは、どの場合も返す。
+    fn run(
+        &mut self,
+        program: Box<kir::Program>,
+        shown: Vec<Shown>,
+        layouts: Layouts,
+        mode: Mode,
+    ) -> (Box<kir::Program>, Ran) {
+        let limits = kir::Limits::default();
+        let before = self.verified.done();
+        if let Err(e) = kir::verify_extension(&mut self.verified, &program, &limits) {
+            if e.kind() == kir::ErrorKind::Limit {
+                // 書き手の診断を優先する(`keleut run` の `program_for_run` と同じ文面にする)。
+                let msg = match kir::write_kir_with(&program, &limits) {
+                    Err(w) if w.kind() == kir::ErrorKind::WriteLimit => w.message().to_string(),
+                    _ => e.message().to_string(),
+                };
+                return (program, Ran::Limit(format!("<stdin>: {msg}")));
+            }
+            eprintln!(
+                "keleut: 内部エラー: KIR の検証に失敗しました: {}",
+                e.message()
+            );
+            return (program, Ran::Ran(Exec::Exit(70)));
+        }
+        let Some(jobs) = &self.jobs else {
+            return (program, Ran::Ran(Exec::Exit(70)));
+        };
+        let job = Job {
+            program,
+            shown,
+            layouts,
+            mode,
+        };
+        if let Err(mpsc::SendError(job)) = jobs.send(job) {
+            eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+            return (job.program, Ran::Ran(Exec::Exit(70)));
+        }
+        match self.replies.recv() {
+            Ok(r) => {
+                if std::env::var_os("KELEUT_REPL_STATS").is_some() {
+                    let after = self.verified.done();
+                    eprintln!(
+                        "keleut-repl-stats: kir_functions=+{}/{} kir_globals=+{}/{} lir_functions=+{}/{}",
+                        after.functions - before.functions,
+                        after.functions,
+                        after.globals - before.globals,
+                        after.globals,
+                        r.lir.0,
+                        r.lir.1
+                    );
+                }
+                (r.program, Ran::Ran(r.exec))
+            }
+            Err(_) => {
+                // スレッドが落ちて、プログラムも失われた。セッションを終えるので、空のプログラムを返す。
+                eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+                self.jobs = None;
+                let empty = kir::Program {
+                    version: kir::VERSION,
+                    units: Vec::new(),
+                    types: Vec::new(),
+                    effects: Vec::new(),
+                    classes: Vec::new(),
+                    instances: Vec::new(),
+                    globals: Vec::new(),
+                    functions: Vec::new(),
+                    nodes: kir::Nodes::default(),
+                };
+                (Box::new(empty), Ran::Ran(Exec::Exit(70)))
+            }
+        }
+    }
+}
+
+/// 実行時の文脈を使わない間に付けておく、空のプログラム。
+static PARKED: keleut_lir::Program = keleut_lir::Program::empty();
+
+/// 実行のスレッドの本体。
+///
+/// 依頼ごとに、足した単位を LIR に下ろして LIR のプログラムの後ろに足し、インタプリタをそのプログラムに付け替え、
+/// 実行時の表を伸ばして、足した単位の初期化を実行する。
+/// 依頼の間は、インタプリタを空のプログラムに付け替えておく(LIR のプログラムに単位を足せるようにする)。
+fn mutator(o: &Options, native: u64, jobs: mpsc::Receiver<Job>, replies: mpsc::Sender<Reply>) {
+    let x = 0u8;
+    let sp0 = std::hint::black_box(&x) as *const u8 as usize;
+    let low = sp0
+        .saturating_sub(usize::try_from(native).unwrap_or(usize::MAX))
+        .saturating_add(keleut_interp::interp::NATIVE_MARGIN);
+    let mut lp = keleut_lir::Program::empty();
+    let mut ext = keleut_lir::Extender::new();
+    let mut parked: Option<Interp<'static>> = None;
+    while let Ok(job) = jobs.recv() {
+        let f0 = lp.funcs.len();
+        let exec = run_job(o, low, &job, &mut lp, &mut ext, &mut parked);
+        let end = matches!(exec, Exec::Exit(_) | Exec::Io);
+        let n = lp.funcs.len();
+        let reply = Reply {
+            program: job.program,
+            exec,
+            lir: (n.saturating_sub(f0), n),
+        };
+        if replies.send(reply).is_err() || end {
+            break;
+        }
+    }
+}
+
+/// 1 つの依頼を実行する([`mutator`])。
+fn run_job(
+    o: &Options,
+    low: usize,
+    job: &Job,
+    lp: &mut keleut_lir::Program,
+    ext: &mut keleut_lir::Extender,
+    parked: &mut Option<Interp<'static>>,
+) -> Exec {
+    // 実行時がこれまでに作った形を、LIR の形の表の後ろに同じ番号で足す。
+    if let Some(it) = parked.as_ref() {
+        let n = it.rt.shapes.count() as usize;
+        for i in lp.shapes.len()..n {
+            let labels = it.rt.shapes.labels(keleut_rtcore::ShapeId(i as u32));
+            lp.shapes
+                .push(labels.iter().map(|&l| keleut_lir::LabelId(l)).collect());
+        }
+    }
+    let init0 = lp.init.len();
+    if let Err(e) = ext.extend(&job.program, lp, kir::N_NEST, o.yield_prune) {
+        eprintln!("keleut: {e}");
+        *parked = None;
+        return Exec::Exit(70);
+    }
+    let lp: &keleut_lir::Program = lp;
+    // この単位が足す大域とインスタンスの最初の添字(実行時エラーで止まったときに値を捨てる)。
+    let base = parked
+        .as_ref()
+        .map(|it| (it.rt.globals.len(), it.rt.inst_values.len()));
+    let mut it = match parked.take() {
+        Some(it) => {
+            let mut it = it.rebind(lp);
+            if let Err(e) = it.rt.grow() {
+                // 表を伸ばす途中の内部の誤りか、メモリの不足である。入力の誤りではないので、セッションを終える。
+                eprint!("{}", String::from_utf8_lossy(&e.message()));
+                return Exec::Exit(70);
+            }
+            it
+        }
+        None => match Rt::new_with(lp, o.max_depth, o.gc_stress) {
+            Ok(rt) => {
+                let mut it = Interp::new(rt, low);
+                it.rt.out.set_log_to_stdout(true);
+                it
+            }
+            Err(e) => {
+                eprint!("{}", String::from_utf8_lossy(&e.message()));
+                return Exec::Exit(70);
+            }
+        },
+    };
+    let r = exec(
+        &mut it,
+        lp,
+        &job.program,
+        &lp.init[init0..],
+        &job.shown,
+        &job.layouts,
+    );
+    let exec = match r {
+        Ok(()) => match it.rt.out.flush() {
+            Ok(()) => Exec::Done,
+            Err(e) => io_failed(&mut it, Stop::from(e)),
+        },
+        Err(e) if job.mode == Mode::Start => {
+            // プレリュードの初期化が止まった(Diktor は標準エラーに書いて終わる)。
+            it.rt.out.eprint(&e.message());
+            Exec::Exit(e.exit_code())
+        }
+        Err(e @ (Stop::Io(_) | Stop::IoAbort(_))) => io_failed(&mut it, e),
+        Err(e) => {
+            // 止まるまでに書いた出力を残し、その後ろに診断を書く(Diktor の `runtime_message`)。
+            match it.rt.out.flush() {
+                Err(w) => io_failed(&mut it, Stop::from(w)),
+                Ok(()) => {
+                    let mut w = std::io::stdout().lock();
+                    match w.write_all(&e.message()).and_then(|()| w.flush()) {
+                        Ok(()) => Exec::Failed,
+                        Err(err) => {
+                            eprintln!(
+                                "keleut: 標準出力に書き出せません: {}",
+                                crate::front_cmd::io_msg(&err)
+                            );
+                            Exec::Io
+                        }
+                    }
+                }
+            }
+        }
+    };
+    if let (Exec::Failed, Mode::Input, Some((g0, i0))) = (&exec, job.mode, base) {
+        drop_unit_values(&mut it, g0, i0);
+    }
+    *parked = Some(it.rebind(&PARKED));
+    exec
+}
+
+/// 実行時エラーで止まった入力の単位の、大域とインスタンスの値を捨てる。
+///
+/// 型検査の側がその入力の名前とインスタンスを捨てるので、後の入力はこれらの値を指せない。
+/// 参照セルはトップレベルに置けない(`Heap[h]` を導入するのは `run` だけである)ので、
+/// 前の入力の値からこれらの値に届くことも無い。
+/// 値を Unit にして初期化前に戻し、回収の根から外す(`g0` と `i0` は [`Rt::grow`] で伸ばす前の表の長さ)。
+fn drop_unit_values(it: &mut Interp<'_>, g0: usize, i0: usize) {
+    let rt = &mut it.rt;
+    for g in g0..rt.globals.len() {
+        rt.globals[g] = Word::UNIT;
+        rt.global_init[g] = false;
+    }
+    for i in i0..rt.inst_values.len() {
+        rt.inst_values[i].fill(Word::UNIT);
+        rt.inst_init[i] = false;
     }
 }
 
 /// プレリュードの初期化を 1 回実行する(Diktor の `repl` の `start` の `Interp.start_session`)。
 ///
+/// 実行のスレッドを作り、組み込みの単位とプレリュードの単位からなるプログラムを下ろして初期化する。
 /// プレリュードの出力は標準出力に出す。
 /// 止まれば、診断を標準エラーに書いた後の終了状態を `Err` で返す。
-fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<(), u8> {
-    if o.session.no_prelude {
-        return Ok(());
-    }
-    let (program, shown, layouts) = match sess.check(Vec::new()) {
-        Outcome::Run {
-            program,
-            shown,
-            layouts,
-            ..
-        } => (program, shown, layouts),
-        Outcome::Rejected(lines) => {
-            out.flush()?;
-            for l in lines {
-                eprintln!("keleut: 内部エラー: プレリュードを初期化できません: {l}");
-            }
-            return Err(70);
-        }
-    };
+fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<Live, u8> {
     out.flush()?;
-    let r = run_input(o, &program, &shown, &layouts, Mode::Start);
-    sess.finish(false);
+    let mut live = Live::spawn(o)?;
+    let Some(program) = sess.take_program() else {
+        eprintln!("keleut: 内部エラー: プレリュードを初期化できません");
+        return Err(70);
+    };
+    let (program, r) = live.run(program, Vec::new(), Layouts::default(), Mode::Start);
+    sess.put_program(program);
     match r {
-        Ok(Exec::Done) => Ok(()),
-        Ok(Exec::Io) => Err(exit::IO),
-        Ok(Exec::Exit(c)) => Err(c),
-        Ok(Exec::Failed) => Err(70),
-        Err(msg) => {
-            eprintln!("{msg}");
+        Ran::Ran(Exec::Done) => Ok(live),
+        Ran::Ran(Exec::Io) => Err(exit::IO),
+        Ran::Ran(Exec::Exit(c)) => Err(c),
+        Ran::Ran(Exec::Failed) => Err(70),
+        Ran::Limit(msg) => {
+            eprintln!("keleut: 内部エラー: プレリュードを初期化できません: {msg}");
             Err(70)
         }
     }
@@ -443,7 +747,7 @@ fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<(), u8
 
 /// 1 つの入力を型検査して実行する(Diktor の `repl` の `process`)。
 fn process(
-    o: &Options,
+    live: &mut Live,
     sess: &mut Session,
     ds: Vec<keleut_front::ast::Decl>,
     out: &mut Output,
@@ -467,169 +771,36 @@ fn process(
             (program, shown, layouts)
         }
     };
-    out.flush()?;
-    let accepted = match run_input(o, &program, &shown, &layouts, Mode::Input) {
-        Ok(Exec::Done) => true,
-        Ok(Exec::Failed) => false,
-        Ok(Exec::Io) => {
-            sess.finish(false);
-            return Err(exit::IO);
-        }
-        Ok(Exec::Exit(c)) => {
-            sess.finish(false);
-            return Err(c);
-        }
-        Err(msg) => {
+    if let Err(c) = out.flush() {
+        sess.finish(program, Finish::Unrun);
+        return Err(c);
+    }
+    let (program, r) = live.run(program, shown, layouts, Mode::Input);
+    let (finish, end) = match r {
+        Ran::Ran(Exec::Done) => (Finish::Accepted, None),
+        Ran::Ran(Exec::Failed) => (Finish::Failed, None),
+        Ran::Ran(Exec::Io) => (Finish::Failed, Some(exit::IO)),
+        Ran::Ran(Exec::Exit(c)) => (Finish::Failed, Some(c)),
+        Ran::Limit(msg) => {
             out.line(&msg);
-            false
+            (Finish::Unrun, None)
         }
     };
-    sess.finish(accepted);
-    Ok(())
-}
-
-/// KIR を検証して LIR に下ろし、インタプリタの専用のスレッドで実行する。
-///
-/// 入れ子が KIR の限度 `N_nest` を超えた入力は、処理系の限度として受理しない。
-/// その診断(標準出力に書く 1 行)を `Err` で返す。
-/// `keleut run --frontend rust` が KIR の書き出しで止まるのと同じ限度である。
-/// それ以外の検証と下ろしの失敗は内部の誤りか資源の不足なので、
-/// 診断を標準エラーに書いて [`Exec::Exit`] の 70 を返す(`keleut run` と同じ)。
-fn run_input(
-    o: &Options,
-    program: &kir::Program,
-    shown: &[Shown],
-    layouts: &Layouts,
-    mode: Mode,
-) -> Result<Exec, String> {
-    let limits = kir::Limits::default();
-    if let Err(e) = kir::verify_with(program, &limits) {
-        if e.kind() == kir::ErrorKind::Limit {
-            // 書き手の診断を優先する(`keleut run` の `program_for_run` と同じ文面にする)。
-            let msg = match kir::write_kir_with(program, &limits) {
-                Err(w) if w.kind() == kir::ErrorKind::WriteLimit => w.message().to_string(),
-                _ => e.message().to_string(),
-            };
-            return Err(format!("<stdin>: {msg}"));
-        }
-        eprintln!(
-            "keleut: 内部エラー: KIR の検証に失敗しました: {}",
-            e.message()
-        );
-        return Ok(Exec::Exit(70));
-    }
-    let lp = match keleut_lir::lower_opts(program, kir::N_NEST, o.yield_prune) {
-        Ok(lp) => lp,
-        Err(e) => {
-            eprintln!("keleut: {e}");
-            return Ok(Exec::Exit(70));
-        }
-    };
-    let native = keleut_rt::native_stack_for(o.max_depth);
-    let size = usize::try_from(native).unwrap_or(usize::MAX);
-    std::thread::scope(|s| {
-        let h = std::thread::Builder::new()
-            .name("keleut-mutator".to_string())
-            .stack_size(size)
-            .spawn_scoped(s, || {
-                on_thread(o, &lp, program, shown, layouts, native, mode)
-            });
-        // スレッドを作れないか、スレッドが落ちたときは、診断を標準エラーに書いてセッションを 70 で終える
-        // (`keleut run` と同じ)。
-        match h {
-            Ok(h) => Ok(h.join().unwrap_or_else(|_| {
-                eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
-                Exec::Exit(70)
-            })),
-            Err(e) => {
-                eprintln!(
-                    "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
-                );
-                Ok(Exec::Exit(70))
-            }
-        }
-    })
-}
-
-fn on_thread(
-    o: &Options,
-    lp: &keleut_lir::Program,
-    kp: &kir::Program,
-    shown: &[Shown],
-    layouts: &Layouts,
-    native: u64,
-    mode: Mode,
-) -> Exec {
-    let x = 0u8;
-    let sp0 = std::hint::black_box(&x) as *const u8 as usize;
-    let low = sp0
-        .saturating_sub(usize::try_from(native).unwrap_or(usize::MAX))
-        .saturating_add(keleut_interp::interp::NATIVE_MARGIN);
-    let rt = match Rt::new_with(lp, o.max_depth, o.gc_stress) {
-        Ok(rt) => rt,
-        Err(e) => {
-            // 表を作る途中の内部の誤りか、メモリの不足である。入力の誤りではないので、セッションを終える。
-            eprint!("{}", String::from_utf8_lossy(&e.message()));
-            return Exec::Exit(70);
-        }
-    };
-    let mut it = keleut_interp::Interp::new(rt, low);
-    it.rt.out.set_log_to_stdout(true);
-    let r = exec(&mut it, lp, kp, shown, layouts, mode);
-    it.rt.out.set_discard(false);
-    match r {
-        Ok(()) => match it.rt.out.flush() {
-            Ok(()) => Exec::Done,
-            Err(e) => io_failed(&mut it, Stop::from(e)),
-        },
-        Err(Failure::Earlier(e)) => {
-            // プレリュードの初期化が止まった(Diktor は標準エラーに書いて終わる)か、
-            // 前の入力のやり直しが止まった(起こらないはずの内部の誤り)。
-            let (msg, code) = match mode {
-                Mode::Start => (e.message(), e.exit_code()),
-                Mode::Input => (
-                    format!(
-                        "keleut: 内部エラー: 前の入力の初期化をやり直せませんでした: {}\n",
-                        String::from_utf8_lossy(&e.message()).trim_end()
-                    )
-                    .into_bytes(),
-                    70,
-                ),
-            };
-            it.rt.out.eprint(&msg);
-            Exec::Exit(code)
-        }
-        Err(Failure::Last(e)) => match e {
-            Stop::Io(_) | Stop::IoAbort(_) => io_failed(&mut it, e),
-            e => {
-                // 止まるまでに書いた出力を残し、その後ろに診断を書く(Diktor の `runtime_message`)。
-                if let Err(w) = it.rt.out.flush() {
-                    return io_failed(&mut it, Stop::from(w));
-                }
-                let mut w = std::io::stdout().lock();
-                match w.write_all(&e.message()).and_then(|()| w.flush()) {
-                    Ok(()) => Exec::Failed,
-                    Err(err) => {
-                        eprintln!(
-                            "keleut: 標準出力に書き出せません: {}",
-                            crate::front_cmd::io_msg(&err)
-                        );
-                        Exec::Io
-                    }
-                }
-            }
-        },
+    sess.finish(program, finish);
+    match end {
+        Some(c) => Err(c),
+        None => Ok(()),
     }
 }
 
-fn io_failed(it: &mut keleut_interp::Interp<'_>, e: Stop) -> Exec {
+fn io_failed(it: &mut Interp<'_>, e: Stop) -> Exec {
     it.rt.out.eprint(&e.message());
     Exec::Io
 }
 
 /// 関数 `f` を呼ぶ。最上位に届いた状態語は、その誤りにする(`keleut_interp` の `run_init` と同じ)。
 fn call(
-    it: &mut keleut_interp::Interp<'_>,
+    it: &mut Interp<'_>,
     f: keleut_lir::FuncId,
     env: Word,
     args: &[Word],
@@ -652,61 +823,48 @@ fn call(
 }
 
 /// 止まった呼び出しの後で、次の呼び出しができる状態に戻す。
-fn reset(it: &mut keleut_interp::Interp<'_>) {
+fn reset(it: &mut Interp<'_>) {
     it.rt.pending = Pending::None;
     it.rt.limit = it.rt.max_depth;
     it.rt.depth = 0;
     it.rt.chain = Word::UNIT;
 }
 
-/// [`exec`] が止まった場所である。
-enum Failure {
-    /// 最後の単位(この入力)の初期化か、結果の表示で止まった。
-    Last(Stop),
-    /// 最後の単位より前の単位で止まった([`Mode::Start`] ではすべての単位)。
-    Earlier(Stop),
-}
-
-/// 単位の初期化を順に実行し、最後の単位(この入力)の結果を表示する。
-///
-/// [`Mode::Input`] では、最後の単位より前の単位の出力は捨てる。
+/// 足した単位の初期化 `inits` を順に実行し、結果を表示する。
 fn exec(
-    it: &mut keleut_interp::Interp<'_>,
+    it: &mut Interp<'_>,
     lp: &keleut_lir::Program,
     kp: &kir::Program,
+    inits: &[keleut_lir::FuncId],
     shown: &[Shown],
     layouts: &Layouts,
-    mode: Mode,
-) -> Result<(), Failure> {
-    let n = lp.init.len();
-    for (i, &f) in lp.init.iter().enumerate() {
-        let last = i + 1 == n && mode == Mode::Input;
-        it.rt.out.set_discard(!last && mode == Mode::Input);
-        match call(it, f, Word(0), &[]) {
-            Ok(_) => {}
-            Err(e) if last || (e.is_fatal() && mode == Mode::Input) => {
-                return Err(Failure::Last(e));
-            }
-            Err(e) => return Err(Failure::Earlier(e)),
-        }
+) -> Result<(), Stop> {
+    for &f in inits {
+        call(it, f, Word(0), &[])?;
     }
-    it.rt.out.set_discard(false);
     for s in shown {
         if s.unit_exp {
             continue;
         }
-        let text = display(it, lp, kp, s, layouts).map_err(Failure::Last)?;
+        let text = display(it, lp, kp, s, layouts)?;
         let mut line = Vec::with_capacity(s.label.len() + text.len() + 4);
         line.extend_from_slice(s.label.as_bytes());
         line.extend_from_slice(b" = ");
         line.extend_from_slice(&text);
         line.push(b'\n');
-        it.rt
-            .out
-            .write(&line)
-            .map_err(|e| Failure::Last(Stop::from(e)))?;
+        it.rt.out.write(&line).map_err(Stop::from)?;
     }
     Ok(())
+}
+
+/// KIR の大域 `g` が辞書を受け取る関数なら、その辞書の数。
+fn dict_count(kp: &kir::Program, g: usize) -> usize {
+    match kp.globals.get(g).map(|x| &x.kind) {
+        Some(kir::GlobalKind::Dictabs(f)) => {
+            kp.functions.get(f.index()).map_or(0, |f| f.dicts as usize)
+        }
+        _ => 0,
+    }
 }
 
 /// 束縛の値の表示(Diktor の `show_value`)。
@@ -717,7 +875,7 @@ fn exec(
 /// 型の頭が newtype で `Show` を満たす値は、`$show` の関数で文字列にする。
 /// その関数が止まったら、入力を受理しない。
 fn display(
-    it: &mut keleut_interp::Interp<'_>,
+    it: &mut Interp<'_>,
     lp: &keleut_lir::Program,
     kp: &kir::Program,
     s: &Shown,
@@ -727,7 +885,7 @@ fn display(
     let v = it.rt.globals[g];
     let forced = match &lp.globals[g].kind {
         keleut_lir::GlobalKind::Dictabs(f) => {
-            let n = kp.functions[f.index()].dicts as usize;
+            let n = dict_count(kp, g);
             match call(it, *f, v, &vec![Word::UNIT; n]) {
                 Ok(w) => Some(w),
                 Err(e) if e.is_fatal() || matches!(e, Stop::Io(_)) => return Err(e),
@@ -751,7 +909,7 @@ fn display(
 
 /// `$show` の関数を、根の枠の `mark` 番の値に適用する。
 fn show_call(
-    it: &mut keleut_interp::Interp<'_>,
+    it: &mut Interp<'_>,
     lp: &keleut_lir::Program,
     kp: &kir::Program,
     sg: usize,
@@ -764,7 +922,7 @@ fn show_call(
             call(it, *func, f, &[v])?
         }
         keleut_lir::GlobalKind::Dictabs(func) => {
-            let n = kp.functions[func.index()].dicts as usize;
+            let n = dict_count(kp, sg);
             let c = call(it, *func, f, &vec![Word::UNIT; n])?;
             let v = Word(it.rt.roots.get(mark));
             let cf = it.rt.closure_func(c);

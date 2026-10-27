@@ -22,7 +22,7 @@
 
 use super::check::{CheckOptions, Checked};
 use super::exhaust::{ocaml_int32_opt, ocaml_int64_opt};
-use super::fx::HashMap;
+use super::fx::{HashMap, JMap};
 use super::pmap::PMap;
 use super::{DKey, DictInfo, Evidence, GRef, HoleId, Oid, R, Resolved, Tc, Ty, TyNode, bug};
 use crate::ast::{BinOp, Clause, TypeExpKind};
@@ -158,7 +158,6 @@ fn strip_annot(p: &Pat) -> &Pat {
 
 /// 大域の種類(関数は記号で指し、最後に添字に直す)。
 enum PendingGlobal {
-    Builtin,
     Extern { abi: Abi, name: String, dicts: u32 },
     Fn(String),
     Dictabs(String),
@@ -196,30 +195,48 @@ struct PendingInstance {
 #[derive(Default)]
 struct Tables {
     /// 型の名前の oid から記号へ。
-    type_syms: HashMap<Oid, String>,
-    effect_syms: HashMap<Oid, String>,
-    class_syms: HashMap<Oid, String>,
+    type_syms: JMap<Oid, String>,
+    effect_syms: JMap<Oid, String>,
+    class_syms: JMap<Oid, String>,
+    /// 記号を置いたが、まだ添字を決めていない名前([`W::add_units`] が添字を決めて空にする)。
+    new_syms: [Vec<Oid>; 3],
     /// 名前の oid から添字へ(記号の最初の項目の添字)。
-    type_ids: HashMap<Oid, TypeId>,
-    effect_ids: HashMap<Oid, EffectId>,
-    class_ids: HashMap<Oid, ClassId>,
+    type_ids: JMap<Oid, TypeId>,
+    effect_ids: JMap<Oid, EffectId>,
+    class_ids: JMap<Oid, ClassId>,
     /// (持ち主の添字, 短い名前) から持ち主の中の位置へ。
     ctor_idx: HashMap<(u32, String), u32>,
     op_idx: HashMap<(u32, String), u32>,
     meth_idx: HashMap<(u32, String), u32>,
-    instances: HashMap<(Oid, Oid), InstanceId>,
+    instances: JMap<(Oid, Oid), InstanceId>,
     globals: HashMap<(NodeId, String), GlobalId>,
     /// 組み込みの値の名前から添字へ。
     builtin_globals: HashMap<String, GlobalId>,
 }
 
-/// 記号の列から、記号ごとの最初の位置を引く表を作る(Diktor の `index_of`)。
-fn first_index<'s>(syms: impl Iterator<Item = &'s str>) -> HashMap<&'s str, u32> {
-    let mut m = HashMap::default();
-    for (i, s) in syms.enumerate() {
-        m.entry(s).or_insert(i as u32);
+/// [`Tables`] の、印で戻す表に同じ操作をする([`ReplWriter::mark`])。
+macro_rules! each_marked {
+    ($tb:expr, $op:ident) => {
+        $tb.type_syms.$op();
+        $tb.effect_syms.$op();
+        $tb.class_syms.$op();
+        $tb.type_ids.$op();
+        $tb.effect_ids.$op();
+        $tb.class_ids.$op();
+        $tb.instances.$op();
+    };
+}
+
+impl Tables {
+    /// 名前 `o` の記号を置く。`k` は型(0)、エフェクト(1)、クラス(2)である。
+    fn set_sym(&mut self, k: usize, o: Oid, s: String) {
+        match k {
+            0 => self.type_syms.insert(o, s),
+            1 => self.effect_syms.insert(o, s),
+            _ => self.class_syms.insert(o, s),
+        };
+        self.new_syms[k].push(o);
     }
-    m
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +396,12 @@ struct W<'t> {
     repl_print: Option<ReplPrint>,
     /// 対話的な実行の入力の単位を書き出した結果。
     repl_out: ReplOut,
+    /// この書き出しで足す大域、インスタンス、関数の最初の添字(前の書き出しが置いた項目の数)。
+    gbase: u32,
+    ibase: u32,
+    fbase: u32,
+    /// 型、エフェクト、クラスの記号から添字へ([`ReplWriter`] の同名の欄)。
+    index: [HashMap<String, u32>; 3],
 }
 
 /// 対話的な実行で `Print` を処理するハンドラ式が使う、エフェクトと操作の位置である。
@@ -397,20 +420,211 @@ pub fn program(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<kir::Program> {
 
 /// [`program`] と同じで、対話的な実行の入力の単位([`UnitSrc::repl`])を書き出した結果も返す。
 pub fn program_repl(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<(kir::Program, ReplOut)> {
-    let mut w = W {
-        tc,
-        tb: Tables::default(),
-        nodes: Nodes::default(),
-        root: Root::default(),
-        provisional: 0,
-        final_cap: HashMap::default(),
+    let mut rw = ReplWriter::default();
+    let mut kp = empty_program();
+    let mut w = rw.writer(tc, &mut kp);
+    w.builtins(&mut kp);
+    let r = w.add_units(&mut kp, units);
+    let out = rw.restore(w, &mut kp);
+    r?;
+    Ok((kp, out))
+}
+
+/// 表の空の KIR のプログラム。
+fn empty_program() -> kir::Program {
+    kir::Program {
+        version: kir::VERSION,
+        units: Vec::new(),
+        types: Vec::new(),
+        effects: Vec::new(),
+        classes: Vec::new(),
+        instances: Vec::new(),
+        globals: Vec::new(),
         functions: Vec::new(),
-        fn_first: HashMap::default(),
-        repl_print: None,
-        repl_out: ReplOut::default(),
-    };
-    let p = w.program(units)?;
-    Ok((p, w.repl_out))
+        nodes: Nodes::default(),
+    }
+}
+
+/// 単位を後ろに足していく KIR の書き手(対話的な実行。Diktor の driver.ml の §16.6b)。
+///
+/// 対話的な実行は、受理した入力ごとに単位を 1 つプログラムの後ろに足し、前の単位は実行時に残したまま使う。
+/// [`ReplWriter::add`] は、[`program`] と同じ規則で 1 つの単位を書き出し、プログラムの各表の後ろに項目を足す。
+/// 前の項目の添字は変わらず、足した単位の式は前の単位の大域と型を同じ添字で指す。
+/// 書き出しの表(名前から型、エフェクト、クラス、インスタンスへ)は、足した単位の宣言を後から見えるように書き換える。
+/// 手間は足した単位の大きさに比例する。
+///
+/// 表の書き換えは、[`ReplWriter::mark`] で取った印に [`ReplWriter::rollback`] で戻せる
+/// (入力を受理しなかったとき)。
+/// 戻しても、プログラムに足した項目は残す(関数と大域の番号を詰め直さないためである)。
+/// 名前の衝突しない鍵を使うので、残した項目が後の単位と重なることは無い。
+#[derive(Default)]
+pub struct ReplWriter {
+    tb: Tables,
+    fn_first: HashMap<String, FnId>,
+    repl_print: Option<ReplPrint>,
+    /// 型、エフェクト、クラスの記号から添字へ(記号ごとの最初の項目)。
+    type_index: HashMap<String, u32>,
+    effect_index: HashMap<String, u32>,
+    class_index: HashMap<String, u32>,
+}
+
+/// [`ReplWriter::mark`] で取る、名前で引く表の印である。
+///
+/// [`ReplWriter::commit`] で外すか [`ReplWriter::rollback`] で戻す。
+#[must_use]
+pub struct WriterMark(());
+
+/// プログラムの表の大きさ。書き出しが途中で止まったときと、足した単位を実行せずに捨てるときに、
+/// 足した項目を除く([`ProgramMark::truncate`])。
+pub struct ProgramMark {
+    types: usize,
+    effects: usize,
+    classes: usize,
+    instances: usize,
+    globals: usize,
+    functions: usize,
+    units: usize,
+    exps: usize,
+    dicts: usize,
+    pats: usize,
+}
+
+impl ProgramMark {
+    /// プログラム `kp` の今の大きさ。
+    pub fn of(kp: &kir::Program) -> ProgramMark {
+        ProgramMark {
+            types: kp.types.len(),
+            effects: kp.effects.len(),
+            classes: kp.classes.len(),
+            instances: kp.instances.len(),
+            globals: kp.globals.len(),
+            functions: kp.functions.len(),
+            units: kp.units.len(),
+            exps: kp.nodes.exps.len(),
+            dicts: kp.nodes.dicts.len(),
+            pats: kp.nodes.pats.len(),
+        }
+    }
+
+    /// `kp` を、印を取ったときの大きさに戻す(実行した単位には使わない)。
+    pub fn truncate(&self, kp: &mut kir::Program) {
+        kp.types.truncate(self.types);
+        kp.effects.truncate(self.effects);
+        kp.classes.truncate(self.classes);
+        kp.instances.truncate(self.instances);
+        kp.globals.truncate(self.globals);
+        kp.functions.truncate(self.functions);
+        kp.units.truncate(self.units);
+        kp.nodes.exps.truncate(self.exps);
+        kp.nodes.dicts.truncate(self.dicts);
+        kp.nodes.pats.truncate(self.pats);
+    }
+}
+
+impl ReplWriter {
+    /// 組み込みの単位と `units`(プレリュード)を書き出したプログラムを作る。
+    ///
+    /// 型検査と同じ [`check::on_check_stack`](super::check::on_check_stack) のスレッドの中で呼ぶ。
+    pub fn start(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<(ReplWriter, kir::Program)> {
+        let mut rw = ReplWriter::default();
+        let mut kp = empty_program();
+        let mut w = rw.writer(tc, &mut kp);
+        w.builtins(&mut kp);
+        let r = w.add_units(&mut kp, units);
+        rw.restore(w, &mut kp);
+        r?;
+        Ok((rw, kp))
+    }
+
+    /// 単位 `u` を書き出して `kp` の後ろに足す。
+    ///
+    /// `kp` は、この書き手が前に書き出したプログラムである。
+    /// 誤りのときは、足しかけた項目を除き、表をこの呼び出しの前に戻す。
+    pub fn add(&mut self, tc: &mut Tc, kp: &mut kir::Program, u: UnitSrc<'_>) -> R<ReplOut> {
+        let lens = ProgramMark::of(kp);
+        let mark = self.mark();
+        let mut w = self.writer(tc, kp);
+        let r = w.add_units(kp, std::slice::from_ref(&u));
+        let out = self.restore(w, kp);
+        match r {
+            Ok(()) => {
+                self.commit(mark);
+                Ok(out)
+            }
+            Err(e) => {
+                lens.truncate(kp);
+                self.rollback(mark);
+                Err(e)
+            }
+        }
+    }
+
+    /// 名前で引く表の印を取る。
+    ///
+    /// 表は写さず、印の後の書き換えを記録する(手間は表の大きさに依らない)。
+    /// 印は入れ子にできる。
+    pub fn mark(&mut self) -> WriterMark {
+        each_marked!(self.tb, begin);
+        WriterMark(())
+    }
+
+    /// 印 `m` を外し、印の後の書き換えを残す(入力を受理したとき)。
+    pub fn commit(&mut self, m: WriterMark) {
+        let WriterMark(()) = m;
+        each_marked!(self.tb, commit);
+    }
+
+    /// 名前で引く表を印に戻す(受理しなかった入力の型、エフェクト、クラス、インスタンスを後から見えなくする)。
+    pub fn rollback(&mut self, m: WriterMark) {
+        let WriterMark(()) = m;
+        each_marked!(self.tb, rollback);
+        for v in &mut self.tb.new_syms {
+            v.clear();
+        }
+    }
+
+    fn writer<'t>(&mut self, tc: &'t mut Tc, kp: &mut kir::Program) -> W<'t> {
+        W {
+            tc,
+            tb: std::mem::take(&mut self.tb),
+            nodes: std::mem::take(&mut kp.nodes),
+            root: Root::default(),
+            provisional: 0,
+            final_cap: HashMap::default(),
+            functions: Vec::new(),
+            fn_first: std::mem::take(&mut self.fn_first),
+            repl_print: self.repl_print,
+            repl_out: ReplOut::default(),
+            gbase: 0,
+            ibase: 0,
+            fbase: 0,
+            index: [
+                std::mem::take(&mut self.type_index),
+                std::mem::take(&mut self.effect_index),
+                std::mem::take(&mut self.class_index),
+            ],
+        }
+    }
+
+    fn restore(&mut self, w: W<'_>, kp: &mut kir::Program) -> ReplOut {
+        let W {
+            tb,
+            nodes,
+            fn_first,
+            repl_print,
+            repl_out,
+            index: [ti, ei, ci],
+            ..
+        } = w;
+        self.tb = tb;
+        kp.nodes = nodes;
+        self.fn_first = fn_first;
+        self.repl_print = repl_print;
+        self.type_index = ti;
+        self.effect_index = ei;
+        self.class_index = ci;
+        repl_out
+    }
 }
 
 impl<'t> W<'t> {
@@ -1799,7 +2013,7 @@ impl<'t> W<'t> {
             },
         );
         let push_fn = |w: &mut Self, f: kir::Function, sym: String| {
-            let id = FnId(w.functions.len() as u32);
+            let id = FnId(w.fbase + w.functions.len() as u32);
             w.fn_first.entry(sym.clone()).or_insert(id);
             w.functions.push((f, sym));
         };
@@ -1865,16 +2079,15 @@ impl<'t> W<'t> {
         })
     }
 
-    fn program(&mut self, units: &[UnitSrc<'_>]) -> R<kir::Program> {
+    /// 組み込みの型、クラス、値と、組み込みの単位を `kp` に置く(空のプログラムに 1 回だけ行う)。
+    fn builtins(&mut self, kp: &mut kir::Program) {
         use kir::builtins;
-        let mut types: Vec<kir::Type> = Vec::new();
-        let mut effects: Vec<kir::Effect> = Vec::new();
-        let mut classes: Vec<kir::Class> = Vec::new();
         for t in builtins::TYPES {
             let o = self.tc.intern(t);
             let s = format!("builtin/{t}");
-            self.tb.type_syms.insert(o, s.clone());
-            types.push(kir::Type {
+            self.tb.set_sym(0, o, s.clone());
+            self.index[0].insert(s.clone(), kp.types.len() as u32);
+            kp.types.push(kir::Type {
                 sym: s,
                 ctors: Vec::new(),
             });
@@ -1882,8 +2095,16 @@ impl<'t> W<'t> {
         for (c, ms) in builtins::CLASSES {
             let o = self.tc.intern(c);
             let s = format!("builtin/{c}");
-            self.tb.class_syms.insert(o, s.clone());
-            classes.push(kir::Class {
+            self.tb.set_sym(2, o, s.clone());
+            let id = kp.classes.len() as u32;
+            self.index[2].insert(s.clone(), id);
+            for (j, m) in ms.iter().enumerate() {
+                self.tb
+                    .meth_idx
+                    .entry((id, m.to_string()))
+                    .or_insert(j as u32);
+            }
+            kp.classes.push(kir::Class {
                 sym: s,
                 methods: ms
                     .iter()
@@ -1894,16 +2115,52 @@ impl<'t> W<'t> {
                     .collect(),
             });
         }
+        for v in builtins::VALUES {
+            self.tb
+                .builtin_globals
+                .insert(v.to_string(), GlobalId(kp.globals.len() as u32));
+            kp.globals.push(kir::Global {
+                sym: format!("builtin/{v}"),
+                kind: GlobalKind::Builtin,
+            });
+        }
+        kp.units.push(kir::Unit {
+            key: "builtin".to_string(),
+            paths: Vec::new(),
+            init: Vec::new(),
+        });
+    }
+
+    /// 単位の列 `units` を書き出し、`kp` の各表の後ろに足す(Diktor の `program`)。
+    ///
+    /// 1 回で書き出すプログラム([`program`])は、空のプログラムに組み込みの項目を置き([`W::builtins`])、
+    /// すべての単位を 1 回で足したものである。
+    fn add_units(&mut self, kp: &mut kir::Program, units: &[UnitSrc<'_>]) -> R<()> {
+        let (t0, e0, c0) = (kp.types.len(), kp.effects.len(), kp.classes.len());
         // 1 段目の前半:型、エフェクト、クラス。
         for u in units {
-            self.collect_types(u, &mut types, &mut effects, &mut classes)?;
+            self.collect_types(u, &mut kp.types, &mut kp.effects, &mut kp.classes)?;
         }
         {
-            let ti = first_index(types.iter().map(|t| t.sym.as_str()));
-            for (o, s) in &self.tb.type_syms {
-                self.tb.type_ids.insert(*o, TypeId(ti[s.as_str()]));
+            let [ti, ei, ci] = &mut self.index;
+            for (i, t) in kp.types.iter().enumerate().skip(t0) {
+                ti.entry(t.sym.clone()).or_insert(i as u32);
             }
-            for t in &types {
+            for (i, t) in kp.effects.iter().enumerate().skip(e0) {
+                ei.entry(t.sym.clone()).or_insert(i as u32);
+            }
+            for (i, t) in kp.classes.iter().enumerate().skip(c0) {
+                ci.entry(t.sym.clone()).or_insert(i as u32);
+            }
+            // 添字は、この呼び出しまでに記号を置いた名前の分だけ決める(前の単位の名前の添字は変わらない)。
+            let [nt, ne, nc] = std::mem::take(&mut self.tb.new_syms);
+            for o in nt {
+                if let Some(s) = self.tb.type_syms.get(&o) {
+                    let id = TypeId(ti[s.as_str()]);
+                    self.tb.type_ids.insert(o, id);
+                }
+            }
+            for t in &kp.types[t0..] {
                 let id = ti[t.sym.as_str()];
                 for (j, c) in t.ctors.iter().enumerate() {
                     self.tb
@@ -1912,11 +2169,13 @@ impl<'t> W<'t> {
                         .or_insert(j as u32);
                 }
             }
-            let ei = first_index(effects.iter().map(|t| t.sym.as_str()));
-            for (o, s) in &self.tb.effect_syms {
-                self.tb.effect_ids.insert(*o, EffectId(ei[s.as_str()]));
+            for o in ne {
+                if let Some(s) = self.tb.effect_syms.get(&o) {
+                    let id = EffectId(ei[s.as_str()]);
+                    self.tb.effect_ids.insert(o, id);
+                }
             }
-            for t in &effects {
+            for t in &kp.effects[e0..] {
                 let id = ei[t.sym.as_str()];
                 for (j, c) in t.ops.iter().enumerate() {
                     self.tb
@@ -1925,11 +2184,13 @@ impl<'t> W<'t> {
                         .or_insert(j as u32);
                 }
             }
-            let ci = first_index(classes.iter().map(|t| t.sym.as_str()));
-            for (o, s) in &self.tb.class_syms {
-                self.tb.class_ids.insert(*o, ClassId(ci[s.as_str()]));
+            for o in nc {
+                if let Some(s) = self.tb.class_syms.get(&o) {
+                    let id = ClassId(ci[s.as_str()]);
+                    self.tb.class_ids.insert(o, id);
+                }
             }
-            for t in &classes {
+            for t in &kp.classes[c0..] {
                 let id = ci[t.sym.as_str()];
                 for (j, c) in t.methods.iter().enumerate() {
                     self.tb
@@ -1940,13 +2201,9 @@ impl<'t> W<'t> {
             }
         }
         // 1 段目の後半:大域、インスタンス、手順。
+        self.gbase = kp.globals.len() as u32;
+        self.ibase = kp.instances.len() as u32;
         let mut globals: Vec<(String, PendingGlobal)> = Vec::new();
-        for v in builtins::VALUES {
-            self.tb
-                .builtin_globals
-                .insert(v.to_string(), GlobalId(globals.len() as u32));
-            globals.push((format!("builtin/{v}"), PendingGlobal::Builtin));
-        }
         let mut instances: Vec<PendingInstance> = Vec::new();
         let mut unit_steps: Vec<Vec<PendingStep>> = Vec::new();
         let mut jobs: Vec<Job<'_>> = Vec::new();
@@ -1954,8 +2211,9 @@ impl<'t> W<'t> {
             let steps = self.collect_unit(u, &mut globals, &mut instances, &mut jobs)?;
             unit_steps.push(steps);
         }
-        if units.iter().any(|u| u.repl.is_some_and(|r| r.print)) {
+        if self.repl_print.is_none() && units.iter().any(|u| u.repl.is_some_and(|r| r.print)) {
             // 引数 1 個の操作 `print` を持つ `Print` と、実行時が処理する `Console.write` があるときだけ包む。
+            let effects = &kp.effects;
             let find = |sym: &str, op: &str| -> Option<(EffectId, u32)> {
                 let e = effects.iter().position(|e| e.sym == sym)?;
                 let o = effects[e].ops.iter().position(|o| {
@@ -1972,12 +2230,13 @@ impl<'t> W<'t> {
             };
         }
         // 2 段目:根の関数。
+        self.fbase = kp.functions.len() as u32;
         for job in jobs {
             self.root_fn(job)?;
         }
         // 関数を記号で引く。
         let functions = std::mem::take(&mut self.functions);
-        let fi = std::mem::take(&mut self.fn_first);
+        let fi = &self.fn_first;
         let fn_id = |s: &str| -> R<FnId> {
             match fi.get(s) {
                 Some(i) => Ok(*i),
@@ -1987,7 +2246,6 @@ impl<'t> W<'t> {
         let mut gs = Vec::with_capacity(globals.len());
         for (sym, k) in &globals {
             let kind = match k {
-                PendingGlobal::Builtin => GlobalKind::Builtin,
                 PendingGlobal::Extern { abi, name, dicts } => GlobalKind::Extern {
                     abi: *abi,
                     name: name.clone(),
@@ -2020,11 +2278,7 @@ impl<'t> W<'t> {
                 methods,
             });
         }
-        let mut us = vec![kir::Unit {
-            key: "builtin".to_string(),
-            paths: Vec::new(),
-            init: Vec::new(),
-        }];
+        let mut us = Vec::with_capacity(units.len());
         for (u, steps) in units.iter().zip(unit_steps) {
             let mut init = Vec::with_capacity(steps.len());
             for s in steps {
@@ -2050,24 +2304,14 @@ impl<'t> W<'t> {
                 init,
             });
         }
-        let functions = functions
-            .into_iter()
-            .map(|(mut f, s)| {
-                f.sym = s;
-                f
-            })
-            .collect();
-        Ok(kir::Program {
-            version: kir::VERSION,
-            units: us,
-            types,
-            effects,
-            classes,
-            instances: is,
-            globals: gs,
-            functions,
-            nodes: std::mem::take(&mut self.nodes),
-        })
+        kp.globals.extend(gs);
+        kp.instances.extend(is);
+        kp.units.extend(us);
+        kp.functions.extend(functions.into_iter().map(|(mut f, s)| {
+            f.sym = s;
+            f
+        }));
+        Ok(())
     }
 
     /// 単位の型、エフェクト、クラスの表を作る(1 段目の前半)。
@@ -2084,7 +2328,7 @@ impl<'t> W<'t> {
                 DeclKind::Newtype(n) => {
                     let s = sym(&n.name);
                     let o = self.tc.intern(&n.name);
-                    self.tb.type_syms.insert(o, s.clone());
+                    self.tb.set_sym(0, o, s.clone());
                     types.push(kir::Type {
                         sym: s,
                         ctors: n
@@ -2100,7 +2344,7 @@ impl<'t> W<'t> {
                 DeclKind::Effect(e) => {
                     let s = sym(&e.name);
                     let eoid = self.tc.intern(&e.name);
-                    self.tb.effect_syms.insert(eoid, s.clone());
+                    self.tb.set_sym(1, eoid, s.clone());
                     let Some(info) = self.tc.find_effect(eoid) else {
                         return bug(format!(
                             "KIR の書き出し: エフェクトがありません: {}",
@@ -2139,7 +2383,7 @@ impl<'t> W<'t> {
                 DeclKind::Class(c) => {
                     let s = sym(&c.name);
                     let coid = self.tc.intern(&c.name);
-                    self.tb.class_syms.insert(coid, s.clone());
+                    self.tb.set_sym(2, coid, s.clone());
                     let Some(ci) = self.tc.find_class(coid) else {
                         return bug(format!("KIR の書き出し: クラスがありません: {}", c.name));
                     };
@@ -2207,7 +2451,7 @@ impl<'t> W<'t> {
                           kind: GKind|
          -> GlobalId {
             let g = format!("{key}/{}", numbered(counts, super::display(x)));
-            let id = GlobalId(globals.len() as u32);
+            let id = GlobalId(w.gbase + globals.len() as u32);
             w.tb.globals.insert((oid, x.to_string()), id);
             if display {
                 w.repl_out.globals.push(((oid, x.to_string()), id));
@@ -2221,8 +2465,10 @@ impl<'t> W<'t> {
             globals.push((g, k));
             id
         };
-        let gsym =
-            |globals: &Vec<(String, PendingGlobal)>, g: GlobalId| globals[g.index()].0.clone();
+        let gbase = self.gbase as usize;
+        let gsym = |globals: &Vec<(String, PendingGlobal)>, g: GlobalId| {
+            globals[g.index() - gbase].0.clone()
+        };
         for d in u.decls {
             match &d.kind {
                 DeclKind::Let(b) => {
@@ -2417,7 +2663,7 @@ impl<'t> W<'t> {
                             &format!("instance:{}[{}]", sym_name(&csym), sym_name(&hsym))
                         )
                     );
-                    let iid = InstanceId(instances.len() as u32);
+                    let iid = InstanceId(self.ibase + instances.len() as u32);
                     self.tb.instances.insert((cls, con), iid);
                     let pk = match self.tc.dict.get(&d.meta.id) {
                         Some(DictInfo::Instance(ks)) => ks.clone(),

@@ -4,21 +4,25 @@
 //!
 //! 1. 入力を構文解析する([`Session::parse`])。
 //!    文法に合わなかったトークンが `EOF` なら、続きの行を待つ。
-//! 2. 平坦化して型検査し、受理した入力なら、プレリュード、受理した前の入力、この入力を単位とする KIR を書く
-//!    ([`Session::check`])。
-//!    この入力の単位は最後の単位 `main` で、前の入力の単位の鍵は `repl/1`、`repl/2` …である。
-//!    この入力の単位は、結果の表示に使う隠れた大域(式文の値と、`Show.show` を呼ぶ関数)を持つ。
-//! 3. 呼び出し側が KIR を実行し、その結果で入力を受理するか捨てるかを決める([`Session::finish`])。
+//! 2. 平坦化して型検査し、型検査に通った入力なら、その入力を 1 つの単位として KIR に書き、
+//!    セッションのプログラムの後ろに足す([`Session::check`]。[`ReplWriter`])。
+//!    プログラムは、組み込みの単位、プレリュードの単位、足した入力の単位(鍵は `repl/1`、`repl/2` …)からなる。
+//!    入力の単位は、結果の表示に使う隠れた大域(式文の値と、`Show.show` を呼ぶ関数)を持つ。
+//! 3. 呼び出し側が足した単位だけを実行し、その結果で入力を受理するか捨てるかを決める([`Session::finish`])。
 //!
 //! 受理しなかった入力(構文エラー、型エラー、実行時エラー)は捨てる。
-//! 型検査の文脈は入力の前に写しを取り、捨てるときは写しに戻す。
+//! 型検査の文脈は入力の前に印を取り(`Tc::snapshot`)、捨てるときは印の時点に戻す。
+//! 入力の数とともに伸びる表(型、セル、穴、木の注釈、宣言表、名前の表など)は、印の後の書き換えの記録で戻し、
+//! 入力ごとに初めに戻す小さな欄だけを写しから戻す。
 //! そのため、捨てた入力の宣言、束縛、インスタンスと、一般化しなかった束縛の型変数に決めた型は、後の入力から見えない。
-//! 写しに戻しても、通し番号と名前の表(Diktor が戻さないもの)は捨てた入力の後のものを残す。
+//! 印に戻しても、通し番号と名前の表(Diktor が戻さないもの)は捨てた入力の後のものを残す(`Session::restore`)。
+//! KIR の書き手の名前の表も同じく印で入力の前に戻すが、実行した単位はプログラムに残す
+//! (関数と大域の番号を詰め直さないためである。実行時エラーで止まった入力の大域の値は、実行する側が捨てる)。
 
 use super::check::{PRELUDE, Stop, fail_to_error, parse_unit, render_line};
 use super::decls::{ROOT_UNIT, STD_UNIT};
 use super::elab::{is_value, pat_var_names};
-use super::emit::{ReplUnit, UnitSrc, program_repl};
+use super::emit::{ProgramMark, ReplUnit, ReplWriter, UnitSrc, WriterMark};
 use super::fx::{HashMap, HashSet};
 use super::{DKey, Emit, Env, Evidence, Fail, GRef, OutLine, R, Tc, Ty, TyNode};
 use crate::ParseError;
@@ -56,6 +60,8 @@ pub enum StartError {
     Stop(Stop),
     /// プレリュードの型エラー(終了状態 1)。報告する 1 行である。
     Type(String),
+    /// プレリュードを KIR に書き出せない(内部の誤り。終了状態 70)。報告する 1 行である。
+    Emit(String),
 }
 
 impl From<Stop> for StartError {
@@ -115,11 +121,12 @@ const LAYOUT_KEY_MAX: usize = 4096;
 pub enum Outcome {
     /// 受理しなかった。報告する行(警告と誤り)である。
     Rejected(Vec<String>),
-    /// 型検査に通った。呼び出し側は警告の行を出し、KIR を実行してから [`Session::finish`] を呼ぶ。
+    /// 型検査に通った。呼び出し側は警告の行を出し、足した単位を実行してから [`Session::finish`] を呼ぶ。
     Run {
         /// 警告の行。
         lines: Vec<String>,
-        /// プレリュード、受理した前の入力、この入力を単位とするプログラム。
+        /// セッションのプログラム。最後の単位がこの入力である。
+        /// [`Session::finish`] で返す。
         program: Box<kir::Program>,
         /// 結果を表示する束縛(入力の順)。
         shown: Vec<Shown>,
@@ -130,9 +137,24 @@ pub enum Outcome {
 
 /// 型検査に通り、実行を待つ入力である。
 struct PendingInput {
-    snapshot: Box<Tc>,
+    snapshot: Snapshot,
     flat: Vec<Decl>,
     env: Env,
+    /// 書き手の名前の表の、入力の前の写し。
+    writer: WriterMark,
+    /// 入力の単位を足す前のプログラムの大きさ。
+    program: ProgramMark,
+}
+
+/// 実行した結果([`Session::finish`])。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Finish {
+    /// 最後まで実行した。入力を受理する。
+    Accepted,
+    /// 実行時エラーで止まった。入力を捨てるが、実行した単位はプログラムに残す。
+    Failed,
+    /// 実行しなかった(KIR の限度に当たった)。入力を捨て、足した単位をプログラムから除く。
+    Unrun,
 }
 
 /// 対話的な実行の型検査の状態である。
@@ -143,11 +165,14 @@ pub struct Session {
     /// 入力の `<stdin>` のファイルの添字(入力ごとに足さない)。
     stdin: FileId,
     cx: Ctx,
-    prelude: Vec<Decl>,
     /// プレリュードだけを処理した後の環境に、受理した入力の束縛を足した環境。
     env: Env,
-    /// 受理した入力の、平坦化した宣言の列。
-    units: Vec<Vec<Decl>>,
+    /// KIR の書き手。
+    writer: ReplWriter,
+    /// セッションのプログラム(入力の実行の間は呼び出し側が持つ)。
+    program: Option<Box<kir::Program>>,
+    /// 次に足す単位の番号(受理しなかった入力の単位の鍵も使い直さない)。
+    next_unit: u32,
     /// 受理した入力のトップレベルの値の名前(Diktor の `session_vals`)。
     session_vals: HashSet<String>,
     /// `Print` をプレリュードが所有するか。
@@ -206,19 +231,50 @@ impl Session {
         let print = tc.intern("Print");
         let print_owned = tc.prelude_owned("effect", print);
         let stdin = files.add("<stdin>");
+        let prelude_paths: Vec<Vec<u8>> = if opts.no_prelude {
+            Vec::new()
+        } else {
+            vec![
+                opts.prelude
+                    .clone()
+                    .unwrap_or_else(|| "<prelude>".to_string())
+                    .into_bytes(),
+            ]
+        };
+        let base = [UnitSrc {
+            key: "prelude".to_string(),
+            paths: prelude_paths,
+            decls: &prelude,
+            repl: None,
+        }];
+        let (writer, program) = ReplWriter::start(&mut tc, &base)
+            .map_err(|f| StartError::Emit(render_fail(&files, f)))?;
         Ok(Session {
             opts,
             tc,
             files,
             stdin,
             cx,
-            prelude,
             env,
-            units: Vec::new(),
+            writer,
+            program: Some(Box::new(program)),
+            next_unit: 1,
             session_vals: HashSet::default(),
             print_owned,
             pending: None,
         })
+    }
+
+    /// プレリュードまでを書いたプログラムを取り出す(始めるときと `:reset` の後の、プレリュードの初期化)。
+    ///
+    /// 実行した後で [`Session::put_program`] で返す。
+    pub fn take_program(&mut self) -> Option<Box<kir::Program>> {
+        self.program.take()
+    }
+
+    /// [`Session::take_program`] で取り出したプログラムを返す。
+    pub fn put_program(&mut self, p: Box<kir::Program>) {
+        self.program = Some(p);
     }
 
     /// プレリュードだけを処理した状態に戻す(`:reset`)。
@@ -250,15 +306,9 @@ impl Session {
         }
     }
 
-    /// 型検査の文脈を写しに戻す。通し番号と名前の表は今のものを残す。
-    fn restore(&mut self, snap: Tc) {
-        let next_oid = self.tc.next_oid;
-        let intern_map = std::mem::take(&mut self.tc.intern_map);
-        let name_map = std::mem::take(&mut self.tc.name_map);
-        self.tc = snap;
-        self.tc.next_oid = next_oid;
-        self.tc.intern_map = intern_map;
-        self.tc.name_map = name_map;
+    /// 型検査の文脈を印の時点に戻す。通し番号と名前の表は今のものを残す。
+    fn restore(&mut self, snap: Snapshot) {
+        self.tc.rollback_with(snap, true);
     }
 
     /// 1 つの入力を平坦化して型検査し、受理できれば KIR を書く(Diktor の `repl` の `process` の前半)。
@@ -266,7 +316,7 @@ impl Session {
     /// 受理しなかったときは、型検査の文脈を入力の前に戻してから返す。
     /// [`Outcome::Run`] を返したときは、呼び出し側が [`Session::finish`] を呼ぶ。
     pub fn check(&mut self, decls: Vec<Decl>) -> Outcome {
-        let snap = self.tc.clone();
+        let snap = self.tc.snapshot();
         let flat = match self.tc.flatten_input(&self.session_vals, decls) {
             Ok(d) => d,
             Err(f) => {
@@ -289,16 +339,27 @@ impl Session {
                 return Outcome::Rejected(lines);
             }
         };
-        match self.prepare(&flat) {
-            Ok((program, shown, layouts)) => {
+        let Some(mut program) = self.program.take() else {
+            lines.push("[BUG] 対話的な実行のプログラムがありません".to_string());
+            self.restore(snap);
+            return Outcome::Rejected(lines);
+        };
+        let writer = self.writer.mark();
+        let pmark = ProgramMark::of(&program);
+        let r = self.prepare(&flat, &mut program);
+        self.program = Some(program);
+        match r {
+            Ok((shown, layouts)) => {
                 self.pending = Some(PendingInput {
-                    snapshot: Box::new(snap),
+                    snapshot: snap,
                     flat,
                     env,
+                    writer,
+                    program: pmark,
                 });
                 Outcome::Run {
                     lines,
-                    program: Box::new(program),
+                    program: self.program.take().expect("プログラム"),
                     shown,
                     layouts,
                 }
@@ -310,14 +371,17 @@ impl Session {
                     }
                     f => render_fail(&self.files, f),
                 });
+                self.writer.rollback(writer);
                 self.restore(snap);
                 Outcome::Rejected(lines)
             }
         }
     }
 
-    /// 結果を表示する束縛を集め、KIR を書く。
-    fn prepare(&mut self, flat: &[Decl]) -> R<(kir::Program, Vec<Shown>, Layouts)> {
+    /// 結果を表示する束縛を集め、入力の単位を KIR に書いて `program` の後ろに足す。
+    ///
+    /// 誤りのときは、書き手が足しかけた項目を除き、書き手の表を戻してある。
+    fn prepare(&mut self, flat: &[Decl], program: &mut kir::Program) -> R<(Vec<Shown>, Layouts)> {
         // 束縛ごとの (表示の名前, 型, 大域を引く鍵)。
         let mut items: Vec<(String, Ty, (crate::ast::NodeId, String), bool)> = Vec::new();
         for d in flat {
@@ -361,7 +425,6 @@ impl Session {
             nodes: vec![Layout::Any],
         };
         let mut memo: HashMap<String, usize> = HashMap::default();
-        let mut probe: Option<Box<Tc>> = None;
         for (x, t, key, is_exp) in items {
             let label = format!("{} : {}", super::display(&x), self.tc.show(t)?);
             let unit_exp = is_exp && {
@@ -371,7 +434,7 @@ impl Session {
                     _ => false,
                 }
             };
-            let show = if !unit_exp && self.shows_newtype(t, &mut probe)? {
+            let show = if !unit_exp && self.shows_newtype(t)? {
                 let show = self.tc.intern("Show");
                 let mut pend = Vec::new();
                 let ev = self.display_evidence(show, t, &mut pend)?;
@@ -383,48 +446,20 @@ impl Session {
             let layout = self.layout(t, &mut layouts, &mut memo)?;
             pre.push((label, key, unit_exp, show, layout));
         }
-        let quiet = ReplUnit {
-            print: self.print_owned,
-            display: false,
-            shows: Vec::new(),
-        };
         let cur = ReplUnit {
             print: self.print_owned,
             display: true,
             shows,
         };
-        let prelude_paths: Vec<Vec<u8>> = if self.opts.no_prelude {
-            Vec::new()
-        } else {
-            vec![
-                self.opts
-                    .prelude
-                    .clone()
-                    .unwrap_or_else(|| "<prelude>".to_string())
-                    .into_bytes(),
-            ]
-        };
-        let mut srcs = vec![UnitSrc {
-            key: "prelude".to_string(),
-            paths: prelude_paths,
-            decls: &self.prelude,
-            repl: None,
-        }];
-        for (i, u) in self.units.iter().enumerate() {
-            srcs.push(UnitSrc {
-                key: format!("repl/{}", i + 1),
-                paths: vec![b"<stdin>".to_vec()],
-                decls: u,
-                repl: Some(&quiet),
-            });
-        }
-        srcs.push(UnitSrc {
-            key: "main".to_string(),
+        let key = format!("repl/{}", self.next_unit);
+        self.next_unit += 1;
+        let src = UnitSrc {
+            key,
             paths: vec![b"<stdin>".to_vec()],
             decls: flat,
             repl: Some(&cur),
-        });
-        let (program, out) = program_repl(&mut self.tc, &srcs)?;
+        };
+        let out = self.writer.add(&mut self.tc, program, src)?;
         let globals: HashMap<(crate::ast::NodeId, String), kir::GlobalId> =
             out.globals.into_iter().collect();
         let mut shown = Vec::with_capacity(pre.len());
@@ -440,7 +475,7 @@ impl Session {
                 layout,
             });
         }
-        Ok((program, shown, layouts))
+        Ok((shown, layouts))
     }
 
     /// 型の構造の鍵。型変数は `?` にする(型変数の位置の値は型の分からない値として表示する)。
@@ -552,10 +587,9 @@ impl Session {
 
     /// 型の頭が newtype で、その型が `Show` を満たすか(Diktor の `show_value` の `shows`)。
     ///
-    /// 満たすかどうかは、写した型検査の文脈 `probe` に `Show` の制約を足して確かめる。
-    /// 写しは 1 つの入力の中で使い回し、制約を足すのに失敗したときと、型に決まっていない型変数があるときに捨てる
-    /// (足した制約が、後の束縛の確かめに効かないようにする)。
-    fn shows_newtype(&mut self, t: Ty, probe: &mut Option<Box<Tc>>) -> R<bool> {
+    /// 満たすかどうかは、型検査の文脈に `Show` の制約を足して確かめ、文脈を足す前に戻す
+    /// (足した制約が、後の束縛の確かめと表示に効かないようにする)。
+    fn shows_newtype(&mut self, t: Ty) -> R<bool> {
         let r = self.tc.repr(t);
         let TyNode::Con(c, _) = self.tc.node(r) else {
             return Ok(false);
@@ -568,13 +602,9 @@ impl Session {
             // インスタンスが無ければ、制約を足すと必ず失敗する。
             return Ok(false);
         }
-        let mut vars = Vec::new();
-        self.tc.unbound_vars(&mut vars, r)?;
-        let p = probe.get_or_insert_with(|| Box::new(self.tc.clone()));
-        let ok = p.add_class(None, r, show).is_ok();
-        if !ok || !vars.is_empty() {
-            *probe = None;
-        }
+        let snap = self.tc.snapshot();
+        let ok = self.tc.add_class(None, r, show).is_ok();
+        self.tc.rollback(snap);
         Ok(ok)
     }
 
@@ -625,12 +655,21 @@ impl Session {
 
     /// 実行の結果で、入力を受理するか捨てるかを決める(Diktor の `repl` の `process` の後半)。
     ///
-    /// `accepted` が偽なら、型検査の文脈を入力の前に戻す。
-    pub fn finish(&mut self, accepted: bool) {
+    /// `program` は [`Outcome::Run`] で渡したプログラムである。
+    /// 受理しなければ、型検査の文脈と書き手の名前の表を入力の前に戻す。
+    /// [`Finish::Unrun`] なら、足した単位もプログラムから除く。
+    pub fn finish(&mut self, mut program: Box<kir::Program>, r: Finish) {
         let Some(p) = self.pending.take() else {
+            self.program = Some(program);
             return;
         };
-        if accepted {
+        if r == Finish::Unrun {
+            p.program.truncate(&mut program);
+        }
+        self.program = Some(program);
+        if r == Finish::Accepted {
+            self.tc.commit(p.snapshot);
+            self.writer.commit(p.writer);
             for d in &p.flat {
                 match &d.kind {
                     DeclKind::Let(b) => {
@@ -647,10 +686,10 @@ impl Session {
                     _ => {}
                 }
             }
-            self.units.push(p.flat);
             self.env = p.env;
         } else {
-            self.restore(*p.snapshot);
+            self.writer.rollback(p.writer);
+            self.restore(p.snapshot);
         }
     }
 
@@ -669,7 +708,7 @@ impl Session {
         let DeclKind::Exp(e) = &d.kind else {
             return ":type には式を 1 つ書いてください".to_string();
         };
-        let snap = self.tc.clone();
+        let snap = self.tc.snapshot();
         let env = self.env.clone();
         let r = self.tc.type_of_expr(&env, e).and_then(|t| self.tc.show(t));
         let line = match r {
@@ -727,8 +766,15 @@ impl Tc {
                 }
             }
         }
-        let mut prev: Vec<String> = session_vals.iter().cloned().collect();
-        prev.sort();
+        // 前の入力のトップレベルの値の名前は、この入力の module の中の値と突き合わせるだけに使う。
+        // module の無い入力では渡さない(入力ごとに前の入力の数だけ手間がかからないようにする)。
+        let prev: Vec<String> = if decls.iter().any(|d| matches!(d.kind, DeclKind::Module(..))) {
+            let mut v: Vec<String> = session_vals.iter().cloned().collect();
+            v.sort();
+            v
+        } else {
+            Vec::new()
+        };
         self.flatten_modules(&prev, &[], ROOT_UNIT, decls)
     }
 
@@ -765,5 +811,151 @@ impl Tc {
         }
         self.check_pattern_numbers()?;
         Ok(t)
+    }
+}
+
+/// 型検査の文脈の印([`Tc::snapshot`])。
+pub(crate) struct Snapshot {
+    /// 書き換えを記録する表を除いた文脈の写し(入力ごとに初めに戻す、小さな欄だけが残る)。
+    rest: Box<Tc>,
+    /// 型の表の長さ。
+    tys: usize,
+    /// 宣言表の、表でない欄。
+    decls: super::decls::DeclsMark,
+}
+
+/// 型検査の文脈のうち、印を取るときに写さず、印の後の書き換えの記録で戻す欄である。
+///
+/// 入力の数とともに伸びる表(型、セル、カインド、穴、木の注釈、宣言表、名前の表など)をすべて含む。
+struct Big {
+    tys: Vec<super::TyNode>,
+    cells: Vec<super::TVar>,
+    kinds: Vec<super::KNode>,
+    holes_arena: Vec<super::Hole>,
+    node_ty: super::fx::NodeMap<Ty>,
+    resolved: super::fx::NodeMap<super::Resolved>,
+    dict: super::fx::NodeMap<super::DictInfo>,
+    cell_trail: super::fx::Trail<super::TVar>,
+    hole_trail: super::fx::Trail<super::Hole>,
+    kind_trail: super::fx::Trail<super::KNode>,
+    d: super::decls::Decls,
+    rigid_tparams: super::fx::JMap<super::Oid, String>,
+    intern_map: super::fx::JMap<std::rc::Rc<str>, super::Oid>,
+    name_map: super::fx::JMap<super::Oid, std::rc::Rc<str>>,
+}
+
+impl Tc {
+    fn take_big(&mut self) -> Big {
+        use std::mem::take;
+        Big {
+            tys: take(&mut self.tys),
+            cells: take(&mut self.cells),
+            kinds: take(&mut self.kinds),
+            holes_arena: take(&mut self.holes_arena),
+            node_ty: take(&mut self.node_ty),
+            resolved: take(&mut self.resolved),
+            dict: take(&mut self.dict),
+            cell_trail: take(&mut self.cell_trail),
+            hole_trail: take(&mut self.hole_trail),
+            kind_trail: take(&mut self.kind_trail),
+            d: take(&mut self.d),
+            rigid_tparams: take(&mut self.rigid_tparams),
+            intern_map: take(&mut self.intern_map),
+            name_map: take(&mut self.name_map),
+        }
+    }
+
+    fn put_big(&mut self, b: Big) {
+        self.tys = b.tys;
+        self.cells = b.cells;
+        self.kinds = b.kinds;
+        self.holes_arena = b.holes_arena;
+        self.node_ty = b.node_ty;
+        self.resolved = b.resolved;
+        self.dict = b.dict;
+        self.cell_trail = b.cell_trail;
+        self.hole_trail = b.hole_trail;
+        self.kind_trail = b.kind_trail;
+        self.d = b.d;
+        self.rigid_tparams = b.rigid_tparams;
+        self.intern_map = b.intern_map;
+        self.name_map = b.name_map;
+    }
+
+    /// 文脈の印を取る(対話的な実行の入力の取り消し。計画 7 節の snapshot)。
+    ///
+    /// 入力の数とともに伸びる表([`Big`])は写さず、印の後の書き換えを記録する。
+    /// 型の表は足すだけなので長さを覚え、ほかの表は書き換える前の値を覚える。
+    /// 残りの欄は写すが、どれも入力ごとに初めに戻す小さなものである。
+    /// そのため、印を取る手間は、それまでの入力の数と大きさに依らない。
+    /// 印は入れ子にできる。
+    /// 取った印は、[`Tc::rollback`] で戻すか [`Tc::commit`] で外す。
+    pub(crate) fn snapshot(&mut self) -> Snapshot {
+        let big = self.take_big();
+        let rest = Box::new(self.clone());
+        self.put_big(big);
+        self.cell_trail.begin(self.cells.len());
+        self.hole_trail.begin(self.holes_arena.len());
+        self.kind_trail.begin(self.kinds.len());
+        self.node_ty.begin();
+        self.resolved.begin();
+        self.dict.begin();
+        self.rigid_tparams.begin();
+        self.intern_map.begin();
+        self.name_map.begin();
+        let decls = self.d.begin();
+        Snapshot {
+            rest,
+            tys: self.tys.len(),
+            decls,
+        }
+    }
+
+    /// 印 `s` を外し、印の後の書き換えを残す。
+    pub(crate) fn commit(&mut self, s: Snapshot) {
+        drop(s);
+        self.cell_trail.commit();
+        self.hole_trail.commit();
+        self.kind_trail.commit();
+        self.node_ty.commit();
+        self.resolved.commit();
+        self.dict.commit();
+        self.rigid_tparams.commit();
+        self.intern_map.commit();
+        self.name_map.commit();
+        self.d.commit();
+    }
+
+    /// 文脈を印 `s` の時点に戻す(通し番号と名前の表も戻す)。
+    pub(crate) fn rollback(&mut self, s: Snapshot) {
+        self.rollback_with(s, false);
+    }
+
+    /// 文脈を印 `s` の時点に戻す。`keep_names` なら、通し番号と名前の表は今のものを残す。
+    pub(crate) fn rollback_with(&mut self, s: Snapshot, keep_names: bool) {
+        let next_oid = self.next_oid;
+        self.cell_trail.rollback(&mut self.cells);
+        self.hole_trail.rollback(&mut self.holes_arena);
+        self.kind_trail.rollback(&mut self.kinds);
+        self.node_ty.rollback();
+        self.resolved.rollback();
+        self.dict.rollback();
+        self.rigid_tparams.rollback();
+        if keep_names {
+            // 外側の印のために記録は残す。
+            self.intern_map.commit();
+            self.name_map.commit();
+        } else {
+            self.intern_map.rollback();
+            self.name_map.rollback();
+        }
+        self.d.rollback(s.decls);
+        self.tys.truncate(s.tys);
+        let big = self.take_big();
+        *self = *s.rest;
+        self.put_big(big);
+        if keep_names {
+            self.next_oid = next_oid;
+        }
     }
 }
