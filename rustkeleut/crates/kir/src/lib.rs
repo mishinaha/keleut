@@ -179,6 +179,19 @@ pub fn verify_with(p: &Program, lim: &Limits) -> Result<(), Error> {
     on_stack(lim.stack_bytes, || verify::check(p, n))
 }
 
+/// 単位を後ろに足していくプログラムの、足した項目を限度を与えて検証する([`verify::Extension`])。
+///
+/// `keleut repl` が、受理した入力ごとに足した単位を確かめるのに使う。
+/// 誤りのときは `ext` を変えない。
+pub fn verify_extension(
+    ext: &mut verify::Extension,
+    p: &Program,
+    lim: &Limits,
+) -> Result<(), Error> {
+    let n = lim.max_nest;
+    on_stack(lim.stack_bytes, || ext.check(p, n))
+}
+
 /// 正準のバイナリを書く。
 pub fn write_kir(p: &Program) -> Result<Vec<u8>, Error> {
     write_kir_with(p, &Limits::default())

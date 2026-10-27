@@ -212,6 +212,23 @@ fn symbol_form(units: &HashSet<&str>, what: &str, sym: &str) -> V<()> {
     Ok(())
 }
 
+/// [`symbol_form`] と同じで、単位の鍵を前に確かめた鍵 `old` と足した鍵 `new` から探す([`Extension`])。
+fn symbol_form_in(old: &HashSet<String>, new: &HashSet<&str>, what: &str, sym: &str) -> V<()> {
+    match sym.rfind('/') {
+        None => fail!("{what}の記号 {sym} が 単位の鍵/名前 の形ではありません"),
+        Some(i) => {
+            if i == sym.len() - 1 {
+                fail!("{what}の記号 {sym} の名前の部分が空です");
+            }
+            let k = &sym[..i];
+            if !old.contains(k) && !new.contains(k) {
+                fail!("{what}の記号 {sym} の単位の鍵 {k} が単位の表にありません");
+            }
+        }
+    }
+    Ok(())
+}
+
 /// `runtime` の印が付いてよい操作(IRSpec 13.8 節の 14)。
 fn is_runtime_op(e: &Effect, o: &Op) -> bool {
     e.sym == "prelude/Console" && o.name == "write" && o.arity == 1
@@ -327,9 +344,25 @@ impl Ctx<'_> {
         Ok(())
     }
 
-    fn origins(&mut self) -> V<()> {
+    /// `m` より後ろの項目について、関数を作る場所を決める。
+    ///
+    /// `self.origins` の `m.functions` より前の項目は決めてあるものとして残す。
+    /// 後ろの項目が前の関数を作る場所になっていれば、作る場所が 2 つになるので拒否する。
+    /// 誤りのときは、`self.origins` を `m.functions` より前の項目だけに戻す。
+    fn origins_from(&mut self, m: &Marks) -> V<()> {
+        let mut origins: Vec<Option<Origin>> = std::mem::take(&mut self.origins);
+        origins.truncate(m.functions);
+        origins.resize(self.p.functions.len(), None);
+        let r = self.origins_into(&mut origins, m);
+        if r.is_err() {
+            origins.truncate(m.functions);
+        }
+        self.origins = origins;
+        r
+    }
+
+    fn origins_into(&self, origins: &mut [Option<Origin>], m: &Marks) -> V<()> {
         let p = self.p;
-        let mut origins: Vec<Option<Origin>> = vec![None; p.functions.len()];
         let mut add = |ctx: &Ctx<'_>, f: FnId, kind: FnKind, o: Origin| -> V<()> {
             let func = ctx.func(f)?;
             if origins[f.index()].is_some() {
@@ -346,14 +379,14 @@ impl Ctx<'_> {
             origins[f.index()] = Some(o);
             Ok(())
         };
-        for g in &p.globals {
+        for g in &p.globals[m.globals..] {
             match g.kind {
                 GlobalKind::Fn(f) => add(self, f, FnKind::Lambda, Origin::Root)?,
                 GlobalKind::Dictabs(f) => add(self, f, FnKind::Dictabs, Origin::Root)?,
                 _ => {}
             }
         }
-        for u in &p.units {
+        for u in &p.units[m.units..] {
             for s in &u.init {
                 match s {
                     Step::DefValue { func, .. }
@@ -363,12 +396,12 @@ impl Ctx<'_> {
                 }
             }
         }
-        for i in &p.instances {
+        for i in &p.instances[m.instances..] {
             for m in &i.methods {
                 add(self, m.func, FnKind::Dictabs, Origin::Root)?;
             }
         }
-        for (i, f) in p.functions.iter().enumerate() {
+        for (i, f) in p.functions.iter().enumerate().skip(m.functions) {
             let fid = FnId(i as u32);
             let mut acc = Vec::new();
             if let Some(g) = f.guard {
@@ -379,12 +412,11 @@ impl Ctx<'_> {
                 add(self, g, kind, o)?;
             }
         }
-        for (i, f) in p.functions.iter().enumerate() {
+        for (i, f) in p.functions.iter().enumerate().skip(m.functions) {
             if origins[i].is_none() {
                 fail!("関数 {} を作る場所がありません", f.sym);
             }
         }
-        self.origins = origins;
         Ok(())
     }
 
@@ -1133,17 +1165,21 @@ impl Ctx<'_> {
     /// `handlebody` の関数が長い鎖をなすとき、関数ごとに鎖をたどり直すと入力の大きさの 2 乗の時間がかかるからである。
     /// `memo` の値は、まだたどっていなければ `Unseen`、いまたどっている途中なら `Walking`、決まれば `Done` である。
     /// たどる途中で `Walking` の関数に戻れば鎖は輪になっており、その途中の関数はどれも持ち主を持たない。
-    fn owner(&self, memo: &mut [OwnerMemo], f: FnId) -> V<Option<FnId>> {
+    fn owner(&self, memo: &mut [OwnerMemo], base: usize, f: FnId) -> V<Option<FnId>> {
         let mut path = Vec::new();
         let mut cur = f;
         let found = loop {
             let func = self.func(cur)?;
-            match memo[cur.index()] {
+            // 足した関数の作る場所は足した関数の中にあるので、前の関数には届かない。
+            let Some(slot) = cur.index().checked_sub(base) else {
+                break None;
+            };
+            match memo[slot] {
                 OwnerMemo::Done(o) => break o,
                 OwnerMemo::Walking => break None,
                 OwnerMemo::Unseen => {}
             }
-            memo[cur.index()] = OwnerMemo::Walking;
+            memo[slot] = OwnerMemo::Walking;
             path.push(cur);
             match (func.kind, self.origin(cur)) {
                 (FnKind::Opclause, _) => break Some(cur),
@@ -1159,21 +1195,23 @@ impl Ctx<'_> {
             }
         };
         for g in path {
-            memo[g.index()] = OwnerMemo::Done(found);
+            memo[g.index() - base] = OwnerMemo::Done(found);
         }
         Ok(found)
     }
 
-    fn check_classes(&self, resumes: &[Vec<bool>]) -> V<()> {
+    /// `resumes` は関数 `base` 以降の、関数ごとの `resume` の末尾の印である。
+    fn check_classes(&self, base: usize, resumes: &[Vec<bool>]) -> V<()> {
         let p = self.p;
         let mut owned: HashMap<FnId, Vec<bool>> = HashMap::new();
-        let mut memo = vec![OwnerMemo::Unseen; p.functions.len()];
-        for (i, rs) in resumes.iter().enumerate() {
+        let mut memo = vec![OwnerMemo::Unseen; p.functions.len() - base];
+        for (k, rs) in resumes.iter().enumerate() {
             if rs.is_empty() {
                 continue;
             }
+            let i = base + k;
             let fid = FnId(i as u32);
-            match self.owner(&mut memo, fid)? {
+            match self.owner(&mut memo, base, fid)? {
                 None => fail!(
                     "関数 {}: resume を書けない関数に resume があります",
                     p.functions[i].sym
@@ -1181,7 +1219,7 @@ impl Ctx<'_> {
                 Some(o) => owned.entry(o).or_default().extend_from_slice(rs),
             }
         }
-        for (i, f) in p.functions.iter().enumerate() {
+        for (i, f) in p.functions.iter().enumerate().skip(base) {
             let fid = FnId(i as u32);
             if let Origin::Site {
                 h_op: Some((e, o, written)),
@@ -1258,9 +1296,11 @@ impl Ctx<'_> {
         Ok(())
     }
 
-    fn check_units(&self) -> V<()> {
+    /// `m` より後ろの単位の手順と、後ろの大域とインスタンスの定義を確かめる。
+    fn check_units(&self, m: &Marks) -> V<()> {
         let p = self.p;
-        if let Some(u) = p.units.first()
+        if m.units == 0
+            && let Some(u) = p.units.first()
             && !u.init.is_empty()
         {
             fail!("builtin の単位が初期化の手順を持ちます");
@@ -1286,7 +1326,7 @@ impl Ctx<'_> {
             Ok(())
         };
         let is_value: fn(&GlobalKind) -> bool = |k| matches!(k, GlobalKind::Value(_));
-        for u in &p.units {
+        for u in &p.units[m.units..] {
             for s in &u.init {
                 match s {
                     Step::DefValue { global, func } => {
@@ -1357,7 +1397,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        for (i, g) in p.globals.iter().enumerate() {
+        for (i, g) in p.globals.iter().enumerate().skip(m.globals) {
             let gid = GlobalId(i as u32);
             match g.kind {
                 GlobalKind::Builtin => {
@@ -1372,7 +1412,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        for (i, inst) in p.instances.iter().enumerate() {
+        for (i, inst) in p.instances.iter().enumerate().skip(m.instances) {
             if !inst_defined.contains(&InstanceId(i as u32)) {
                 fail!("インスタンス {} を定義する手順がありません", inst.sym);
             }
@@ -1380,8 +1420,8 @@ impl Ctx<'_> {
         Ok(())
     }
 
-    fn check_instances(&self) -> V<()> {
-        for i in &self.p.instances {
+    fn check_instances(&self, from: usize) -> V<()> {
+        for i in &self.p.instances[from..] {
             let cl = self.cls(i.class)?;
             self.ty(i.head)?;
             let mut names = Vec::new();
@@ -1427,69 +1467,77 @@ impl Ctx<'_> {
         Ok(())
     }
 
-    fn check_builtins(&self) -> V<()> {
+    /// 表の先頭の組み込みの項目は、`m` が空(プログラムの全体を確かめる)ときだけ確かめる。
+    fn check_builtins(&self, m: &Marks) -> V<()> {
         let p = self.p;
         let is_builtin = |s: &str| unit_of_symbol(s) == "builtin";
+        let whole = *m == Marks::default();
         // 型
-        if p.types.len() < builtins::TYPES.len()
-            || !builtins::TYPES
-                .iter()
-                .zip(&p.types)
-                .all(|(w, t)| builtin_name(&t.sym) == Some(*w) && t.ctors.is_empty())
+        if whole
+            && (p.types.len() < builtins::TYPES.len()
+                || !builtins::TYPES
+                    .iter()
+                    .zip(&p.types)
+                    .all(|(w, t)| builtin_name(&t.sym) == Some(*w) && t.ctors.is_empty()))
         {
             fail!("型の表の先頭が、付録 A の組み込みの型の並びと合いません");
         }
-        for t in &p.types[builtins::TYPES.len()..] {
+        for t in p.types.iter().skip(builtins::TYPES.len().max(m.types)) {
             if is_builtin(&t.sym) {
                 fail!("組み込みでない位置に組み込みの型 {} があります", t.sym);
             }
         }
         // クラス
-        if p.classes.len() < builtins::CLASSES.len()
-            || !builtins::CLASSES
-                .iter()
-                .zip(&p.classes)
-                .all(|((w, ms), c)| {
-                    builtin_name(&c.sym) == Some(*w)
-                        && c.methods.len() == ms.len()
-                        && c.methods
-                            .iter()
-                            .zip(ms.iter())
-                            .all(|(m, n)| m.name == *n && m.dicts == 0)
-                })
+        if whole
+            && (p.classes.len() < builtins::CLASSES.len()
+                || !builtins::CLASSES
+                    .iter()
+                    .zip(&p.classes)
+                    .all(|((w, ms), c)| {
+                        builtin_name(&c.sym) == Some(*w)
+                            && c.methods.len() == ms.len()
+                            && c.methods
+                                .iter()
+                                .zip(ms.iter())
+                                .all(|(m, n)| m.name == *n && m.dicts == 0)
+                    }))
         {
             fail!("クラスの表の先頭が、付録 A の組み込みのクラスの並びと合いません");
         }
-        for c in &p.classes[builtins::CLASSES.len()..] {
+        for c in p
+            .classes
+            .iter()
+            .skip(builtins::CLASSES.len().max(m.classes))
+        {
             if is_builtin(&c.sym) {
                 fail!("組み込みでない位置に組み込みのクラス {} があります", c.sym);
             }
         }
         // 値
-        if p.globals.len() < builtins::VALUES.len()
-            || !builtins::VALUES
-                .iter()
-                .zip(&p.globals)
-                .all(|(w, g)| builtin_name(&g.sym) == Some(*w) && g.kind == GlobalKind::Builtin)
+        if whole
+            && (p.globals.len() < builtins::VALUES.len()
+                || !builtins::VALUES.iter().zip(&p.globals).all(|(w, g)| {
+                    builtin_name(&g.sym) == Some(*w) && g.kind == GlobalKind::Builtin
+                }))
         {
             fail!("大域の表の先頭が、付録 A の組み込みの値の並びと合いません");
         }
-        for g in &p.globals[builtins::VALUES.len()..] {
+        for g in p.globals.iter().skip(builtins::VALUES.len().max(m.globals)) {
             if is_builtin(&g.sym) || g.kind == GlobalKind::Builtin {
                 fail!("組み込みでない位置に組み込みの値 {} があります", g.sym);
             }
         }
-        for e in &p.effects {
+        for e in &p.effects[m.effects..] {
             if is_builtin(&e.sym) {
                 fail!("単位 builtin のエフェクト {} があります", e.sym);
             }
         }
-        for i in &p.instances {
+        for i in &p.instances[m.instances..] {
             if is_builtin(&i.sym) {
                 fail!("単位 builtin のインスタンス {} があります", i.sym);
             }
         }
-        for e in &p.effects {
+        for e in &p.effects[m.effects..] {
             for o in &e.ops {
                 if o.runtime != is_runtime_op(e, o) {
                     fail!(
@@ -1557,13 +1605,190 @@ pub fn check(p: &Program, max_nest: usize) -> Result<(), Error> {
         lim: max_nest,
         origins: Vec::new(),
     };
-    ctx.check_instances()?;
-    ctx.check_units()?;
-    ctx.check_builtins()?;
-    ctx.origins()?;
+    let whole = Marks::default();
+    ctx.check_instances(0)?;
+    ctx.check_units(&whole)?;
+    ctx.check_builtins(&whole)?;
+    ctx.origins_from(&whole)?;
     let mut resumes = Vec::with_capacity(p.functions.len());
     for (i, f) in p.functions.iter().enumerate() {
         resumes.push(ctx.check_fn(FnId(i as u32), f)?);
     }
-    ctx.check_classes(&resumes)
+    ctx.check_classes(0, &resumes)
+}
+
+// ---------------------------------------------------------------------------
+// 単位を足していくプログラム(対話的な実行)
+// ---------------------------------------------------------------------------
+
+/// 表ごとの項目の数。検証を済ませた範囲の境目に使う。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Marks {
+    /// 型。
+    pub types: usize,
+    /// エフェクト。
+    pub effects: usize,
+    /// クラス。
+    pub classes: usize,
+    /// インスタンス。
+    pub instances: usize,
+    /// 大域。
+    pub globals: usize,
+    /// 関数。
+    pub functions: usize,
+    /// 単位。
+    pub units: usize,
+}
+
+impl Marks {
+    /// プログラム `p` の表の大きさ。
+    pub fn of(p: &Program) -> Marks {
+        Marks {
+            types: p.types.len(),
+            effects: p.effects.len(),
+            classes: p.classes.len(),
+            instances: p.instances.len(),
+            globals: p.globals.len(),
+            functions: p.functions.len(),
+            units: p.units.len(),
+        }
+    }
+}
+
+/// 単位を後ろに足していくプログラムの検証の状態(`keleut repl`)。
+///
+/// 対話的な実行は、受理した入力ごとに単位を 1 つプログラムの後ろに足し、前の単位はそのまま残す。
+/// [`Extension::check`] は、前に確かめた範囲より後ろの項目だけを [`check`] と同じ規則で確かめる。
+/// 後ろの項目は前の項目を指せるが、前の項目は後ろの項目を指さないので、確かめる手間は足した項目の大きさに比例する。
+///
+/// [`check`] と違うのは次の 2 点である。
+///
+/// - 単位の列は `builtin`、`prelude` で始まればよく、`main` で終わらなくてよい。
+/// - 記号の一意性は、前に確かめた記号の集まりと突き合わせる。
+#[derive(Default)]
+pub struct Extension {
+    done: Marks,
+    syms: [HashSet<String>; 6],
+    keys: HashSet<String>,
+    origins: Vec<Option<Origin>>,
+}
+
+impl Extension {
+    /// まだ何も確かめていない状態。
+    pub fn new() -> Extension {
+        Extension::default()
+    }
+
+    /// 確かめ終えた範囲。
+    pub fn done(&self) -> Marks {
+        self.done
+    }
+
+    /// 確かめ終えた範囲より後ろの項目を確かめる。
+    ///
+    /// `p` は、前に確かめたプログラムの表の後ろに項目を足したものでなければならない
+    /// (前の項目と、前の式、辞書、パターンのノードは変えない)。
+    /// 誤りのときは状態を変えないので、足した項目を除いたプログラムで続けられる。
+    pub fn check(&mut self, p: &Program, max_nest: usize) -> Result<(), Error> {
+        let m = self.done;
+        let now = Marks::of(p);
+        if now.types < m.types
+            || now.effects < m.effects
+            || now.classes < m.classes
+            || now.instances < m.instances
+            || now.globals < m.globals
+            || now.functions < m.functions
+            || now.units < m.units
+        {
+            fail!("確かめた範囲より表が短くなっています");
+        }
+        if !(p.units.len() >= 2 && p.units[0].key == "builtin" && p.units[1].key == "prelude") {
+            fail!("単位の列が builtin、prelude で始まる形になっていません");
+        }
+        let keys: Vec<&str> = p.units[m.units..].iter().map(|u| u.key.as_str()).collect();
+        let mut new_keys: HashSet<&str> = HashSet::new();
+        for k in &keys {
+            if self.keys.contains(*k) || !new_keys.insert(k) {
+                fail!("単位の記号が重なります: {k}");
+            }
+        }
+        let fresh = |what: &str, old: &HashSet<String>, syms: Vec<&str>| -> V<()> {
+            let mut seen = HashSet::new();
+            for s in syms {
+                if old.contains(s) || !seen.insert(s) {
+                    fail!("{what}の記号が重なります: {s}");
+                }
+            }
+            Ok(())
+        };
+        let tsyms: Vec<&str> = p.types[m.types..].iter().map(|t| t.sym.as_str()).collect();
+        let esyms: Vec<&str> = p.effects[m.effects..]
+            .iter()
+            .map(|e| e.sym.as_str())
+            .collect();
+        let csyms: Vec<&str> = p.classes[m.classes..]
+            .iter()
+            .map(|c| c.sym.as_str())
+            .collect();
+        let isyms: Vec<&str> = p.instances[m.instances..]
+            .iter()
+            .map(|i| i.sym.as_str())
+            .collect();
+        let gsyms: Vec<&str> = p.globals[m.globals..]
+            .iter()
+            .map(|g| g.sym.as_str())
+            .collect();
+        let fsyms: Vec<&str> = p.functions[m.functions..]
+            .iter()
+            .map(|f| f.sym.as_str())
+            .collect();
+        let all = [&tsyms, &esyms, &csyms, &isyms, &gsyms, &fsyms];
+        let whats = ["型", "エフェクト", "クラス", "インスタンス", "大域", "関数"];
+        for ((what, old), syms) in whats.iter().zip(&self.syms).zip(all) {
+            fresh(what, old, syms.clone())?;
+        }
+        for (what, syms) in whats.iter().zip(all) {
+            for s in syms {
+                symbol_form_in(&self.keys, &new_keys, what, s)?;
+            }
+        }
+        for t in &p.types[m.types..] {
+            unique_names("型", &t.sym, t.ctors.iter().map(|c| c.name.as_str()))?;
+        }
+        for e in &p.effects[m.effects..] {
+            unique_names("エフェクト", &e.sym, e.ops.iter().map(|o| o.name.as_str()))?;
+        }
+        for c in &p.classes[m.classes..] {
+            unique_names("クラス", &c.sym, c.methods.iter().map(|m| m.name.as_str()))?;
+        }
+        let mut ctx = Ctx {
+            p,
+            lim: max_nest,
+            origins: std::mem::take(&mut self.origins),
+        };
+        let r = (|| -> V<()> {
+            ctx.check_instances(m.instances)?;
+            ctx.check_units(&m)?;
+            ctx.check_builtins(&m)?;
+            ctx.origins_from(&m)?;
+            let mut resumes = Vec::with_capacity(p.functions.len() - m.functions);
+            for (i, f) in p.functions.iter().enumerate().skip(m.functions) {
+                resumes.push(ctx.check_fn(FnId(i as u32), f)?);
+            }
+            ctx.check_classes(m.functions, &resumes)
+        })();
+        let mut origins = ctx.origins;
+        if r.is_err() {
+            origins.truncate(m.functions);
+            self.origins = origins;
+            return r;
+        }
+        self.origins = origins;
+        for (set, syms) in self.syms.iter_mut().zip(all) {
+            set.extend(syms.iter().map(|s| s.to_string()));
+        }
+        self.keys.extend(keys.iter().map(|s| s.to_string()));
+        self.done = now;
+        Ok(())
+    }
 }
