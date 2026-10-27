@@ -12,7 +12,7 @@
 [[diff]]
 file = "diktor/test/if.t"
 line = 259
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -33,28 +33,28 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 168
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 170
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 176
-pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 180
-pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -68,35 +68,35 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 195
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 206
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 208
-pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 215
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 12
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -166,7 +166,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 149
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -187,7 +187,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 191
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -250,7 +250,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 307
-pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
+pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
@@ -261,7 +261,7 @@ ledger = "V213"
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 636
-pairs = ["kf", "ki", "kj", "kw"]
+pairs = ["kf", "ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -274,7 +274,7 @@ ledger = "V217"
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 632
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -289,7 +289,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 57
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -305,7 +305,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 63
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -321,7 +321,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 70
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -337,7 +337,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 73
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -353,7 +353,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 26
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -369,7 +369,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 42
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -385,7 +385,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 68
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -401,7 +401,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 77
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 against = "pair"
@@ -409,7 +409,7 @@ against = "pair"
 [[diff]]
 file = "diktor/test/eval.t"
 line = 845
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -429,7 +429,7 @@ against = "record"
 [[diff]]
 file = "conformance/bytes/bytes.t"
 line = 50
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
 ledger = "V218"
 against = "pair"
@@ -440,21 +440,21 @@ against = "pair"
 [[diff]]
 file = "diktor/test/import.t"
 line = 298
-pairs = ["kf", "x-ir"]
+pairs = ["kf", "x-ir", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 339
-pairs = ["kf", "x-ir"]
+pairs = ["kf", "x-ir", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
 line = 668
-pairs = ["kf", "x-ir"]
+pairs = ["kf", "x-ir", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -514,14 +514,14 @@ ledger = "V217"
 [[diff]]
 file = "corpus/ir_run/0005-hw.kel"
 line = 1
-pairs = ["kf", "x-ir"]
+pairs = ["kf", "x-ir", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
 [[diff]]
 file = "corpus/resolved_names/0002-pmuse.kel"
 line = 1
-pairs = ["kf", "x-ir"]
+pairs = ["kf", "x-ir", "kr-ki"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
@@ -540,7 +540,7 @@ against = "record"
 [[diff]]
 file = "conformance/oom/oom.t"
 line = 15
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
 ledger = "V215"
 against = "pair"
@@ -556,7 +556,7 @@ against = "record"
 [[diff]]
 file = "conformance/oom/oom.t"
 line = 31
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
 ledger = "V215"
 against = "pair"
@@ -576,7 +576,7 @@ against = "record"
 [[diff]]
 file = "conformance/depth/limit.t"
 line = 23
-pairs = ["ki", "kj", "kw"]
+pairs = ["ki", "kj", "kw", "kr-ki"]
 reason = "限度は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
 ledger = "V213"
 against = "pair"
