@@ -46,6 +46,22 @@ struct Chunk {
     base: u64,
 }
 
+/// 使っている最後の塊の範囲(JIT がフレームを置く速い道で読む)。
+///
+/// `lo` と `hi` は塊の先頭と終わりの論理的な位置、`ptr` は塊の先頭の語の番地である。
+/// 塊が無いときは `lo == hi == 0` で、速い道はどのフレームも置けない。
+/// [`ValueStack`] は、使っている塊を変えるたびにこれを書き直すので、いつも使っている最後の塊を表す。
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct StackWindow {
+    /// 塊の先頭の論理的な位置。
+    pub lo: u64,
+    /// 塊の終わり(最後の語の次)の論理的な位置。
+    pub hi: u64,
+    /// 塊の先頭の語の番地。
+    pub ptr: usize,
+}
+
 /// 分割値スタック。
 pub struct ValueStack {
     chunks: Vec<Chunk>,
@@ -55,6 +71,8 @@ pub struct ValueStack {
     spare: Option<Box<[u64]>>,
     /// 塊を取れなかった後に、次に使う予備の塊。
     armed: Option<Box<[u64]>>,
+    /// 使っている最後の塊の範囲。
+    win: StackWindow,
 }
 
 impl Default for ValueStack {
@@ -83,7 +101,26 @@ impl ValueStack {
             cur: 0,
             spare: None,
             armed: None,
+            win: StackWindow::default(),
         }
+    }
+
+    /// 使っている最後の塊の範囲を書き直す。
+    #[inline]
+    fn sync_win(&mut self) {
+        let c = &mut self.chunks[self.cur];
+        self.win = StackWindow {
+            lo: c.base,
+            hi: c.base + c.mem.len() as u64,
+            ptr: c.mem.as_mut_ptr() as usize,
+        };
+    }
+
+    /// 使っている最後の塊の範囲の番地(JIT の文脈に置く)。
+    ///
+    /// 範囲は値スタックの中にあるので、値スタックが動かない間だけ使える。
+    pub fn window_ptr(&mut self) -> *mut StackWindow {
+        &mut self.win
     }
 
     /// 新しい塊の領域。取れなければ予備を次に使える塊にして失敗を返し、予備があればそれを使う。
@@ -117,11 +154,15 @@ impl ValueStack {
     /// どの塊にも入らない位置は処理系の不具合なので、release の組みでも panic にする(スレッドが落ちて 70 になる)。
     #[inline]
     pub fn ptr_at(&mut self, pos: u64) -> *mut u64 {
+        let old = self.cur;
         while pos < self.chunks[self.cur].base {
             self.cur -= 1;
         }
         while self.cur + 1 < self.chunks.len() && pos >= self.chunks[self.cur + 1].base {
             self.cur += 1;
+        }
+        if self.cur != old {
+            self.sync_win();
         }
         let c = &mut self.chunks[self.cur];
         let off = (pos - c.base) as usize;
@@ -164,10 +205,15 @@ impl ValueStack {
             let mem = self.take_mem(words)?;
             self.chunks.push(Chunk { mem, base: 0 });
             self.cur = 0;
+            self.sync_win();
             return Ok(0);
         }
+        let old = self.cur;
         while self.cur > 0 && top < self.chunks[self.cur].base {
             self.cur -= 1;
+        }
+        if self.cur != old {
+            self.sync_win();
         }
         {
             let c = &self.chunks[self.cur];
@@ -195,6 +241,7 @@ impl ValueStack {
             });
         }
         self.cur = i;
+        self.sync_win();
         Ok(next_base)
     }
 }
