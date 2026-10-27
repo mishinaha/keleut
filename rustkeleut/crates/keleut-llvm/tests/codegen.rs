@@ -35,13 +35,18 @@ fn fixture_の関数をすべて翻訳できる() {
                 continue;
             }
             let fid = FuncId(i as u32);
-            let src = codegen::module(&lp, fid, 0x1000, &triple, &layout).unwrap();
+            let src = codegen::module(&lp, fid, 0x1000, 0x2000, &triple, &layout).unwrap();
             // 同じ LLJIT に足すので、名前を試験の入力ごとに変える。
             let name = format!("{}_{k}", codegen::func_name(fid));
-            let src = src.replace(
-                &format!("@{}(", codegen::func_name(fid)),
-                &format!("@{name}("),
-            );
+            let src = src
+                .replace(
+                    &format!("@{}(", codegen::func_name(fid)),
+                    &format!("@{name}("),
+                )
+                .replace(
+                    &format!("@{}.r(", codegen::func_name(fid)),
+                    &format!("@{name}.r("),
+                );
             jit.add_ir(&name, &src, "default<O2>")
                 .unwrap_or_else(|e| panic!("{}: {}: {e}", p.display(), f.sym));
             jit.lookup(&name)

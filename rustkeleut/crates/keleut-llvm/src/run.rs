@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 
-use keleut_interp::native::{EnterFn, Native, TierMode, Translator};
+use keleut_interp::native::{EnterFn, Native, PendingInit, TierMode, Translator};
 use keleut_interp::{Interp, Setup};
 use keleut_lir::{FuncId, Program};
 use keleut_rt::Stop;
@@ -81,7 +81,7 @@ impl Default for RunOptions {
 
 /// 翻訳のスレッドが起動時に返すもの。
 struct Init {
-    entry: Arc<[AtomicUsize]>,
+    stub: usize,
     enter: usize,
 }
 
@@ -108,6 +108,7 @@ type Failure = Arc<(AtomicBool, Mutex<Option<String>>)>;
 #[allow(clippy::too_many_arguments)]
 fn jit_thread(
     prog: &Program,
+    entry: Arc<[AtomicUsize]>,
     passes: &str,
     init: mpsc::Sender<Result<Init, String>>,
     req: mpsc::Receiver<(FuncId, bool)>,
@@ -116,11 +117,11 @@ fn jit_thread(
     stop: Arc<AtomicBool>,
     busy: Arc<AtomicBool>,
 ) {
-    let start = || -> Result<(Jit, Init, usize, String, String), String> {
+    type Started = (Jit, Init, Box<[AtomicUsize]>, usize, String, String);
+    let start = || -> Result<Started, String> {
         let jit = Jit::new()?;
         jit.define_absolute(&keleut_interp::native::helper_symbols())?;
         let n = prog.funcs.len();
-        let entry: Arc<[AtomicUsize]> = (0..n).map(|_| AtomicUsize::new(0)).collect();
         let table = entry.as_ptr() as usize;
         let (triple, layout) = (jit.triple(), jit.data_layout());
         let stubs = format!(
@@ -129,21 +130,27 @@ fn jit_thread(
         );
         jit.add_ir("keleut-stubs", &stubs, passes)?;
         let stub = jit.lookup("interp_stub")?;
+        let stub_r = jit.lookup("interp_stub_r")?;
+        let rentry: Box<[AtomicUsize]> = (0..n).map(|_| AtomicUsize::new(stub_r)).collect();
         let enter = jit.lookup("enter_tailcc")?;
         for e in entry.iter() {
-            e.store(stub, Ordering::Relaxed);
+            e.store(stub, Ordering::Release);
         }
-        Ok((jit, Init { entry, enter }, table, triple, layout))
+        Ok((jit, Init { stub, enter }, rentry, table, triple, layout))
     };
-    let (jit, entry, table, triple, layout) = match start() {
-        Ok((jit, i, table, triple, layout)) => {
-            let entry = i.entry.clone();
+    let (jit, entry, rentry, table, triple, layout) = match start() {
+        Ok((jit, i, rentry, table, triple, layout)) => {
             if init.send(Ok(i)).is_err() {
                 return;
             }
-            (jit, entry, table, triple, layout)
+            (jit, entry, rentry, table, triple, layout)
         }
         Err(e) => {
+            // 起動を待たずに走り始めたミューテータ(`threshold=N`)は、頼んだ関数を調べるときにこの印を見る。
+            if let Ok(mut m) = failure.1.lock() {
+                m.get_or_insert_with(|| format!("LLVM の JIT を始められません: {e}"));
+            }
+            failure.0.store(true, Ordering::Release);
             let _ = init.send(Err(e));
             return;
         }
@@ -154,13 +161,17 @@ fn jit_thread(
             // 実行が終わった。残りの待たない頼みは翻訳しない。
             break;
         }
-        let src = codegen::module(prog, f, table, &triple, &layout);
+        let rtable = rentry.as_ptr() as usize;
+        let src = codegen::module(prog, f, table, rtable, &triple, &layout);
         if stop.load(Ordering::SeqCst) {
             break;
         }
         let r = src.and_then(|src| {
             let name = codegen::func_name(f);
             jit.add_ir(&name, &src, passes)?;
+            let ra = jit.lookup(&format!("{name}.r"))?;
+            // レジスタの入口を先に書く(入口の表の項目を見て翻訳済みと知った呼び出しは、どちらの入口も使える)。
+            rentry[f.index()].store(ra, Ordering::Release);
             jit.lookup(&name)
         });
         busy.store(false, Ordering::SeqCst);
@@ -182,7 +193,9 @@ fn jit_thread(
 
 /// ネイティブの後段を付けてプログラムを実行し、終了状態を返す。
 ///
-/// 実行が終わったとき翻訳のスレッドがまだ翻訳していれば、その翻訳を待たずに、終了状態 `code` でプロセスを終える(戻らない)。
+/// `threshold=N` では、実行が終わると、翻訳のスレッドを待たずにいつも終了状態 `code` でプロセスを終える(戻らない)。
+/// 翻訳のスレッドは、翻訳の途中か、まだ LLJIT とスタブを作る起動の途中でありうるからである。
+/// ほかの段の設定では、実行が終わったとき翻訳のスレッドがまだ翻訳しているときだけ、その翻訳を待たずに同じように終える。
 /// 待たない頼み(`threshold=N`)の翻訳は大きな関数では数分かかることがあり、結果を変えない翻訳のために終了を遅らせないためである。
 /// このとき標準出力と標準エラーを flush してから `_exit` を呼ぶ。
 /// `exit` を使わないのは、翻訳のスレッドが LLVM の中にいる間に LLVM の静的な破棄子を走らせないためである。
@@ -215,6 +228,13 @@ unsafe extern "C" {
     fn _exit(status: i32) -> !;
 }
 
+/// 翻訳のスレッドの起動を受け取る前の入口の関数。
+///
+/// 起動を受け取るまでは翻訳済みの関数が無いので、呼ばれない。
+unsafe extern "C" fn no_enter(_: *mut keleut_interp::native::NativeCtx, _: usize) -> u64 {
+    std::process::abort()
+}
+
 /// 標準出力と標準エラーを flush し、終了の処理を走らせずにプロセスを終える。
 fn exit_now(code: u8) -> ! {
     use std::io::Write;
@@ -245,34 +265,53 @@ fn run_with(
         let stop2 = stop.clone();
         let busy = Arc::new(AtomicBool::new(false));
         let busy2 = busy.clone();
+        // 入口の表。翻訳のスレッドが起動を終えるまで、どの項目も 0 である。
+        let entry: Arc<[AtomicUsize]> =
+            (0..prog.funcs.len()).map(|_| AtomicUsize::new(0)).collect();
+        let entry2 = entry.clone();
         let spawned = std::thread::Builder::new()
             .name("keleut-jit".to_string())
             .stack_size(JIT_STACK)
             .spawn_scoped(s, move || {
-                jit_thread(prog, passes, init_tx, req_rx, rep_tx, fail2, stop2, busy2)
+                jit_thread(
+                    prog, entry2, passes, init_tx, req_rx, rep_tx, fail2, stop2, busy2,
+                )
             });
         if let Err(e) = spawned {
             eprintln!("keleut: 内部エラー: JIT のスレッドを作れません: {e}");
             return 70;
         }
-        let init = match init_rx.recv() {
-            Ok(Ok(i)) => i,
-            Ok(Err(e)) => {
-                eprintln!("keleut: 内部エラー: LLVM の JIT を始められません: {e}");
-                return 70;
-            }
-            Err(_) => {
-                eprintln!("keleut: 内部エラー: JIT のスレッドが落ちました");
-                return 70;
-            }
-        };
-        let mut parts = Some((init, req_tx, rep_rx, failure));
-        let mut setup = move |it: &mut Interp<'_>| -> Result<(), Stop> {
-            let (init, req_tx, rep_rx, failure) = parts
-                .take()
-                .ok_or_else(|| Stop::Internal("ネイティブの後段を 2 度付けました".into()))?;
+        // `threshold=N` では、LLJIT の作成とスタブの翻訳(数ミリ秒)を待たずにインタプリタで走り始める。
+        // 頼んだ関数の翻訳が済んで入口の表の項目が 0 でなくなったときに、起動の結果を受け取る。
+        // ほかの段の設定は、最初の呼び出しで翻訳を待つので、ここで起動を待つ。
+        let lazy = matches!(mode, TierMode::Threshold(_));
+        let recv_init = move || -> Result<(u64, EnterFn), String> {
+            let init = match init_rx.recv() {
+                Ok(Ok(i)) => i,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => return Err("JIT のスレッドが落ちました".to_string()),
+            };
             // SAFETY: enter は翻訳した enter_tailcc の番地で、型は EnterFn と同じである。
             let enter: EnterFn = unsafe { std::mem::transmute::<usize, EnterFn>(init.enter) };
+            Ok((init.stub as u64, enter))
+        };
+        let (eager, pending): (Option<EnterFn>, Option<PendingInit>) = if lazy {
+            (None, Some(Box::new(recv_init)))
+        } else {
+            match recv_init() {
+                Ok((_, enter)) => (Some(enter), None),
+                Err(e) => {
+                    eprintln!("keleut: 内部エラー: LLVM の JIT を始められません: {e}");
+                    return 70;
+                }
+            }
+        };
+        let mut parts = Some((eager, pending, entry, req_tx, rep_rx, failure));
+        let mut setup = move |it: &mut Interp<'_>| -> Result<(), Stop> {
+            let (eager, pending, entry, req_tx, rep_rx, failure) = parts
+                .take()
+                .ok_or_else(|| Stop::Internal("ネイティブの後段を 2 度付けました".into()))?;
+            let enter = eager.unwrap_or(no_enter);
             let request = Box::new(
                 move |f: FuncId, wait: bool| -> Result<Option<usize>, String> {
                     req_tx
@@ -288,14 +327,17 @@ fn run_with(
                 },
             );
             let translator = Translator { request, failure };
-            let n = Native::new(it.rt.prog, init.entry, enter, mode, translator);
+            let mut n = Native::new(it.rt.prog, entry, enter, mode, translator);
+            if let Some(p) = pending {
+                n.set_pending_init(p);
+            }
             it.set_native(Box::new(n));
             Ok(())
         };
         let code = go(prog, &opts.base, &mut setup);
         stop.store(true, Ordering::SeqCst);
-        if exit_busy && busy.load(Ordering::SeqCst) {
-            // 翻訳の途中である。結果は出し終えたので、翻訳を待たずに終える。
+        if exit_busy && (lazy || busy.load(Ordering::SeqCst)) {
+            // 翻訳の途中か、翻訳のスレッドがまだ起動の途中でありうる。結果は出し終えたので、待たずに終える。
             exit_now(code);
         }
         code
@@ -311,7 +353,7 @@ pub fn dump_ir(prog: &Program) -> Result<String, String> {
     for (i, f) in prog.funcs.iter().enumerate() {
         s.push('\n');
         if keleut_interp::native::jit_eligible(f) {
-            s.push_str(&codegen::function(prog, FuncId(i as u32), 0)?);
+            s.push_str(&codegen::function(prog, FuncId(i as u32), 0, 0)?);
         } else {
             s.push_str(&format!(
                 "; {} ({}): インタプリタに残す\n",

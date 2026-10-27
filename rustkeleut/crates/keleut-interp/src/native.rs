@@ -1,13 +1,31 @@
 //! ネイティブの後段(M91 の LLVM の JIT)とインタプリタの境目(計画 261024-1 の 6.8 節、6.9 節)。
 //!
-//! JIT の関数は `tailcc i64 @f(ptr %ctx)` の 1 つの型を持ち、戻り値は一様な語か番兵(`0x2`)である。
+//! JIT の関数は 2 つの入口を持つ。
+//! 値スタックで引数を受け取る入口 `tailcc i64 @f(ptr %ctx)` と、
+//! 環境と前の [`REG_ARGS`] 個の引数をレジスタで受け取る入口 `tailcc i64 @f.r(ptr %ctx, i64 %env, i64 %x0, …, i64 %x3)` である。
+//! 戻り値はどちらも一様な語か番兵(`0x2`)である。
 //! `ctx` は [`NativeCtx`] で、呼び出しの相手と、呼ばれた側のフレームの位置を運ぶ。
 //! フレームは分割値スタックに置き、形はインタプリタと同じである(`keleut_rt::stack`)。
 //!
 //! ## 呼び出しの規約
 //!
-//! 呼ぶ側は、呼ばれた側のフレームを置いてから(JIT は [`krt_prep`]、インタプリタは自分で置く)、
-//! [`NativeCtx`] の `callee`、`cur_pos`、`cur_fp`、`env` を書き、入口の表の `entry[callee]` を呼ぶ。
+//! 呼ぶ側は、呼ばれた側のフレームを置いてから(JIT は [`krt_prep`] かその場の速い道、インタプリタは自分で置く)、
+//! [`NativeCtx`] の `callee`、`cur_pos`、`cur_fp` を書く。
+//! 値スタックの入口(入口の表 `entry[callee]`)を呼ぶときは、引数をすべてスロットに書き、`env` も文脈に書く。
+//! JIT の関数どうしの直接の呼び出しとクロージャの呼び出しは、レジスタの入口の表 `rentry[callee]` を呼ぶ。
+//! このときは、前の [`REG_ARGS`] 個の引数と環境をレジスタで渡し、残りの引数だけをスロットに書く。
+//! レジスタの入口の表は、はじめスタブ `interp_stub_r` を指す。
+//! `interp_stub_r` は [`krt_store_regs`] でレジスタの引数をスロットに、環境を文脈に書いてから `interp_stub` へ移る。
+//! 値スタックの入口は、スロットと文脈から引数と環境を読んでレジスタの入口へ移る。
+//! レジスタの入口は、引数をスロットに書かずに走る。
+//! インタプリタに移るとき(スタックの下限と `alternating`)はレジスタの引数をスロットに、環境を文脈に書いてから移る。
+//! `$rt_handle` は 0 番のスロットがどの点でも根なので(`doc/lir.md` の 1.8 節)、入口でレジスタの引数をスロットに書く。
+//! そのほかのスロットは、生きているレジスタを再開点と安全点の前に書くので、入口で書かなくてよい。
+//!
+//! 呼ばれる側のフレームが値スタックの使っている最後の塊(文脈の `win`)に収まるとき、JIT のコードは [`krt_prep`] を呼ばずに、
+//! その場で見出しと文脈の欄を書く(速い道)。
+//! 自分のフレームも同じ塊にあることを確かめるので、置く位置は [`krt_prep`] と同じになる。
+//! 呼ぶ相手を実行時に知るクロージャの呼び出しは、フレームの語の数を文脈の `frames` の列から読む。
 //! 末尾の呼び出しは、自分のフレームの位置に置き直して `musttail` で呼ぶ。
 //! フレームの見出しの 3 番の語には、どの境目でも本当の呼び出し元のフレームの位置を書く。
 //! そのため、回収と継続は、インタプリタと JIT がネイティブのスタックの上で入れ子になっていても、
@@ -52,6 +70,7 @@
 //! | `mixed=SEED` | 種で決まる半分の関数([`mixed_selects`])を、初めて呼ぶときに | 翻訳した関数は JIT のコードで走る |
 //!
 //! 回数は、インタプリタが関数に入るたびに 1 増やす(自己の末尾呼び出しでフレームを再利用する場合も数える)。
+//! `threshold=N` では、翻訳のスレッドの起動(LLJIT の作成とスタブの翻訳)を待たずに走り始める([`Native::set_pending_init`])。
 //! JIT の関数の入口でインタプリタに移るときは、文脈の `force_interp` に理由を書いて `interp_stub` を `musttail` で呼ぶ。
 //! 理由は、ネイティブのスタックが下限に近いこと([`SOFT_MARGIN`])と、`alternating` の選びである。
 
@@ -110,6 +129,14 @@ pub struct NativeCtx {
     pub force_interp: u64,
     /// `alternating` の擬似乱数の状態(xorshift64)。0 なら段を選ばない(ほかの設定)。
     pub alt: u64,
+    /// 値スタックの使っている最後の塊の範囲([`keleut_rt::stack::StackWindow`])。
+    ///
+    /// JIT のコードは、呼ばれる側のフレームがこの範囲に収まるとき、[`krt_prep`] を呼ばずにその場でフレームを置く。
+    pub win: *mut keleut_rt::stack::StackWindow,
+    /// 関数の番号ごとの、フレームの語の数と見出しの 2 番の語の 2 語の列。
+    ///
+    /// 呼ぶ相手を実行時に知る呼び出し(クロージャ)も、JIT のコードがその場でフレームを置くために読む。
+    pub frames: *const u64,
 }
 
 /// [`NativeCtx`] の欄のバイトの位置。
@@ -131,6 +158,8 @@ pub mod off {
     pub const STUB: u64 = 112;
     pub const FORCE_INTERP: u64 = 120;
     pub const ALT: u64 = 128;
+    pub const WIN: u64 = 136;
+    pub const FRAMES: u64 = 144;
 }
 
 /// ネイティブのスタックの残りがこの量(バイト)を予備の検査の余裕に足したものより少なくなったら、
@@ -177,6 +206,9 @@ pub mod fx {
 
 /// Rust から tailcc の関数を呼ぶスタブ `enter_tailcc` の型。
 pub type EnterFn = unsafe extern "C" fn(*mut NativeCtx, usize) -> u64;
+
+/// 翻訳のスレッドの起動の結果(`interp_stub` と `enter_tailcc` の番地)を待って受け取る関数。
+pub type PendingInit = Box<dyn FnMut() -> Result<(u64, EnterFn), String> + Send>;
 
 /// 段の設定(計画 6.9 節の `--tier`。`interp-only` はネイティブの後段を付けないことで表す)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -239,6 +271,11 @@ pub struct Native {
     /// 入口の表(関数の番号ごとの番地)。JIT のコードはこの表の番地を定数として持つ。
     pub entry: Arc<[AtomicUsize]>,
     enter: EnterFn,
+    /// 翻訳のスレッドの起動を待たずに走り始めたとき、起動の結果(`interp_stub` と `enter_tailcc` の番地)を受け取る関数。
+    ///
+    /// 入口の表の項目は、起動が済むまで 0 で、起動が済むと `interp_stub` を指す。
+    /// ミューテータは、頼んだ関数の項目が 0 でなくなったときに初めてこれを呼ぶ([`Native::set_pending_init`])。
+    pending: Option<PendingInit>,
     state: Vec<State>,
     eligible: Vec<bool>,
     counts: Vec<u64>,
@@ -246,6 +283,8 @@ pub struct Native {
     pub mode: TierMode,
     translator: Translator,
     frames: Vec<(usize, u64)>,
+    /// `ctx.frames` が指す列。
+    _frame_tab: Box<[u64]>,
     /// 巻き戻さずに止まる誤り。
     pub fatal: Option<Stop>,
     /// 引数の受け渡しの領域(`ctx.args` が指す)。
@@ -359,6 +398,16 @@ pub fn jit_eligible(f: &Func) -> bool {
     true
 }
 
+impl Native {
+    /// 翻訳のスレッドの起動を待たずに走り始める(`threshold=N`)。
+    ///
+    /// 入口の表の項目は起動が済むまで 0 で、そのあいだは翻訳済みの関数が無い。
+    /// 頼んだ関数の項目が 0 でなくなったら、`init` で起動の結果を受け取ってから JIT のコードを呼ぶ。
+    pub fn set_pending_init(&mut self, init: PendingInit) {
+        self.pending = Some(init);
+    }
+}
+
 impl Drop for Native {
     /// 環境変数 `KELEUT_JIT_STATS` があれば、翻訳した関数の数を標準エラーに書く。
     fn drop(&mut self) {
@@ -368,7 +417,10 @@ impl Drop for Native {
         self.compiled = self
             .entry
             .iter()
-            .filter(|e| e.load(Ordering::Acquire) != stub)
+            .filter(|e| {
+                let e = e.load(Ordering::Acquire);
+                e != stub && e != 0 && self.pending.is_none()
+            })
             .count();
         LAST_LOW_STACK_ENTRIES.store(self.low_stack_entries, Ordering::Relaxed);
         LAST_COMPILED.store(self.compiled as u64, Ordering::Relaxed);
@@ -404,7 +456,7 @@ impl Native {
         mode: TierMode,
         translator: Translator,
     ) -> Native {
-        let frames = prog
+        let frames: Vec<(usize, u64)> = prog
             .funcs
             .iter()
             .map(|f| match &f.frame {
@@ -414,6 +466,10 @@ impl Native {
                 ),
                 None => (HEADER_WORDS, 0),
             })
+            .collect();
+        let frame_tab: Box<[u64]> = frames
+            .iter()
+            .flat_map(|&(fw, sizes)| [fw as u64, sizes])
             .collect();
         let mut args = vec![0u64; ARG_WORDS].into_boxed_slice();
         let alt = match mode {
@@ -441,15 +497,19 @@ impl Native {
                     .map_or(0, |e| e.load(Ordering::Relaxed) as u64),
                 force_interp: 0,
                 alt,
+                win: std::ptr::null_mut(),
+                frames: frame_tab.as_ptr(),
             },
             entry,
             enter,
+            pending: None,
             state: vec![State::Unknown; prog.funcs.len()],
             eligible: prog.funcs.iter().map(jit_eligible).collect(),
             counts: vec![0; prog.funcs.len()],
             mode,
             translator,
             frames,
+            _frame_tab: frame_tab,
             fatal: None,
             _args: args,
             compiled: 0,
@@ -490,7 +550,17 @@ impl<'p> Interp<'p> {
             State::Interp => return Ok(None),
             State::Requested => {
                 let e = n.entry[i].load(Ordering::Acquire);
-                if e as u64 != n.ctx.stub {
+                if e != 0
+                    && let Some(mut init) = n.pending.take()
+                {
+                    // 翻訳のスレッドの起動が済んだ。スタブと入口の番地を受け取る。
+                    let (stub, enter) = init().map_err(|m| {
+                        Stop::Internal(format!("LLVM の JIT を始められません: {m}"))
+                    })?;
+                    n.ctx.stub = stub;
+                    n.enter = enter;
+                }
+                if e != 0 && e as u64 != n.ctx.stub {
                     n.state[i] = State::Compiled;
                     n.compiled += 1;
                     return Ok(Some(e));
@@ -568,6 +638,7 @@ impl<'p> Interp<'p> {
         n.ctx.globals = rt.globals.as_mut_ptr().cast::<u64>();
         n.ctx.global_init = rt.global_init.as_mut_ptr().cast::<u8>();
         n.ctx.strings = rt.strings.as_ptr().cast::<u64>();
+        n.ctx.win = rt.stack.window_ptr();
         &mut n.ctx
     }
 
@@ -742,6 +813,38 @@ pub unsafe extern "C" fn krt_prep(
         place(it, ctx, fid, me, at, caller, env).unwrap_or(std::ptr::null_mut())
     })
 }
+
+/// レジスタの入口のスタブ `interp_stub_r` が、レジスタで渡された引数を置いたフレーム(文脈の `cur_fp`)のスロットに書き、環境を文脈に書く。
+///
+/// # Safety
+///
+/// [`krt_prep`] と同じ。
+pub unsafe extern "C" fn krt_store_regs(
+    ctx: *mut NativeCtx,
+    env: u64,
+    x0: u64,
+    x1: u64,
+    x2: u64,
+    x3: u64,
+) {
+    guarded(ctx, || {
+        // SAFETY: 呼び出し側の約束による。
+        let it = unsafe { interp(ctx) };
+        // SAFETY: ctx は生きている文脈で、cur_fp は置いたフレームを指す。
+        unsafe {
+            let fid = (*ctx).callee as usize;
+            let n = it.prog.funcs[fid].params.len().min(REG_ARGS);
+            let fp = (*ctx).cur_fp;
+            for (i, x) in [x0, x1, x2, x3].into_iter().take(n).enumerate() {
+                *fp.add(HEADER_WORDS + i) = x;
+            }
+            (*ctx).env = env;
+        }
+    })
+}
+
+/// レジスタで渡す引数の数(`ctx` と環境とあわせて、x86-64 の引数のレジスタ 6 つに収まる)。
+pub const REG_ARGS: usize = 4;
 
 /// JIT のフレーム(見出しは `fp`)の末尾でない呼び出しが番兵で戻った。
 ///
@@ -1680,6 +1783,7 @@ pub unsafe extern "C" fn krt_bug(ctx: *mut NativeCtx, fid: u64, what: u64) {
 pub fn helper_symbols() -> Vec<(&'static str, usize)> {
     vec![
         ("krt_prep", krt_prep as *const () as usize),
+        ("krt_store_regs", krt_store_regs as *const () as usize),
         ("krt_sentinel", krt_sentinel as *const () as usize),
         ("krt_interp_run", krt_interp_run as *const () as usize),
         ("krt_dispatch", krt_dispatch as *const () as usize),
@@ -1743,6 +1847,8 @@ mod tests {
             off::FORCE_INTERP
         );
         assert_eq!(offset_of!(NativeCtx, alt) as u64, off::ALT);
+        assert_eq!(offset_of!(NativeCtx, win) as u64, off::WIN);
+        assert_eq!(offset_of!(NativeCtx, frames) as u64, off::FRAMES);
         assert_eq!(TAILREQ.0 & 7, 4);
     }
 }

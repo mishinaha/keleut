@@ -1,11 +1,15 @@
 //! LIR の関数から LLVM IR の文面を作る(計画 261024-1 の 6.8 節)。
 //!
-//! 1 つの LIR の関数を、`tailcc i64 @kfN(ptr %ctx)` の 1 つの関数にする(`N` は関数の番号)。
+//! 1 つの LIR の関数を、レジスタの入口 `tailcc i64 @kfN.r(ptr %ctx, i64 %env, i64 ×4)` と
+//! 値スタックの入口 `tailcc i64 @kfN(ptr %ctx)` の 2 つの関数にする(`N` は関数の番号)。
+//! 値スタックの入口は、スロットと文脈から引数と環境を読んでレジスタの入口を `musttail` で呼ぶ。
 //! 規約は `keleut_interp::native` の冒頭にある。
 //!
 //! - 入口で、ネイティブのスタックの番地を文脈の下限と比べる(予備の検査)。
 //!   次に、呼ぶ側が置いたフレームの位置と見出しへのポインタ、環境を文脈から読む。
-//! - LIR のレジスタは関数の入口の `alloca` に置き(最適化で SSA の値になる)、引数はフレームのスロットから読む。
+//! - LIR のレジスタは関数の入口の `alloca` に置き(最適化で SSA の値になる)。
+//!   前の 4 個の引数と環境はレジスタの入口の引数から、残りの引数はフレームのスロットから読む。
+//! - 呼ばれる側のフレームは、値スタックの使っている最後の塊に収まれば、`krt_prep` を呼ばずにその場で置く。
 //! - 末尾でない呼び出しの前には、再開点で生きているレジスタをスロットに書き、見出しの 0 番の語に再開点を書く。
 //!   yield を受け取らない再開点(`doc/lir.md` の 17 節)では、生の区画のレジスタを書かない(回収は `any` の区画だけを読む)。
 //!   呼ばれた側が番兵で戻ったら `krt_sentinel` を呼んで自分も番兵で戻る。
@@ -35,6 +39,9 @@ use keleut_lir::{
 };
 use keleut_rt::Word;
 use keleut_rt::stack::HEADER_WORDS;
+
+/// レジスタで渡す引数の数。
+const NREG: usize = keleut_interp::native::REG_ARGS;
 
 /// 関数の LLVM IR の名前。
 pub fn func_name(f: FuncId) -> String {
@@ -89,6 +96,14 @@ pub fn stubs(entry: usize) -> String {
     format!(
         "\
 declare i64 @krt_interp_run(ptr) nounwind
+declare void @krt_store_regs(ptr, i64, i64, i64, i64, i64) nounwind
+
+define tailcc i64 @interp_stub_r(ptr %ctx, i64 %env, i64 %x0, i64 %x1, i64 %x2, i64 %x3) nounwind {{
+entry:
+  call void @krt_store_regs(ptr %ctx, i64 %env, i64 %x0, i64 %x1, i64 %x2, i64 %x3)
+  %r = musttail call tailcc i64 @interp_stub(ptr %ctx)
+  ret i64 %r
+}}
 
 define tailcc i64 @interp_stub(ptr %ctx) nounwind {{
 entry:
@@ -165,6 +180,9 @@ enum Callee {
 }
 
 struct Gen<'a> {
+    prog: &'a Program,
+    /// レジスタの入口の表の番地。
+    rentry: usize,
     f: &'a Func,
     fid: FuncId,
     entry: usize,
@@ -398,9 +416,33 @@ impl Gen<'_> {
         e
     }
 
-    /// 置いたフレーム(見出しは `np`)のスロットに引数を書く。
-    fn store_args(&mut self, np: &str, args: &[Reg]) {
-        for (i, &r) in args.iter().enumerate() {
+    /// レジスタの入口の表の `fid` 番の番地。
+    fn rentry_of(&mut self, fid: &str) -> String {
+        let tab = self.t();
+        self.line(format!("{tab} = inttoptr i64 {} to ptr", self.rentry));
+        let p = self.t();
+        self.line(format!("{p} = getelementptr ptr, ptr {tab}, i64 {fid}"));
+        let e = self.t();
+        self.line(format!("{e} = load atomic ptr, ptr {p} acquire, align 8"));
+        e
+    }
+
+    /// レジスタで渡す引数の並び(`ptr %ctx` の後)。
+    fn reg_args(&mut self, env: &str, args: &[Reg]) -> String {
+        let mut v = format!("ptr %ctx, i64 {env}");
+        for i in 0..NREG {
+            let a = match args.get(i) {
+                Some(&r) => self.get64(r),
+                None => "0".to_string(),
+            };
+            let _ = write!(v, ", i64 {a}");
+        }
+        v
+    }
+
+    /// 置いたフレーム(見出しは `np`)のスロットに、`from` 番目からの引数を書く(前の引数はレジスタで渡す)。
+    fn store_args_from(&mut self, np: &str, args: &[Reg], from: usize) {
+        for (i, &r) in args.iter().enumerate().skip(from) {
             let v = self.get64(r);
             let p = self.t();
             self.line(format!(
@@ -411,8 +453,99 @@ impl Gen<'_> {
         }
     }
 
+    /// 関数 `f` のフレームの語の数と見出しの 2 番の語(`keleut_interp::native` の `frames` と同じ式)。
+    fn frame_of(&self, f: FuncId) -> Option<(u64, u64)> {
+        let fr = self.prog.funcs[f.index()].frame.as_ref()?;
+        Some((
+            (HEADER_WORDS as u32 + fr.any_slots + fr.raw_slots) as u64,
+            u64::from(fr.any_slots) | (u64::from(fr.raw_slots) << 32),
+        ))
+    }
+
     /// 関数 `fid`(値)のフレームを置く。末尾なら自分の位置に、そうでなければ自分の上に。
-    fn prep(&mut self, fid: &str, env: &str, tail: bool) -> String {
+    ///
+    /// `frame` は呼ばれる側のフレームの語の数と見出しの 2 番の語で、翻訳のときに分かれば渡す。
+    /// そのときは、置く場所が値スタックの使っている最後の塊(文脈の `win`)に収まれば、
+    /// `krt_prep` を呼ばずにその場で見出しと文脈の欄を書く(速い道)。
+    /// 自分のフレームも同じ塊にあるので、`krt_prep` の `ValueStack::place` と同じ位置に置くことになる。
+    fn prep(&mut self, fid: &str, env: &str, tail: bool, frame: Option<(u64, u64)>) -> String {
+        let (cfw, sizes) = match frame {
+            Some((a, b)) => (a.to_string(), b.to_string()),
+            None => {
+                // 相手を実行時に知る呼び出しは、文脈の `frames` の列から読む。
+                let i = self.t();
+                self.line(format!("{i} = shl i64 {fid}, 1"));
+                let p = self.t();
+                self.line(format!("{p} = getelementptr i64, ptr %frtab, i64 {i}"));
+                let a = self.t();
+                self.line(format!("{a} = load i64, ptr {p}"));
+                let q = self.t();
+                self.line(format!("{q} = getelementptr i64, ptr {p}, i64 1"));
+                let b = self.t();
+                self.line(format!("{b} = load i64, ptr {q}"));
+                (a, b)
+            }
+        };
+        let at = if tail { "%fpos" } else { "%top" };
+        let caller = if tail { "%w3" } else { "%fpos" };
+        let lo = self.t();
+        self.line(format!("{lo} = load i64, ptr %winp"));
+        let hip = self.t();
+        self.line(format!("{hip} = getelementptr i64, ptr %winp, i64 1"));
+        let hi = self.t();
+        self.line(format!("{hi} = load i64, ptr {hip}"));
+        let c1 = self.t();
+        self.line(format!("{c1} = icmp uge i64 %fpos, {lo}"));
+        let end = self.t();
+        self.line(format!("{end} = add i64 {at}, {cfw}"));
+        let c2 = self.t();
+        self.line(format!("{c2} = icmp ule i64 {end}, {hi}"));
+        let c = self.t();
+        self.line(format!("{c} = and i1 {c1}, {c2}"));
+        let fast = self.label("pfast");
+        let slow = self.label("pslow");
+        let join = self.label("pjoin");
+        self.line(format!("br i1 {c}, label %{fast}, label %{slow}"));
+        self.start_block(&fast);
+        let bp = self.t();
+        self.line(format!("{bp} = getelementptr i64, ptr %winp, i64 2"));
+        let base = self.t();
+        self.line(format!("{base} = load ptr, ptr {bp}"));
+        let o = self.t();
+        self.line(format!("{o} = sub i64 {at}, {lo}"));
+        let p = self.t();
+        self.line(format!("{p} = getelementptr i64, ptr {base}, i64 {o}"));
+        self.line(format!("store i64 {fid}, ptr {p}"));
+        for (i, v) in [(1, "0".to_string()), (2, sizes), (3, caller.to_string())] {
+            let q = self.t();
+            self.line(format!("{q} = getelementptr i64, ptr {p}, i64 {i}"));
+            self.line(format!("store i64 {v}, ptr {q}"));
+        }
+        for (o, ty, v) in [
+            (off::CALLEE, "i64", fid.to_string()),
+            (off::CUR_POS, "i64", at.to_string()),
+            (off::CUR_FP, "ptr", p.clone()),
+        ] {
+            let q = self.t();
+            self.line(format!("{q} = getelementptr i8, ptr %ctx, i64 {o}"));
+            self.line(format!("store {ty} {v}, ptr {q}"));
+        }
+        let fast_end = self.cur.clone();
+        self.line(format!("br label %{join}"));
+        self.start_block(&slow);
+        let sp = self.prep_slow(fid, env, tail);
+        let slow_end = self.cur.clone();
+        self.line(format!("br label %{join}"));
+        self.start_block(&join);
+        let np = self.t();
+        self.line(format!(
+            "{np} = phi ptr [ {p}, %{fast_end} ], [ {sp}, %{slow_end} ]"
+        ));
+        np
+    }
+
+    /// `krt_prep` でフレームを置く([`Gen::prep`] の遅い道)。
+    fn prep_slow(&mut self, fid: &str, env: &str, tail: bool) -> String {
         let np = self.t();
         if tail {
             self.line(format!(
@@ -456,10 +589,12 @@ impl Gen<'_> {
         match callee {
             Callee::Direct(f) => {
                 let fid = f.0.to_string();
-                let np = self.prep(&fid, "0", tail);
-                self.store_args(&np, args);
-                let e = self.entry_of(&fid);
-                self.finish_call(&e, dst, yields, &done);
+                let frame = self.frame_of(f);
+                let np = self.prep(&fid, "0", tail, frame);
+                self.store_args_from(&np, args, NREG);
+                let e = self.rentry_of(&fid);
+                let ra = self.reg_args("0", args);
+                self.finish_call_r(&e, &ra, dst, yields, &done);
             }
             Callee::Dynamic { op, x, cm, own } => {
                 let slow = self.label("slow");
@@ -489,10 +624,11 @@ impl Gen<'_> {
                     self.line(format!("br i1 {isc}, label %{clo}, label %{slow}"));
                     self.start_block(&clo);
                     let fid = self.load_box(&fv, 1);
-                    let np = self.prep(&fid, &fv, tail);
-                    self.store_args(&np, args);
-                    let e = self.entry_of(&fid);
-                    self.finish_call(&e, dst, yields, &done);
+                    let np = self.prep(&fid, &fv, tail, None);
+                    self.store_args_from(&np, args, NREG);
+                    let e = self.rentry_of(&fid);
+                    let ra = self.reg_args(&fv, args);
+                    self.finish_call_r(&e, &ra, dst, yields, &done);
                 } else {
                     self.line(format!("br label %{slow}"));
                 }
@@ -564,6 +700,24 @@ impl Gen<'_> {
         }
         if !tail {
             self.start_block(&done);
+        }
+    }
+
+    /// レジスタの入口 `e` を引数の並び `ra` で呼ぶ。ほかは [`Gen::finish_call`] と同じ。
+    fn finish_call_r(&mut self, e: &str, ra: &str, dst: Option<Reg>, yields: bool, done: &str) {
+        match dst {
+            Some(d) => {
+                let r = self.t();
+                self.line(format!("{r} = call tailcc i64 {e}({ra})"));
+                self.after_call(&r, yields);
+                self.set(d, &r);
+                self.line(format!("br label %{done}"));
+            }
+            None => {
+                let r = self.t();
+                self.line(format!("{r} = musttail call tailcc i64 {e}({ra})"));
+                self.line(format!("ret i64 {r}"));
+            }
         }
     }
 
@@ -1683,10 +1837,15 @@ impl Gen<'_> {
     }
 }
 
-/// 関数 `fid` の LLVM IR の関数の定義を作る。`entry` は入口の表の番地。
+/// 関数 `fid` の LLVM IR の関数の定義を作る。`entry` と `rentry` は入口の表とレジスタの入口の表の番地。
 ///
 /// 関数は `keleut_interp::native::jit_eligible` を満たし、パス 12 を済ませていなければならない。
-pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, String> {
+pub fn function(
+    prog: &Program,
+    fid: FuncId,
+    entry: usize,
+    rentry: usize,
+) -> Result<String, String> {
     let f = &prog.funcs[fid.index()];
     if !keleut_interp::native::jit_eligible(f) {
         return Err(format!("関数 {} は JIT にできません", f.sym));
@@ -1742,6 +1901,8 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
     }
     let fw = (HEADER_WORDS as u32 + any + fr.raw_slots) as u64;
     let mut g = Gen {
+        prog,
+        rentry,
         f,
         fid,
         entry,
@@ -1759,7 +1920,7 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
     };
     let _ = writeln!(
         g.out,
-        "; {} ({})\ndefine tailcc i64 @{}(ptr %ctx) nounwind {{\nentry:",
+        "; {} ({})\ndefine tailcc i64 @{}.r(ptr %ctx, i64 %renv, i64 %ra0, i64 %ra1, i64 %ra2, i64 %ra3) nounwind {{\nentry:",
         f.sym,
         f.kind.name(),
         func_name(fid)
@@ -1804,6 +1965,23 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
     for (lbl, why) in [("lowstack", 1), ("altstack", 2)] {
         g.start_block(lbl);
         g.line(format!(
+            "%sfpp{why} = getelementptr i8, ptr %ctx, i64 {}",
+            off::CUR_FP
+        ));
+        g.line(format!("%sfp{why} = load ptr, ptr %sfpp{why}"));
+        for i in 0..f.params.len().min(NREG) {
+            g.line(format!(
+                "%sap{why}.{i} = getelementptr i64, ptr %sfp{why}, i64 {}",
+                HEADER_WORDS + i
+            ));
+            g.line(format!("store i64 %ra{i}, ptr %sap{why}.{i}"));
+        }
+        g.line(format!(
+            "%senvp{why} = getelementptr i8, ptr %ctx, i64 {}",
+            off::ENV
+        ));
+        g.line(format!("store i64 %renv, ptr %senvp{why}"));
+        g.line(format!(
             "%forcep{why} = getelementptr i8, ptr %ctx, i64 {}",
             off::FORCE_INTERP
         ));
@@ -1822,25 +2000,37 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
     for (name, o, t) in [
         ("fp", off::CUR_FP, "ptr"),
         ("fpos", off::CUR_POS, "i64"),
-        ("env", off::ENV, "i64"),
         ("dp", off::DEPTH, "ptr"),
         ("lp", off::LIMIT, "ptr"),
         ("argp", off::ARGS, "ptr"),
         ("glob", off::GLOBALS, "ptr"),
         ("ginit", off::GLOBAL_INIT, "ptr"),
         ("strs", off::STRINGS, "ptr"),
+        ("winp", off::WIN, "ptr"),
+        ("frtab", off::FRAMES, "ptr"),
     ] {
         g.line(format!("%{name}.p = getelementptr i8, ptr %ctx, i64 {o}"));
         g.line(format!("%{name} = load {t}, ptr %{name}.p"));
     }
+    g.line("%env = add i64 %renv, 0");
     g.line("%w3p = getelementptr i64, ptr %fp, i64 3");
     g.line("%w3 = load i64, ptr %w3p");
     g.line(format!("%top = add i64 %fpos, {}", g.fw));
+    let handler = matches!(f.kind, keleut_lir::FuncKind::Handler);
     for (i, &p) in f.params.iter().enumerate() {
-        let sp = g.frame_word((HEADER_WORDS + i) as u64);
-        let v = g.t();
-        g.line(format!("{v} = load i64, ptr {sp}"));
-        g.set64(p, &v);
+        if i < NREG {
+            if handler {
+                // `$rt_handle` のフレームは、どの点でも 0 番のスロットを根にする(`doc/lir.md` の 1.8 節)。
+                let sp = g.frame_word((HEADER_WORDS + i) as u64);
+                g.line(format!("store i64 %ra{i}, ptr {sp}"));
+            }
+            g.set64(p, &format!("%ra{i}"));
+        } else {
+            let sp = g.frame_word((HEADER_WORDS + i) as u64);
+            let v = g.t();
+            g.line(format!("{v} = load i64, ptr {sp}"));
+            g.set64(p, &v);
+        }
     }
     g.line("br label %b0");
     for (bi, b) in f.blocks.iter().enumerate() {
@@ -1856,6 +2046,42 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
     g.line("call void @krt_depth_error(ptr %ctx)");
     g.line("ret i64 2");
     g.out.push_str("}\n");
+    // 値スタックで引数を受け取る入口(入口の表の番地)。スロットから読んでレジスタの入口へ移る。
+    let name = func_name(fid);
+    let _ = writeln!(
+        g.out,
+        "define tailcc i64 @{name}(ptr %ctx) nounwind {{\nentry:"
+    );
+    let _ = writeln!(
+        g.out,
+        "  %envp = getelementptr i8, ptr %ctx, i64 {}",
+        off::ENV
+    );
+    let _ = writeln!(g.out, "  %env = load i64, ptr %envp");
+    let _ = writeln!(
+        g.out,
+        "  %fpp = getelementptr i8, ptr %ctx, i64 {}",
+        off::CUR_FP
+    );
+    let _ = writeln!(g.out, "  %fp = load ptr, ptr %fpp");
+    let mut ra = "ptr %ctx, i64 %env".to_string();
+    for i in 0..NREG {
+        if i < f.params.len() {
+            let _ = writeln!(
+                g.out,
+                "  %ap{i} = getelementptr i64, ptr %fp, i64 {}",
+                HEADER_WORDS + i
+            );
+            let _ = writeln!(g.out, "  %a{i} = load i64, ptr %ap{i}");
+            let _ = write!(ra, ", i64 %a{i}");
+        } else {
+            ra.push_str(", i64 0");
+        }
+    }
+    let _ = writeln!(
+        g.out,
+        "  %r = musttail call tailcc i64 @{name}.r({ra})\n  ret i64 %r\n}}"
+    );
     Ok(g.out)
 }
 
@@ -1864,10 +2090,11 @@ pub fn module(
     prog: &Program,
     fid: FuncId,
     entry: usize,
+    rentry: usize,
     triple: &str,
     layout: &str,
 ) -> Result<String, String> {
-    let body = function(prog, fid, entry)?;
+    let body = function(prog, fid, entry, rentry)?;
     let mut s = String::new();
     if !layout.is_empty() {
         let _ = writeln!(s, "target datalayout = \"{layout}\"");
