@@ -461,3 +461,62 @@ fn long_handlebody_chain_is_linear() {
     let took = start.elapsed();
     assert!(took.as_secs() < 30, "検証に {took:?} かかりました");
 }
+
+/// プログラム `p` の先頭の `k` 個の単位と、その単位の項目だけを残したもの(表は単位の順に並ぶ)。
+fn prefix(p: &kir::Program, k: usize) -> kir::Program {
+    let keys: Vec<&str> = p.units[..k].iter().map(|u| u.key.as_str()).collect();
+    let mine = |s: &str| keys.contains(&kir::unit_of_symbol(s));
+    let mut q = p.clone();
+    q.units.truncate(k);
+    q.types.retain(|t| mine(&t.sym));
+    q.effects.retain(|t| mine(&t.sym));
+    q.classes.retain(|t| mine(&t.sym));
+    q.instances.retain(|t| mine(&t.sym));
+    q.globals.retain(|t| mine(&t.sym));
+    q.functions.retain(|t| mine(&t.sym));
+    q
+}
+
+/// 単位を足していく検証([`kir::verify::Extension`])は、全体を 1 回で足しても、単位を 1 つずつ足しても、
+/// 正しいプログラムを受理し、書き換えたプログラムを拒否する。
+/// 確かめた単位と同じ鍵の単位を足すと拒否し、拒否した後も状態は変わらない。
+#[test]
+fn extension_agrees_with_verify() {
+    let lim = kir::Limits::default();
+    for (name, _, kirt) in common::pairs(&common::fixtures()) {
+        let p = kir::read_kirt(&kirt).unwrap();
+        let mut e = kir::verify::Extension::new();
+        kir::verify_extension(&mut e, &p, &lim).unwrap_or_else(|x| panic!("{name}: {x}"));
+        let mut e = kir::verify::Extension::new();
+        for k in 2..=p.units.len() {
+            let q = prefix(&p, k);
+            kir::verify_extension(&mut e, &q, &lim)
+                .unwrap_or_else(|x| panic!("{name} の {k} 個の単位: {x}"));
+        }
+        assert_eq!(e.done(), kir::verify::Marks::of(&p), "{name}");
+        // 同じ鍵の単位をもう 1 つ足す。
+        let mut q = p.clone();
+        let last = q.units.last().unwrap().clone();
+        q.units.push(last);
+        let done = e.done();
+        assert!(kir::verify_extension(&mut e, &q, &lim).is_err(), "{name}");
+        assert_eq!(e.done(), done, "{name}");
+        kir::verify_extension(&mut e, &p, &lim).unwrap_or_else(|x| panic!("{name}: {x}"));
+    }
+    for (fixture, old, new, what) in MUTATIONS {
+        let text = mutate(fixture, old, new);
+        let Ok(p) = kir::read_kirt(&text) else {
+            continue;
+        };
+        let mut e = kir::verify::Extension::new();
+        if let Err(x) = kir::verify_extension(&mut e, &p, &lim) {
+            assert_eq!(x.kind(), ErrorKind::Invalid, "{what}: {x}");
+        } else {
+            // 単位の列の終わりの `main` だけは、足していくプログラムでは確かめない。
+            assert!(
+                kir::verify(&p).unwrap_err().to_string().contains("main"),
+                "{what}"
+            );
+        }
+    }
+}
