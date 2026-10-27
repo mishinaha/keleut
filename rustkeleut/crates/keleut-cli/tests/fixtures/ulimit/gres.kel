@@ -1,0 +1,6 @@
+effect Tick = { tick: () => Unit }
+let rec ticks(n: Int32): Unit @ {Tick} = if n == 0 then () else { perform tick(); ticks(n - 1) }
+let count(n: Int32): Int32 = { ticks(n); 0 } handle { case tick() => { let r = resume(()); r + 1 } }
+echoln(show(count(200000)))
+ticks(3000000) handle { case tick() => if false then { let r = resume(()); r } else resume(()) }
+echoln("G")
