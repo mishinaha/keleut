@@ -175,6 +175,13 @@ pub struct Code {
     pub fx: Vec<keleut_lir::FxOp>,
     /// エフェクトのブロックの終わりの種類(`FX_TERM` の細目が添字)。
     pub fx_terms: Vec<keleut_lir::FxTermOp>,
+    /// エフェクトの命令の位置(`FX` の細目が添字)。
+    ///
+    /// 添字は、関数のブロックの順、ブロックの中の命令の順で 0 から数えた何番目のエフェクトの命令かである。
+    /// JIT のコード(`keleut-llvm`)は同じ数え方でこの添字を実行時の関数に渡し、インタプリタの命令を 1 つだけ走らせる。
+    pub fx_pc: Vec<u32>,
+    /// エフェクトのブロックの終わりの位置(`FX_TERM` の細目が添字。数え方は [`Code::fx_pc`] と同じ)。
+    pub fx_term_pc: Vec<u32>,
 }
 
 struct Enc<'a> {
@@ -187,6 +194,8 @@ struct Enc<'a> {
     texts: Vec<String>,
     fx: Vec<keleut_lir::FxOp>,
     fx_terms: Vec<keleut_lir::FxTermOp>,
+    fx_pc: Vec<u32>,
+    fx_term_pc: Vec<u32>,
     block_pc: Vec<u32>,
     fixups: Vec<(usize, BlockId)>,
 }
@@ -352,6 +361,8 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
         texts: Vec::new(),
         fx: Vec::new(),
         fx_terms: Vec::new(),
+        fx_pc: Vec::new(),
+        fx_term_pc: Vec::new(),
         block_pc: vec![0; f.blocks.len()],
         fixups: Vec::new(),
     };
@@ -411,6 +422,8 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
         texts: e.texts,
         fx: e.fx,
         fx_terms: e.fx_terms,
+        fx_pc: e.fx_pc,
+        fx_term_pc: e.fx_term_pc,
     })
 }
 
@@ -853,6 +866,7 @@ fn encode_inst(e: &mut Enc<'_>, rt: &Rt<'_>, inst: &Inst, rp: Option<u32>) -> Re
             e.op(UNIMPL_VALUE, (e.texts.len() - 1) as u32);
         }
         Inst::Fx { op, dst, args } => {
+            e.fx_pc.push(e.words.len() as u32);
             e.fx.push(op.clone());
             e.op(FX, (e.fx.len() - 1) as u32);
             e.w(if op.is_call() { rp()? } else { u32::MAX });
@@ -937,6 +951,7 @@ fn encode_term(e: &mut Enc<'_>, t: &Term) -> Result<(), String> {
             e.op(UNIMPLEMENTED, (e.texts.len() - 1) as u32);
         }
         Term::Fx { op, args } => {
+            e.fx_term_pc.push(e.words.len() as u32);
             e.fx_terms.push(op.clone());
             e.op(FX_TERM, (e.fx_terms.len() - 1) as u32);
             e.regs(args);

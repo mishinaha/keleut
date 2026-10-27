@@ -175,6 +175,38 @@ pub struct Interp<'p> {
 /// 項目の比べ方の 1 段(インタプリタで約 1.5 KiB)と、その中で JIT の関数が下限に届くまでに使う分を残す。
 pub const HOP_MARGIN: usize = 2 * crate::native::SOFT_MARGIN as usize;
 
+/// JIT のフレームのエフェクトの命令の結果([`Interp::native_fx`])。
+pub(crate) enum NativeFx {
+    /// 結果を書き先のスロットに書いた(書き先が無ければ何も書かない)。
+    Next,
+    /// 関数を、環境と引数で、このフレームの上で呼ぶ(番兵を受け取る呼び出しか `perform`)。
+    Enter(FuncId, Word, Vec<Word>),
+    /// 呼び出しの結果(値か番兵)が決まった(継続の再開)。
+    Value(Word),
+    /// 見出しの再開点の呼び出しが、この結果で戻り直した(`cont_make` の失敗)。
+    Redeliver(Word),
+}
+
+/// エフェクトの呼び出しの一種の相手([`Interp::fx_call`])。
+enum FxCall {
+    /// 呼ばずに結果を書いた(`call_clause` が深さの限度を超え、番兵を結果に書いた)。
+    Done,
+    /// 関数を、環境と引数で呼ぶ。
+    Enter(FuncId, Word, Vec<Word>),
+    /// 値を、引数で呼ぶ(`call_value` の規則)。
+    Value(Word, Vec<Word>),
+    /// 継続を、値で再開する。
+    Resume(Word, Word),
+}
+
+/// 構造的な `Eq` の入れ子が移る新しいスタックの最小の大きさ(バイト)。
+///
+/// 移る先のスタックは、ネイティブのスタック(`--native-stack`)とこの値の大きいほうにする。
+/// `--native-stack 512k` と同じ大きさでは、予備の検査の余裕と [`HOP_MARGIN`] を除くと 1 つのスレッドで 80 段ほどしか進まず、
+/// 20 万段の入れ子で 2,600 個ほどのスレッドを作る。
+/// 試験を並べて走らせると利用者ごとのスレッドの数の上限に届き、スレッドを作れずに 70 で終わった。
+pub const HOP_STACK_MIN: usize = 8 << 20;
+
 /// フレームの見出しの 2 番の語(区画の大きさ)から、見出しを含むフレームの語の数を求める。
 fn frame_words(sz: u64) -> usize {
     HEADER_WORDS + (sz & 0xffff_ffff) as usize + (sz >> 32) as usize
@@ -1111,6 +1143,20 @@ impl<'p> Interp<'p> {
         let arg = |i: usize| st.w(w[pc + 4 + i]);
         let next = pc + 4 + n;
         let op = &code.fx[idx as usize];
+        if op.is_call() {
+            st.pc = next;
+            return match self.fx_call(st, pc, idx)? {
+                FxCall::Done => Ok(None),
+                FxCall::Enter(func, env, args) => {
+                    st.set_resume(rp);
+                    self.enter(st, func, env, Args::Words(args.as_ptr(), args.len()))
+                }
+                FxCall::Value(f, args) => {
+                    self.call_value(st, rp, f, Args::Words(args.as_ptr(), args.len()), false)
+                }
+                FxCall::Resume(k, v) => self.cont_resume(st, rp, k, v),
+            };
+        }
         let mut out: Option<u64> = None;
         match op {
             FxOp::HandlerNew {
@@ -1162,25 +1208,6 @@ impl<'p> Interp<'p> {
                 out = Some(c.0);
             }
             FxOp::HandlersGet => out = Some(self.rt.chain.0),
-            FxOp::Perform { op, .. } => {
-                let hr = arg(0);
-                let user: Vec<Word> = (2..n).map(arg).collect();
-                let p = self.rt.depth;
-                if p + 1 > self.rt.limit {
-                    return Err(self.rt.depth_error());
-                }
-                let Some((j, clause)) = self.next_clause(hr, *op, 0)? else {
-                    return Err(self.no_clause(hr, *op, &user)?);
-                };
-                self.rt.chain = self.rt.hr(hr)?.parent;
-                self.rt.depth = p + 1;
-                let mut args = user;
-                args.push(hr);
-                args.push(Word::i32(j as i32));
-                st.set_resume(rp);
-                let func = self.rt.closure_func(clause);
-                return self.enter(st, func, clause, Args::Words(args.as_ptr(), args.len()));
-            }
             FxOp::ContCheck { nontail } => {
                 let k = arg(0);
                 let depth = st.depth();
@@ -1213,18 +1240,6 @@ impl<'p> Interp<'p> {
                 self.rt.chain = hr;
             }
             FxOp::HandlerUninstall => self.rt.chain = self.rt.hr(arg(0))?.parent,
-            FxOp::CallBody => {
-                let r = self.rt.hr(arg(0))?;
-                let (body, res) = (r.body, r.res);
-                let args = [res];
-                st.pc = next;
-                return self.call_value(st, rp, body, Args::Words(args.as_ptr(), 1), false);
-            }
-            FxOp::ContResume => {
-                let (k, v) = (arg(0), arg(1));
-                st.pc = next;
-                return self.cont_resume(st, rp, k, v);
-            }
             FxOp::IsPending => out = Some(u64::from(arg(0) == Word::SENTINEL)),
             FxOp::PendingClass => {
                 use keleut_lir::effect::class::*;
@@ -1275,27 +1290,6 @@ impl<'p> Interp<'p> {
                 let hr = arg(0);
                 out = Some(self.cont_make(st, hr)?.0);
             }
-            FxOp::CallClause => {
-                let k = arg(0);
-                st.pc = next;
-                let d = st.depth();
-                if d + 1 > self.rt.limit {
-                    let s = self.rt.depth_error();
-                    self.rt.pending = Pending::Error(s);
-                    st.set(dst, Word::SENTINEL.0);
-                    return Ok(None);
-                }
-                let c = self.cont(k)?;
-                let (hr, j, args) = (c.hr, c.clause as usize, c.args);
-                let clause = self.rt.hr(hr)?.ops[j].2;
-                let mut a = self.array_words(args);
-                a.push(k);
-                a.push(Word::i32(-1));
-                self.rt.depth = d + 1;
-                st.set_resume(rp);
-                let func = self.rt.closure_func(clause);
-                return self.enter(st, func, clause, Args::Words(a.as_ptr(), a.len()));
-            }
             FxOp::ContKill => {
                 let k = arg(0);
                 self.cont(k)?.alive = false;
@@ -1320,13 +1314,13 @@ impl<'p> Interp<'p> {
                 };
                 out = Some(x.ok_or_else(|| bug("無い節を読みました"))?.0);
             }
-            FxOp::CallCancel => {
-                let f = arg(0);
-                st.pc = next;
-                return self.call_value(st, rp, f, Args::Words([].as_ptr(), 0), false);
-            }
             FxOp::LimitGet => out = Some(self.rt.limit),
             FxOp::LimitSet => self.rt.limit = st.get(w[pc + 4]),
+            FxOp::Perform { .. }
+            | FxOp::CallBody
+            | FxOp::ContResume
+            | FxOp::CallClause
+            | FxOp::CallCancel => unreachable!("呼び出しの一種は上で扱った"),
         }
         if let Some(v) = out {
             st.set(dst, v);
@@ -1335,8 +1329,79 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
+    /// エフェクトの呼び出しの一種(`FxOp::is_call`)の相手を決める。
+    ///
+    /// 呼ぶ前の副作用(`perform` の連鎖と深さ、`call_clause` の深さ)はここで済ませる。
+    /// 呼び出しそのものは呼ぶ側が行う(インタプリタは [`Interp::fx`]、JIT のフレームは [`Interp::native_fx`])。
+    fn fx_call(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<FxCall, Stop> {
+        // SAFETY: Code は self.codes の Box の中にあり、動かない。
+        let code: &Code = unsafe { &*st.code };
+        let w = &code.words;
+        let dst = w[pc + 2];
+        let n = w[pc + 3] as usize;
+        let arg = |i: usize| st.w(w[pc + 4 + i]);
+        match &code.fx[idx as usize] {
+            FxOp::Perform { op, .. } => {
+                let hr = arg(0);
+                let user: Vec<Word> = (2..n).map(arg).collect();
+                let p = self.rt.depth;
+                if p + 1 > self.rt.limit {
+                    return Err(self.rt.depth_error());
+                }
+                let Some((j, clause)) = self.next_clause(hr, *op, 0)? else {
+                    return Err(self.no_clause(hr, *op, &user)?);
+                };
+                self.rt.chain = self.rt.hr(hr)?.parent;
+                self.rt.depth = p + 1;
+                let mut args = user;
+                args.push(hr);
+                args.push(Word::i32(j as i32));
+                Ok(FxCall::Enter(self.rt.closure_func(clause), clause, args))
+            }
+            FxOp::CallBody => {
+                let r = self.rt.hr(arg(0))?;
+                Ok(FxCall::Value(r.body, vec![r.res]))
+            }
+            FxOp::ContResume => Ok(FxCall::Resume(arg(0), arg(1))),
+            FxOp::CallClause => {
+                let k = arg(0);
+                let d = st.depth();
+                if d + 1 > self.rt.limit {
+                    let s = self.rt.depth_error();
+                    self.rt.pending = Pending::Error(s);
+                    st.set(dst, Word::SENTINEL.0);
+                    return Ok(FxCall::Done);
+                }
+                let c = self.cont(k)?;
+                let (hr, j, args) = (c.hr, c.clause as usize, c.args);
+                let clause = self.rt.hr(hr)?.ops[j].2;
+                let mut a = self.array_words(args);
+                a.push(k);
+                a.push(Word::i32(-1));
+                self.rt.depth = d + 1;
+                Ok(FxCall::Enter(self.rt.closure_func(clause), clause, a))
+            }
+            FxOp::CallCancel => Ok(FxCall::Value(arg(0), Vec::new())),
+            _ => Err(bug("呼び出しでないエフェクトの命令")),
+        }
+    }
+
     /// エフェクトのブロックの終わり。
     fn fx_term(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
+        let (func, env, a) = self.fx_term_call(st, pc, idx)?;
+        self.tail_enter(st, func, env, Args::Words(a.as_ptr(), a.len()))
+    }
+
+    /// エフェクトのブロックの終わりを、末尾で呼ぶ相手まで進める。
+    ///
+    /// 印を立てて番兵で戻る終わり(`propagate`、`clause_value`、`clause_matched`、`tail_resume`)は `Err(Stop::Pending)` を返す。
+    /// 末尾で呼ぶ終わり(`tail_call_never`、`tail_call_clause`)は、呼ぶ関数、環境、引数を返す。
+    fn fx_term_call(
+        &mut self,
+        st: &St,
+        pc: usize,
+        idx: u32,
+    ) -> Result<(FuncId, Word, Vec<Word>), Stop> {
         // SAFETY: Code は self.codes の Box の中にあり、動かない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
@@ -1365,8 +1430,7 @@ impl<'p> Interp<'p> {
                 let mut a = self.array_words(args);
                 a.push(Word::UNIT);
                 a.push(Word::i32(-1));
-                let func = self.rt.closure_func(c);
-                self.tail_enter(st, func, c, Args::Words(a.as_ptr(), a.len()))
+                Ok((self.rt.closure_func(c), c, a))
             }
             FxTermOp::TailCallClause { op } => {
                 let (hr, sel) = (arg(0), arg(1));
@@ -1377,8 +1441,7 @@ impl<'p> Interp<'p> {
                         let mut a = user;
                         a.push(hr);
                         a.push(Word::i32(j as i32));
-                        let func = self.rt.closure_func(c);
-                        self.tail_enter(st, func, c, Args::Words(a.as_ptr(), a.len()))
+                        Ok((self.rt.closure_func(c), c, a))
                     }
                     None => Err(self.no_clause(hr, *op, &user)?),
                 }
@@ -1554,6 +1617,165 @@ impl<'p> Interp<'p> {
         st.set(e.dst, v.0);
         st.pc = e.pc_after as usize;
         Ok(None)
+    }
+
+    // ---- JIT のフレームのエフェクト(`crate::native` の実行時の関数から) ----
+
+    /// JIT のフレーム(位置 `fpos`、見出し `fp`)を、インタプリタの今のフレームの形にする(位置 `pc`)。
+    fn native_st(&mut self, fpos: u64, fp: *mut u64, pc: usize) -> Result<St, Stop> {
+        // SAFETY: fp は JIT のフレームの見出しを指す。
+        let fid = FuncId(unsafe { *fp } as u32);
+        let code = self.code(fid)?;
+        Ok(St {
+            fpos,
+            fp,
+            code,
+            pc,
+            env: Word(0),
+        })
+    }
+
+    /// JIT のフレームのエフェクトの命令(`idx` 番目)を 1 つ実行する。
+    ///
+    /// JIT のコードは、命令の被演算子をすべてスロットに書いてから呼ぶ(呼び出しの一種なら、再開点で生きているレジスタも書き、見出しに再開点を書く)。
+    /// 命令の意味はインタプリタと同じで、結果は書き先のスロットに書く([`NativeFx::Next`])。
+    /// 呼び出しの一種は、呼ぶ相手を返す([`NativeFx::Enter`])。
+    /// 継続の再開は、写し戻した区間をこの起動の中のインタプリタで走らせ、区間の最下段の結果を返す([`NativeFx::Value`])。
+    /// 区間の最上段は取り出された `perform` のフレームで、JIT のコードはフレームを再開点から続けられないからである(計画 6.8 節)。
+    /// `cont_make` が継続を作れなかったときは、区間の最上段から巻き戻し、区間の最下段の結果を、
+    /// このフレームの見出しの再開点(本体の呼び出し)の結果として返す([`NativeFx::Redeliver`])。
+    pub(crate) fn native_fx(
+        &mut self,
+        fpos: u64,
+        fp: *mut u64,
+        idx: u32,
+    ) -> Result<NativeFx, Stop> {
+        let mut st = self.native_st(fpos, fp, 0)?;
+        let pc = st.code().fx_pc[idx as usize] as usize;
+        st.pc = pc;
+        // SAFETY: Code は self.codes の Box の中にあり、動かない。
+        let code: &Code = unsafe { &*st.code };
+        if !code.fx[idx as usize].is_call() {
+            return match self.fx(&mut st, pc, idx) {
+                Ok(_) => Ok(NativeFx::Next),
+                Err(e) if st.fpos != fpos => {
+                    let bottom = self.segment_bottom(st.fpos, fpos)?;
+                    Ok(NativeFx::Redeliver(self.run_from(
+                        &mut st,
+                        bottom,
+                        Some(e),
+                    )?))
+                }
+                Err(e) => Err(e),
+            };
+        }
+        let rp = st.code().words[pc + 1];
+        match self.fx_call(&mut st, pc, idx)? {
+            FxCall::Done => Ok(NativeFx::Next),
+            FxCall::Enter(func, env, args) => Ok(NativeFx::Enter(func, env, args)),
+            FxCall::Value(f, args) => match self.rt.callee_view(f) {
+                CalleeView::Closure(func) => Ok(NativeFx::Enter(func, f, args)),
+                _ => Err(Stop::Internal(format!(
+                    "エフェクトの呼び出しの相手がクロージャでありません: {}",
+                    String::from_utf8_lossy(&self.rt.show(f))
+                ))),
+            },
+            FxCall::Resume(k, v) => {
+                let inject = match self.cont_resume(&mut st, rp, k, v) {
+                    Ok(_) => None,
+                    Err(e) if st.fpos != fpos => Some(e),
+                    Err(e) => return Err(e),
+                };
+                let bottom = self.segment_bottom(st.fpos, fpos)?;
+                Ok(NativeFx::Value(self.run_from(&mut st, bottom, inject)?))
+            }
+        }
+    }
+
+    /// 値スタックのフレーム `top` から呼び出し元の鎖をたどり、呼び出し元が `below` のフレームの位置を返す。
+    fn segment_bottom(&mut self, top: u64, below: u64) -> Result<u64, Stop> {
+        let mut pos = top;
+        loop {
+            let p = self.rt.stack.ptr_at_ro(pos);
+            // SAFETY: p はフレームの見出しを指す。
+            let caller = unsafe { *p.add(3) };
+            if caller == below {
+                return Ok(pos);
+            }
+            if caller == NATIVE_CALLER {
+                return Err(bug("区間の最下段が JIT のフレームの上にありません"));
+            }
+            pos = caller;
+        }
+    }
+
+    /// `st` を今のフレームにし、`bottom` を最下段にした起動を回す(`inject` があれば、それを状態語にして今のフレームから巻き戻す)。
+    ///
+    /// 最下段のフレームが戻った値か番兵を返す。
+    /// 最下段のフレームが JIT の関数を末尾で呼んだら、その関数をネイティブに呼んで値を返す。
+    fn run_from(&mut self, st: &mut St, bottom: u64, inject: Option<Stop>) -> Result<Word, Stop> {
+        self.check_native_stack()?;
+        let saved = self.bottom;
+        self.bottom = bottom;
+        let r = (|| {
+            let first = match inject {
+                Some(e) => {
+                    self.rt.raise(e)?;
+                    self.unwind(st)?
+                }
+                None => None,
+            };
+            match first {
+                Some(v) => Ok(v),
+                None => self.exec(st),
+            }
+        })();
+        self.bottom = saved;
+        let v = r?;
+        if v == crate::native::TAILREQ {
+            return self.call_native_request();
+        }
+        Ok(v)
+    }
+
+    /// JIT のフレームの `perform` の呼び出しが `r` で戻った(`doc/lir.md` の 16.5 節の手順 4)。
+    ///
+    /// 値なら連鎖と深さを `perform` の時点に戻して真を返す(JIT のコードは `r` を結果にする)。
+    /// 番兵なら、深さを書き戻し、節の選択の結果を状態語にして偽を返す(JIT のコードは番兵で戻る)。
+    pub(crate) fn native_perform_back(
+        &mut self,
+        fpos: u64,
+        fp: *mut u64,
+        r: Word,
+    ) -> Result<bool, Stop> {
+        let mut st = self.native_st(fpos, fp, 0)?;
+        if r == Word::SENTINEL {
+            self.rt.depth = st.depth();
+            if self.receive(&mut st)? {
+                return Err(bug("perform の再開点が番兵を受け取りました"));
+            }
+            return Ok(false);
+        }
+        self.deliver(&mut st, r)?;
+        Ok(true)
+    }
+
+    /// JIT のフレームのエフェクトのブロックの終わり(`idx` 番目)。
+    ///
+    /// 印を立てて番兵で戻る終わりなら `None`(状態語は立ててある)、末尾で呼ぶ終わりなら、呼ぶ関数、環境、引数を返す。
+    pub(crate) fn native_fx_term(
+        &mut self,
+        fpos: u64,
+        fp: *mut u64,
+        idx: u32,
+    ) -> Result<Option<(FuncId, Word, Vec<Word>)>, Stop> {
+        let st = self.native_st(fpos, fp, 0)?;
+        let pc = st.code().fx_term_pc[idx as usize] as usize;
+        match self.fx_term_call(&st, pc, idx) {
+            Ok(t) => Ok(Some(t)),
+            Err(Stop::Pending) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     // ---- 振り分けのループ ----
