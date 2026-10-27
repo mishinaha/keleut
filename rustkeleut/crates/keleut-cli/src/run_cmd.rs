@@ -18,8 +18,12 @@
 //! 読み込んだ KIR を検証し、LIR に下ろして、後段で実行する。
 //! 後段はインタプリタ(`--backend interp`)、WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)、
 //! LLVM の JIT(`--backend jit`。M91。crate keleut-llvm。feature `llvm` で組んだときだけ使え、無ければ未実装の 4)である。
-//! `--backend jit` の段の設定は `--tier jit-only`(既定)と `interp-only` で、ほかは M92 まで未実装(4)である。
-//! 既定の後段は、段の切り替え(M92)が入るまで `interp` である。
+//! 既定の後段は、feature `llvm` で組んだときは `jit`、そうでなければ `interp` である(計画 6.2 節)。
+//! `--backend jit` の段の設定(`--tier`。M92)は `interp-only`、`jit-only`、`threshold=N`、`alternating=SEED`、`mixed=SEED` で、
+//! 既定は `threshold=1000` である(しきい値の既定は M93 で決める。P249)。
+//! `--backend` を省いて `interp-only` 以外の `--tier` を与えたときは `jit` で走る。
+//! `--backend interp` と `--backend wasm` は `--tier` を受け付けて使わない
+//! (組 `kt` などの選択肢を足しても、`--backend interp` を書いたコマンドはインタプリタで走る)。
 //!
 //! `keleut dump bytecode` も同じ読み方で入力を LIR にし、インタプリタのバイトコードを印字する([`dump_bytecode`])。
 //!
@@ -36,9 +40,12 @@ pub const USAGE: &str = "\
 usage: keleut run [OPTIONS] FILE.kel... | FILE.kir
 
 options:
-  --backend interp|jit|wasm   back end (default: interp; jit needs a build with the llvm feature)
+  --backend interp|jit|wasm   back end (default: jit in a build with the llvm feature, else interp;
+                              jit needs a build with the llvm feature)
   --tier MODE                 interp-only|jit-only|threshold=N|alternating=SEED|mixed=SEED
-                              (jit: jit-only (default) or interp-only; the others are not implemented yet)
+                              (jit only, ignored by --backend interp|wasm; default threshold=1000;
+                              a mode other than interp-only selects --backend jit when --backend
+                              is not given)
   --max-depth N               logical depth limit L (default 1048576)
   --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k;
                               interp and jit; ignored by --backend wasm)
@@ -54,7 +61,7 @@ options:
 /// 解釈したコマンド行である。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Options {
-    backend: String,
+    backend: Option<String>,
     tier: Option<String>,
     pub(crate) max_depth: u64,
     native_stack: Option<u64>,
@@ -88,7 +95,7 @@ fn valid_tier(s: &str) -> bool {
 
 pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
-        backend: "interp".to_string(),
+        backend: None,
         tier: None,
         max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
         native_stack: None,
@@ -113,7 +120,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
                 if !matches!(v.as_str(), "interp" | "jit" | "wasm") {
                     return Err(format!("bad --backend value: {v}"));
                 }
-                o.backend = v;
+                o.backend = Some(v);
             }
             "--tier" => {
                 let v = value(a)?;
@@ -230,8 +237,20 @@ fn emit_with_diktor(o: &Options) -> Result<Vec<u8>, u8> {
     })
 }
 
+impl Options {
+    /// 後段の名前(`--backend` を省いたときの既定を当てたもの)。
+    fn backend(&self) -> &str {
+        match (self.backend.as_deref(), self.tier.as_deref()) {
+            (Some(b), _) => b,
+            (None, Some(t)) if t != "interp-only" => "jit",
+            _ if cfg!(feature = "llvm") => "jit",
+            _ => "interp",
+        }
+    }
+}
+
 fn run(o: &Options) -> u8 {
-    if o.backend == "wasm" {
+    if o.backend() == "wasm" {
         // WasmGC の後段(M94)。Node を子プロセスで起動する(crate keleut-wasm の launch)。
         let lp = match load(o) {
             Ok(p) => p,
@@ -246,7 +265,7 @@ fn run(o: &Options) -> u8 {
             },
         );
     }
-    if o.backend == "jit" {
+    if o.backend() == "jit" {
         return run_jit(o);
     }
     let lp = match load(o) {
@@ -266,16 +285,18 @@ fn interp_options(o: &Options) -> keleut_interp::RunOptions {
     }
 }
 
-/// LLVM の後段(M91)で走らせる。
+/// LLVM の後段(M91、M92)で走らせる。
 #[cfg(feature = "llvm")]
 fn run_jit(o: &Options) -> u8 {
     let tier = match o.tier.as_deref() {
-        None | Some("jit-only") => keleut_llvm::Tier::JitOnly,
-        Some("interp-only") => keleut_llvm::Tier::InterpOnly,
-        Some(t) => {
-            eprintln!("keleut: 未実装: 段の設定 {t}");
-            return exit::UNIMPLEMENTED;
-        }
+        None => keleut_llvm::DEFAULT_TIER,
+        Some(t) => match keleut_llvm::Tier::parse(t) {
+            Some(t) => t,
+            None => {
+                eprintln!("keleut: 内部エラー: 段の設定 {t} を読めません");
+                return 70;
+            }
+        },
     };
     let lp = match load(o) {
         Ok(p) => p,
@@ -527,5 +548,22 @@ mod tests {
         assert_eq!(parse_size("1g"), Some(1 << 30));
         assert_eq!(parse_size("123"), Some(123));
         assert_eq!(parse_size("k"), None);
+        let b = |a: &[&str]| parse(&argv(a)).unwrap().backend().to_string();
+        assert_eq!(b(&["--tier", "alternating=3", "a.kel"]), "jit");
+        assert_eq!(
+            b(&["--backend", "interp", "--tier", "threshold=1", "a.kel"]),
+            "interp"
+        );
+        assert_eq!(
+            b(&["--backend", "wasm", "--tier", "mixed=1", "a.kel"]),
+            "wasm"
+        );
+        let dflt = if cfg!(feature = "llvm") {
+            "jit"
+        } else {
+            "interp"
+        };
+        assert_eq!(b(&["a.kel"]), dflt);
+        assert_eq!(b(&["--tier", "interp-only", "a.kel"]), dflt);
     }
 }
