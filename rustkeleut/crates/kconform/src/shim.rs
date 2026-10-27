@@ -789,12 +789,69 @@ pub fn keleut(args: &[OsString]) -> u8 {
         Err(c) => return c,
     };
     if is_run {
+        let pargs = pair_args();
+        let (own, note) = own_backend(&pair, &pargs, &args[1..]);
+        if let Some(note) = note {
+            log_route("backend-override", &note);
+        }
         let mut v = vec![OsString::from("run")];
-        v.extend(pair_args());
-        v.extend_from_slice(&args[1..]);
+        v.extend(pargs);
+        v.extend(own);
         return exec(&real, "keleut", &v);
     }
     exec(&real, "keleut", args)
+}
+
+/// LLVM の後段の組である。
+const JIT_PAIRS: &[&str] = &["kj", "kt", "ka", "km"];
+
+/// コマンドが自分で書いた `keleut run --backend` と、組の後段の食い違いを扱う。
+///
+/// shim は組の選択肢を先に、コマンドの引数を後に並べるので、後に書いた旗が効く `keleut run` ではコマンドの `--backend` が組の後段に勝つ。
+/// LLVM の後段の組(`kj`、`kt`、`ka`、`km`)では、組の後段を優先して、コマンドの `--backend` を取り除く。
+/// `--backend interp` を書いたコマンドが組の JIT を通らず、比べたことにならないのを防ぐためである。
+/// そのほかの組(`kw` など)では、コマンドの `--backend` を残す(Node は仮想メモリの上限 512 MiB の下で起動できない。V215)。
+///
+/// 返すのは、組の選択肢の後に並べる引数と、食い違いがあったときの記録の文面である。
+/// 文面は呼び出しの記録に `backend-override` の行として足し、kconform が後段を上書きしたコマンドとして報告する。
+fn own_backend(
+    pair: &str,
+    pair_args: &[OsString],
+    own: &[OsString],
+) -> (Vec<OsString>, Option<String>) {
+    let jit = JIT_PAIRS.contains(&pair);
+    let pair_backend = pair_args
+        .windows(2)
+        .rev()
+        .find(|w| w[0] == "--backend")
+        .map(|w| w[1].to_string_lossy().into_owned())
+        .or_else(|| jit.then(|| "jit".to_string()));
+    let mut out = Vec::with_capacity(own.len());
+    let mut notes = Vec::new();
+    let mut i = 0;
+    while i < own.len() {
+        if own[i] == "--backend" && i + 1 < own.len() {
+            let v = own[i + 1].to_string_lossy().into_owned();
+            match &pair_backend {
+                Some(pb) if jit => {
+                    if *pb != v {
+                        notes.push(format!("--backend {v} を除いて {pb} で走らせた"));
+                    }
+                }
+                Some(pb) if *pb != v => {
+                    notes.push(format!("--backend {v} が組の {pb} に勝った"));
+                    out.extend_from_slice(&own[i..i + 2]);
+                }
+                _ => out.extend_from_slice(&own[i..i + 2]),
+            }
+            i += 2;
+        } else {
+            out.push(own[i].clone());
+            i += 1;
+        }
+    }
+    let note = (!notes.is_empty()).then(|| notes.join("、"));
+    (out, note)
 }
 
 #[cfg(test)]
@@ -803,6 +860,34 @@ mod tests {
 
     fn a(xs: &[&str]) -> Vec<OsString> {
         xs.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn llvm_の組ではコマンドの後段より組の後段を優先する() {
+        let own = a(&["--native-stack", "512k", "--backend", "interp", "x.kel"]);
+        let (v, n) = own_backend("kt", &a(&["--tier", "threshold=1"]), &own);
+        assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
+        assert_eq!(
+            n.as_deref(),
+            Some("--backend interp を除いて jit で走らせた")
+        );
+        let (v, n) = own_backend("kj", &a(&["--backend", "jit", "--tier", "jit-only"]), &own);
+        assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
+        assert!(n.is_some());
+        let (v, n) = own_backend("kw", &a(&["--backend", "wasm"]), &own);
+        assert_eq!(v, own);
+        assert_eq!(n.as_deref(), Some("--backend interp が組の wasm に勝った"));
+        let (v, n) = own_backend(
+            "ki",
+            &a(&["--backend", "interp", "--tier", "interp-only"]),
+            &own,
+        );
+        assert_eq!((v, n), (own.clone(), None));
+        let plain = a(&["x.kel"]);
+        assert_eq!(
+            own_backend("ka", &a(&["--tier", "alternating=1"]), &plain),
+            (plain, None)
+        );
     }
 
     #[test]

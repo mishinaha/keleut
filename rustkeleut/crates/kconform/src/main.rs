@@ -426,6 +426,8 @@ fn report(
     let mut invocations = 0usize;
     let mut diktor_commands = 0usize;
     let mut bypass = Vec::new();
+    // コマンドの `--backend` が組の後段を上書きしたもの(shim の `backend-override` の行)。
+    let mut overridden = Vec::new();
     let base_i = base_index(run_pairs);
     let depth = depth_suite(o);
     // 後段の組の間の差(既知の差の一覧に照らさない)。
@@ -457,6 +459,15 @@ fn report(
             for (k, c) in cmds.iter().enumerate() {
                 let inv = &r.invocations[k];
                 invocations += inv.len();
+                for v in inv.iter().filter(|v| v.who == "backend-override") {
+                    overridden.push(format!(
+                        "{}:{} [{}]: {}",
+                        case.name,
+                        c.line,
+                        pair.label,
+                        v.args.join(" ")
+                    ));
+                }
                 if o.list_invocations && !inv.is_empty() {
                     let who: Vec<&str> = inv.iter().map(|v| v.who.as_str()).collect();
                     println!(
@@ -627,6 +638,10 @@ fn report(
         for b in &bypass {
             println!("shim を通らない: {b}");
         }
+    }
+    // 組の後段で走らなかったコマンドは、組の比べ方から漏れているので、いつも印字する。
+    for b in &overridden {
+        println!("組の後段の上書き: {b}");
     }
     let run_names: Vec<&str> = run_pairs.iter().map(|p| p.name).collect();
     let unused: Vec<&known_diffs::Entry> = known
