@@ -1,0 +1,2 @@
+let rec loop(i: Int32, x: Float64, acc: Float64): Float64 = if i == 0 then acc else loop(i - 1, x + 0.5, acc + x * 0.25)
+echoln(show(loop(10000000, 0.0, 0.0)))

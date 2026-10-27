@@ -1,0 +1,15 @@
+let rec digits(n: Int32, acc: String): String = if n == 0 then acc else digits(n / 10, __string_sub("0123456789", n % 10, 1) + acc)
+let rec build(i: Int32, n: Int32, acc: String): String = if i == n then acc else build(i + 1, n, acc + digits(i + 1, "") + ",")
+let rec count(s: String, i: Int32, n: Int32, c: Int32): Int32 =
+  if i == n then c else count(s, i + 1, n, if __string_sub(s, i, 1) == "," then c + 1 else c)
+let rec cmp(i: Int32, a: Int32): Int32 = if i == 0 then a else {
+  let s = show(i)
+  let t = show(i + 1)
+  cmp(i - 1, if s < t then a + __string_length(s) else a)
+}
+let rec rounds(k: Int32, a: Int32): Int32 = if k == 0 then a else {
+  let s = build(0, 300, "")
+  rounds(k - 1, (a + count(s, 0, __string_length(s), 0) + __string_length(s)) % 1000003)
+}
+echoln(show(rounds(1200, 0)))
+echoln(show(cmp(1000000, 0)))

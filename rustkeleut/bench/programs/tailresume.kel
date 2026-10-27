@@ -1,0 +1,6 @@
+effect Ask = { ask: (Int32) => Int32 }
+let rec asks(i: Int32, n: Int32, a: Int32): Int32 @ {Ask} =
+  if i == n then a else asks(i + 1, n, (a + perform ask(i)) % 1000003)
+let twice(n: Int32): Int32 = asks(0, n, 0) handle { case ask(x) => resume(x * 2 + 1) }
+let rec rounds(k: Int32, a: Int32): Int32 = if k == 0 then a else rounds(k - 1, (a + twice(1000)) % 1000003)
+echoln(show(rounds(5000, 0)))

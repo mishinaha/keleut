@@ -1,0 +1,214 @@
+// 小さな型検査器:let 多相つきの単一化による型推論(水準で一般化する)。
+newtype Ty = TInt | TBool | TVar(Int32) | TFun(Ty, Ty) | TPair(Ty, Ty)
+newtype Scheme = Forall(List[Int32], Ty)
+newtype Ex = EInt(Int32) | EBool(Boolean) | EVar(String) | ELam(String, Ex) | EApp(Ex, Ex)
+  | ELet(String, Ex, Ex) | EIf(Ex, Ex, Ex) | EAdd(Ex, Ex) | EEq(Ex, Ex) | EPair(Ex, Ex) | EFst(Ex)
+effect TypeErr = { fail: (String) => Never }
+type St[h] = {links: MutableArray[h, Option[Ty]], levels: MutableArray[h, Int32], next: Ref[h, Int32]}
+
+let fresh[h](st: St[h], level: Int32): Ty @ {Heap[h]} = {
+  let n = Ref.get(st.next)
+  Ref.set(st.next, n + 1)
+  MutableArray.set(st.links, n, None)
+  MutableArray.set(st.levels, n, level)
+  TVar(n)
+}
+let rec prune[h](st: St[h], t: Ty): Ty @ {Heap[h]} = t match {
+  case TVar(n) => MutableArray.get(st.links, n) match {
+    case None => t
+    case Some(u) => {
+      let r = prune(st, u)
+      MutableArray.set(st.links, n, Some(r))
+      r
+    }
+  }
+  case _ => t
+}
+let rec occurs[h](st: St[h], n: Int32, level: Int32, t: Ty): Unit @ {Heap[h], TypeErr} = prune(st, t) match {
+  case TVar(m) => if m == n then perform fail("無限の型") else {
+    if MutableArray.get(st.levels, m) > level then MutableArray.set(st.levels, m, level) else ()
+  }
+  case TFun(a, b) => { occurs(st, n, level, a); occurs(st, n, level, b) }
+  case TPair(a, b) => { occurs(st, n, level, a); occurs(st, n, level, b) }
+  case _ => ()
+}
+let rec show_ty[h](st: St[h], t: Ty): String @ {Heap[h]} = prune(st, t) match {
+  case TInt => "Int"
+  case TBool => "Bool"
+  case TVar(n) => "t" + show(n)
+  case TFun(a, b) => "(" + show_ty(st, a) + " -> " + show_ty(st, b) + ")"
+  case TPair(a, b) => "(" + show_ty(st, a) + ", " + show_ty(st, b) + ")"
+}
+let rec unify[h](st: St[h], a: Ty, b: Ty): Unit @ {Heap[h], TypeErr} = (prune(st, a), prune(st, b)) match {
+  case (TInt, TInt) => ()
+  case (TBool, TBool) => ()
+  case (TVar(n), TVar(m)) => if n == m then () else {
+    let ln = MutableArray.get(st.levels, n)
+    let lm = MutableArray.get(st.levels, m)
+    if lm > ln then MutableArray.set(st.levels, m, ln) else ()
+    MutableArray.set(st.links, n, Some(TVar(m)))
+  }
+  case (TVar(n), t) => { occurs(st, n, MutableArray.get(st.levels, n), t); MutableArray.set(st.links, n, Some(t)) }
+  case (t, TVar(n)) => { occurs(st, n, MutableArray.get(st.levels, n), t); MutableArray.set(st.links, n, Some(t)) }
+  case (TFun(a1, b1), TFun(a2, b2)) => { unify(st, a1, a2); unify(st, b1, b2) }
+  case (TPair(a1, b1), TPair(a2, b2)) => { unify(st, a1, a2); unify(st, b1, b2) }
+  case (x, y) => perform fail("型が合いません: " + show_ty(st, x) + " と " + show_ty(st, y))
+}
+let rec gen_vars[h](st: St[h], level: Int32, t: Ty, acc: List[Int32]): List[Int32] @ {Heap[h]} = prune(st, t) match {
+  case TVar(n) => if MutableArray.get(st.levels, n) > level then Cons(n, acc) else acc
+  case TFun(a, b) => gen_vars(st, level, b, gen_vars(st, level, a, acc))
+  case TPair(a, b) => gen_vars(st, level, b, gen_vars(st, level, a, acc))
+  case _ => acc
+}
+let rec lookup_sub(s: List[(Int32, Ty)], n: Int32): Option[Ty] = s match {
+  case Nil => None
+  case Cons((m, t), rest) => if m == n then Some(t) else lookup_sub(rest, n)
+}
+let rec subst[h](st: St[h], s: List[(Int32, Ty)], t: Ty): Ty @ {Heap[h]} = prune(st, t) match {
+  case TVar(n) => lookup_sub(s, n) match { case Some(u) => u  case None => TVar(n) }
+  case TFun(a, b) => TFun(subst(st, s, a), subst(st, s, b))
+  case TPair(a, b) => TPair(subst(st, s, a), subst(st, s, b))
+  case u => u
+}
+let rec inst_sub[h](st: St[h], level: Int32, vs: List[Int32], acc: List[(Int32, Ty)]): List[(Int32, Ty)] @ {Heap[h]} = vs match {
+  case Nil => acc
+  case Cons(v, rest) => inst_sub(st, level, rest, Cons((v, fresh(st, level)), acc))
+}
+let instantiate[h](st: St[h], level: Int32, sc: Scheme): Ty @ {Heap[h]} = sc match {
+  case Forall(Nil, t) => t
+  case Forall(vs, t) => subst(st, inst_sub(st, level, vs, Nil), t)
+}
+let rec lookup(env: List[(String, Scheme)], x: String): Scheme @ {TypeErr} = env match {
+  case Nil => perform fail("未定義の名前: " + x)
+  case Cons((y, sc), rest) => if x == y then sc else lookup(rest, x)
+}
+let rec infer[h](st: St[h], env: List[(String, Scheme)], level: Int32, e: Ex): Ty @ {Heap[h], TypeErr} = e match {
+  case EInt(_) => TInt
+  case EBool(_) => TBool
+  case EVar(x) => instantiate(st, level, lookup(env, x))
+  case ELam(x, b) => {
+    let a = fresh(st, level)
+    TFun(a, infer(st, Cons((x, Forall(Nil, a)), env), level, b))
+  }
+  case EApp(f, a) => {
+    let tf = infer(st, env, level, f)
+    let ta = infer(st, env, level, a)
+    let r = fresh(st, level)
+    unify(st, tf, TFun(ta, r))
+    r
+  }
+  case ELet(x, v, b) => {
+    let tv = infer(st, env, level + 1, v)
+    let sc = Forall(gen_vars(st, level, tv, Nil), tv)
+    infer(st, Cons((x, sc), env), level, b)
+  }
+  case EIf(c, t, f) => {
+    unify(st, infer(st, env, level, c), TBool)
+    let tt = infer(st, env, level, t)
+    unify(st, tt, infer(st, env, level, f))
+    tt
+  }
+  case EAdd(a, b) => { unify(st, infer(st, env, level, a), TInt); unify(st, infer(st, env, level, b), TInt); TInt }
+  case EEq(a, b) => { unify(st, infer(st, env, level, a), infer(st, env, level, b)); TBool }
+  case EPair(a, b) => TPair(infer(st, env, level, a), infer(st, env, level, b))
+  case EFst(p) => {
+    let a = fresh(st, level)
+    let b = fresh(st, level)
+    unify(st, infer(st, env, level, p), TPair(a, b))
+    a
+  }
+}
+
+// 入力の生成(線形合同法の擬似乱数で、型で導いた式を作る)。
+let next_seed(s: Int32): Int32 = (s * 1103 + 12345) % 1000003
+let names(i: Int32): String = __string_sub("abcdefgh", i % 8, 1)
+let more(n: Int32): Int32 = if n < 8 then n + 1 else n
+let rec gen_int(seed: Int32, depth: Int32, nv: Int32): (Ex, Int32) = {
+  let s = next_seed(seed)
+  let k = if depth == 0 then s % 2 else s % 7
+  if k == 0 then (EInt(s % 100), s)
+  else if k == 1 then (if nv == 0 then EInt(s % 10) else EVar(names(s % nv)), s)
+  else if k == 2 then {
+    let (a, s2) = gen_int(s, depth - 1, nv)
+    let (b, s3) = gen_int(s2, depth - 1, nv)
+    (EAdd(a, b), s3)
+  } else if k == 3 then {
+    let (c, s2) = gen_bool(s, depth - 1, nv)
+    let (a, s3) = gen_int(s2, depth - 1, nv)
+    let (b, s4) = gen_int(s3, depth - 1, nv)
+    (EIf(c, a, b), s4)
+  } else if k == 4 then {
+    let (v, s2) = gen_int(s, depth - 1, nv)
+    let (b, s3) = gen_int(s2, depth - 1, more(nv))
+    (ELet(names(nv), v, b), s3)
+  } else if k == 5 then {
+    let (f, s2) = gen_fn(s, depth - 1, nv)
+    let (a, s3) = gen_int(s2, depth - 1, nv)
+    (EApp(f, a), s3)
+  } else {
+    let (a, s2) = gen_int(s, depth - 1, nv)
+    let (b, s3) = gen_bool(s2, depth - 1, nv)
+    (EFst(EPair(a, b)), s3)
+  }
+}
+and gen_bool(seed: Int32, depth: Int32, nv: Int32): (Ex, Int32) = {
+  let s = next_seed(seed)
+  let k = if depth == 0 then 0 else s % 3
+  if k == 0 then (EBool(s % 2 == 0), s)
+  else if k == 1 then {
+    let (a, s2) = gen_int(s, depth - 1, nv)
+    let (b, s3) = gen_int(s2, depth - 1, nv)
+    (EEq(a, b), s3)
+  } else {
+    let (c, s2) = gen_bool(s, depth - 1, nv)
+    let (a, s3) = gen_bool(s2, depth - 1, nv)
+    let (b, s4) = gen_bool(s3, depth - 1, nv)
+    (EIf(c, a, b), s4)
+  }
+}
+and gen_fn(seed: Int32, depth: Int32, nv: Int32): (Ex, Int32) = {
+  let s = next_seed(seed)
+  let k = if depth == 0 then 0 else s % 5
+  if k == 0 then (EVar("inc"), s)
+  else if k == 1 then {
+    let (b, s2) = gen_int(s, depth - 1, more(nv))
+    (ELam(names(nv), b), s2)
+  } else if k == 2 then {
+    let (f, s2) = gen_fn(s, depth - 1, nv)
+    (EApp(EVar("twice"), f), s2)
+  } else if k == 3 then {
+    let (f, s2) = gen_fn(s, depth - 1, nv)
+    let (g, s3) = gen_fn(s2, depth - 1, nv)
+    (EApp(EApp(EVar("compose"), f), g), s3)
+  } else {
+    let (f, s2) = gen_fn(s, depth - 1, nv)
+    (EApp(EVar("id"), f), s2)
+  }
+}
+
+// 型のよい既知のプログラム(id、compose、twice を let で多相に使う)。
+let prelude_ex(body: Ex): Ex =
+  ELet("id", ELam("x", EVar("x")),
+  ELet("compose", ELam("f", ELam("g", ELam("x", EApp(EVar("f"), EApp(EVar("g"), EVar("x")))))),
+  ELet("twice", ELam("f", ELam("x", EApp(EVar("f"), EApp(EVar("f"), EVar("x"))))),
+  ELet("inc", ELam("n", EAdd(EVar("n"), EInt(1))),
+  ELet("swap", ELam("p", EPair(EFst(EVar("p")), EFst(EVar("p")))),
+  body)))))
+
+// 1 回の検査が使う型変数は 256 個に収まる(128 個では足りない)ので、配列は 512 要素にする。
+let check(e: Ex): String = run h {
+  let st = {links = MutableArray.new(512, None), levels = MutableArray.new(512, 0), next = Ref.new(0)}
+  { let t = infer(st, Nil, 0, prelude_ex(e)); show_ty(st, t) } handle { case fail(m) => "誤り: " + m }
+}
+let rec lines(i: Int32, n: Int32, seed: Int32, ok: Int32, err: Int32, chars: Int32): (Int32, Int32, Int32) =
+  if i == n then (ok, err, chars) else {
+    let (e0, s2) = gen_fn(seed, 8, 0)
+    let e = if i % 10 == 9 then EApp(e0, EBool(true)) else EApp(e0, EInt(i))
+    let r = check(e)
+    let isok = __string_length(r) < 6 || __string_sub(r, 0, 6) != "誤り"
+    lines(i + 1, n, s2, if isok then ok + 1 else ok, if isok then err else err + 1, (chars + __string_length(r)) % 1000003)
+  }
+let fixed = check(EApp(EApp(EApp(EVar("compose"), EVar("twice")), EVar("twice")), EVar("inc")))
+echoln(fixed)
+let (ok, err, chars) = lines(0, 12000, 7, 0, 0, 0)
+echoln(show(ok) + " " + show(err) + " " + show(chars))

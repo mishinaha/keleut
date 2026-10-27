@@ -1,0 +1,2 @@
+let rec loop(i: Int64, acc: Int64): Int64 = if i == 0 then acc else loop(i - 1, acc + i * i)
+echoln(show(loop(10000000, 0)))

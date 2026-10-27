@@ -1,0 +1,9 @@
+effect Gen = { yield: (Int32) => Unit }
+let rec count(i: Int32, n: Int32): Unit @ {Gen} = if i == n then () else { perform yield(i); count(i + 1, n) }
+let sum(n: Int32): Int32 = run h {
+  let acc = Ref.new(0)
+  count(0, n) handle { case yield(x) => { Ref.set(acc, (Ref.get(acc) + x) % 1000003); let u = resume(()); u } }
+  Ref.get(acc)
+}
+let rec rounds(k: Int32, a: Int32): Int32 = if k == 0 then a else rounds(k - 1, (a + sum(1000)) % 1000003)
+echoln(show(rounds(1000, 0)))

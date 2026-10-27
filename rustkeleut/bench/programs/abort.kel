@@ -1,0 +1,6 @@
+effect Fail = { fail: (Int32) => Never }
+let rec dig(d: Int32, x: Int32): Int32 @ {Fail} = if d == 0 then perform fail(x) else 1 + dig(d - 1, x)
+let attempt(d: Int32, x: Int32): Int32 = dig(d, x) handle { case fail(v) => v }
+let rec rounds(d: Int32, k: Int32, a: Int32): Int32 = if k == 0 then a else rounds(d, k - 1, (a + attempt(d, k)) % 1000003)
+echoln(show(rounds(10, 200000, 0)))
+echoln(show(rounds(1000, 2000, 0)))

@@ -1,0 +1,5 @@
+let rec loop(i: Int32, acc: Int32): Int32 = if i == 0 then acc else loop(i - 1, (acc + i) % 1000003)
+let rec even(n: Int32): Boolean = if n == 0 then true else odd(n - 1)
+and odd(n: Int32): Boolean = if n == 0 then false else even(n - 1)
+echoln(show(loop(10000000, 0)))
+echoln(show(even(10000000)))

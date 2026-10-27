@@ -1,0 +1,9 @@
+effect Gen = { yield: (Int32) => Unit }
+let rec dive(d: Int32, i: Int32): Int32 @ {Gen} = if d == 0 then { perform yield(i); 0 } else 1 + dive(d - 1, i)
+let rec count(d: Int32, i: Int32, n: Int32): Unit @ {Gen} = if i == n then () else { let u = dive(d, i); count(d, i + 1, n) }
+let sum(d: Int32, n: Int32): Int32 = run h {
+  let acc = Ref.new(0)
+  count(d, 0, n) handle { case yield(x) => { Ref.set(acc, (Ref.get(acc) + x) % 1000003); let u = resume(()); u } }
+  Ref.get(acc)
+}
+echoln(show(sum(100, 20000)))
