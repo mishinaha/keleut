@@ -15,6 +15,12 @@
 //! - 相手を実行時に決める呼び出しは `krt_dispatch` に任せる。
 //!   値の呼び出しは、相手がクロージャなら実行時の関数を通さずに呼ぶ。
 //!
+//! - エフェクトの命令は、被演算子をスロットに書いてから実行時の関数 `krt_fx` を呼ぶ(`keleut_interp::native` の冒頭)。
+//!   呼び出しの一種は、`krt_fx` が置いたフレームの関数を入口の表から呼び、番兵を受け取る呼び出しなら番兵を結果にし、
+//!   `perform` なら戻りを `krt_perform_back` に渡す。
+//!   エフェクトのブロックの終わりは `krt_fx_term` を呼び、末尾で呼ぶ終わりは置いたフレームの関数を `musttail` で呼ぶ。
+//! - 入口では、`alternating` の擬似乱数の状態が文脈にあれば、それを進めて段を選ぶ(インタプリタに移るなら `interp_stub` を `musttail` で呼ぶ)。
+//!
 //! 整数の `+ - *` は `nsw` を付けずに折り返し、`sdiv` と `srem` の前に除数 0 と `MIN / -1` の場合を分ける。
 //! `Float64` から整数への変換は飽和する組み込み関数 `llvm.fptosi.sat` を使う(`doc/lir.md` の 6 節)。
 //! `sin cos exp log` は rtcore の不透明な記号 `krt_sin` などを呼び、`sqrt` は `llvm.sqrt` にする。
@@ -22,10 +28,10 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use keleut_interp::native::{dispatch, off};
+use keleut_interp::native::{dispatch, fx, off};
 use keleut_lir::{
-    CmpOp, Const, ConvOp, FloatOp, Func, FuncId, Inst, IntOp, IntTy, MathFn, Program, Reg, Rep,
-    ShowOp, Slot, Term,
+    CmpOp, Const, ConvOp, FloatOp, Func, FuncId, FxOp, FxTermOp, Inst, IntOp, IntTy, MathFn,
+    Program, Reg, Rep, ShowOp, Slot, Term,
 };
 use keleut_rt::Word;
 use keleut_rt::stack::HEADER_WORDS;
@@ -63,6 +69,10 @@ declare i64 @krt_rec_field(ptr, i64, i64, i64, i64) nounwind
 declare i64 @krt_inst(ptr, i64, i64, i64, i64) nounwind
 declare i64 @krt_array(ptr, i64, i64, i64, i64) nounwind
 declare i64 @krt_console_write(ptr, i64) nounwind
+declare i64 @krt_fx(ptr, i64, ptr, i64, i64) nounwind
+declare i64 @krt_fx_term(ptr, i64, ptr, i64) nounwind
+declare i64 @krt_perform_back(ptr, i64, ptr, i64) nounwind
+declare void @krt_bug(ptr, i64, i64) nounwind
 declare double @krt_sin(double) nounwind
 declare double @krt_cos(double) nounwind
 declare double @krt_exp(double) nounwind
@@ -165,6 +175,12 @@ struct Gen<'a> {
     rp_of: HashMap<(u32, u32), u32>,
     sp_of: HashMap<(u32, u32), u32>,
     tail_row: HashMap<u32, u32>,
+    /// エフェクトの命令の通し番号(`keleut_interp::bytecode::Code::fx_pc` の添字)。
+    fx_idx: HashMap<(u32, u32), u32>,
+    /// エフェクトのブロックの終わりの通し番号(`Code::fx_term_pc` の添字)。
+    fxt_idx: HashMap<u32, u32>,
+    /// 番兵を受け取るエフェクトの呼び出しの再開点(`cont_make` の失敗の後に戻り直す先)。
+    catch_rps: Vec<u32>,
     /// 今のブロックの名前(phi の入り口に使う)。
     cur: String,
 }
@@ -1351,9 +1367,194 @@ impl Gen<'_> {
                 let dead = self.label("dead");
                 self.start_block(&dead);
             }
-            Inst::Fx { .. } => return Err("エフェクトの命令は JIT にできません".into()),
+            Inst::Fx { op, dst, args } => self.fx_inst(bi, ii, op, *dst, args)?,
         }
         Ok(())
+    }
+
+    /// スロットの語をレジスタ `r` に読む。
+    fn load_slot(&mut self, r: Reg) {
+        let p = self.frame_word(HEADER_WORDS as u64 + u64::from(self.slot[r.index()]));
+        let v = self.t();
+        self.line(format!("{v} = load i64, ptr {p}"));
+        self.set64(r, &v);
+    }
+
+    /// エフェクトの命令(`krt_fx`)。
+    fn fx_inst(
+        &mut self,
+        bi: usize,
+        ii: usize,
+        op: &FxOp,
+        dst: Option<Reg>,
+        args: &[Reg],
+    ) -> Result<(), String> {
+        let idx = self.fx_idx[&(bi as u32, ii as u32)];
+        if !op.is_call() {
+            for &a in args {
+                self.spill(a);
+            }
+            let sp = if op.allocates() {
+                i64::from(self.safepoint(bi, ii)?)
+            } else {
+                -1
+            };
+            let c = self.t();
+            self.line(format!(
+                "{c} = call i64 @krt_fx(ptr %ctx, i64 %fpos, ptr %fp, i64 {idx}, i64 {sp})"
+            ));
+            let next = self.label("fxnext");
+            if matches!(op, FxOp::ContMake) {
+                let redo = self.label("fxredo");
+                self.line(format!(
+                    "switch i64 {c}, label %ret2 [ i64 {}, label %{next} i64 {}, label %{redo} ]",
+                    fx::NEXT,
+                    fx::REDELIVER
+                ));
+                // 継続を作れず、区間の最上段から巻き戻した。見出しの再開点(本体の呼び出し)の結果として受け取り直す。
+                self.start_block(&redo);
+                let v = self.ctx_load(off::RESULT, "i64");
+                self.line(format!("store i64 {v}, ptr %catchr"));
+                let h = self.t();
+                self.line(format!("{h} = load i64, ptr %fp"));
+                let rp = self.t();
+                self.line(format!("{rp} = lshr i64 {h}, 32"));
+                let bad = self.label("fxbad");
+                let cases: String = self
+                    .catch_rps
+                    .iter()
+                    .map(|r| format!(" i64 {r}, label %cin{r}"))
+                    .collect();
+                self.line(format!("switch i64 {rp}, label %{bad} [{cases} ]"));
+                self.start_block(&bad);
+                self.line(format!(
+                    "call void @krt_bug(ptr %ctx, i64 {}, i64 1)",
+                    self.fid.0
+                ));
+                self.line("ret i64 2");
+            } else {
+                let z = self.t();
+                self.line(format!("{z} = icmp eq i64 {c}, {}", fx::NEXT));
+                self.line(format!("br i1 {z}, label %{next}, label %ret2"));
+            }
+            self.start_block(&next);
+            if let Some(d) = dst {
+                self.load_slot(d);
+            }
+            return Ok(());
+        }
+        let d = dst.ok_or("書き先の無いエフェクトの呼び出し")?;
+        let (rp, live, y) = self.resume(bi, ii)?;
+        self.spill_set(&live, y);
+        for &a in args {
+            self.spill(a);
+        }
+        self.set_row(rp);
+        let c = self.t();
+        self.line(format!(
+            "{c} = call i64 @krt_fx(ptr %ctx, i64 %fpos, ptr %fp, i64 {idx}, i64 -1)"
+        ));
+        let lcall = self.label("fxcall");
+        if matches!(op, FxOp::Perform { .. }) {
+            self.line(format!(
+                "switch i64 {c}, label %ret2 [ i64 {}, label %{lcall} ]",
+                fx::CALL
+            ));
+            self.start_block(&lcall);
+            let cid = self.ctx_load(off::CALLEE, "i64");
+            let e = self.entry_of(&cid);
+            let r = self.t();
+            self.line(format!("{r} = call tailcc i64 {e}(ptr %ctx)"));
+            let k = self.t();
+            self.line(format!(
+                "{k} = call i64 @krt_perform_back(ptr %ctx, i64 %fpos, ptr %fp, i64 {r})"
+            ));
+            let ok = self.t();
+            self.line(format!("{ok} = icmp ne i64 {k}, 0"));
+            let go = self.label("pok");
+            self.line(format!("br i1 {ok}, label %{go}, label %ret2"));
+            self.start_block(&go);
+            self.set64(d, &r);
+            return Ok(());
+        }
+        // 番兵を受け取る呼び出し。
+        let lval = self.label("fxval");
+        let lnext = self.label("fxnext");
+        self.line(format!(
+            "switch i64 {c}, label %ret2 [ i64 {}, label %{lnext} i64 {}, label %{lcall} i64 {}, label %{lval} ]",
+            fx::NEXT,
+            fx::CALL,
+            fx::VALUE
+        ));
+        // 呼ばずに番兵を結果に書いた(`call_clause` が深さの限度を超えた)。深さは変えない。
+        self.start_block(&lnext);
+        let p = self.frame_word(HEADER_WORDS as u64 + u64::from(self.slot[d.index()]));
+        let v = self.t();
+        self.line(format!("{v} = load i64, ptr {p}"));
+        self.line(format!("store i64 {v}, ptr %catchr"));
+        self.line(format!("br label %cj{rp}"));
+        self.start_block(&lcall);
+        let cid = self.ctx_load(off::CALLEE, "i64");
+        let e = self.entry_of(&cid);
+        let r = self.t();
+        self.line(format!("{r} = call tailcc i64 {e}(ptr %ctx)"));
+        self.line(format!("store i64 {r}, ptr %catchr"));
+        self.line(format!("br label %cin{rp}"));
+        self.start_block(&lval);
+        let v = self.ctx_load(off::RESULT, "i64");
+        self.line(format!("store i64 {v}, ptr %catchr"));
+        self.line(format!("br label %cin{rp}"));
+        // 戻った。番兵なら深さをこのフレームの深さに書き戻す。
+        self.start_block(&format!("cin{rp}"));
+        let v = self.t();
+        self.line(format!("{v} = load i64, ptr %catchr"));
+        let s = self.t();
+        self.line(format!("{s} = icmp eq i64 {v}, 2"));
+        self.line(format!("br i1 {s}, label %cs{rp}, label %cj{rp}"));
+        self.start_block(&format!("cs{rp}"));
+        let fd = self.frame_word(1);
+        let dv = self.t();
+        self.line(format!("{dv} = load i64, ptr {fd}"));
+        self.line(format!("store i64 {dv}, ptr %dp"));
+        self.line(format!("br label %cj{rp}"));
+        self.start_block(&format!("cj{rp}"));
+        let v = self.t();
+        self.line(format!("{v} = load i64, ptr %catchr"));
+        self.set64(d, &v);
+        Ok(())
+    }
+
+    /// エフェクトのブロックの終わり(`krt_fx_term`)。
+    fn fx_term(&mut self, bi: usize, op: &FxTermOp, args: &[Reg]) {
+        if matches!(op, FxTermOp::Propagate) {
+            self.line("ret i64 2");
+            return;
+        }
+        let idx = self.fxt_idx[&(bi as u32)];
+        for &a in args {
+            self.spill(a);
+        }
+        let c = self.t();
+        self.line(format!(
+            "{c} = call i64 @krt_fx_term(ptr %ctx, i64 %fpos, ptr %fp, i64 {idx})"
+        ));
+        if matches!(
+            op,
+            FxTermOp::TailCallNever | FxTermOp::TailCallClause { .. }
+        ) {
+            let z = self.t();
+            self.line(format!("{z} = icmp eq i64 {c}, {}", fx::CALL));
+            let tc = self.label("fxtail");
+            self.line(format!("br i1 {z}, label %{tc}, label %ret2"));
+            self.start_block(&tc);
+            let cid = self.ctx_load(off::CALLEE, "i64");
+            let e = self.entry_of(&cid);
+            let r = self.t();
+            self.line(format!("{r} = musttail call tailcc i64 {e}(ptr %ctx)"));
+            self.line(format!("ret i64 {r}"));
+        } else {
+            self.line("ret i64 2");
+        }
     }
 
     /// 語 `w` が即値なら `imm`、箱なら `boxed` の値を選ぶ(どちらも i64 の値を作る)。
@@ -1476,7 +1677,7 @@ impl Gen<'_> {
                 ));
                 self.line("ret i64 2");
             }
-            Term::Fx { .. } => return Err("エフェクトのブロックの終わりは JIT にできません".into()),
+            Term::Fx { op, args } => self.fx_term(bi, op, args),
         }
         Ok(())
     }
@@ -1520,6 +1721,25 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
             k += 1;
         }
     }
+    let mut fx_idx = HashMap::new();
+    let mut fxt_idx = HashMap::new();
+    let mut catch_rps = Vec::new();
+    for (bi, b) in f.blocks.iter().enumerate() {
+        for (ii, inst) in b.insts.iter().enumerate() {
+            if let Inst::Fx { op, .. } = inst {
+                fx_idx.insert((bi as u32, ii as u32), fx_idx.len() as u32);
+                if op.catches() {
+                    let rp = rp_of
+                        .get(&(bi as u32, ii as u32))
+                        .ok_or("エフェクトの呼び出しに再開点がありません")?;
+                    catch_rps.push(*rp);
+                }
+            }
+        }
+        if let Term::Fx { .. } = b.term {
+            fxt_idx.insert(bi as u32, fxt_idx.len() as u32);
+        }
+    }
     let fw = (HEADER_WORDS as u32 + any + fr.raw_slots) as u64;
     let mut g = Gen {
         f,
@@ -1532,6 +1752,9 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
         rp_of,
         sp_of,
         tail_row,
+        fx_idx,
+        fxt_idx,
+        catch_rps,
         cur: String::new(),
     };
     let _ = writeln!(
@@ -1545,6 +1768,7 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
         g.line(format!("%r{i} = alloca {}", ty(rep)));
     }
     g.line("%fdepth = alloca i64");
+    g.line("%catchr = alloca i64");
     // ネイティブのスタックが下限(予備の検査の余裕と SOFT_MARGIN)に近ければ、
     // 置いたフレームのままインタプリタの起動に移る(`keleut_interp::native::SOFT_MARGIN`)。
     // 予備の検査そのもの(計画 6.8 節)は、インタプリタの起動の入口が行う。
@@ -1556,20 +1780,44 @@ pub fn function(prog: &Program, fid: FuncId, entry: usize) -> Result<String, Str
     ));
     g.line("%low = load i64, ptr %lowp");
     g.line("%sov = icmp ult i64 %rai, %low");
-    g.line("br i1 %sov, label %lowstack, label %go");
-    g.start_block("lowstack");
+    g.line("br i1 %sov, label %lowstack, label %altchk");
+    // alternating の擬似乱数(xorshift64)を進め、32 番のビットが立てばインタプリタに移る。
+    g.start_block("altchk");
     g.line(format!(
-        "%forcep = getelementptr i8, ptr %ctx, i64 {}",
-        off::FORCE_INTERP
+        "%altp = getelementptr i8, ptr %ctx, i64 {}",
+        off::ALT
     ));
-    g.line("store i64 1, ptr %forcep");
-    g.line(format!(
-        "%stubp = getelementptr i8, ptr %ctx, i64 {}",
-        off::STUB
-    ));
-    g.line("%stub = load ptr, ptr %stubp");
-    g.line("%rlow = musttail call tailcc i64 %stub(ptr %ctx)");
-    g.line("ret i64 %rlow");
+    g.line("%alt = load i64, ptr %altp");
+    g.line("%alton = icmp ne i64 %alt, 0");
+    g.line("br i1 %alton, label %altpick, label %go");
+    g.start_block("altpick");
+    g.line("%x1s = shl i64 %alt, 13");
+    g.line("%x1 = xor i64 %alt, %x1s");
+    g.line("%x2s = lshr i64 %x1, 7");
+    g.line("%x2 = xor i64 %x1, %x2s");
+    g.line("%x3s = shl i64 %x2, 17");
+    g.line("%x3 = xor i64 %x2, %x3s");
+    g.line("store i64 %x3, ptr %altp");
+    g.line("%xb = and i64 %x3, 4294967296");
+    g.line("%toint = icmp ne i64 %xb, 0");
+    g.line("br i1 %toint, label %altstack, label %go");
+    for (lbl, why) in [("lowstack", 1), ("altstack", 2)] {
+        g.start_block(lbl);
+        g.line(format!(
+            "%forcep{why} = getelementptr i8, ptr %ctx, i64 {}",
+            off::FORCE_INTERP
+        ));
+        g.line(format!("store i64 {why}, ptr %forcep{why}"));
+        g.line(format!(
+            "%stubp{why} = getelementptr i8, ptr %ctx, i64 {}",
+            off::STUB
+        ));
+        g.line(format!("%stub{why} = load ptr, ptr %stubp{why}"));
+        g.line(format!(
+            "%rstub{why} = musttail call tailcc i64 %stub{why}(ptr %ctx)"
+        ));
+        g.line(format!("ret i64 %rstub{why}"));
+    }
     g.start_block("go");
     for (name, o, t) in [
         ("fp", off::CUR_FP, "ptr"),

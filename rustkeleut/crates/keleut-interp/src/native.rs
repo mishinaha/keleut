@@ -19,25 +19,51 @@
 //! 起動の最下段のフレームが JIT の関数を末尾で呼ぶと、起動は [`TAILREQ`] を返し、スタブがその関数を `musttail` で呼ぶ。
 //! インタプリタが JIT の関数を末尾でなく呼ぶときは、スタブ `enter_tailcc`(ccc)を通して普通に呼ぶ。
 //!
-//! ## 番兵と致命的な誤り
+//! ## 番兵とエフェクト
 //!
-//! JIT の関数は `handle` と `resume` と `perform` を含まない(それらの関数はインタプリタに残す。[`jit_eligible`])。
-//! そのため JIT のフレームは番兵を受け取らず、番兵を受け取ったら呼び出し元の深さに書き戻して自分も番兵で戻る([`krt_sentinel`])。
+//! JIT の関数は、ふつうの呼び出しの後に番兵を受け取ったら、呼び出し元の深さに書き戻して自分も番兵で戻る([`krt_sentinel`])。
 //! `YIELD` のときは、フレームは値スタックに残り、継続に写される。
 //! 写し戻した継続はインタプリタが続ける(脱最適化)。
 //! そのため JIT は、末尾でない呼び出しの前に、生きているレジスタをスロットに書き、見出しに再開点を書く。
 //!
+//! `handle`、`resume`、`perform` の下ろし(エフェクトの命令とブロックの終わり。`doc/lir.md` の 16 節)を含む関数も JIT にする。
+//! エフェクトの命令は、被演算子をスロットに書いてから実行時の関数 [`krt_fx`] を呼び、インタプリタの同じ命令を 1 つだけ走らせる。
+//! 呼び出しの一種(`perform`、番兵を受け取る呼び出し)は、[`krt_fx`] が呼ばれる側のフレームを置き、JIT のコードが入口の表から呼ぶ。
+//! 番兵を受け取る呼び出しは、番兵なら深さを書き戻して番兵を結果にする。
+//! `perform` は、戻りを [`krt_perform_back`] に渡して節の選択の結果を状態語にする。
+//! 継続の再開(`cont_resume`)は、写し戻した区間を [`krt_fx`] の中のインタプリタで走らせ、その結果を呼び出しの結果にする。
+//! JIT のコードは再開点の入口を持たないからである(計画 6.8 節)。
+//! エフェクトのブロックの終わりは [`krt_fx_term`] で、末尾で呼ぶ終わりは置いたフレームを `musttail` で呼ぶ。
+//!
 //! 巻き戻さずに止まる誤り(未実装、内部の誤り、防壁の flush の失敗)は、[`Native::fatal`] に置いて番兵で戻る。
 //! インタプリタはネイティブの呼び出しから戻るたびにこれを確かめ、Rust の `Err` にして止まる。
+//!
+//! ## 段の切り替え(計画 6.9 節)
+//!
+//! 関数ごとに入口の表の項目と状態を持つ。
+//! 入口の表の項目は、はじめ `interp_stub` を指し、翻訳のスレッドが翻訳を終えたときに 1 回だけ原子的に書き換える。
+//! 段の設定([`TierMode`])は次のとおりである。
+//!
+//! | 設定 | 翻訳する関数 | 段の選び方 |
+//! | --- | --- | --- |
+//! | `jit-only` | JIT にできるすべての関数を、初めて呼ぶときに | 翻訳した関数は JIT のコードで走る |
+//! | `threshold=N` | インタプリタで `N` 回呼んだ関数を、翻訳のスレッドで(待たずに) | 翻訳が済んだ後の呼び出しから JIT のコードで走る |
+//! | `alternating=SEED` | `jit-only` と同じ | JIT の関数の入口ごとに、種から決まる擬似乱数で、インタプリタに移るかを選ぶ |
+//! | `mixed=SEED` | 種で決まる半分の関数([`mixed_selects`])を、初めて呼ぶときに | 翻訳した関数は JIT のコードで走る |
+//!
+//! 回数は、インタプリタが関数に入るたびに 1 増やす(自己の末尾呼び出しでフレームを再利用する場合も数える)。
+//! JIT の関数の入口でインタプリタに移るときは、文脈の `force_interp` に理由を書いて `interp_stub` を `musttail` で呼ぶ。
+//! 理由は、ネイティブのスタックが下限に近いこと([`SOFT_MARGIN`])と、`alternating` の選びである。
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use keleut_lir::{ClassId, Func, FuncId, Inst, LabelId, Program, ShapeId, Term, TypeId};
 use keleut_rt::stack::HEADER_WORDS;
 use keleut_rt::value::Kind;
 use keleut_rt::{CalleeView, DictView, Stop, Word};
 
-use crate::interp::{Interp, PHASE, runtime_error, unimpl_prim};
+use crate::interp::{Interp, NativeFx, PHASE, runtime_error, unimpl_prim};
 
 /// 起動の最下段のフレームが JIT の関数を末尾で呼んだことを表す、[`krt_interp_run`] の戻り値(一様な語にも番兵にもならない語)。
 pub const TAILREQ: Word = Word(0x4);
@@ -78,8 +104,12 @@ pub struct NativeCtx {
     pub stack_soft: u64,
     /// `interp_stub` の番地。
     pub stub: u64,
-    /// 真なら、[`krt_interp_run`] は関数を翻訳せずにインタプリタで走らせる(スタックが下限に近い)。
+    /// 0 でなければ、[`krt_interp_run`] は関数を翻訳せずにインタプリタで走らせる。
+    ///
+    /// 1 はネイティブのスタックが下限に近いこと、2 は `alternating` の選びである。
     pub force_interp: u64,
+    /// `alternating` の擬似乱数の状態(xorshift64)。0 なら段を選ばない(ほかの設定)。
+    pub alt: u64,
 }
 
 /// [`NativeCtx`] の欄のバイトの位置。
@@ -100,6 +130,7 @@ pub mod off {
     pub const STACK_SOFT: u64 = 104;
     pub const STUB: u64 = 112;
     pub const FORCE_INTERP: u64 = 120;
+    pub const ALT: u64 = 128;
 }
 
 /// ネイティブのスタックの残りがこの量(バイト)を予備の検査の余裕に足したものより少なくなったら、
@@ -130,11 +161,45 @@ pub mod dispatch {
     pub const ERR: i64 = 3;
 }
 
+/// [`krt_fx`] と [`krt_fx_term`] の結果。
+pub mod fx {
+    /// 結果を書き先のスロットに書いた。次の命令へ進む。
+    pub const NEXT: i64 = 0;
+    /// 状態語を立てたか、致命的な誤りを置いた。番兵で戻る。
+    pub const ERR: i64 = 1;
+    /// 呼ぶ関数のフレームを置いた。`entry[ctx.callee]` を呼ぶ([`super::krt_fx_term`] では `musttail` で呼ぶ)。
+    pub const CALL: i64 = 2;
+    /// 呼び出しの結果が `ctx.result` にある(継続の再開)。
+    pub const VALUE: i64 = 3;
+    /// 見出しの再開点の呼び出しの結果が `ctx.result` にある(`cont_make` の失敗。見出しの再開点から続ける)。
+    pub const REDELIVER: i64 = 4;
+}
+
 /// Rust から tailcc の関数を呼ぶスタブ `enter_tailcc` の型。
 pub type EnterFn = unsafe extern "C" fn(*mut NativeCtx, usize) -> u64;
 
-/// 関数を翻訳して入口の番地を返す関数。
-pub type CompileFn = Box<dyn FnMut(FuncId) -> Result<usize, String>>;
+/// 段の設定(計画 6.9 節の `--tier`。`interp-only` はネイティブの後段を付けないことで表す)。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TierMode {
+    /// JIT にできる関数を、初めて呼ぶときにすべて翻訳する。
+    JitOnly,
+    /// インタプリタで `N` 回呼んだ関数の翻訳を、翻訳のスレッドに頼む(待たない)。
+    Threshold(u64),
+    /// `jit-only` と同じに翻訳し、JIT の関数の入口ごとに、種から決まる擬似乱数で段を選ぶ。
+    Alternating(u64),
+    /// 種で決まる半分の関数([`mixed_selects`])だけを、初めて呼ぶときに翻訳する。
+    Mixed(u64),
+}
+
+/// 翻訳のスレッドへの頼み口。
+pub struct Translator {
+    /// 関数の翻訳を頼む。第 2 引数が真なら済むまで待って入口の番地を返し、偽なら待たずに `None` を返す。
+    ///
+    /// 翻訳のスレッドは、翻訳を終えたら入口の表の項目を書き換える。
+    pub request: Box<dyn FnMut(FuncId, bool) -> Result<Option<usize>, String>>,
+    /// 待たない頼みの翻訳が失敗したときの印と文面。
+    pub failure: Arc<(AtomicBool, Mutex<Option<String>>)>,
+}
 
 /// 関数の段の状態。
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -143,8 +208,28 @@ enum State {
     Unknown,
     /// インタプリタで走らせる。
     Interp,
+    /// 翻訳を頼んだ(待たない頼み)。入口の表が書き換わったら翻訳済みになる。
+    Requested,
     /// 翻訳した(番地は入口の表にある)。
     Compiled,
+}
+
+/// splitmix64 の 1 段。
+fn mix(mut z: u64) -> u64 {
+    z = z.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+/// `mixed=SEED` で関数 `f` を翻訳するか(種と関数の番号から決まる、およそ半分の関数)。
+pub fn mixed_selects(seed: u64, f: FuncId) -> bool {
+    mix(mix(seed) ^ u64::from(f.0)) & 1 == 1
+}
+
+/// `alternating=SEED` の擬似乱数の初めの状態(0 にならない)。
+pub fn alternating_state(seed: u64) -> u64 {
+    mix(seed ^ 0x5eed) | 1
 }
 
 /// ネイティブの後段の状態(インタプリタが持つ)。
@@ -152,22 +237,29 @@ pub struct Native {
     /// 文脈。
     pub ctx: NativeCtx,
     /// 入口の表(関数の番号ごとの番地)。JIT のコードはこの表の番地を定数として持つ。
-    pub entry: Box<[AtomicUsize]>,
+    pub entry: Arc<[AtomicUsize]>,
     enter: EnterFn,
     state: Vec<State>,
     eligible: Vec<bool>,
-    /// 段の設定が `jit-only`(使える関数をすべて翻訳する)か。偽なら翻訳しない(`interp-only`)。
-    pub jit_only: bool,
-    compile: CompileFn,
+    counts: Vec<u64>,
+    /// 段の設定。
+    pub mode: TierMode,
+    translator: Translator,
     frames: Vec<(usize, u64)>,
     /// 巻き戻さずに止まる誤り。
     pub fatal: Option<Stop>,
     /// 引数の受け渡しの領域(`ctx.args` が指す)。
     _args: Box<[u64]>,
-    /// 翻訳した関数の数。
+    /// 翻訳した関数の数(終わるときに入口の表から数え直す)。
     pub compiled: usize,
     /// JIT の関数の入口がスタックの下限に近く、インタプリタに移った回数。
     pub low_stack_entries: u64,
+    /// JIT の関数の入口で、`alternating` の選びでインタプリタに移った回数。
+    pub alt_entries: u64,
+    /// `interp_stub` からインタプリタの起動に入った回数。
+    pub stub_entries: u64,
+    /// 起動の最下段が JIT の関数を末尾で呼び、起動を抜けた回数([`TAILREQ`])。
+    pub tail_requests: u64,
     /// 実行時の関数とネイティブの呼び出しが見たネイティブのスタックの最も深い番地(計測用)。
     pub min_sp: usize,
     /// 同じ時点で見た文脈の深さの最大(計測用)。
@@ -180,19 +272,52 @@ pub struct Native {
 pub static LAST_LOW_STACK_ENTRIES: AtomicU64 = AtomicU64::new(0);
 /// 直近の実行の [`Native::compiled`](試験用)。
 pub static LAST_COMPILED: AtomicU64 = AtomicU64::new(0);
+/// 直近の実行の [`Native::alt_entries`](試験用)。
+pub static LAST_ALT_ENTRIES: AtomicU64 = AtomicU64::new(0);
+/// 直近の実行の [`Native::stub_entries`](試験用)。
+pub static LAST_STUB_ENTRIES: AtomicU64 = AtomicU64::new(0);
+/// 直近の実行の [`Native::tail_requests`](試験用)。
+pub static LAST_TAIL_REQUESTS: AtomicU64 = AtomicU64::new(0);
+/// 直近の実行で、ネイティブの呼び出しの入口から見たネイティブのスタックの使用量(バイト。試験用)。
+pub static LAST_STACK_USED: AtomicU64 = AtomicU64::new(0);
+
+/// JIT にする関数の翻訳の重さの上限([`jit_cost`] の値)。
+///
+/// これを超える関数はインタプリタに残す。
+/// 翻訳の時間は重さのおよそ 1.3 乗で増え、重さ 4 万から 9 万の関数で 0.6 秒から 1.7 秒かかった(`default<O2>`)。
+/// 上限は、上限の近くの関数の翻訳が 1 秒ほどで終わるように選んだ。
+/// `conformance/` の試験の関数の重さは 600 に届かない。
+pub const JIT_COST_MAX: u64 = 50_000;
+
+/// 関数の翻訳の重さの見積もり。
+///
+/// 命令とブロックの終わりの数に、安全点と再開点の数とスロットの数の積を足したものである。
+/// 安全点と再開点のそれぞれで生きているレジスタをスロットに書くので、出す LLVM IR の大きさはおよそ後の項に比例する。
+/// 生きているレジスタの数はスロットの数を超えないので、後の項は書く数の上限である。
+pub fn jit_cost(f: &Func) -> u64 {
+    let Some(fr) = f.frame.as_ref() else {
+        return 0;
+    };
+    let insts: u64 = f.blocks.iter().map(|b| b.insts.len() as u64 + 1).sum();
+    let points = (fr.safepoints.len() + fr.resume_points.len()) as u64;
+    let slots = u64::from(fr.any_slots) + u64::from(fr.raw_slots);
+    insts.saturating_add(points.saturating_mul(slots))
+}
 
 /// 関数を JIT にできるか。
 ///
-/// エフェクトの命令とブロックの終わり(`handle`、`resume`、`perform` の下ろし)を含む関数はインタプリタに残す(計画 9 節の M91)。
-/// 引数の受け渡しの領域に入らない呼び出しを含む関数も残す。
+/// 引数の受け渡しの領域に入らない呼び出しを含む関数と、翻訳が重すぎる関数([`JIT_COST_MAX`])はインタプリタに残す。
+/// エフェクトの命令とブロックの終わりを含む関数も JIT にする(冒頭の「番兵とエフェクト」)。
 pub fn jit_eligible(f: &Func) -> bool {
     if f.frame.is_none() || f.params.len() > ARG_WORDS {
+        return false;
+    }
+    if jit_cost(f) > JIT_COST_MAX {
         return false;
     }
     for b in &f.blocks {
         for i in &b.insts {
             match i {
-                Inst::Fx { .. } => return false,
                 Inst::CallMethod { own, args, .. } if own.len() + args.len() > ARG_WORDS => {
                     return false;
                 }
@@ -220,7 +345,6 @@ pub fn jit_eligible(f: &Func) -> bool {
             }
         }
         match &b.term {
-            Term::Fx { .. } => return false,
             Term::TailCallMethod { own, args, .. } if own.len() + args.len() > ARG_WORDS => {
                 return false;
             }
@@ -238,15 +362,32 @@ pub fn jit_eligible(f: &Func) -> bool {
 impl Drop for Native {
     /// 環境変数 `KELEUT_JIT_STATS` があれば、翻訳した関数の数を標準エラーに書く。
     fn drop(&mut self) {
+        let used = self.sp0.saturating_sub(self.min_sp);
+        // 待たない頼みで翻訳した関数は、ミューテータが入口を調べる前に JIT のコードから呼ばれうるので、入口の表で数える。
+        let stub = self.ctx.stub as usize;
+        self.compiled = self
+            .entry
+            .iter()
+            .filter(|e| e.load(Ordering::Acquire) != stub)
+            .count();
         LAST_LOW_STACK_ENTRIES.store(self.low_stack_entries, Ordering::Relaxed);
         LAST_COMPILED.store(self.compiled as u64, Ordering::Relaxed);
+        LAST_ALT_ENTRIES.store(self.alt_entries, Ordering::Relaxed);
+        LAST_STUB_ENTRIES.store(self.stub_entries, Ordering::Relaxed);
+        LAST_TAIL_REQUESTS.store(self.tail_requests, Ordering::Relaxed);
+        LAST_STACK_USED.store(used as u64, Ordering::Relaxed);
         if std::env::var_os("KELEUT_JIT_STATS").is_some() {
             let interp = self.state.iter().filter(|s| **s == State::Interp).count();
-            let used = self.sp0.saturating_sub(self.min_sp);
             eprintln!(
                 "keleut: jit: 翻訳した関数 {}、インタプリタで走らせた関数 {interp}、スタックの下限で移った入口 {}、\
+                 alternating で移った入口 {}、interp_stub からの起動 {}、末尾呼び出しの依頼 {}、\
                  ネイティブのスタック {used} バイト(文脈の深さ {})",
-                self.compiled, self.low_stack_entries, self.max_depth_seen
+                self.compiled,
+                self.low_stack_entries,
+                self.alt_entries,
+                self.stub_entries,
+                self.tail_requests,
+                self.max_depth_seen
             );
         }
     }
@@ -255,13 +396,13 @@ impl Drop for Native {
 impl Native {
     /// プログラム `prog` のネイティブの後段の状態を作る。
     ///
-    /// `entry` は関数の数の長さの入口の表で、どの項目もはじめは `stub`(`interp_stub` の番地)を指す。
+    /// `entry` は関数の数の長さの入口の表で、どの項目もはじめは `interp_stub` の番地を指す。
     pub fn new(
         prog: &Program,
-        entry: Box<[AtomicUsize]>,
+        entry: Arc<[AtomicUsize]>,
         enter: EnterFn,
-        jit_only: bool,
-        compile: CompileFn,
+        mode: TierMode,
+        translator: Translator,
     ) -> Native {
         let frames = prog
             .funcs
@@ -275,6 +416,10 @@ impl Native {
             })
             .collect();
         let mut args = vec![0u64; ARG_WORDS].into_boxed_slice();
+        let alt = match mode {
+            TierMode::Alternating(seed) => alternating_state(seed),
+            _ => 0,
+        };
         Native {
             ctx: NativeCtx {
                 interp: std::ptr::null_mut(),
@@ -295,18 +440,23 @@ impl Native {
                     .first()
                     .map_or(0, |e| e.load(Ordering::Relaxed) as u64),
                 force_interp: 0,
+                alt,
             },
             entry,
             enter,
             state: vec![State::Unknown; prog.funcs.len()],
             eligible: prog.funcs.iter().map(jit_eligible).collect(),
-            jit_only,
-            compile,
+            counts: vec![0; prog.funcs.len()],
+            mode,
+            translator,
             frames,
             fatal: None,
             _args: args,
             compiled: 0,
             low_stack_entries: 0,
+            alt_entries: 0,
+            stub_entries: 0,
+            tail_requests: 0,
             min_sp: usize::MAX,
             max_depth_seen: 0,
             sp0: 0,
@@ -320,7 +470,11 @@ impl<'p> Interp<'p> {
         self.native = Some(n);
     }
 
-    /// 関数 `f` を JIT で走らせるなら、入口の番地を返す(`jit-only` では初めて呼ぶときに翻訳する)。
+    /// 関数 `f` を JIT のコードで走らせるなら、入口の番地を返す。
+    ///
+    /// インタプリタが関数に入るたびに呼ぶ(冒頭の「段の切り替え」)。
+    /// `threshold` では回数を数え、しきい値に届いたら翻訳を頼む。
+    /// ほかの設定では、翻訳する関数を初めて呼ぶときに翻訳し、済むまで待つ。
     pub(crate) fn native_target(&mut self, f: FuncId) -> Result<Option<usize>, Stop> {
         let Some(n) = self.native.as_mut() else {
             return Ok(None);
@@ -330,23 +484,65 @@ impl<'p> Interp<'p> {
             // ネイティブのスタックが下限に近い。JIT の関数もインタプリタで走らせる([`SOFT_MARGIN`])。
             return Ok(None);
         }
-        match n.state[f.index()] {
-            State::Compiled => return Ok(Some(n.entry[f.index()].load(Ordering::Relaxed))),
+        let i = f.index();
+        match n.state[i] {
+            State::Compiled => return Ok(Some(n.entry[i].load(Ordering::Relaxed))),
             State::Interp => return Ok(None),
+            State::Requested => {
+                let e = n.entry[i].load(Ordering::Acquire);
+                if e as u64 != n.ctx.stub {
+                    n.state[i] = State::Compiled;
+                    n.compiled += 1;
+                    return Ok(Some(e));
+                }
+                if n.translator.failure.0.load(Ordering::Relaxed) {
+                    let m = n
+                        .translator
+                        .failure
+                        .1
+                        .lock()
+                        .map(|m| m.clone().unwrap_or_default())
+                        .unwrap_or_default();
+                    return Err(Stop::Internal(format!("関数を翻訳できません: {m}")));
+                }
+                return Ok(None);
+            }
             State::Unknown => {}
         }
-        if !n.jit_only || !n.eligible[f.index()] {
-            n.state[f.index()] = State::Interp;
+        if !n.eligible[i] {
+            n.state[i] = State::Interp;
             return Ok(None);
         }
-        let addr = (n.compile)(f).map_err(|e| {
-            Stop::Internal(format!(
-                "関数 {} を翻訳できません: {e}",
-                self.prog.funcs[f.index()].sym
-            ))
-        })?;
-        n.entry[f.index()].store(addr, Ordering::Release);
-        n.state[f.index()] = State::Compiled;
+        match n.mode {
+            TierMode::Threshold(t) => {
+                n.counts[i] += 1;
+                if n.counts[i] < t {
+                    return Ok(None);
+                }
+                (n.translator.request)(f, false).map_err(|e| {
+                    Stop::Internal(format!(
+                        "関数 {} の翻訳を頼めません: {e}",
+                        self.prog.funcs[i].sym
+                    ))
+                })?;
+                n.state[i] = State::Requested;
+                return Ok(None);
+            }
+            TierMode::Mixed(seed) if !mixed_selects(seed, f) => {
+                n.state[i] = State::Interp;
+                return Ok(None);
+            }
+            _ => {}
+        }
+        let addr = (n.translator.request)(f, true)
+            .and_then(|a| a.ok_or_else(|| "番地が返りませんでした".to_string()))
+            .map_err(|e| {
+                Stop::Internal(format!(
+                    "関数 {} を翻訳できません: {e}",
+                    self.prog.funcs[i].sym
+                ))
+            })?;
+        n.state[i] = State::Compiled;
         n.compiled += 1;
         Ok(Some(addr))
     }
@@ -413,7 +609,8 @@ impl<'p> Interp<'p> {
 
     /// [`Interp::run`] の起動の最下段が残した末尾呼び出しの依頼を、ネイティブに呼んで終える。
     pub(crate) fn call_native_request(&mut self) -> Result<Word, Stop> {
-        let n = self.native.as_ref().expect("ネイティブの後段がある");
+        let n = self.native.as_mut().expect("ネイティブの後段がある");
+        n.tail_requests += 1;
         let func = FuncId(n.ctx.callee as u32);
         let (env, pos, fp) = (Word(n.ctx.env), n.ctx.cur_pos, n.ctx.cur_fp);
         let addr = n.entry[func.index()].load(Ordering::Acquire);
@@ -602,20 +799,27 @@ pub unsafe extern "C" fn krt_interp_run(ctx: *mut NativeCtx) -> u64 {
             )
         };
         // SAFETY: ctx は生きている文脈である。
-        let forced = unsafe { std::mem::replace(&mut (*ctx).force_interp, 0) } != 0;
-        if forced {
-            native(it).low_stack_entries += 1;
-        } else {
-            match it.native_target(func) {
-                Ok(Some(_)) => return TAILREQ.0,
+        let forced = unsafe { std::mem::replace(&mut (*ctx).force_interp, 0) };
+        native(it).stub_entries += 1;
+        match forced {
+            0 => match it.native_target(func) {
+                Ok(Some(_)) => {
+                    native(it).tail_requests += 1;
+                    return TAILREQ.0;
+                }
                 Ok(None) => {}
                 Err(e) => {
                     set_fatal(it, e);
                     return Word::SENTINEL.0;
                 }
-            }
+            },
+            2 => native(it).alt_entries += 1,
+            _ => native(it).low_stack_entries += 1,
         }
         let r = it.run_activation(func, env, pos, fp);
+        if matches!(r, Ok(v) if v == TAILREQ) {
+            native(it).tail_requests += 1;
+        }
         // 起動の中のネイティブの呼び出しが文脈のポインタを書き直したので、戻る前にこの起動のものに戻す必要は無い
         // (どの欄も同じ Interp と Rt を指す)。
         match r {
@@ -1302,6 +1506,176 @@ pub unsafe extern "C" fn krt_console_write(ctx: *mut NativeCtx, s: u64) -> u64 {
     })
 }
 
+/// フレーム(位置 `fpos`、見出し `fp`)の上に関数 `func` のフレームを置き、引数を書く。
+///
+/// 末尾(`tail`)なら、今のフレームの位置に置き直し、呼び出し元と深さを引き継ぐ(インタプリタの末尾呼び出しと同じ)。
+#[allow(clippy::too_many_arguments)]
+fn place_with_args(
+    it: &mut Interp<'_>,
+    ctx: *mut NativeCtx,
+    fpos: u64,
+    fp: *mut u64,
+    func: FuncId,
+    env: Word,
+    args: &[Word],
+    tail: bool,
+) -> bool {
+    // SAFETY: fp は今のフレームの見出しを指す。
+    let (fid, caller, depth) = unsafe { (*fp & 0xffff_ffff, *fp.add(3), *fp.add(1)) };
+    let (at, caller) = if tail {
+        (fpos, caller)
+    } else {
+        (fpos + native(it).frames[fid as usize].0 as u64, fpos)
+    };
+    let Some(p) = place(it, ctx, u64::from(func.0), fpos, at, caller, env.0) else {
+        return false;
+    };
+    // SAFETY: 置いたフレームは関数の引数の数以上のスロットを持つ。
+    unsafe {
+        if tail {
+            *p.add(1) = depth;
+        }
+        for (i, a) in args.iter().enumerate() {
+            *p.add(HEADER_WORDS + i) = a.0;
+        }
+    }
+    true
+}
+
+/// JIT のフレーム(位置 `fpos`、見出し `fp`)のエフェクトの命令(関数の中の `idx` 番目)を実行する。
+///
+/// JIT のコードは、被演算子をすべてスロットに書いてから呼ぶ。
+/// 確保する命令なら `sp` はその安全点の番号で(生きている `any` の区画も書いてある)、そうでなければ `u64::MAX` である。
+/// 呼び出しの一種なら、再開点で生きているレジスタも書き、見出しに再開点を書いてある。
+/// 結果は [`fx`] の値で、書き先のある命令の結果は書き先のスロットにある。
+///
+/// # Safety
+///
+/// [`krt_prep`] と同じ。
+pub unsafe extern "C" fn krt_fx(
+    ctx: *mut NativeCtx,
+    fpos: u64,
+    fp: *mut u64,
+    idx: u64,
+    sp: u64,
+) -> i64 {
+    guarded(ctx, || {
+        // SAFETY: 呼び出し側の約束による。
+        let it = unsafe { interp(ctx) };
+        sample(it);
+        if sp != u64::MAX {
+            it.rt.gc.at_safepoint(fpos, sp as u32);
+        }
+        match it.native_fx(fpos, fp, idx as u32) {
+            Ok(NativeFx::Next) => fx::NEXT,
+            Ok(NativeFx::Enter(func, env, args)) => {
+                if place_with_args(it, ctx, fpos, fp, func, env, &args, false) {
+                    fx::CALL
+                } else {
+                    fx::ERR
+                }
+            }
+            Ok(NativeFx::Value(v)) => {
+                // SAFETY: ctx は生きている文脈である。
+                unsafe { (*ctx).result = v.0 };
+                fx::VALUE
+            }
+            Ok(NativeFx::Redeliver(v)) => {
+                // SAFETY: ctx は生きている文脈である。
+                unsafe { (*ctx).result = v.0 };
+                fx::REDELIVER
+            }
+            Err(e) => {
+                fail(it, e);
+                fx::ERR
+            }
+        }
+    })
+}
+
+/// JIT のフレームのエフェクトのブロックの終わり(関数の中の `idx` 番目)。
+///
+/// 被演算子はスロットにある。
+/// 印を立てて番兵で戻る終わりと誤りは [`fx::ERR`]、末尾で呼ぶ終わりはフレームを置き直して [`fx::CALL`] を返す。
+///
+/// # Safety
+///
+/// [`krt_prep`] と同じ。
+pub unsafe extern "C" fn krt_fx_term(
+    ctx: *mut NativeCtx,
+    fpos: u64,
+    fp: *mut u64,
+    idx: u64,
+) -> i64 {
+    guarded(ctx, || {
+        // SAFETY: 呼び出し側の約束による。
+        let it = unsafe { interp(ctx) };
+        sample(it);
+        match it.native_fx_term(fpos, fp, idx as u32) {
+            Ok(None) => fx::ERR,
+            Ok(Some((func, env, args))) => {
+                if place_with_args(it, ctx, fpos, fp, func, env, &args, true) {
+                    fx::CALL
+                } else {
+                    fx::ERR
+                }
+            }
+            Err(e) => {
+                fail(it, e);
+                fx::ERR
+            }
+        }
+    })
+}
+
+/// JIT のフレームの `perform` の呼び出しが `r` で戻った([`Interp::native_perform_back`])。
+///
+/// 1 なら `r` を結果にして続け、0 なら番兵で戻る。
+///
+/// # Safety
+///
+/// [`krt_prep`] と同じ。
+pub unsafe extern "C" fn krt_perform_back(
+    ctx: *mut NativeCtx,
+    fpos: u64,
+    fp: *mut u64,
+    r: u64,
+) -> u64 {
+    guarded(ctx, || {
+        // SAFETY: 呼び出し側の約束による。
+        let it = unsafe { interp(ctx) };
+        if native(it).fatal.is_some() {
+            return 0;
+        }
+        match it.native_perform_back(fpos, fp, Word(r)) {
+            Ok(b) => u64::from(b),
+            Err(e) => {
+                set_fatal(it, e);
+                0
+            }
+        }
+    })
+}
+
+/// JIT のコードが、起きないはずの道に入った(`what` は場所の番号)。内部の誤りにする。
+///
+/// # Safety
+///
+/// [`krt_prep`] と同じ。
+pub unsafe extern "C" fn krt_bug(ctx: *mut NativeCtx, fid: u64, what: u64) {
+    guarded(ctx, || {
+        // SAFETY: 呼び出し側の約束による。
+        let it = unsafe { interp(ctx) };
+        let sym = &it.prog.funcs[fid as usize].sym;
+        set_fatal(
+            it,
+            Stop::Internal(format!(
+                "JIT のコードが起きないはずの道に入りました({sym}、{what})"
+            )),
+        );
+    })
+}
+
 /// JIT のコードが呼ぶ実行時の関数の名前と番地(LLJIT の絶対の記号として登録する)。
 pub fn helper_symbols() -> Vec<(&'static str, usize)> {
     vec![
@@ -1332,6 +1706,10 @@ pub fn helper_symbols() -> Vec<(&'static str, usize)> {
         ("krt_inst", krt_inst as *const () as usize),
         ("krt_array", krt_array as *const () as usize),
         ("krt_console_write", krt_console_write as *const () as usize),
+        ("krt_fx", krt_fx as *const () as usize),
+        ("krt_fx_term", krt_fx_term as *const () as usize),
+        ("krt_perform_back", krt_perform_back as *const () as usize),
+        ("krt_bug", krt_bug as *const () as usize),
         ("krt_sin", keleut_rtcore::sys::krt_sin as *const () as usize),
         ("krt_cos", keleut_rtcore::sys::krt_cos as *const () as usize),
         ("krt_exp", keleut_rtcore::sys::krt_exp as *const () as usize),
@@ -1364,6 +1742,7 @@ mod tests {
             offset_of!(NativeCtx, force_interp) as u64,
             off::FORCE_INTERP
         );
+        assert_eq!(offset_of!(NativeCtx, alt) as u64, off::ALT);
         assert_eq!(TAILREQ.0 & 7, 4);
     }
 }

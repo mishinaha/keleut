@@ -83,7 +83,9 @@ fn run_mutator(
     };
     let mut it = Interp::new(rt, low);
     it.set_stack_hop(
-        usize::try_from(opts.native_stack).unwrap_or(usize::MAX),
+        usize::try_from(opts.native_stack)
+            .unwrap_or(usize::MAX)
+            .max(interp::HOP_STACK_MIN),
         margin,
     );
     if let Some(setup) = setup
