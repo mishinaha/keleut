@@ -6,3 +6,5 @@
 
 - `evenodd.kel`: 1,000 万段の相互の末尾再帰(`tests/small_stack.rs`。256 KiB のスタックのスレッドで走らせる)。
 - `nontail.kel`: 100 万段の末尾でない再帰(同じ試験で、スタックの下限でインタプリタに移ることを確かめる)。
+- `alt.kel`: 1 億回の相互の末尾呼び出し(`tests/tier_alt.rs`。`mixed` の種で片方だけを翻訳し、インタプリタと JIT を交互にまたぐ)。
+- `alt6.kel`: 同じ形の 100 万回(最適化なしの組みの `tests/tier_alt.rs`)。
