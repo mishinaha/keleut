@@ -250,28 +250,46 @@ impl ValueStack {
 mod tests {
     use super::*;
 
+    /// 範囲 `win` が使っている塊 `chunks[cur]` と一致することを確かめる(JIT のコードが頼る性質)。
+    fn check_win(s: &ValueStack) {
+        if s.chunks.is_empty() {
+            return;
+        }
+        let c = &s.chunks[s.cur];
+        assert_eq!(s.win.lo, c.base);
+        assert_eq!(s.win.hi, c.base + c.mem.len() as u64);
+        assert_eq!(s.win.ptr, c.mem.as_ptr() as usize);
+    }
+
     #[test]
     fn 入らないフレームは次の塊に置き戻ると前の塊に戻る() {
         let mut s = ValueStack::new();
         assert_eq!(s.chunk_count(), 0);
         let a = s.place(0, 10).unwrap();
+        check_win(&s);
         assert_eq!(a, 0);
         assert_eq!(s.chunk_count(), 1);
         let b = s.place(10, CHUNK_WORDS - 5).unwrap();
+        check_win(&s);
         assert_eq!(b, CHUNK_WORDS as u64);
         assert_eq!(s.chunk_count(), 2);
         let p = s.ptr_at(b);
+        check_win(&s);
         // SAFETY: p は塊の中を指す。
         unsafe { *p = 7 };
         let q = s.ptr_at(a);
+        check_win(&s);
         // SAFETY: q は塊の中を指す。
         unsafe { *q = 3 };
         // 塊 0 に戻ったので、次のフレームは塊 0 の続きに置ける。
         assert_eq!(s.place(10, 10), Ok(10));
+        check_win(&s);
         // 大きなフレームは専用の大きさの塊を作る。
         let big = s.place(20, CHUNK_WORDS * 3).unwrap();
+        check_win(&s);
         assert_eq!(big, CHUNK_WORDS as u64);
         let p = s.ptr_at(big + (CHUNK_WORDS * 3 - 1) as u64);
+        check_win(&s);
         // SAFETY: p は塊の中を指す。
         unsafe { *p = 1 };
     }
@@ -280,23 +298,54 @@ mod tests {
     fn 塊を取れなければ値スタックを変えずに失敗を返す() {
         let mut s = ValueStack::new();
         assert_eq!(s.place(0, usize::MAX / 4), Err(OutOfMemory));
+        check_win(&s);
         assert_eq!(s.chunk_count(), 0);
         assert_eq!(s.place(0, 10), Ok(0));
+        check_win(&s);
         assert_eq!(s.place(10, usize::MAX / 4), Err(OutOfMemory));
+        check_win(&s);
         assert_eq!(s.chunk_count(), 1);
         assert_eq!(s.place(10, 10), Ok(10));
+        check_win(&s);
     }
 
     #[test]
     fn 塊を取れなかった後は予備の塊にフレームを置ける() {
         let mut s = ValueStack::new();
         assert_eq!(s.place(0, 10), Ok(0));
+        check_win(&s);
         assert!(s.spare.is_some());
         assert_eq!(s.place(10, usize::MAX / 4), Err(OutOfMemory));
+        check_win(&s);
         assert!(s.armed.is_some() && s.spare.is_none());
         // 今の塊に入らないフレームは、予備の塊に置く。
         assert_eq!(s.place(10, CHUNK_WORDS), Ok(CHUNK_WORDS as u64));
+        check_win(&s);
         assert!(s.armed.is_none());
         assert_eq!(s.chunk_count(), 2);
+    }
+
+    #[test]
+    fn 範囲は次の塊の使い直しと戻った後の失敗でも使っている塊と一致する() {
+        let mut s = ValueStack::new();
+        assert_eq!(s.place(0, 10), Ok(0));
+        check_win(&s);
+        let b = s.place(10, CHUNK_WORDS - 5).unwrap();
+        check_win(&s);
+        assert_eq!(s.chunk_count(), 2);
+        // 塊 0 に戻ってから入らないフレームを置くと、残っている塊 1 を使い直す。
+        s.ptr_at(0);
+        check_win(&s);
+        assert_eq!(s.place(10, CHUNK_WORDS - 5), Ok(b));
+        check_win(&s);
+        assert_eq!(s.chunk_count(), 2);
+        // 塊 1 から塊 0 の位置に戻って置けずに失敗しても、範囲は戻った先の塊 0 を指す。
+        assert_eq!(s.place(10, usize::MAX / 4), Err(OutOfMemory));
+        check_win(&s);
+        assert_eq!(s.cur, 0);
+        // 使い直した塊にもう一度進む。
+        s.ptr_at(b);
+        check_win(&s);
+        assert_eq!(s.cur, 1);
     }
 }
