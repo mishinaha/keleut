@@ -10,6 +10,7 @@
 //! | [`error`] | 評価が止まる理由、文面、終了状態 |
 //! | [`ctx`] | 実行時の文脈と、値を作り読む操作、診断の印字 |
 //! | [`effect`] | エフェクトのデータ(状態語、ハンドラ記録、継続) |
+//! | [`extend`] | 単位を足したプログラムへの文脈の付け替え(`keleut repl`) |
 //!
 //! 後段(M87 のインタプリタ、M91 の JIT)は、LIR の命令の意味のうち実行時に任せるものを [`ctx::Rt`] の関数で行う。
 //! 後段が回収のために守る規則は [`gc`] の冒頭と `doc/lir.md` の 1.8 節にある。
@@ -17,6 +18,7 @@
 pub mod ctx;
 pub mod effect;
 pub mod error;
+pub mod extend;
 pub mod gc;
 pub mod heap;
 pub mod out;

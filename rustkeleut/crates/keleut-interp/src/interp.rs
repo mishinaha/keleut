@@ -261,6 +261,51 @@ impl<'p> Interp<'p> {
         }
     }
 
+    /// インタプリタを、プログラム `prog` に付け替える(`keleut repl`。[`Rt::rebind`])。
+    ///
+    /// `prog` は、今のプログラムの各表の後ろに項目を足したもの(`keleut_lir::Extender`)か、
+    /// 使わない間だけ置いておく空のプログラムである。
+    /// 符号化したバイトコードは、前の関数の分を残し、足した関数の分の空きを作る。
+    /// 実行時の文脈の表は伸ばさないので、足したプログラムに付け替えた後で [`Rt::grow`] を呼ぶ。
+    /// ネイティブの後段(JIT)を付けたインタプリタには使えない(付けていれば panic する)。
+    /// JIT の入口の表と翻訳のスレッドは前のプログラムに合わせて作ってあり、足した関数を知らないからである。
+    pub fn rebind<'q>(self, prog: &'q Program) -> Interp<'q> {
+        assert!(
+            self.native.is_none(),
+            "Interp::rebind: ネイティブの後段を付けたインタプリタは付け替えられません"
+        );
+        let Interp {
+            rt,
+            prog: _,
+            mut codes,
+            mut builtin_methods,
+            stack_low,
+            words,
+            rt_handle: _,
+            native,
+            bottom,
+            stack_hop,
+        } = self;
+        if codes.len() < prog.funcs.len() {
+            codes.resize_with(prog.funcs.len(), || None);
+        }
+        for b in &prog.builtin_methods {
+            builtin_methods.insert((b.class.0, b.ty.0, b.method), b.func);
+        }
+        Interp {
+            rt: rt.rebind(prog),
+            prog,
+            codes,
+            builtin_methods,
+            stack_low,
+            words,
+            rt_handle: prog.rt_handle,
+            native,
+            bottom,
+            stack_hop,
+        }
+    }
+
     /// 構造的な `Eq` の入れ子が深くなったときに、大きさ `size` のスタックの新しいスレッドに移って続けるようにする。
     ///
     /// `margin` は新しいスタックでの予備の検査の余裕で、下限は新しいスレッドの入口の番地から `size` を引き `margin` を足したものである。

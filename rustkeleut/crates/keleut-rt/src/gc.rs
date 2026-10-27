@@ -217,6 +217,13 @@ pub struct GcState {
 }
 
 impl GcState {
+    /// 関数ごとの根の表を `nfuncs` 個に伸ばす(プログラムに単位を足したとき。[`Rt::rebind`])。
+    pub fn grow_funcs(&mut self, nfuncs: usize) {
+        if self.funcs.len() < nfuncs {
+            self.funcs.resize_with(nfuncs, || None);
+        }
+    }
+
     /// 最上段のフレーム `pos` が、安全点 `sp`(LIR の安全点の番号)の確保をする。
     #[inline]
     pub fn at_safepoint(&mut self, pos: u64, sp: u32) {
