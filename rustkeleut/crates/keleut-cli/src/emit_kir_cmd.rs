@@ -152,9 +152,9 @@ fn write_limit(msg: &str) -> u8 {
 /// 型検査して KIR を作る。終わるときは終了状態を `Err` で返す。
 ///
 /// 型検査のスレッドの中で呼ぶ。
-fn build(o: &Options) -> Result<kir::Program, u8> {
+fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
     let mut fs = StdFs;
-    let mut c = match check_program(&o.check, &mut fs) {
+    let mut c = match check_program(check, &mut fs) {
         Ok(c) => c,
         Err(Stop::Input(m)) => {
             eprintln_now(&format!("keleut: ファイルを開けません: {m}"));
@@ -183,10 +183,10 @@ fn build(o: &Options) -> Result<kir::Program, u8> {
         eprintln_now(&e.render());
         return Err(e.exit);
     }
-    if o.strict && out.lines.iter().any(|l| matches!(l, OutLine::Warning(_))) {
+    if strict && out.lines.iter().any(|l| matches!(l, OutLine::Warning(_))) {
         return Err(1);
     }
-    let keys = match c.unit_keys(&mut fs, &o.check) {
+    let keys = match c.unit_keys(&mut fs, check) {
         Ok(k) => k,
         Err(UnitKeyError::Clash(m)) => {
             eprintln_now(&format!("keleut: {m}"));
@@ -201,7 +201,7 @@ fn build(o: &Options) -> Result<kir::Program, u8> {
             return Err(3);
         }
     };
-    let r = program_of_checked(&mut c, &keys, &o.check);
+    let r = program_of_checked(&mut c, &keys, check);
     // 型検査の文脈と木は捨てずにプロセスの終わりまで残す(`keleut check` と同じ理由)。
     std::mem::forget(c);
     match r {
@@ -294,7 +294,7 @@ pub fn main(args: &[String]) -> u8 {
         }
     };
     let limits = o.limits;
-    let prog = match on_check_stack(limits, || build(&o)) {
+    let prog = match on_check_stack(limits, || build(&o.check, o.strict)) {
         Ok(Ok(p)) => p,
         Ok(Err(code)) => return code,
         Err(msg) => {
@@ -317,6 +317,66 @@ pub fn main(args: &[String]) -> u8 {
         write_text(&o, &prog)
     } else {
         write_binary(&o, &bin)
+    }
+}
+
+/// `keleut run --frontend rust` のフロントエンドである。
+///
+/// `front_args` は `keleut run` が受けたフロントエンドの旗(`--no-prelude`、`--prelude PATH`、`--import-path DIR`、
+/// `--strict-exhaustive`)である。
+/// 手順、診断、終了状態は `diktor --emit-ir` と同じで、KIR をファイルに書く代わりに返す
+/// (入れ子の深さは、バイナリに符号化して確かめる)。
+/// フロントエンドのスレッドは既定の大きさのスタックで走らせる(`keleut run` の `--native-stack` はインタプリタのスタックである)。
+pub(crate) fn program_for_run(
+    files: &[std::path::PathBuf],
+    front_args: &[String],
+) -> Result<kir::Program, u8> {
+    let mut check = CheckOptions {
+        no_prelude: false,
+        prelude: None,
+        files: files.iter().map(|f| f.display().to_string()).collect(),
+        import_path: Vec::new(),
+        max_nest: keleut_front::DEFAULT_MAX_NEST,
+    };
+    let mut strict = false;
+    let mut i = 0;
+    while i < front_args.len() {
+        match front_args[i].as_str() {
+            "--no-prelude" => check.no_prelude = true,
+            "--strict-exhaustive" => strict = true,
+            "--prelude" => {
+                i += 1;
+                check.prelude = front_args.get(i).cloned();
+            }
+            "--import-path" => {
+                i += 1;
+                check.import_path.extend(front_args.get(i).cloned());
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let limits = match check_limits(check.max_nest, None) {
+        Ok(l) => l,
+        Err(msg) => {
+            eprintln_now(&format!("keleut: {msg}"));
+            return Err(exit::USAGE);
+        }
+    };
+    let prog = match on_check_stack(limits, || build(&check, strict)) {
+        Ok(r) => r?,
+        Err(msg) => {
+            eprintln_now(&format!("keleut: {msg}"));
+            return Err(70);
+        }
+    };
+    match kir::write_kir(&prog) {
+        Ok(_) => Ok(prog),
+        Err(e) if e.kind() == kir::ErrorKind::WriteLimit => Err(write_limit(e.message())),
+        Err(e) => {
+            eprintln_now(&format!("keleut: KIR を符号化できません: {}", e.message()));
+            Err(70)
+        }
     }
 }
 

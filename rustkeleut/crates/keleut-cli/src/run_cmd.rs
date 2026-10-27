@@ -4,10 +4,16 @@
 //!
 //! - `.kir`(バイナリ)か `.kirt`(テキスト)の 1 ファイルは、そのまま読む。
 //! - `.kel` のファイルは、フロントエンドで KIR にする。
-//!   M99 までの既定のフロントエンドは `diktor` で、`$KELEUT_DIKTOR`(無ければ PATH の `diktor`)を
-//!   `--emit-ir` で子プロセスとして呼ぶ。
-//!   `--prelude`、`--no-prelude`、`--import-path` はそのまま渡す。
-//!   Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
+//!   フロントエンドは `--frontend diktor|rust` で選ぶ。
+//!   既定は `diktor` で、M99 の後半で決めるまでそのままにする。
+//!   - `--frontend diktor` は、`$KELEUT_DIKTOR`(無ければ PATH の `diktor`)を `--emit-ir` で子プロセスとして呼ぶ。
+//!     Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
+//!   - `--frontend rust` は、keleut-front でプロセスの中で型検査して KIR を書く
+//!     ([`crate::emit_kir_cmd::program_for_run`])。
+//!     診断と終了状態は `diktor --emit-ir` と同じで、フロントエンドのスレッドは既定のスタックで走る
+//!     (`--native-stack` はインタプリタのスタックのままである)。
+//!
+//!   `--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive` は、どちらのフロントエンドにもそのまま渡す。
 //!
 //! 読み込んだ KIR を検証し、LIR に下ろして、後段で実行する。
 //! 後段はインタプリタ(`--backend interp`)、WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)、
@@ -41,7 +47,8 @@ options:
                               interp and jit; ignored by --backend wasm)
   --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
   --frontend diktor|rust      front end for .kel files (default: diktor via $KELEUT_DIKTOR)
-  --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
+  --prelude FILE, --no-prelude, --import-path DIR, --strict-exhaustive
+                              passed to the front end
 ";
 
 /// 解釈したコマンド行である。
@@ -138,7 +145,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
                 }
                 o.frontend = v;
             }
-            "--no-prelude" => o.front_args.push(a.to_string()),
+            "--no-prelude" | "--strict-exhaustive" => o.front_args.push(a.to_string()),
             "--prelude" | "--import-path" => {
                 let v = value(a)?;
                 o.front_args.push(a.to_string());
@@ -303,8 +310,8 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
             }
         }
     } else if o.frontend == "rust" {
-        eprintln!("keleut: 未実装: フロントエンド rust の KIR の書き出し");
-        return Err(exit::UNIMPLEMENTED);
+        let prog = crate::emit_kir_cmd::program_for_run(&o.files, &o.front_args)?;
+        return verify_and_lower(o, &prog, &kir::Limits::default());
     } else {
         emit_with_diktor(o)?
     };
@@ -321,12 +328,21 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
             return Err(e.exit_code() as u8);
         }
     };
-    if let Err(e) = kir::verify_with(&prog, &limits) {
+    drop(data);
+    verify_and_lower(o, &prog, &limits)
+}
+
+/// KIR を検証して LIR に下ろす。失敗すれば、診断を標準エラーに書いて終了状態を返す。
+fn verify_and_lower(
+    o: &Options,
+    prog: &kir::Program,
+    limits: &kir::Limits,
+) -> Result<keleut_lir::Program, u8> {
+    if let Err(e) = kir::verify_with(prog, limits) {
         eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
         return Err(e.exit_code() as u8);
     }
-    drop(data);
-    keleut_lir::lower_opts(&prog, kir::N_NEST, o.yield_prune).map_err(|e| {
+    keleut_lir::lower_opts(prog, kir::N_NEST, o.yield_prune).map_err(|e| {
         eprintln!("keleut: {e}");
         e.exit_code() as u8
     })
