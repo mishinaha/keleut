@@ -64,10 +64,12 @@ struct LexBuf {
     marked_pos: usize,
     marked_line: u32,
     marked_bol: usize,
+    /// 1 行目の桁の始まり(対話的な実行の `:type` の後ろの式。位置の表示を行の中の桁にする)。
+    col0: u32,
 }
 
 impl LexBuf {
-    fn new(src: &[u8], file: FileId) -> LexBuf {
+    fn new(src: &[u8], file: FileId, line: u32, col0: u32) -> LexBuf {
         let (valid, malformed) = match std::str::from_utf8(src) {
             Ok(s) => (s, false),
             Err(e) => (
@@ -81,14 +83,15 @@ impl LexBuf {
             malformed,
             file,
             pos: 0,
-            line: 1,
+            line,
             bol: 0,
             start_pos: 0,
-            start_line: 1,
+            start_line: line,
             start_bol: 0,
             marked_pos: 0,
-            marked_line: 1,
+            marked_line: line,
             marked_bol: 0,
+            col0,
         }
     }
 
@@ -136,22 +139,22 @@ impl LexBuf {
         self.bol = self.start_bol;
     }
 
-    fn start_p(&self) -> Pos {
+    /// 位置。1 行目の桁は `col0` だけずらす(Diktor の対話的な実行が `pos_bol` を `-col` にするのと同じ)。
+    fn pos_at(&self, line: u32, bol: usize, pos: usize) -> Pos {
         Pos {
             file: self.file,
-            line: self.start_line,
-            bol: self.start_bol as u32,
-            cnum: self.start_pos as u32,
+            line,
+            bol: if bol == 0 { 0 } else { bol as u32 + self.col0 },
+            cnum: pos as u32 + self.col0,
         }
     }
 
+    fn start_p(&self) -> Pos {
+        self.pos_at(self.start_line, self.start_bol, self.start_pos)
+    }
+
     fn curr_p(&self) -> Pos {
-        Pos {
-            file: self.file,
-            line: self.line,
-            bol: self.bol as u32,
-            cnum: self.pos as u32,
-        }
+        self.pos_at(self.line, self.bol, self.pos)
     }
 
     fn lexeme(&self) -> String {
@@ -304,8 +307,14 @@ const DUMMY: Pos = Pos {
 impl Lexer {
     /// ソースのバイト列から字句解析器を作る。
     pub fn new(src: &[u8], file: FileId) -> Lexer {
+        Lexer::with_start(src, file, 1, 0)
+    }
+
+    /// 1 行目を `line` 行目とし、1 行目の桁を `col0` だけずらした字句解析器を作る
+    /// (Diktor の対話的な実行の `try_parse` の `Sedlexing.set_position`)。
+    pub fn with_start(src: &[u8], file: FileId, line: u32, col0: u32) -> Lexer {
         Lexer {
-            lb: LexBuf::new(src, file),
+            lb: LexBuf::new(src, file, line, col0),
             pending: VecDeque::new(),
             regions: vec![Region::Top],
             prev: None,

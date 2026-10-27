@@ -211,6 +211,11 @@ struct Driver<'a> {
     file: FileId,
     /// これまでに与えたトークンの数。
     count: usize,
+    /// 1 行目の行番号と桁のずれ([`Lexer::with_start`])。
+    line: u32,
+    col0: u32,
+    /// 文法に合わなかったトークンが `EOF` だったか(予約語の誤用でなかったときだけ立てる)。
+    eof_error: bool,
 }
 
 impl Driver<'_> {
@@ -231,7 +236,7 @@ impl Driver<'_> {
     /// 最後のトークンを与える直前の自動機械を作り直す。
     fn before(&mut self) -> Result<Machine, ParseError> {
         let mut m = Machine::new();
-        let mut lx = Lexer::new(self.src, self.file);
+        let mut lx = Lexer::with_start(self.src, self.file, self.line, self.col0);
         for _ in 1..self.count {
             let Ok(e) = lx.read() else {
                 return Err(ParseError::Internal(
@@ -356,7 +361,10 @@ impl Driver<'_> {
                             "{}: 構文エラー: 予約語 {w} はここには書けません(予約語は識別子に使えません)",
                             self.files.show(sp)
                         )),
-                        None => ParseError::Syntax(self.parse_error_message()),
+                        None => {
+                            self.eof_error = e.tok == Tok::EOF;
+                            ParseError::Syntax(self.parse_error_message())
+                        }
                     });
                 }
                 Err(err) => return Err(self.merr(err)),
@@ -392,6 +400,61 @@ pub fn parse_program(
         src,
         file,
         count: 0,
+        line: 1,
+        col0: 0,
+        eof_error: false,
     };
     d.run()
+}
+
+/// 対話的な実行の 1 つの入力を構文解析した結果である(Diktor の driver.ml の `try_parse` の 3 通り)。
+#[derive(Debug)]
+pub enum InputParse {
+    /// 入力が終わった。
+    Complete(Program),
+    /// 続きの行を待つ。
+    /// 文法に合わなかったトークンが `EOF` のときと、閉じていない文字列リテラルとブロックコメントの字句エラーのときである。
+    Incomplete,
+    /// 誤り。
+    Failed(ParseError),
+}
+
+/// 対話的な実行の 1 つの入力を構文解析する。
+///
+/// `src` の 1 行目を `line` 行目とし、1 行目の桁を `col0` だけずらす(`:type` の後ろの式は `:type ` の長さ)。
+/// ノードの番号は `cx` が続きから振る。
+pub fn parse_input(
+    src: &[u8],
+    file: FileId,
+    files: &Files,
+    cx: &mut Ctx,
+    line: u32,
+    col0: u32,
+) -> InputParse {
+    cx.over = false;
+    let limit = cx.limit();
+    let mut lexer = Lexer::with_start(src, file, line, col0);
+    let mut d = Driver {
+        lexer: &mut lexer,
+        files,
+        cx,
+        limit,
+        src,
+        file,
+        count: 0,
+        line,
+        col0,
+        eof_error: false,
+    };
+    match d.run() {
+        Ok(p) => InputParse::Complete(p),
+        Err(ParseError::Syntax(_)) if d.eof_error => InputParse::Incomplete,
+        Err(ParseError::Lex(e))
+            if e.msg == crate::lexer::UNTERMINATED_TEXT_MSG
+                || e.msg == crate::lexer::UNTERMINATED_COMMENT_MSG =>
+        {
+            InputParse::Incomplete
+        }
+        Err(e) => InputParse::Failed(e),
+    }
 }
