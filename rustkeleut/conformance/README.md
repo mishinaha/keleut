@@ -16,7 +16,7 @@ RustKeleut の差分試験の材料である。
 | `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215) |
 | `stack/` | ネイティブのスタックの試験。`--native-stack 512k` で、JIT の関数の深い末尾でない再帰の後の構造的な `Eq` の比べ方と、20 万段の構造的な `Eq` の入れ子が、どの後段でも同じ結果になることを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `effects/` | G の節の継続の取り出しと再開の試験(`g.t`。生成器、深い再帰の底の yield、2 回目の resume、再開の間の回収、G と N と T の節の重なり、メソッドの呼び出しと引数の多い関数の中の yield)。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
-| `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験。Diktor が基準にならないので `kconform expect` でだけ走らせる |
+| `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験(`parse.t` は `keleut dump ast`、`typecheck.t` は `keleut check`、`repl.t` は `keleut repl` で走らせる)。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
 `float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
 どれも cram の形の `.t` で書き、`.kel` は `.t` の横か `.t` のヒアドキュメントに置く。
@@ -41,6 +41,7 @@ RustKeleut の差分試験の材料である。
 | `kj` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend jit --tier jit-only FILE.kir` | `keleut run --backend jit --tier jit-only` |
 | `kw` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend wasm FILE.kir` | `keleut run --backend wasm` |
 | `x-ir` | `keleut emit-kir` の後の `diktor --run-ir` | 同じく |
+| `kr-ki` | `keleut run --frontend rust --backend interp --tier interp-only` に同じ旗とファイル | `keleut run --frontend rust --backend interp --tier interp-only` |
 
 組 `kf` は、Rust のフロントエンド(crate `keleut-front`。`keleut dump` と `keleut check` が使う)を Diktor と比べるために足した組である(M96)。
 組 `ki` は Diktor が書いた KIR を RustKeleut のインタプリタで走らせ、後段だけを比べる。
@@ -52,16 +53,25 @@ RustKeleut の差分試験の材料である。
 `kj` は feature `llvm` を付けて組んだ `keleut`(`cargo build --release --features llvm`)でだけ走り、付けずに組んだ `keleut` ではどのコマンドも未実装の 4 で終わる。
 そのため、`--pairs` を省いたときの組に `kj` を入れていない。
 `kconform --pairs ki,kj` のように名を挙げて走らせる。
+組 `kr-ki` は Rust のフロントエンドが書いた KIR をインタプリタで走らせる(M100)。
+KIR は `keleut run --frontend rust` がプロセスの中で書き、ファイルを介さない。
 `kw` で V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut run` は 3 でなく 70 で終わる。
 このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
 `ERROR(OutOfMemory)` と終了状態 3 になるのは `N_alloc_max` を超える確保だけで、`oom/` はそれを確かめる。
 これは §15.5 からの既知の逸脱(P252、台帳 V215。計画 6.5 節)で、既知の差には登録していない。
 
-`kf` と `ki` では、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump` に、`--type-check` の呼び出しを `keleut check` に振り向ける。
+`dk`、`dk-ir`、`x-ir` を除くすべての組(`kf`、RustKeleut の後段の組、`kr-ki`)は、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump` に、`--type-check` の呼び出しを `keleut check` に振り向ける。
 `dk`、`dk-ir`、`x-ir` は、これらを本物の diktor に渡す。
 `--type-check` を含まず `--strict-exhaustive` を含む呼び出しは、Diktor がプログラムを実行するので、組 `dk-ir` と `ki` では実行の呼び出しとして振り分ける。
-Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む呼び出しと `--repl` は、組 `x-ir` の書き出しを除いて本物の diktor に渡す。
-`--extra=FLAG` は、RustKeleut の後段の組(`ki`、`kw` など)の `keleut run` のすべての起動に `FLAG` を足す。
+Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む呼び出しは、組 `x-ir` の書き出しを除いて本物の diktor に渡す。
+`--repl` の呼び出しは、RustKeleut の後段の組(`ki`、`kj`、`kw`、`kr-ki` など)では `keleut repl` に組の選択肢と `--no-prelude`、`--prelude` を付けて振り向け、`dk`、`dk-ir`、`kf`、`x-ir` では本物の diktor に渡す(M100)。
+`keleut repl` は組の選択肢(`--backend`、`--tier`、`--frontend`)を受けて捨て、Rust のフロントエンドとインタプリタで走る。
+そのため、どの後段の組でも REPL のブロックの出力は同じで、後段の組の間の完全な一致の比べが成り立つ。
+組 `ki` でも、REPL の KIR の書き手は Rust である。
+入力のファイルを渡した `--repl` の呼び出し(使い方の誤り)は、どの組でも本物の diktor に渡す。
+`--extra=FLAG` は、RustKeleut の後段の組(`ki`、`kw`、`kr-ki` など)の `keleut run` のすべての起動と、`keleut repl` の起動に `FLAG` を足す。
+`keleut repl` では `--native-stack` がフロントエンドのスレッドのスタックになる。
+リリースの構築では `--extra=--native-stack 512k` で構文解析の限度が 128 段に下がり、最適化なしの構築では `keleut repl` が使い方の誤り(64)で終わる。
 回収の試験は `--extra=--gc-stress` で回す。
 `keleut run --gc-stress` は、確保の場所(最上段のフレームの関数と点の組)を初めて通る確保で必ず回収し、それ以外では前の回収の手間の 64 分の 1 ほどの確保の回数ごとに回収する(間隔は擬似乱数で揺らす)。
 実行したどの確保の場所でも少なくとも 1 回は回収するが、確保のたびには回収しない。
@@ -176,6 +186,8 @@ target/release/kconform --pairs dk,ki --suite all              # Diktor と kele
 target/release/kconform                                        # 使える組のうち kj を除いてすべて走らせる
 target/release/kconform --pairs ki,kj --suite all              # JIT をインタプリタと比べる(--features llvm で組む)
 target/release/kconform --pairs dk --check-shim ../diktor/test/*.t  # shim が本物の diktor に渡すことの自己検査
+target/release/kconform --pairs dk,kr-ki --suite all           # Rust のフロントエンドとインタプリタを Diktor と比べる
+target/release/kconform expect conformance/frontend-depth/repl.t  # REPL が限度の後で入力を続けること
 target/release/kconform expect conformance/kir-bad/*.t         # 記録した期待とだけ比べる
 target/release/kconform kir-roundtrip                          # コーパスの全件で KIR を往復させる
 target/release/kconform extract-corpus                         # コーパスを作り直す
