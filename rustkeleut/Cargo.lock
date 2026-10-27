@@ -65,6 +65,7 @@ dependencies = [
  "keleut-lir",
  "keleut-llvm",
  "keleut-rt",
+ "keleut-rtcore",
  "keleut-wasm",
  "kir",
 ]

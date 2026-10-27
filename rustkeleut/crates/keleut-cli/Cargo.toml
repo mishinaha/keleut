@@ -16,6 +16,7 @@ keleut-interp = { path = "../keleut-interp" }
 keleut-lir = { path = "../keleut-lir" }
 keleut-llvm = { path = "../keleut-llvm", optional = true }
 keleut-rt = { path = "../keleut-rt" }
+keleut-rtcore = { path = "../keleut-rtcore" }
 keleut-wasm = { path = "../keleut-wasm" }
 kir = { path = "../kir" }
 

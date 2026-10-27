@@ -13,6 +13,7 @@ mod emit_kir_cmd;
 mod front_cmd;
 mod kir_cmd;
 mod lir_cmd;
+mod repl_cmd;
 mod run_cmd;
 
 /// 終了状態の定数である(計画 6.2 節の表)。
@@ -55,7 +56,7 @@ const COMMANDS: &[(&str, Handler)] = &[
     ("kir", kir_cmd::main),
     ("build", build_cmd::main),
     ("dump", dump_cmd::main),
-    ("repl", unimplemented_command),
+    ("repl", repl_cmd::main),
     ("compat-diktor", unimplemented_command),
 ];
 
@@ -125,7 +126,7 @@ mod tests {
     #[test]
     fn 中身の無いサブコマンドは未実装になる() {
         for (name, _) in COMMANDS {
-            if !["kir", "dump", "check", "run", "emit-kir", "build"].contains(name) {
+            if !["kir", "dump", "check", "run", "emit-kir", "build", "repl"].contains(name) {
                 assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
             }
         }
