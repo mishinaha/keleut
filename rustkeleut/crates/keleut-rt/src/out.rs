@@ -123,6 +123,10 @@ pub fn os_message(e: &std::io::Error) -> String {
 pub struct Out<S: Sink = Fd1> {
     sink: S,
     buf: Vec<u8>,
+    /// 書く文字列を捨てるか([`Out::set_discard`])。
+    discard: bool,
+    /// [`Out::eprint_after_flush`] の記録を標準出力に書くか([`Out::set_log_to_stdout`])。
+    log_to_stdout: bool,
 }
 
 impl Default for Out<Fd1> {
@@ -137,7 +141,23 @@ impl<S: Sink> Out<S> {
         Out {
             sink,
             buf: Vec::with_capacity(BUFFER_BYTES),
+            discard: false,
+            log_to_stdout: false,
         }
+    }
+
+    /// 真なら、これから [`Out::write`] に渡す文字列を捨てる。
+    ///
+    /// 対話的な実行は、前の入力の初期化をやり直すときに、その出力を捨てる。
+    pub fn set_discard(&mut self, on: bool) {
+        self.discard = on;
+    }
+
+    /// 真なら、[`Out::eprint_after_flush`] の記録を標準エラーでなく標準出力に足す。
+    ///
+    /// 対話的な実行は、結果、診断、プログラムの出力をすべて標準出力に出す(Diktor の `--repl` の `cancel_log`)。
+    pub fn set_log_to_stdout(&mut self, on: bool) {
+        self.log_to_stdout = on;
     }
 
     /// 出力先(試験用)。
@@ -209,6 +229,9 @@ impl<S: Sink> Out<S> {
 
     /// `Console.write` の文字列を足す。満ちたら書き出す。
     pub fn write(&mut self, data: &[u8]) -> Result<(), WriteError> {
+        if self.discard {
+            return Ok(());
+        }
         if self.buf.len() + data.len() < BUFFER_BYTES {
             self.buf.extend_from_slice(data);
             return Ok(());
@@ -242,6 +265,9 @@ impl<S: Sink> Out<S> {
     /// 防壁が抑制した例外の記録に使う(IRSpec 9.6 節)。
     /// 前の失敗がバッファを捨てる誤りで、その後に書き足したものが無ければ、バッファは空なので flush は成功し、`msg` を書く。
     pub fn eprint_after_flush(&mut self, msg: &[u8]) -> Result<(), WriteError> {
+        if self.log_to_stdout {
+            return self.write(msg);
+        }
         self.flush()?;
         let mut e = std::io::stderr().lock();
         let _ = e.write_all(msg);
