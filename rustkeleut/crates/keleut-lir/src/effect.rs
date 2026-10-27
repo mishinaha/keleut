@@ -27,18 +27,26 @@ use crate::lower::{Low, V};
 use crate::pattern::Target;
 
 /// 操作節の関数ごとの(操作, 分類)。操作節でない関数は `None`。
-pub(crate) fn clause_classes(k: &kir::Program) -> Vec<Option<(u32, ClauseClass)>> {
-    let mut out = vec![None; k.functions.len()];
-    for e in &k.nodes.exps {
-        if let kir::Exp::Handle(h) = e {
-            for o in &h.ops {
-                if let Some(slot) = out.get_mut(o.part.func.index()) {
-                    *slot = Some((o.op, o.class));
+///
+/// 単位を足したプログラムでは、`out` に前の関数の分類を持ち、関数 `f0` から後ろの本体だけを調べる
+/// (足した操作節の関数を作る `handle` は、足した関数の本体にある)。
+pub(crate) fn clause_classes(
+    k: &kir::Program,
+    out: &mut Vec<Option<(u32, ClauseClass)>>,
+    f0: usize,
+) {
+    out.resize(k.functions.len(), None);
+    for f in &k.functions[f0..] {
+        crate::initck::visit(k, f, |e| {
+            if let kir::Exp::Handle(h) = e {
+                for o in &h.ops {
+                    if let Some(slot) = out.get_mut(o.part.func.index()) {
+                        *slot = Some((o.op, o.class));
+                    }
                 }
             }
-        }
+        });
     }
-    out
 }
 
 fn fx(b: &mut Builder, op: FxOp, args: Vec<Reg>) -> Option<Reg> {

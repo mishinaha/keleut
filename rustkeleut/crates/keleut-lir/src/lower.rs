@@ -58,29 +58,105 @@ pub(crate) struct Prog<'k> {
     pub clause_class: Vec<Option<(u32, kir::ClauseClass)>>,
     /// ハンドラのフレームの関数 `$rt_handle`(パス 8)。
     pub rt_handle: Option<FuncId>,
+    /// KIR の関数の添字から LIR の関数の添字へ。
+    ///
+    /// 1 回で下ろしたプログラムでは同じ添字である。
+    /// 単位を足したプログラム([`crate::Extender`])では、足した単位の KIR の関数は、前の関数の後ろに続く。
+    pub fn_map: Vec<FuncId>,
     /// 下ろしの途中で見つけた内部の誤り。
     pub bug: Option<String>,
 }
 
+/// [`Prog`] の、KIR のプログラムを指さない部分。単位を足す下ろしの間で持ち越す。
+#[derive(Default)]
+pub(crate) struct ProgParts {
+    pub labels: Vec<String>,
+    label_ix: HashMap<String, LabelId>,
+    pub shapes: Vec<Vec<LabelId>>,
+    shape_ix: HashMap<Vec<LabelId>, ShapeId>,
+    /// `shape_ix` に入れた形の数(呼び出し側が `shapes` の後ろに足した形は、まだ入れていない)。
+    shapes_indexed: usize,
+    pub strings: Vec<Vec<u8>>,
+    string_ix: HashMap<Vec<u8>, StrId>,
+    pub init: initck::Info,
+    pub global_func: Vec<Option<FuncId>>,
+    pub each_loop: Option<FuncId>,
+    pub clause_class: Vec<Option<(u32, kir::ClauseClass)>>,
+    pub rt_handle: Option<FuncId>,
+    pub fn_map: Vec<FuncId>,
+}
+
 impl<'k> Prog<'k> {
-    pub(crate) fn new(k: &'k kir::Program) -> Prog<'k> {
+    /// 持ち越した部分 `parts` で、KIR のプログラム `k` の下ろしを始める。
+    ///
+    /// 表が空なら空の形を 0 番に入れる。
+    /// `parts.shapes` の後ろに足された形(実行時が作った形)は、ここで索引に入れる。
+    pub(crate) fn resume(k: &'k kir::Program, parts: ProgParts) -> Prog<'k> {
+        let ProgParts {
+            labels,
+            label_ix,
+            shapes,
+            mut shape_ix,
+            shapes_indexed,
+            strings,
+            string_ix,
+            init,
+            global_func,
+            each_loop,
+            clause_class,
+            rt_handle,
+            fn_map,
+        } = parts;
+        for (i, s) in shapes.iter().enumerate().skip(shapes_indexed) {
+            shape_ix.entry(s.clone()).or_insert(ShapeId(i as u32));
+        }
         let mut p = Prog {
             k,
-            labels: Vec::new(),
-            label_ix: HashMap::new(),
-            shapes: Vec::new(),
-            shape_ix: HashMap::new(),
-            strings: Vec::new(),
-            string_ix: HashMap::new(),
-            init: initck::analyze(k),
-            global_func: vec![None; k.globals.len()],
-            each_loop: None,
-            clause_class: crate::effect::clause_classes(k),
-            rt_handle: None,
+            labels,
+            label_ix,
+            shapes,
+            shape_ix,
+            strings,
+            string_ix,
+            init,
+            global_func,
+            each_loop,
+            clause_class,
+            rt_handle,
+            fn_map,
             bug: None,
         };
-        p.shape(Vec::new());
+        if p.shapes.is_empty() {
+            p.shape(Vec::new());
+        }
         p
+    }
+
+    /// 持ち越す部分を取り出す。
+    pub(crate) fn into_parts(self) -> ProgParts {
+        ProgParts {
+            shapes_indexed: self.shapes.len(),
+            labels: self.labels,
+            label_ix: self.label_ix,
+            shapes: self.shapes,
+            shape_ix: self.shape_ix,
+            strings: self.strings,
+            string_ix: self.string_ix,
+            init: self.init,
+            global_func: self.global_func,
+            each_loop: self.each_loop,
+            clause_class: self.clause_class,
+            rt_handle: self.rt_handle,
+            fn_map: self.fn_map,
+        }
+    }
+
+    /// KIR の関数の LIR の添字。
+    pub(crate) fn func(&self, f: FnId) -> FuncId {
+        match self.fn_map.get(f.index()) {
+            Some(&g) => g,
+            None => FuncId(f.0),
+        }
     }
 
     /// ラベルを表に入れて番号を返す。
@@ -373,7 +449,7 @@ impl<'p, 'k> Low<'p, 'k> {
         let dst = self.b.reg(Rep::Any);
         self.b.emit(Inst::ClosureNew {
             dst,
-            func: FuncId(part.func.0),
+            func: self.p.func(part.func),
             caps,
         });
         Some(V::any(dst))
@@ -715,7 +791,7 @@ impl<'p, 'k> Low<'p, 'k> {
             let dst = self.b.reg(Rep::Any);
             self.b.emit(Inst::ClosureNew {
                 dst,
-                func: FuncId(part.func.0),
+                func: self.p.func(part.func),
                 caps: vec![unit; part.caps.len()],
             });
             self.bind_slot(slot, V::any(dst));
@@ -914,7 +990,7 @@ impl<'p, 'k> Low<'p, 'k> {
             KGlobalKind::Fn(f) => {
                 self.global_check(g);
                 let args = self.args_any(args)?;
-                self.call_direct(FuncId(f.0), args, tail, yields)
+                self.call_direct(self.p.func(*f), args, tail, yields)
             }
             KGlobalKind::Extern { abi, name, .. } => {
                 self.global_check(g);
@@ -1003,7 +1079,7 @@ impl<'p, 'k> Low<'p, 'k> {
                 KGlobalKind::Dictabs(f) => {
                     self.global_check(*g);
                     let ds = self.dict_regs(dicts);
-                    return self.call_direct(FuncId(f.0), ds, false, false);
+                    return self.call_direct(self.p.func(f), ds, false, false);
                 }
                 KGlobalKind::Extern { .. } => {
                     self.global_check(*g);

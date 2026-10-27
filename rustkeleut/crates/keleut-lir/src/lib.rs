@@ -12,6 +12,7 @@
 //! | [`lower_unassigned`] | パス 11 の前の LIR を作って検証する |
 //! | [`assign_frames`] | パス 11(yield の刈り込み)と 12(生存区間、再開点、スロット)を行う |
 //! | [`verify()`] | LIR を検証する |
+//! | [`Extender`] | 単位を後ろに足していくプログラムを、足した単位だけ下ろして LIR の後ろに足す(`keleut repl`) |
 //! | [`print()`] | LIR を印字する |
 //!
 //! エフェクトの下ろし(パス 8)は [`effect`] にある。
@@ -174,6 +175,61 @@ pub fn lower_opts(p: &kir::Program, max_nest: usize, yield_prune: bool) -> Resul
 /// LIR を検証する。
 pub fn verify(p: &Program) -> Result<(), Error> {
     verify::verify(p).map_err(|m| Error::new(ErrorKind::Verify, m))
+}
+
+/// 単位を後ろに足していく KIR のプログラムを、足した単位ごとに下ろす(`keleut repl`)。
+///
+/// 対話的な実行は、受理した入力ごとに KIR の単位を 1 つ後ろに足し、前の単位はそのまま実行時に残す。
+/// [`Extender::extend`] は、前に下ろした範囲より後ろの KIR の項目だけを下ろし(パス 1〜12)、
+/// LIR のプログラムの各表の後ろに足して、足した部分だけを検証する。
+/// 前の関数、大域、形、文字列の添字は変わらないので、生きている実行時の値はそのまま使える。
+/// 手間は足した単位の大きさに比例する。
+///
+/// 1 回で下ろしたプログラム([`lower`])との違いは、関数の並びだけである。
+/// 足した単位の KIR の関数は、その前の単位の関数(KIR の関数と次の関数)の後ろに続く。
+/// 空の [`Extender`] と [`Program::empty`] から全体を 1 回で足せば、[`lower_opts`] と同じ LIR になる。
+#[derive(Default)]
+pub struct Extender {
+    st: program::State,
+    verified: verify::Marks,
+}
+
+impl Extender {
+    /// 何も下ろしていない状態。[`Program::empty`] と組にして使う。
+    pub fn new() -> Extender {
+        Extender::default()
+    }
+
+    /// KIR のプログラム `k` の、前に下ろした範囲より後ろの項目を下ろし、`lp` の後ろに足す。
+    ///
+    /// `k` は前に渡したプログラムの表の後ろに項目を足したもので、足した項目まで検証済みでなければならない
+    /// (`kir::verify_extension`)。
+    /// `lp` は前の呼び出しが作ったプログラムで、`lp.shapes` の後ろには、実行時がその後に作った形を
+    /// 実行時の番号の順に足しておく(実行時の形の表と番号を揃えるため。足した形の番号は、その後ろから振る)。
+    /// 誤りはどれも処理系の内部の誤りで、誤りの後の `self` と `lp` は使えない。
+    pub fn extend(
+        &mut self,
+        k: &kir::Program,
+        lp: &mut Program,
+        max_nest: usize,
+        yield_prune: bool,
+    ) -> Result<(), Error> {
+        let st = &mut self.st;
+        let lpr = &mut *lp;
+        on_stack(stack_for(max_nest), || {
+            program::extend_program(k, st, lpr).map_err(|m| Error::new(ErrorKind::Lower, m))
+        })?;
+        let m = self.verified;
+        let check =
+            |p: &Program| verify::verify_from(p, &m).map_err(|e| Error::new(ErrorKind::Verify, e));
+        check(lp)?;
+        for f in &mut lp.funcs[m.funcs..] {
+            frame::assign(f, yield_prune);
+        }
+        check(lp)?;
+        self.verified = verify::Marks::of(lp);
+        Ok(())
+    }
 }
 
 /// 関数 `f` について、パス 12 の生存解析([`Frame`] の再開点と安全点を求めるもの)と、

@@ -1423,8 +1423,10 @@ pub struct BuiltinMethod {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     /// 関数。先頭の部分は KIR の関数と同じ添字である。
+    ///
+    /// 単位を足したプログラム([`crate::Extender`])では、足した単位の KIR の関数が、その前の関数の後ろに続く。
     pub funcs: Vec<Func>,
-    /// KIR の関数の数。
+    /// KIR の関数の数(単位を足したプログラムでは、初めに下ろした単位の KIR の関数の数)。
     pub kir_funcs: u32,
     /// 大域(KIR と同じ添字)。
     pub globals: Vec<Global>,
@@ -1469,6 +1471,25 @@ pub struct EffectInfo {
 pub const N_ALLOC_MAX: i32 = 1 << 26;
 
 impl Program {
+    /// 空のプログラム([`crate::Extender`] が単位を足していく初めの状態)。
+    pub const fn empty() -> Program {
+        Program {
+            funcs: Vec::new(),
+            kir_funcs: 0,
+            globals: Vec::new(),
+            instances: Vec::new(),
+            types: Vec::new(),
+            classes: Vec::new(),
+            builtin_methods: Vec::new(),
+            labels: Vec::new(),
+            shapes: Vec::new(),
+            strings: Vec::new(),
+            init: Vec::new(),
+            effects: Vec::new(),
+            rt_handle: None,
+        }
+    }
+
     /// 実行時エラーの付録 B の番号。
     ///
     /// [`RtError::UnimplPrim`] は、大域の表示名が実装名に等しければ 17、違えば 18 である。

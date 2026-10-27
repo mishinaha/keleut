@@ -15,7 +15,7 @@ use kir::{GlobalKind as KG, Step};
 
 use crate::builder::Builder;
 use crate::ir::*;
-use crate::lower::{Low, Prog, V};
+use crate::lower::{Low, Prog, ProgParts, V};
 use crate::numeric::{self, Prim};
 use crate::pattern::Target;
 use crate::wrappers;
@@ -76,9 +76,10 @@ fn lower_init(prog: &mut Prog, u: usize) -> Func {
     crate::depth::enter(&mut lw.b);
     let call = |lw: &mut Low, f: kir::FnId| -> Reg {
         let dst = lw.b.reg(Rep::Any);
+        let func = lw.p.func(f);
         lw.b.emit(Inst::CallDirect {
             dst,
-            func: FuncId(f.0),
+            func,
             args: Vec::new(),
             yields: k.functions[f.index()].yields,
         });
@@ -154,20 +155,66 @@ pub(crate) fn display_name(sym: &str) -> String {
     }
 }
 
+/// 単位を足していく下ろしで、前の下ろしから持ち越す状態。
+#[derive(Default)]
+pub(crate) struct State {
+    /// ラベル、形、文字列の索引と、パス 8、9 の解析の結果と、関数の添字の対応。
+    pub parts: ProgParts,
+    /// 下ろし終えた KIR の表の大きさ。
+    pub k: kir::verify::Marks,
+}
+
 /// パス 1〜7、9、10 を行う(パス 12 の前の LIR)。
 pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
-    let mut prog = Prog::new(k);
+    let mut lp = Program::empty();
+    extend_program(k, &mut State::default(), &mut lp)?;
+    Ok(lp)
+}
+
+/// KIR のプログラム `k` の、`st` が下ろし終えた範囲より後ろの項目を下ろし、`lp` の後ろに足す
+/// (パス 1〜7、9、10)。
+///
+/// `lp` は、同じ `st` で前に下ろした LIR(初めは [`Program::empty`])である。
+/// 足した単位の KIR の関数は `lp` の関数の後ろに同じ順で並べ、その後ろに足した単位の次の関数を置く。
+///
+/// 1. 足した大域の順に、組み込みの値と `extern` の本体(組み込みの値はプログラムの先頭の単位だけにある)。
+/// 2. プログラムの先頭を下ろすときだけ、組み込みのインスタンスのメソッドの本体。
+/// 3. `$rt_handle` が無く、足した関数に操作節があれば `$rt_handle`。
+/// 4. 足した単位の順に、単位の初期化の関数。
+///
+/// 1 回で下ろすプログラム([`lower_program`])は、空の `st` と `lp` から全体を下ろしたものである。
+/// 誤りを返した後の `st` と `lp` は使えない。
+pub(crate) fn extend_program(
+    k: &kir::Program,
+    st: &mut State,
+    lp: &mut Program,
+) -> Result<(), String> {
+    let m = st.k;
+    let mut parts = std::mem::take(&mut st.parts);
+    parts.labels = std::mem::take(&mut lp.labels);
+    parts.shapes = std::mem::take(&mut lp.shapes);
+    parts.strings = std::mem::take(&mut lp.strings);
+    crate::initck::extend(k, &mut parts.init, m.functions, m.units);
+    crate::effect::clause_classes(k, &mut parts.clause_class, m.functions);
+    parts.global_func.resize(k.globals.len(), None);
     let nf = k.functions.len();
+    let lf0 = lp.funcs.len();
+    let nnew = nf - m.functions;
+    parts.fn_map.truncate(m.functions);
+    parts
+        .fn_map
+        .extend((0..nnew).map(|i| FuncId((lf0 + i) as u32)));
+    let mut prog = Prog::resume(k, parts);
     let mut extras: Vec<(String, FuncKind, bool, Extra)> = Vec::new();
-    let mut next = nf as u32;
+    let mut next = (lf0 + nnew) as u32;
     let mut alloc =
         |extras: &mut Vec<(String, FuncKind, bool, Extra)>, sym: String, kind, yields, e| {
             extras.push((sym, kind, yields, e));
             next += 1;
             FuncId(next - 1)
         };
-    let mut globals = Vec::with_capacity(k.globals.len());
-    for (gi, g) in k.globals.iter().enumerate() {
+    let mut globals = Vec::with_capacity(k.globals.len() - m.globals);
+    for (gi, g) in k.globals.iter().enumerate().skip(m.globals) {
         let display = display_name(&g.sym);
         let kind = match &g.kind {
             KG::Builtin => {
@@ -211,8 +258,8 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
                     func,
                 }
             }
-            KG::Fn(f) => GlobalKind::Fn(FuncId(f.0)),
-            KG::Dictabs(f) => GlobalKind::Dictabs(FuncId(f.0)),
+            KG::Fn(f) => GlobalKind::Fn(prog.func(*f)),
+            KG::Dictabs(f) => GlobalKind::Dictabs(prog.func(*f)),
             KG::Value(r) => GlobalKind::Value(*r),
         };
         globals.push(Global {
@@ -224,7 +271,9 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
     let find_class = |name: &str| k.classes.iter().position(|c| c.sym == name);
     let find_type = |name: &str| k.types.iter().position(|t| t.sym == name);
     let mut builtin_methods = Vec::new();
-    for &(c, t, m, _) in kir::builtins::METHODS.iter() {
+    // 組み込みのクラスと型はプログラムの先頭の単位だけにある。
+    let first = m.classes == 0;
+    for &(c, t, m, _) in kir::builtins::METHODS.iter().filter(|_| first) {
         let (Some(ci), Some(ti)) = (
             find_class(&format!("builtin/{c}")),
             find_type(&format!("builtin/{t}")),
@@ -251,7 +300,13 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
             func: f,
         });
     }
-    if prog.clause_class.iter().any(|c| c.is_some()) {
+    if prog.rt_handle.is_none()
+        && prog
+            .clause_class
+            .iter()
+            .skip(m.functions)
+            .any(|c| c.is_some())
+    {
         let f = alloc(
             &mut extras,
             "$rt_handle".to_string(),
@@ -262,7 +317,7 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
         prog.rt_handle = Some(f);
     }
     let mut init = Vec::new();
-    for (ui, u) in k.units.iter().enumerate() {
+    for (ui, u) in k.units.iter().enumerate().skip(m.units) {
         let f = alloc(
             &mut extras,
             format!("$init:{}", u.key),
@@ -272,12 +327,12 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
         );
         init.push(f);
     }
-    let mut funcs = Vec::with_capacity(next as usize);
-    for i in 0..nf {
+    let mut funcs = Vec::with_capacity(next as usize - lf0);
+    for i in m.functions..nf {
         funcs.push(lower_kir_fn(&mut prog, i));
     }
     for (idx, (sym, kind, yields, e)) in extras.into_iter().enumerate() {
-        let me = FuncId((nf + idx) as u32);
+        let me = FuncId((lf0 + nnew + idx) as u32);
         let f = match e {
             Extra::Builtin(name) => {
                 let each = prog.each_loop.unwrap_or(me);
@@ -305,6 +360,7 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
     let instances: Vec<Instance> = k
         .instances
         .iter()
+        .skip(m.instances)
         .map(|x| {
             let class = &k.classes[x.class.index()];
             let mut methods: Vec<InstMethod> = Vec::with_capacity(class.methods.len());
@@ -313,7 +369,7 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
                 methods.push(match im {
                     Some(m) => InstMethod {
                         dicts: x.premises + m.dicts,
-                        func: FuncId(m.func.0),
+                        func: prog.func(m.func),
                     },
                     None => {
                         // 検証済みの KIR では、インスタンスはクラスのメソッドをすべて実装する。
@@ -345,9 +401,10 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
     if let Some(b) = prog.bug.take() {
         return Err(b);
     }
-    let types = k
+    let types: Vec<TypeInfo> = k
         .types
         .iter()
+        .skip(m.types)
         .map(|t| TypeInfo {
             sym: t.sym.clone(),
             ctors: t
@@ -360,37 +417,39 @@ pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
                 .collect(),
         })
         .collect();
-    let classes = k
+    let classes: Vec<ClassInfo> = k
         .classes
         .iter()
+        .skip(m.classes)
         .map(|c| ClassInfo {
             sym: c.sym.clone(),
             methods: c.methods.iter().map(|m| m.name.clone()).collect(),
         })
         .collect();
-    Ok(Program {
-        funcs,
-        kir_funcs: nf as u32,
-        globals,
-        instances,
-        types,
-        classes,
-        builtin_methods,
-        labels: std::mem::take(&mut prog.labels),
-        shapes: std::mem::take(&mut prog.shapes),
-        strings: std::mem::take(&mut prog.strings),
-        init,
-        effects: k
-            .effects
-            .iter()
-            .map(|e| EffectInfo {
-                sym: e.sym.clone(),
-                display: display_name(&e.sym),
-                ops: e.ops.iter().map(|o| (o.name.clone(), o.arity)).collect(),
-            })
-            .collect(),
-        rt_handle: prog.rt_handle,
-    })
+    let effects = k.effects.iter().skip(m.effects).map(|e| EffectInfo {
+        sym: e.sym.clone(),
+        display: display_name(&e.sym),
+        ops: e.ops.iter().map(|o| (o.name.clone(), o.arity)).collect(),
+    });
+    if lf0 == 0 && m.functions == 0 {
+        lp.kir_funcs = nf as u32;
+    }
+    lp.funcs.extend(funcs);
+    lp.globals.extend(globals);
+    lp.instances.extend(instances);
+    lp.types.extend(types);
+    lp.classes.extend(classes);
+    lp.builtin_methods.extend(builtin_methods);
+    lp.init.extend(init);
+    lp.effects.extend(effects);
+    lp.rt_handle = prog.rt_handle;
+    let mut parts = prog.into_parts();
+    lp.labels = std::mem::take(&mut parts.labels);
+    lp.shapes = std::mem::take(&mut parts.shapes);
+    lp.strings = std::mem::take(&mut parts.strings);
+    st.parts = parts;
+    st.k = kir::verify::Marks::of(k);
+    Ok(())
 }
 
 #[cfg(test)]

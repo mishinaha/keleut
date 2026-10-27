@@ -16,6 +16,7 @@
 use kir::{Exp, ExpId, FnId, GlobalId, GlobalKind, Program, Step};
 
 /// 解析の結果。
+#[derive(Default)]
 pub(crate) struct Info {
     /// 関数ごとの、最も外側のトップレベルの実体の手順の番号。
     pub fn_step: Vec<Option<usize>>,
@@ -39,14 +40,15 @@ impl Info {
     }
 }
 
-/// 関数の本体が作る関数(`closure`、`dictabs`、`handle` の各部分)を集める。
-fn created(p: &Program, f: &kir::Function, out: &mut Vec<FnId>) {
+/// 関数の本体(と guard)のすべての式のノードを `on` に渡す(順は決めない)。
+pub(crate) fn visit(p: &Program, f: &kir::Function, mut on: impl FnMut(&Exp)) {
     let mut stack: Vec<ExpId> = vec![f.body];
     if let Some(g) = f.guard {
         stack.push(g);
     }
     while let Some(e) = stack.pop() {
         let Some(x) = p.nodes.exp(e) else { continue };
+        on(x);
         match x {
             Exp::Lit(_)
             | Exp::LitError(_)
@@ -55,7 +57,10 @@ fn created(p: &Program, f: &kir::Function, out: &mut Vec<FnId>) {
             | Exp::Global(_)
             | Exp::RecEmpty
             | Exp::Hole
-            | Exp::Method { .. } => {}
+            | Exp::Method { .. }
+            | Exp::Closure(_)
+            | Exp::Dictabs(_)
+            | Exp::Handle(_) => {}
             Exp::Construct { fields, .. } => stack.extend(fields.iter().map(|(_, e)| *e)),
             Exp::Variant { value, .. } => stack.push(*value),
             Exp::Call { func, args, .. } => {
@@ -70,7 +75,6 @@ fn created(p: &Program, f: &kir::Function, out: &mut Vec<FnId>) {
                 stack.push(*a);
                 stack.push(*b);
             }
-            Exp::Closure(part) | Exp::Dictabs(part) => out.push(part.func),
             Exp::Dictapp { func, .. } => stack.push(*func),
             Exp::Let { value, body, .. } | Exp::Letpat { value, body, .. } => {
                 stack.push(*value);
@@ -95,31 +99,45 @@ fn created(p: &Program, f: &kir::Function, out: &mut Vec<FnId>) {
                 stack.push(*record);
             }
             Exp::RecSelect { record, .. } | Exp::RecRestrict { record, .. } => stack.push(*record),
-            Exp::Handle(h) => {
-                out.push(h.body.func);
-                out.extend(h.ops.iter().map(|o| o.part.func));
-                out.extend(h.ret.iter().map(|q| q.func));
-                out.extend(h.cancel.iter().map(|q| q.func));
-            }
             Exp::Resume { value, .. } => stack.push(*value),
         }
     }
 }
 
-/// プログラムを解析する。
-pub(crate) fn analyze(p: &Program) -> Info {
+/// 関数の本体が作る関数(`closure`、`dictabs`、`handle` の各部分)を集める。
+fn created(p: &Program, f: &kir::Function, out: &mut Vec<FnId>) {
+    visit(p, f, |x| match x {
+        Exp::Closure(part) | Exp::Dictabs(part) => out.push(part.func),
+        Exp::Handle(h) => {
+            out.push(h.body.func);
+            out.extend(h.ops.iter().map(|o| o.part.func));
+            out.extend(h.ret.iter().map(|q| q.func));
+            out.extend(h.cancel.iter().map(|q| q.func));
+        }
+        _ => {}
+    });
+}
+
+/// プログラムを解析する(単位を足したプログラムでは、足した部分について解析を進める)。
+///
+/// `info` は、関数 `f0` 個、単位 `u0` 個までのプログラムの解析の結果である(どちらも 0 なら空)。
+/// 足した単位の手順は前の手順の後ろに番号を続け、足した関数の根は足した関数の中でたどる
+/// (前の関数は後ろの関数を作らないので、前の結果は変わらない)。
+pub(crate) fn extend(p: &Program, info: &mut Info, f0: usize, u0: usize) {
     let nf = p.functions.len();
     let ng = p.globals.len();
-    let mut global_step = vec![None; ng];
-    let mut root_step: Vec<Option<usize>> = vec![None; nf];
-    let mut is_def_fns = Vec::new();
-    let mut step = 0usize;
+    let n = nf - f0;
+    let global_step = &mut info.global_step;
+    global_step.resize(ng, None);
+    let is_def_fns = &mut info.is_def_fns;
+    let mut root_step: Vec<Option<usize>> = vec![None; n];
+    let mut step = is_def_fns.len();
     let set_root = |root_step: &mut Vec<Option<usize>>, f: FnId, s: usize| {
-        if let Some(slot) = root_step.get_mut(f.index()) {
+        if let Some(slot) = f.index().checked_sub(f0).and_then(|i| root_step.get_mut(i)) {
             *slot = Some(s);
         }
     };
-    for u in &p.units {
+    for u in &p.units[u0..] {
         for st in &u.init {
             match st {
                 Step::DefValue { global, func } => {
@@ -160,24 +178,25 @@ pub(crate) fn analyze(p: &Program) -> Info {
         }
     }
     // 作る場所の親。2 つ以上の場所から作られる関数は、親を決めない。
+    // 添字は足した関数の中の位置である。
     const MANY: u32 = u32::MAX - 1;
     const NONE: u32 = u32::MAX;
-    let mut parent = vec![NONE; nf];
+    let mut parent = vec![NONE; n];
     let mut buf = Vec::new();
-    for (i, f) in p.functions.iter().enumerate() {
+    for (i, f) in p.functions.iter().enumerate().skip(f0) {
         buf.clear();
         created(p, f, &mut buf);
         for c in &buf {
-            if let Some(slot) = parent.get_mut(c.index()) {
-                *slot = if *slot == NONE { i as u32 } else { MANY };
+            if let Some(slot) = c.index().checked_sub(f0).and_then(|j| parent.get_mut(j)) {
+                *slot = if *slot == NONE { (i - f0) as u32 } else { MANY };
             }
         }
     }
     // 親の鎖をたどって根の手順を決める。たどった結果は覚えて、各関数を 1 度だけたどる。
-    let mut fn_step: Vec<Option<usize>> = vec![None; nf];
-    let mut done = vec![false; nf];
+    let mut fn_step: Vec<Option<usize>> = vec![None; n];
+    let mut done = vec![false; n];
     let mut path = Vec::new();
-    for start in 0..nf {
+    for start in 0..n {
         let mut cur = start;
         let mut result: Option<usize> = None;
         path.clear();
@@ -186,7 +205,7 @@ pub(crate) fn analyze(p: &Program) -> Info {
                 result = fn_step[cur];
                 break;
             }
-            if path.len() > nf {
+            if path.len() > n {
                 break;
             }
             path.push(cur);
@@ -210,9 +229,7 @@ pub(crate) fn analyze(p: &Program) -> Info {
             done[x] = true;
         }
     }
-    Info {
-        fn_step,
-        global_step,
-        is_def_fns,
-    }
+    info.fn_step.truncate(f0);
+    info.fn_step.resize(f0, None);
+    info.fn_step.extend(fn_step);
 }

@@ -835,11 +835,50 @@ fn verify_func_with(p: &Program, f: &Func, builtin_pairs: &HashSet<(ClassId, Typ
 
 /// プログラムを検証する。
 pub fn verify(p: &Program) -> VResult {
+    verify_from(p, &Marks::default())
+}
+
+/// 表ごとの項目の数。単位を足したプログラムで、検証を済ませた範囲の境目に使う。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Marks {
+    /// 関数。
+    pub funcs: usize,
+    /// 大域。
+    pub globals: usize,
+    /// インスタンス。
+    pub instances: usize,
+    /// 組み込みのインスタンスのメソッド。
+    pub builtin_methods: usize,
+    /// 初期化の関数。
+    pub init: usize,
+    /// 形。
+    pub shapes: usize,
+}
+
+impl Marks {
+    /// プログラム `p` の表の大きさ。
+    pub fn of(p: &Program) -> Marks {
+        Marks {
+            funcs: p.funcs.len(),
+            globals: p.globals.len(),
+            instances: p.instances.len(),
+            builtin_methods: p.builtin_methods.len(),
+            init: p.init.len(),
+            shapes: p.shapes.len(),
+        }
+    }
+}
+
+/// `m` より後ろの項目を検証する(単位を足したプログラム。前の項目は検証してあるものとする)。
+///
+/// [`verify`] と同じ規則で、関数と表の項目を `m` の位置から確かめる。
+/// 前の項目は後ろの項目を指さないので、手間は足した項目の大きさに比例する。
+pub fn verify_from(p: &Program, m: &Marks) -> VResult {
     ensure!(
         p.shapes.first().map(|s| s.is_empty()) == Some(true),
         "形の表の先頭が空の形でない"
     );
-    for (i, s) in p.shapes.iter().enumerate() {
+    for (i, s) in p.shapes.iter().enumerate().skip(m.shapes) {
         ensure!(
             s.windows(2).all(|w| w[0] <= w[1]),
             "形 {i} がラベルの番号の順に並んでいない"
@@ -863,7 +902,7 @@ pub fn verify(p: &Program) -> VResult {
         );
         Ok(())
     };
-    for g in &p.globals {
+    for g in p.globals.iter().skip(m.globals) {
         match &g.kind {
             GlobalKind::Builtin { func } => global_fn(g, *func, FuncKind::Builtin)?,
             GlobalKind::Fn(func) => global_fn(g, *func, FuncKind::Kir(FnKind::Lambda))?,
@@ -876,7 +915,7 @@ pub fn verify(p: &Program) -> VResult {
             GlobalKind::Value(_) => {}
         }
     }
-    for x in &p.instances {
+    for x in p.instances.iter().skip(m.instances) {
         let cl = p
             .classes
             .get(x.class.index())
@@ -901,16 +940,16 @@ pub fn verify(p: &Program) -> VResult {
             );
         }
     }
-    for m in &p.builtin_methods {
-        ensure!(fid_ok(m.func), "組み込みのメソッドの関数が範囲の外");
-        let t = &p.funcs[m.func.index()];
+    for b in p.builtin_methods.iter().skip(m.builtin_methods) {
+        ensure!(fid_ok(b.func), "組み込みのメソッドの関数が範囲の外");
+        let t = &p.funcs[b.func.index()];
         ensure!(
             t.kind == FuncKind::BuiltinMethod && t.ncaps == 0,
             "組み込みのメソッドの関数 {} の種類が合わない",
             t.sym
         );
     }
-    for &f in &p.init {
+    for &f in p.init.iter().skip(m.init) {
         ensure!(
             fid_ok(f) && p.funcs[f.index()].kind == FuncKind::Init,
             "初期化の関数 {} が不正",
@@ -926,7 +965,7 @@ pub fn verify(p: &Program) -> VResult {
             t.sym
         );
     }
-    for f in &p.funcs {
+    for f in p.funcs.iter().skip(m.funcs) {
         if f.kind == FuncKind::Init {
             ensure!(
                 f.params.is_empty() && f.ncaps == 0,
@@ -936,7 +975,7 @@ pub fn verify(p: &Program) -> VResult {
         }
     }
     let pairs = builtin_pairs(p);
-    for (i, f) in p.funcs.iter().enumerate() {
+    for (i, f) in p.funcs.iter().enumerate().skip(m.funcs) {
         verify_func_with(p, f, &pairs).map_err(|m| format!("関数 {i}({}): {m}", f.sym))?;
     }
     Ok(())

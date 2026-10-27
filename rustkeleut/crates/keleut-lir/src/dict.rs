@@ -183,7 +183,7 @@ impl Low<'_, '_> {
                     return self.bug("インスタンスにメソッドの実装が無い");
                 };
                 let ndicts = k.instances[inst.index()].premises + im.dicts;
-                let func = FuncId(im.func.0);
+                let func = self.p.func(im.func);
                 let args: Vec<Reg> = args.into_iter().map(|v| self.boxed(v)).collect();
                 if !tail {
                     crate::depth::push(&mut self.b);
