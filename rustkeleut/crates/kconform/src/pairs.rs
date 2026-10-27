@@ -17,6 +17,9 @@ pub enum Engine {
     /// `keleut emit-kir` の後の `diktor --run-ir`(組 `x-ir`)。
     /// Rust のフロントエンドが書いた KIR を Diktor が実行する。
     RustIr,
+    /// `keleut run --frontend rust` に組の選択肢を足したもの(組 `kr-*`)。
+    /// Rust のフロントエンドが書いた KIR を RustKeleut の後段が実行する。
+    RustKeleut,
 }
 
 /// 走らせる組の 1 つの実体である。
@@ -35,13 +38,13 @@ pub struct Pair {
 
 /// 組の名前の一覧である。
 pub const NAMES: &[&str] = &[
-    "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir",
+    "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki",
 ];
 
 /// いま走らせられる組である。
 ///
 /// RustKeleut の後段は M88 から順に加わるので、ここに名前を足していく。
-pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "kj", "kw", "x-ir"];
+pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "kj", "kw", "x-ir", "kr-ki"];
 
 /// `--pairs` を省いたときに走らせる組である。
 ///
@@ -49,7 +52,7 @@ pub const AVAILABLE: &[&str] = &["dk", "dk-ir", "kf", "ki", "kj", "kw", "x-ir"];
 /// `kj` は feature `llvm` を付けて組んだ `keleut` でだけ走り(M91 では `llvm` は既定の feature でない)、
 /// 付けずに組んだ `keleut` ではどのコマンドも未実装の 4 で終わるからである。
 /// `kj` は `--pairs` で名を挙げて走らせる。
-pub const DEFAULT: &[&str] = &["dk", "dk-ir", "kf", "ki", "kw", "x-ir"];
+pub const DEFAULT: &[&str] = &["dk", "dk-ir", "kf", "ki", "kw", "x-ir", "kr-ki"];
 
 /// `kconform expect` が `keleut run` に足す選択肢(組 `ki`)である。
 pub const EXPECT_ARGS: &[&str] = &["--backend", "interp", "--tier", "interp-only"];
@@ -94,6 +97,18 @@ pub fn expand(name: &str) -> Option<Vec<Pair>> {
         "km" => seeded("km", "mixed", 4),
         "kw" => one("kw", Engine::Keleut, &["--backend", "wasm"]),
         "x-ir" => one("x-ir", Engine::RustIr, &[]),
+        "kr-ki" => one(
+            "kr-ki",
+            Engine::RustKeleut,
+            &[
+                "--frontend",
+                "rust",
+                "--backend",
+                "interp",
+                "--tier",
+                "interp-only",
+            ],
+        ),
         _ => return None,
     })
 }
@@ -110,6 +125,9 @@ mod tests {
         assert_eq!(expand("ka").unwrap().len(), 8);
         assert_eq!(expand("km").unwrap()[3].args[1], "mixed=4");
         assert!(expand("zz").is_none());
+        let kr = expand("kr-ki").unwrap();
+        assert_eq!(kr[0].engine, Engine::RustKeleut);
+        assert_eq!(kr[0].args[..2], ["--frontend", "rust"]);
     }
 
     #[test]

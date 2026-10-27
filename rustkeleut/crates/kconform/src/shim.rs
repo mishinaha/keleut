@@ -367,12 +367,14 @@ pub fn diktor(args: &[OsString]) -> u8 {
         ("x-ir", Route::Run) => keleut_via_emit(&real, args, &[]),
         ("x-ir", Route::DiktorIr) => x_ir_emit(&real, args),
         ("x-ir", _) => exec(&real, "diktor", args),
+        (p, Route::Repl) if repl_pair(p) => repl_to_keleut(&real, args),
         ("dk" | "dk-ir" | "", _) | (_, Route::Repl | Route::DiktorIr) => {
             exec(&real, "diktor", args)
         }
         (_, Route::Dump) => dump_to_keleut(&real, args),
         ("kf", Route::Run | Route::TypeCheck) => kf_check(&real, args),
         (p, Route::Run | Route::TypeCheck) if is_keleut_pair(p) => keleut_backend(&real, args),
+        (p, Route::Run | Route::TypeCheck) if is_rust_pair(p) => rust_backend(&real, args),
         (_, Route::TypeCheck) => exec(&real, "diktor", args),
         (p, Route::Run) => {
             eprintln!("kconform shim: 組 {p} の diktor の実行の振り分けはありません");
@@ -390,6 +392,102 @@ fn strict_exhaustive_run(args: &[OsString]) -> bool {
 fn is_keleut_pair(name: &str) -> bool {
     crate::pairs::expand(name)
         .is_some_and(|ps| ps.iter().all(|p| p.engine == crate::pairs::Engine::Keleut))
+}
+
+/// 組が Rust のフロントエンドと RustKeleut の後段で実行する組(`kr-*`)かどうかを返す。
+fn is_rust_pair(name: &str) -> bool {
+    crate::pairs::expand(name).is_some_and(|ps| {
+        ps.iter()
+            .all(|p| p.engine == crate::pairs::Engine::RustKeleut)
+    })
+}
+
+/// 組が RustKeleut の後段の組(`ki kj kt ka km kw` と `kr-*`)かどうかを返す。
+///
+/// これらの組では、`--repl` の呼び出しを `keleut repl` に振り向ける(計画 8.1 節の shim の表。M100)。
+/// `keleut repl` は組の後段に関係なくインタプリタで実行し、組の選択肢(`--backend`、`--tier`、`--frontend`)は受けて捨てる。
+/// どの後段の組でも REPL の出力が同じになるので、後段の組の間の完全な一致の比べ(D499)が成り立つ。
+fn repl_pair(name: &str) -> bool {
+    crate::pairs::expand(name).is_some_and(|ps| {
+        ps.iter().all(|p| {
+            matches!(
+                p.engine,
+                crate::pairs::Engine::Keleut | crate::pairs::Engine::RustKeleut
+            )
+        })
+    })
+}
+
+/// Diktor の `--repl` の呼び出しを、`keleut repl 組の選択肢 旗` にする。
+///
+/// `--no-prelude` と `--prelude` を渡す。
+/// `--import-path` と `--strict-exhaustive` は Diktor の対話的な実行に効かないので渡さない。
+/// 入力のファイルを渡した呼び出し(使い方の誤り)と、モードが `--repl` でない呼び出しは、本物の diktor に渡す。
+fn repl_to_keleut(real: &OsString, args: &[OsString]) -> u8 {
+    let mut mode = Mode::Run;
+    let mut flags = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let Some(a) = args[i].to_str() else {
+            return exec(real, "diktor", args);
+        };
+        match a {
+            "--type-check" => mode = Mode::TypeCheck,
+            "--repl" => mode = Mode::Repl,
+            "--dump-tokens" => mode = Mode::DumpTokens,
+            "--dump-ast" => mode = Mode::DumpAst,
+            "--no-prelude" => flags.push(OsString::from(a)),
+            "--strict-exhaustive" => {}
+            "--prelude" | "--import-path" => {
+                let Some(v) = args.get(i + 1) else {
+                    return exec(real, "diktor", args);
+                };
+                if a == "--prelude" {
+                    flags.push(OsString::from(a));
+                    flags.push(v.clone());
+                }
+                i += 1;
+            }
+            _ => return exec(real, "diktor", args),
+        }
+        i += 1;
+    }
+    if mode != Mode::Repl {
+        return exec(real, "diktor", args);
+    }
+    let keleut = match required("KCONFORM_REAL_KELEUT") {
+        Ok(r) => r,
+        Err(c) => return c,
+    };
+    log_route("keleut-repl", "keleut");
+    let mut v = vec![OsString::from("repl")];
+    v.extend(pair_args());
+    v.extend(flags);
+    exec(&keleut, "keleut", &v)
+}
+
+/// 組 `kr-*` で、Diktor の実行と型検査の呼び出しを振り分ける。
+///
+/// - 実行は `keleut run 組の選択肢 旗 FILE…` にする(組の選択肢は `--frontend rust` を含む)。
+///   旗は `--no-prelude`、`--prelude`、`--import-path`、`--strict-exhaustive` である。
+/// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す。
+/// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+fn rust_backend(real: &OsString, args: &[OsString]) -> u8 {
+    match kf_check_args(args) {
+        Some((Mode::Run, kargs)) => {
+            let keleut = match required("KCONFORM_REAL_KELEUT") {
+                Ok(r) => r,
+                Err(c) => return c,
+            };
+            log_route("keleut-run", "keleut-rust");
+            let mut v = vec![OsString::from("run")];
+            v.extend(pair_args());
+            v.extend(kargs);
+            exec(&keleut, "keleut", &v)
+        }
+        Some((Mode::TypeCheck, _)) => kf_check(real, args),
+        _ => exec(real, "diktor", args),
+    }
 }
 
 /// RustKeleut の後段の組で、Diktor の実行と型検査の呼び出しを振り分ける(計画 8.1 節の shim の表)。
@@ -720,6 +818,22 @@ mod tests {
         assert_eq!((m, f), (Mode::Run, a(&["x.kel"])));
         let (m, _, _) = diktor_mode(&a(&["--strict-exhaustive", "--type-check", "x.kel"])).unwrap();
         assert_eq!(m, Mode::TypeCheck);
+    }
+
+    #[test]
+    fn rust_のフロントエンドの組と_repl_の組を見分ける() {
+        assert!(is_rust_pair("kr-ki"));
+        assert!(!is_keleut_pair("kr-ki"));
+        for p in ["dk", "ki", "kw", "x-ir", ""] {
+            assert!(!is_rust_pair(p), "{p}");
+        }
+        // --repl は、後段に関係なく RustKeleut の後段の組すべてで keleut repl に振り向ける。
+        for p in ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki"] {
+            assert!(repl_pair(p), "{p}");
+        }
+        for p in ["dk", "dk-ir", "kf", "x-ir", "zz", ""] {
+            assert!(!repl_pair(p), "{p}");
+        }
     }
 
     #[test]

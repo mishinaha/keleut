@@ -203,7 +203,10 @@ fn run_inner(case: &Case, pair: &Pair, cfg: &Config) -> std::io::Result<CaseResu
         path.push(&cfg.path_tail);
     }
     let mut pair_args = pair.args.clone();
-    if pair.engine == crate::pairs::Engine::Keleut {
+    if matches!(
+        pair.engine,
+        crate::pairs::Engine::Keleut | crate::pairs::Engine::RustKeleut
+    ) {
         pair_args.extend(cfg.extra.iter().cloned());
     }
     let mut child = Command::new("sh")
