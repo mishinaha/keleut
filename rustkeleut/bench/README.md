@@ -32,7 +32,7 @@ RustKeleut の後段と Diktor の実行時間を測る道具である(計画 26
 ## 使い方
 
 `rustkeleut/` で次のように走らせる。
-`keleut` は `cargo build --release --features llvm` で組んだものを使う(LLVM の後段の設定を測るため)。
+`keleut` は `cargo build --release` で組んだものを使う(LLVM の後段の設定を測るため、既定の feature `llvm` を外さない)。
 
 ```sh
 python3 bench/run.py --diktor ../diktor/_build/install/default/bin/diktor \

@@ -28,7 +28,8 @@ Float64 の印字は、`prim/prim.t`(LangSpec §16.2 の綴り、libm、Float64 
 ## 組
 
 組は KIR の書き手と実行系の組である(計画 8.2 節)。
-`--pairs` を省くと、いま使える組のうち LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)を除いたすべてを走らせる(下の `kj` の段落を見よ)。
+`--pairs` を省くと、いま使える組をすべて走らせる。
+`--no-default-features` で組んだ `keleut` では LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)を除き、除いた組を標準エラーに書く(下の `kj` の段落を見よ)。
 基準の組は、`--pairs` に書いた順に依らず、`dk` があれば `dk`、無ければ `dk-ir`、それも無ければ最初に挙げた組である。
 ほかの組は基準の組と比べる。
 要約の行の「基準」が、選んだ組を示す。
@@ -77,15 +78,18 @@ JIT にできる関数(M92 から `handle`、`resume`、`perform` を含む関�
 `--tier` が `interp-only` でなく `--backend` が無いので、`keleut run` は後段 `jit` で走る。
 `ka` と `km` は種ごとに 1 つの実体として走り、既知の差の一覧では種を付けない名前で照らし合わせる。
 `kj` の shim の振り分けは `ki` と同じである。
-`kj` は feature `llvm` を付けて組んだ `keleut`(`cargo build --release --features llvm`)でだけ走り、付けずに組んだ `keleut` ではどのコマンドも未実装の 4 で終わる。
+`kj` は feature `llvm` で組んだ `keleut` でだけ走る。
+`llvm` は既定の feature なので、`cargo build --release` で組んだ `keleut` で走る。
+`cargo build --release --no-default-features` で組んだ `keleut` では、どのコマンドも未実装の 4 で終わる。
 `kt`、`ka`、`km` も同じである。
-そのため、`--pairs` を省いたときの組にこれらを入れていない。
-`kconform --pairs ki,kj,kt,ka,km` のように名を挙げて走らせる。
+kconform は `keleut --version` の `backends:` の行で、`keleut` が後段 `jit` を持つかを確かめる。
+持たないとき、`--pairs` を省いた実行はこれらの組を除き、除いた組を標準エラーに書く。
+`--pairs` でこれらの組を名指した実行は、使い方の誤り(64)で終わる。
 組 `kr-ki` は Rust のフロントエンドが書いた KIR をインタプリタで走らせる(M100)。
 KIR は `keleut run --frontend rust` がプロセスの中で書き、ファイルを介さない。
 組 `kr-kj`、`kr-kt`、`kr-ka`、`kr-km`、`kr-kw` は、同じく Rust のフロントエンドが書いた KIR を、それぞれ `kj`、`kt`、`ka`、`km`、`kw` と同じ後段の設定で走らせる(M99)。
 `kr-ka` と `kr-km` は、`ka` と `km` と同じく種ごとに 1 つの実体として走る。
-`kr-kj`、`kr-kt`、`kr-ka`、`kr-km` は `kj` と同じく feature `llvm` を付けて組んだ `keleut` でだけ走るので、`--pairs` を省いたときの組に入れていない。
+`kr-kj`、`kr-kt`、`kr-ka`、`kr-km` は `kj` と同じく feature `llvm` で組んだ `keleut` でだけ走り、`--no-default-features` で組んだ `keleut` での扱いも `kj` と同じである。
 `kw` で V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut run` は 3 でなく 70 で終わる。
 このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
 `ERROR(OutOfMemory)` と終了状態 3 になるのは `N_alloc_max` を超える確保だけで、`oom/` はそれを確かめる。
@@ -136,7 +140,7 @@ Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む�
 そのため `--pairs` を省くと `dk` と `kf` を除いた組を走らせ、`dk-ir` を基準にする。
 `kf` も Diktor の木の評価器で走り、`keleut run --max-depth` の限度を持たないからである。
 `--pairs` に `dk` か `kf` を書くと 64 で終わる。
-`--pairs` に LLVM の後段の組を含めて `--suite depth` を走らせるときは、`--jobs` を 6 ほどにする。
+`--suite depth` を LLVM の後段の組(`--pairs` を省いたときの既定の組も含む)で走らせるときは、`--jobs` を 6 ほどにする。
 32 コア、31 GB の機械で既定の並列の数(CPU の数)にすると、組 `ka` と `kr-ka` の `depth/gresume.t` がメモリ不足で OOM killer に止められる(終了状態 137。M93、M101)。
 深さの試験では、どの組でも終了状態 70(予備の検査)を失敗にする。
 どのスイートでも、走らせる試験が 1 つも無ければ 1 で終わる。
@@ -232,12 +236,12 @@ dune はこれらの行を捨てるので、kconform もこれらを記録との
 ```sh
 cargo build --release
 target/release/kconform --pairs dk,ki --suite all              # Diktor と keleut run を比べる
-target/release/kconform                                        # 使える組のうち kj kt ka km kr-kj kr-kt kr-ka kr-km を除いてすべて走らせる
-target/release/kconform --pairs ki,kj --suite all              # JIT をインタプリタと比べる(--features llvm で組む)
-target/release/kconform --pairs ki,kj,kt,ka,km --suite all     # 段の切り替えの組も比べる(--features llvm で組む)
+target/release/kconform                                        # 使える組をすべて走らせる(--no-default-features の keleut では LLVM の組を除く)
+target/release/kconform --pairs ki,kj --suite all              # JIT をインタプリタと比べる
+target/release/kconform --pairs ki,kj,kt,ka,km --suite all     # 段の切り替えの組も比べる
 target/release/kconform --pairs dk --check-shim ../diktor/test/*.t  # shim が本物の diktor に渡すことの自己検査
 target/release/kconform --pairs dk,kr-ki --suite all           # Rust のフロントエンドとインタプリタを Diktor と比べる
-target/release/kconform --pairs dk,kr-ki,kr-kj,kr-kt,kr-ka,kr-km,kr-kw,x-ir --suite all  # Rust のフロントエンドを各後段で比べる(--features llvm で組む)
+target/release/kconform --pairs dk,kr-ki,kr-kj,kr-kt,kr-ka,kr-km,kr-kw,x-ir --suite all  # Rust のフロントエンドを各後段で比べる
 target/release/kconform expect conformance/frontend-depth/repl.t  # REPL が限度の後で入力を続けること
 target/release/kconform expect conformance/kir-bad/*.t         # 記録した期待とだけ比べる
 target/release/kconform kir-roundtrip                          # コーパスの全件で KIR を往復させる
