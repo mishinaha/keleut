@@ -790,7 +790,7 @@ pub fn keleut(args: &[OsString]) -> u8 {
     };
     if is_run {
         let pargs = pair_args();
-        let (own, note) = own_backend(&pair, &pargs, &args[1..]);
+        let (own, note) = own_backend(&pargs, &args[1..]);
         if let Some(note) = note {
             log_route("backend-override", &note);
         }
@@ -802,24 +802,18 @@ pub fn keleut(args: &[OsString]) -> u8 {
     exec(&real, "keleut", args)
 }
 
-/// LLVM の後段の組である。
-const JIT_PAIRS: &[&str] = &["kj", "kt", "ka", "km"];
-
 /// コマンドが自分で書いた `keleut run --backend` と、組の後段の食い違いを扱う。
 ///
 /// shim は組の選択肢を先に、コマンドの引数を後に並べるので、後に書いた旗が効く `keleut run` ではコマンドの `--backend` が組の後段に勝つ。
-/// LLVM の後段の組(`kj`、`kt`、`ka`、`km`)では、組の後段を優先して、コマンドの `--backend` を取り除く。
+/// LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`。組の選択肢で見分ける。[`crate::pairs::is_jit_args`])では、
+/// 組の後段を優先して、コマンドの `--backend` を取り除く。
 /// `--backend interp` を書いたコマンドが組の JIT を通らず、比べたことにならないのを防ぐためである。
 /// そのほかの組(`kw` など)では、コマンドの `--backend` を残す(Node は仮想メモリの上限 512 MiB の下で起動できない。V215)。
 ///
 /// 返すのは、組の選択肢の後に並べる引数と、食い違いがあったときの記録の文面である。
 /// 文面は呼び出しの記録に `backend-override` の行として足し、kconform が後段を上書きしたコマンドとして報告する。
-fn own_backend(
-    pair: &str,
-    pair_args: &[OsString],
-    own: &[OsString],
-) -> (Vec<OsString>, Option<String>) {
-    let jit = JIT_PAIRS.contains(&pair);
+fn own_backend(pair_args: &[OsString], own: &[OsString]) -> (Vec<OsString>, Option<String>) {
+    let jit = crate::pairs::is_jit_args(&pair_args_str(pair_args));
     let pair_backend = pair_args
         .windows(2)
         .rev()
@@ -854,6 +848,11 @@ fn own_backend(
     (out, note)
 }
 
+/// 組の選択肢を文字列の列にする(UTF-8 でないものは空にする)。
+fn pair_args_str(args: &[OsString]) -> Vec<&str> {
+    args.iter().map(|a| a.to_str().unwrap_or("")).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -865,27 +864,39 @@ mod tests {
     #[test]
     fn llvm_の組ではコマンドの後段より組の後段を優先する() {
         let own = a(&["--native-stack", "512k", "--backend", "interp", "x.kel"]);
-        let (v, n) = own_backend("kt", &a(&["--tier", "threshold=1"]), &own);
+        let (v, n) = own_backend(&a(&["--tier", "threshold=1"]), &own);
         assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
         assert_eq!(
             n.as_deref(),
             Some("--backend interp を除いて jit で走らせた")
         );
-        let (v, n) = own_backend("kj", &a(&["--backend", "jit", "--tier", "jit-only"]), &own);
+        let (v, n) = own_backend(&a(&["--backend", "jit", "--tier", "jit-only"]), &own);
         assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
         assert!(n.is_some());
-        let (v, n) = own_backend("kw", &a(&["--backend", "wasm"]), &own);
+        let (v, n) = own_backend(&a(&["--backend", "wasm"]), &own);
         assert_eq!(v, own);
         assert_eq!(n.as_deref(), Some("--backend interp が組の wasm に勝った"));
+        let (v, n) = own_backend(&a(&["--backend", "interp", "--tier", "interp-only"]), &own);
+        assert_eq!((v, n), (own.clone(), None));
+        // 組 `kr-kj`、`kr-kt`、`kr-ka`、`kr-km` もフロントエンドの選択肢に関係なく LLVM の後段の組として扱う。
+        let (v, n) = own_backend(&a(&["--frontend", "rust", "--tier", "alternating=3"]), &own);
+        assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
+        assert!(n.is_some());
         let (v, n) = own_backend(
-            "ki",
-            &a(&["--backend", "interp", "--tier", "interp-only"]),
+            &a(&[
+                "--frontend",
+                "rust",
+                "--backend",
+                "interp",
+                "--tier",
+                "interp-only",
+            ]),
             &own,
         );
         assert_eq!((v, n), (own.clone(), None));
         let plain = a(&["x.kel"]);
         assert_eq!(
-            own_backend("ka", &a(&["--tier", "alternating=1"]), &plain),
+            own_backend(&a(&["--tier", "alternating=1"]), &plain),
             (plain, None)
         );
     }
@@ -895,8 +906,15 @@ mod tests {
         for p in ["ki", "kj", "kt", "ka", "km", "kw"] {
             assert!(is_keleut_pair(p), "{p}");
         }
-        for p in ["dk", "dk-ir", "kf", "x-ir", "zz", ""] {
+        for p in [
+            "dk", "dk-ir", "kf", "x-ir", "zz", "", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km",
+            "kr-kw",
+        ] {
             assert!(!is_keleut_pair(p), "{p}");
+        }
+        for p in ["kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"] {
+            assert!(is_rust_pair(p), "{p}");
+            assert!(repl_pair(p), "{p}");
         }
         // 実行と型検査は diktor の引数解析と同じ規則でモードを決める(後に書いたものが効く)。
         let (m, f, _) = diktor_mode(&a(&["--strict-exhaustive", "x.kel"])).unwrap();

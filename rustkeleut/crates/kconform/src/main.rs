@@ -34,7 +34,7 @@ usage: kconform [OPTIONS] [--pairs P,...] [--suite all|depth] [--extra=FLAG...] 
        kconform extract-corpus [--from DIR] [--corpus DIR] [--check]
 
 options:
-  --pairs P,...       the pairs to run (default: dk, dk-ir, kf, ki, kw, x-ir, kr-ki;
+  --pairs P,...       the pairs to run (default: dk, dk-ir, kf, ki, kw, x-ir, kr-ki, kr-kw;
                       --suite depth leaves out dk and kf and rejects them)
   --root DIR          the rustkeleut directory (default: the one kconform was built from)
   --diktor PATH       the real diktor (default: $KELEUT_DIKTOR, else ROOT/../diktor/_build/install/default/bin/diktor)
@@ -369,9 +369,12 @@ fn depth_suite(o: &Options) -> bool {
 
 /// RustKeleut の後段の組の間の差を集める(計画 8.2 節、D499)。
 ///
-/// 実行系が [`Engine::Keleut`] の組(`ka` と `km` の種ごとの実体を含む)のうち、誤りの無い最初の組を基準にする。
-/// ほかの組の各コマンドの結果を、正規化をせずに基準の組と比べる。
+/// 同じ書き手の後段の組を 1 つの群にする。
+/// 実行系が [`Engine::Keleut`] の組(Diktor が書いた KIR。`ka` と `km` の種ごとの実体を含む)と、
+/// [`Engine::RustKeleut`] の組(Rust のフロントエンドが書いた KIR。`kr-ka` と `kr-km` の種ごとの実体を含む)である。
+/// 群ごとに、誤りの無い最初の組を基準にし、ほかの組の各コマンドの結果を正規化をせずに基準の組と比べる。
 /// 後段の間は完全に一致しなければならないからである。
+/// 書き手の違う群の間(`ki` と `kr-ki` など)は、診断の文面が違ってよいので、ここでは比べない。
 /// 誤りのある組は [`report`] が失敗として数えるので、ここでは比べない。
 /// 返す差は [`known_diffs::Comparison::Backend`] の比較で、どの既知の差の項目にも当たらない。
 fn backend_diffs(
@@ -380,8 +383,23 @@ fn backend_diffs(
     rs: &[CaseResult],
     commands: usize,
 ) -> Vec<Difference> {
+    let mut v = Vec::new();
+    for engine in [Engine::Keleut, Engine::RustKeleut] {
+        v.extend(backend_group_diffs(case, run_pairs, rs, commands, engine));
+    }
+    v
+}
+
+/// [`backend_diffs`] の 1 つの群(実行系が `engine` の組)の差を集める。
+fn backend_group_diffs(
+    case: usize,
+    run_pairs: &[Pair],
+    rs: &[CaseResult],
+    commands: usize,
+    engine: Engine,
+) -> Vec<Difference> {
     let ks: Vec<usize> = (0..run_pairs.len())
-        .filter(|&pi| run_pairs[pi].engine == Engine::Keleut && rs[pi].error.is_none())
+        .filter(|&pi| run_pairs[pi].engine == engine && rs[pi].error.is_none())
         .collect();
     let Some((&r0, rest)) = ks.split_first() else {
         return Vec::new();
