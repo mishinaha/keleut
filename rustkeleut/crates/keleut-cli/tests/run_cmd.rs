@@ -2,8 +2,9 @@
 //!
 //! - `tests/fixtures/run/` の各 `.kir` を走らせ、記録した標準出力、標準エラー、終了状態と比べる。
 //!   記録は `diktor --run-ir` の結果である(作り方は同じ場所の `README.md`)。
-//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行形を与えると、`.kel` を Diktor で KIR にする経路と、
+//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行形を与えると、`.kel` を Diktor で KIR にする経路(`--frontend diktor`)と、
 //!   `conformance/corpus/` の全件を Diktor の木の評価器と比べる試験も走らせる。
+//! - `.kel` の既定のフロントエンドが Rust(crate keleut-front)であることを、Diktor の無い環境で確かめる(M99)。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -135,7 +136,7 @@ fn 深い非末尾の再帰は限度の手前まで走り限度で止まる() {
     )
     .unwrap();
     let r = Command::new(env!("CARGO_BIN_EXE_keleut"))
-        .args(["run", "d.kel"])
+        .args(["run", "--frontend", "diktor", "d.kel"])
         .current_dir(&d)
         .env("KELEUT_DIKTOR", &diktor)
         .output()
@@ -146,6 +147,89 @@ fn 深い非末尾の再帰は限度の手前まで走り限度で止まる() {
         String::from_utf8_lossy(&r.stderr),
         "実行時エラー: 論理的な深さが限度 1048576 を超えました\n"
     );
+}
+
+#[test]
+fn 既定のフロントエンドは_rust_で_diktor_も選べる() {
+    let d = scratch("frontend");
+    std::fs::write(d.join("a.kel"), "echoln(show(1 + 2))\n").unwrap();
+    // Diktor を呼べない環境(`KELEUT_DIKTOR` が無いファイルを指し、PATH に diktor が無い)。
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_keleut"))
+            .args(args)
+            .current_dir(&d)
+            .env("KELEUT_DIKTOR", d.join("no-such-diktor"))
+            .env("PATH", &d)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    };
+    for args in [
+        &["run", "a.kel"][..],
+        &["run", "--frontend", "rust", "a.kel"],
+        &["run", "--backend", "interp", "a.kel"],
+    ] {
+        let r = run(args);
+        assert_eq!(
+            (r.status.code(), r.stdout.as_slice()),
+            (Some(0), &b"3\n"[..]),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
+    }
+    // `--frontend diktor` は Diktor を起動しようとし、起動できなければ使い方の誤り(64)で終わる。
+    let r = run(&["run", "--frontend", "diktor", "a.kel"]);
+    assert_eq!(r.status.code(), Some(64));
+    assert!(String::from_utf8_lossy(&r.stderr).contains("を起動できません"));
+    // 仮想メモリの上限の下では、フロントエンドのスレッドのスタックを上限に合わせて小さくする。
+    // LLVM を付けない構築では、スタックを小さくしなくても深さの限度に見込むスタックで作り直せて通る。
+    // feature `llvm` の構築では `libLLVM.so` が仮想メモリの大部分を使うので、この確かめは小さくすることに頼る。
+    // 最適化なしの構築では、KIR の符号化と検証のスレッド(約 797 MiB)が上限に収まらないので確かめない。
+    if !cfg!(debug_assertions) {
+        let r = Command::new("sh")
+            .arg("-c")
+            .arg("ulimit -v 524288; exec \"$0\" run --native-stack 512k --backend interp a.kel")
+            .arg(env!("CARGO_BIN_EXE_keleut"))
+            .current_dir(&d)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(
+            (r.status.code(), r.stdout.as_slice()),
+            (Some(0), &b"3\n"[..]),
+            "ulimit -v: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
+    }
+    // `keleut build` も既定で Rust のフロントエンドを使い、`--frontend diktor` を受け付ける。
+    let out = d.join("out");
+    let r = run(&[
+        "build",
+        "--target",
+        "wasm",
+        "-o",
+        out.to_str().unwrap(),
+        "a.kel",
+    ]);
+    assert_eq!(
+        r.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert!(out.join("program.wasm").exists());
+    let r = run(&[
+        "build",
+        "--target",
+        "wasm",
+        "-o",
+        out.to_str().unwrap(),
+        "--frontend",
+        "diktor",
+        "a.kel",
+    ]);
+    assert_eq!(r.status.code(), Some(64));
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// コーパスの 1 件の比べた結果。
@@ -180,7 +264,7 @@ fn compare_one(diktor: &str, corpus: &Path, rel: &str, flags: &str) -> Verdict {
         d = run_d(&fl);
     }
     let k = Command::new(env!("CARGO_BIN_EXE_keleut"))
-        .arg("run")
+        .args(["run", "--frontend", "diktor"])
         .args(&fl)
         .arg(file)
         .current_dir(dir)
