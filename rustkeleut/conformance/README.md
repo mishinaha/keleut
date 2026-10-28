@@ -38,19 +38,25 @@ RustKeleut の差分試験の材料である。
 | `dk` | 本物の diktor(木の評価器) | Diktor の対応する呼び出し |
 | `dk-ir` | `diktor --emit-ir` の後の `diktor --run-ir` | 同じく |
 | `kf` | 先に `keleut check` を通し、型検査で止まる入力はその結果を返す。通れば本物の diktor | Diktor の対応する呼び出し |
-| `ki` | 本物の `diktor --emit-ir` が 0 なら `keleut run --backend interp --tier interp-only FILE.kir`、0 でなければその出力と終了状態 | `keleut run --backend interp --tier interp-only` |
-| `kj` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend jit --tier jit-only FILE.kir` | `keleut run --backend jit --tier jit-only` |
-| `kt` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --tier threshold=1 FILE.kir` | `keleut run --tier threshold=1` |
-| `ka` | 種 1〜8 のそれぞれで、`keleut run --tier alternating=SEED FILE.kir` | `keleut run --tier alternating=SEED` |
-| `km` | 種 1〜4 のそれぞれで、`keleut run --tier mixed=SEED FILE.kir` | `keleut run --tier mixed=SEED` |
-| `kw` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend wasm FILE.kir` | `keleut run --backend wasm` |
+| `ki` | `keleut compat-diktor --frontend diktor --backend interp --tier interp-only --` に同じ引数。`keleut run --frontend diktor` が PATH の `diktor`(shim)を `--emit-ir` で呼び、shim はそれを本物の diktor に渡す。0 でなければその出力と終了状態 | `keleut run --backend interp --tier interp-only` |
+| `kj` | `ki` と同じく、`keleut compat-diktor --frontend diktor --backend jit --tier jit-only --` に同じ引数 | `keleut run --backend jit --tier jit-only` |
+| `kt` | `ki` と同じく、`keleut compat-diktor --frontend diktor --tier threshold=1 --` に同じ引数 | `keleut run --tier threshold=1` |
+| `ka` | 種 1〜8 のそれぞれで、`keleut compat-diktor --frontend diktor --tier alternating=SEED --` に同じ引数 | `keleut run --tier alternating=SEED` |
+| `km` | 種 1〜4 のそれぞれで、`keleut compat-diktor --frontend diktor --tier mixed=SEED --` に同じ引数 | `keleut run --tier mixed=SEED` |
+| `kw` | `ki` と同じく、`keleut compat-diktor --frontend diktor --backend wasm --` に同じ引数 | `keleut run --backend wasm` |
 | `x-ir` | `keleut emit-kir` の後の `diktor --run-ir` | 同じく |
-| `kr-ki` | `keleut run --frontend rust --backend interp --tier interp-only` に同じ旗とファイル | `keleut run --frontend rust --backend interp --tier interp-only` |
-| `kr-kj` | `keleut run --frontend rust --backend jit --tier jit-only` に同じ旗とファイル | `keleut run --frontend rust --backend jit --tier jit-only` |
-| `kr-kt` | `keleut run --frontend rust --tier threshold=1` に同じ旗とファイル | `keleut run --frontend rust --tier threshold=1` |
-| `kr-ka` | 種 1〜8 のそれぞれで、`keleut run --frontend rust --tier alternating=SEED` に同じ旗とファイル | `keleut run --frontend rust --tier alternating=SEED` |
-| `kr-km` | 種 1〜4 のそれぞれで、`keleut run --frontend rust --tier mixed=SEED` に同じ旗とファイル | `keleut run --frontend rust --tier mixed=SEED` |
-| `kr-kw` | `keleut run --frontend rust --backend wasm` に同じ旗とファイル | `keleut run --frontend rust --backend wasm` |
+| `kr-ki` | `keleut compat-diktor --frontend rust --backend interp --tier interp-only --` に同じ引数 | `keleut run --frontend rust --backend interp --tier interp-only` |
+| `kr-kj` | `keleut compat-diktor --frontend rust --backend jit --tier jit-only --` に同じ引数 | `keleut run --frontend rust --backend jit --tier jit-only` |
+| `kr-kt` | `keleut compat-diktor --frontend rust --tier threshold=1 --` に同じ引数 | `keleut run --frontend rust --tier threshold=1` |
+| `kr-ka` | 種 1〜8 のそれぞれで、`keleut compat-diktor --frontend rust --tier alternating=SEED --` に同じ引数 | `keleut run --frontend rust --tier alternating=SEED` |
+| `kr-km` | 種 1〜4 のそれぞれで、`keleut compat-diktor --frontend rust --tier mixed=SEED --` に同じ引数 | `keleut run --frontend rust --tier mixed=SEED` |
+| `kr-kw` | `keleut compat-diktor --frontend rust --backend wasm --` に同じ引数 | `keleut run --frontend rust --backend wasm` |
+
+左の欄の行き先は、Diktor の実行の呼び出し(旗なし、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive` だけの呼び出し)である(計画 8.1 節の shim の表。M101)。
+`keleut compat-diktor` は `--` の前の組の選択肢を後段の選択肢として読み、`--` の後の Diktor の旗を Diktor と同じに解釈して `keleut run` を呼ぶ。
+入力のファイルは、名前が `.kir` で終わっても Diktor と同じくソースとして読む。
+UTF-8 でない引数を含む呼び出しは、どの組でも本物の diktor に渡す(keleut は UTF-8 でない引数を使い方の誤りにする)。
+`ki` から `kr-kw` までの組でも、`--type-check` は `keleut check`、`--dump-tokens` と `--dump-ast` は `keleut dump`、`--repl` は `keleut repl` に振り向け、使い方の誤りになる呼び出しは本物の diktor に渡す。
 
 `keleut run` の既定のフロントエンドは、M99 から Rust(`--frontend rust`)である。
 Diktor が KIR を書く組(`ki`、`kj`、`kt`、`ka`、`km`、`kw`)は、組の選択肢の先頭に `--frontend diktor` を置く。

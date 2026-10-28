@@ -468,70 +468,51 @@ fn repl_to_keleut(real: &OsString, args: &[OsString]) -> u8 {
 
 /// 組 `kr-*` で、Diktor の実行と型検査の呼び出しを振り分ける。
 ///
-/// - 実行は `keleut run 組の選択肢 旗 FILE…` にする(組の選択肢は `--frontend rust` を含む)。
-///   旗は `--no-prelude`、`--prelude`、`--import-path`、`--strict-exhaustive` である。
+/// - 実行は `keleut compat-diktor 組の選択肢 -- ARGS…` にする(計画 8.1 節の shim の表。組の選択肢は `--frontend rust` を含む)。
+///   `ARGS` は Diktor の呼び出しの引数そのままで、`keleut compat-diktor` が Diktor と同じに解釈して `keleut run` を呼ぶ。
 /// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す。
 /// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
 fn rust_backend(real: &OsString, args: &[OsString]) -> u8 {
     match kf_check_args(args) {
-        Some((Mode::Run, kargs)) => {
-            let keleut = match required("KCONFORM_REAL_KELEUT") {
-                Ok(r) => r,
-                Err(c) => return c,
-            };
-            log_route("keleut-run", "keleut-rust");
-            let mut v = vec![OsString::from("run")];
-            v.extend(pair_args());
-            v.extend(kargs);
-            exec(&keleut, "keleut", &v)
-        }
+        Some((Mode::Run, _)) => compat_diktor(args, "keleut-rust"),
         Some((Mode::TypeCheck, _)) => kf_check(real, args),
         _ => exec(real, "diktor", args),
     }
 }
 
-/// RustKeleut の後段の組で、Diktor の実行と型検査の呼び出しを振り分ける(計画 8.1 節の shim の表)。
+/// Diktor の実行の呼び出しを、`keleut compat-diktor 組の選択肢 -- ARGS…` にする(計画 8.1 節)。
 ///
-/// - 実行(旗なし、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive`)は、
-///   本物の `diktor --emit-ir` が 0 で終われば `keleut run 組の選択肢 FILE.kir` に移り、
-///   0 でなければその出力と終了状態をそのまま返す。
-///   網羅漏れの警告で 1 で終わるかどうかは、同じ旗(`--strict-exhaustive`)を渡した `diktor --emit-ir` が決める
-///   (0 でなければ `keleut run` に進まず、その出力と終了状態を返す)。
-/// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す(M98 で切り替えた行)。
-/// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
-fn keleut_backend(real: &OsString, args: &[OsString]) -> u8 {
-    match diktor_mode(args) {
-        Some((Mode::Run, files, _)) if !files.is_empty() => diktor_to_keleut_run(real, args),
-        Some((Mode::TypeCheck, files, _)) if !files.is_empty() => kf_check(real, args),
-        _ => exec(real, "diktor", args),
-    }
-}
-
-/// Diktor の実行の呼び出しを、本物の `diktor --emit-ir` の後の `keleut run 組の選択肢 FILE.kir` にする。
-///
-/// 書き出しの警告(網羅漏れなど)は `diktor --emit-ir` が標準エラーに出し、`keleut run` は出さない。
-/// 木の評価器と同じく、警告は実行の出力より前に出る。
-fn diktor_to_keleut_run(real: &OsString, args: &[OsString]) -> u8 {
+/// `outcome` は記録の行(`keleut-run` の行)に書く振り分けの名前である。
+fn compat_diktor(args: &[OsString], outcome: &str) -> u8 {
     let keleut = match required("KCONFORM_REAL_KELEUT") {
         Ok(r) => r,
         Err(c) => return c,
     };
-    let kir = temp_kir().into_os_string();
-    let mut emit = vec![OsString::from("--emit-ir"), kir.clone()];
-    emit.extend_from_slice(args);
-    let st = match Command::new(real).arg0("diktor").args(&emit).status() {
-        Ok(st) => st,
-        Err(e) => return exec_failed(real, e),
-    };
-    if !st.success() {
-        log_route("keleut-run", "diktor-emit");
-        return st.code().map_or(70, |c| c as u8);
+    log_route("keleut-run", outcome);
+    let mut v = vec![OsString::from("compat-diktor")];
+    v.extend(pair_args());
+    // `--` の前が組の選択肢で、後が Diktor の引数である(Diktor の `--max-depth` を組の選択肢と取り違えない)。
+    v.push(OsString::from("--"));
+    v.extend_from_slice(args);
+    exec(&keleut, "keleut", &v)
+}
+
+/// RustKeleut の後段の組で、Diktor の実行と型検査の呼び出しを振り分ける(計画 8.1 節の shim の表)。
+///
+/// - 実行(旗なし、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive`)は、
+///   `keleut compat-diktor 組の選択肢 -- ARGS…` にする。
+///   組の選択肢の先頭の `--frontend diktor` で、`keleut run` は PATH の `diktor`(この shim)を `--emit-ir` で呼び、
+///   shim はそれを Diktor の IR の行として本物の diktor に渡す。
+///   本物の `diktor --emit-ir` が 0 で終わらなければ、`keleut run` はその終了状態で終わる
+///   (網羅漏れの警告で 1 で終わるかどうかも、同じ旗を渡した `diktor --emit-ir` が決める)。
+/// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す(M98 で切り替えた行)。
+/// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+fn keleut_backend(real: &OsString, args: &[OsString]) -> u8 {
+    match diktor_mode(args) {
+        Some((Mode::Run, files, _)) if !files.is_empty() => compat_diktor(args, "keleut"),
+        Some((Mode::TypeCheck, files, _)) if !files.is_empty() => kf_check(real, args),
+        _ => exec(real, "diktor", args),
     }
-    log_route("keleut-run", "keleut");
-    let mut run = vec![OsString::from("run")];
-    run.extend(pair_args());
-    run.push(kir);
-    exec(&keleut, "keleut", &run)
 }
 
 /// Diktor のモードの旗である(後に書いたものが効く)。
@@ -548,14 +529,16 @@ enum Mode {
 ///
 /// モード、入力のファイル、`--prelude` があるかを返す。
 /// 知らない旗や、引数の足りない旗があれば `None` を返す(本物の diktor に使い方の誤りを報告させる)。
+/// UTF-8 でない引数を含む呼び出しも `None` を返す(本物の diktor に渡す)。
+/// keleut は UTF-8 でない引数を使い方の誤りにするので、組 `kf` と `kr-*` の [`kf_check_args`] と同じく、
+/// そのような呼び出しは本物の diktor に任せる。
 fn diktor_mode(args: &[OsString]) -> Option<(Mode, Vec<OsString>, bool)> {
     let mut mode = Mode::Run;
     let mut files = Vec::new();
     let mut prelude = false;
     let mut i = 0;
     while i < args.len() {
-        let raw = &args[i];
-        let a = raw.to_str().unwrap_or("");
+        let a = args[i].to_str()?;
         match a {
             "--type-check" => mode = Mode::TypeCheck,
             "--repl" => mode = Mode::Repl,
@@ -569,8 +552,8 @@ fn diktor_mode(args: &[OsString]) -> Option<(Mode, Vec<OsString>, bool)> {
                 prelude |= a == "--prelude";
                 i += 1;
             }
-            _ if raw.as_bytes().first() == Some(&b'-') => return None,
-            _ => files.push(raw.clone()),
+            _ if a.starts_with('-') => return None,
+            _ => files.push(OsString::from(a)),
         }
         i += 1;
     }
@@ -1028,6 +1011,10 @@ mod tests {
         assert_eq!((m, p), (Mode::TypeCheck, true));
         assert!(diktor_mode(&a(&["--typo", "x.kel"])).is_none());
         assert!(diktor_mode(&a(&["x.kel", "--prelude"])).is_none());
+        // UTF-8 でない引数を含む呼び出しは本物の diktor に任せる。
+        use std::os::unix::ffi::OsStringExt;
+        let bad = OsString::from_vec(b"\xff.kel".to_vec());
+        assert!(diktor_mode(&[bad]).is_none());
     }
 
     #[test]
