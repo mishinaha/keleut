@@ -60,6 +60,8 @@ struct Options {
     text: bool,
     out: Option<String>,
     limits: Limits,
+    /// `--native-stack` を与えたか(与えたときは、スタックを小さくして作り直さない)。
+    fixed_stack: bool,
 }
 
 fn parse_options(args: &[String]) -> Result<Options, String> {
@@ -133,6 +135,7 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
         text,
         out,
         limits,
+        fixed_stack: stack.is_some(),
     })
 }
 
@@ -293,8 +296,9 @@ pub fn main(args: &[String]) -> u8 {
             return exit::USAGE;
         }
     };
-    let limits = o.limits;
-    let prog = match on_check_stack(limits, || build(&o.check, o.strict)) {
+    let mut o = o;
+    let (strict, limits, shrink) = (o.strict, o.limits, !o.fixed_stack);
+    let prog = match build_on_front_stack(&mut o.check, strict, limits, shrink) {
         Ok(Ok(p)) => p,
         Ok(Err(code)) => return code,
         Err(msg) => {
@@ -320,6 +324,75 @@ pub fn main(args: &[String]) -> u8 {
     }
 }
 
+/// フロントエンドの専用のスレッドで型検査して KIR を組み立てる。
+///
+/// `shrink` が真なら、仮想メモリの上限(`ulimit -v`)に合わせてスタックを小さくする。
+/// 既定のスタック(8 GiB)は上限の下では予約できず、[`on_check_stack`] はそのとき深さの限度に見込むスタック
+/// (リリースの構築で約 455 MiB)で作り直す。
+/// feature `llvm` で組んだ `keleut` では `libLLVM.so` が仮想メモリの大部分を使うので、上限 512 MiB の下ではその作り直しも失敗する。
+/// 予約できたときも、ヒープの残りが足りなくなることがある。
+/// 上限があれば、初めからスタックを上限の 4 分の 1 までにする。
+/// それでもスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は [`MIN_RUN_FRONT_STACK`])。
+/// どちらも、`--native-stack` と同じ規則で、そのスタックに収まる深さまで `check.max_nest` を下げる(限度は I)。
+fn build_on_front_stack(
+    check: &mut CheckOptions,
+    strict: bool,
+    limits: Limits,
+    shrink: bool,
+) -> Result<Result<kir::Program, u8>, String> {
+    let max_nest = check.max_nest;
+    let mut limits = limits;
+    if shrink
+        && let Some(cap) = address_space_limit().map(|b| b / 4)
+        && cap < limits.stack_bytes
+        && let Ok(l) = check_limits(max_nest, Some(cap.max(MIN_RUN_FRONT_STACK)))
+    {
+        limits = l;
+        check.max_nest = l.max_nest;
+    }
+    let mut r = on_check_stack(limits, || build(check, strict));
+    let mut stack = limits.stack_bytes;
+    while shrink
+        && let Err(msg) = &r
+        && msg.starts_with(SPAWN_FAILED)
+        && stack / 2 >= MIN_RUN_FRONT_STACK
+    {
+        stack /= 2;
+        let Ok(l) = check_limits(max_nest, Some(stack)) else {
+            break;
+        };
+        check.max_nest = l.max_nest;
+        r = on_check_stack(l, || build(check, strict));
+    }
+    r
+}
+
+/// 仮想メモリの軟らかい上限(`RLIMIT_AS`。バイト)を返す。上限が無ければ `None` である。
+fn address_space_limit() -> Option<usize> {
+    #[repr(C)]
+    struct RLimit {
+        cur: u64,
+        max: u64,
+    }
+    unsafe extern "C" {
+        fn getrlimit(resource: i32, rlim: *mut RLimit) -> i32;
+    }
+    /// Linux の `RLIMIT_AS`。
+    const RLIMIT_AS: i32 = 9;
+    let mut r = RLimit { cur: 0, max: 0 };
+    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
+    if unsafe { getrlimit(RLIMIT_AS, &mut r) } != 0 || r.cur == u64::MAX {
+        return None;
+    }
+    usize::try_from(r.cur).ok()
+}
+
+/// フロントエンドのスレッドを作れなかったときの、[`on_check_stack`] の誤りの文面の始まりである。
+const SPAWN_FAILED: &str = "フロントエンドのスレッドを作れません";
+
+/// フロントエンドのスレッドを作り直すときのスタックの下限(16 MiB)である。
+const MIN_RUN_FRONT_STACK: usize = 16 << 20;
+
 /// `keleut run --frontend rust` のフロントエンドである。
 ///
 /// `front_args` は `keleut run` が受けたフロントエンドの旗(`--no-prelude`、`--prelude PATH`、`--import-path DIR`、
@@ -327,6 +400,8 @@ pub fn main(args: &[String]) -> u8 {
 /// 手順、診断、終了状態は `diktor --emit-ir` と同じで、KIR をファイルに書く代わりに返す
 /// (入れ子の深さは、バイナリに符号化して確かめる)。
 /// フロントエンドのスレッドは既定の大きさのスタックで走らせる(`keleut run` の `--native-stack` はインタプリタのスタックである)。
+/// 仮想メモリの上限(`ulimit -v`)があれば、スタックを初めから上限の 4 分の 1 までにし、収まる深さまで入れ子の限度を下げる。
+/// スレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は 16 MiB。[`build_on_front_stack`])。
 pub(crate) fn program_for_run(
     files: &[std::path::PathBuf],
     front_args: &[String],
@@ -363,7 +438,8 @@ pub(crate) fn program_for_run(
             return Err(exit::USAGE);
         }
     };
-    let prog = match on_check_stack(limits, || build(&check, strict)) {
+    let r = build_on_front_stack(&mut check, strict, limits, true);
+    let prog = match r {
         Ok(r) => r?,
         Err(msg) => {
             eprintln_now(&format!("keleut: {msg}"));
