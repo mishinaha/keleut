@@ -1,4 +1,4 @@
-(kir 0 3 0)
+(kir 1 0 0)
 (unit "builtin" (paths))
 (unit "prelude" (paths))
 (unit "main" (paths "ext.kel"))

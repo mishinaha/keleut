@@ -1,6 +1,8 @@
 # kir の試験の fixture
 
 各 `.kir` と `.kirt` の組は、Diktor(サブモジュール `diktor/` の 2f9300a)の `--emit-ir` と `--emit-ir-text` の出力である。
+KIR を 1.0 に凍結したときに、見出しの版(バイナリの位置 4〜7、テキストの 1 行目)だけを 1.0 に書き換えた。
+版を 1.0 にした Diktor で同じ引数で書き出し直すと、単位の `paths` のファイル名のほかはバイト単位で一致する。
 `tests/roundtrip.rs` は、この組で読み書きの往復がバイト単位で一致することを確かめる。
 `tests/verify.rs` と `tests/fuzz.rs` は、これらを書き換えた入力を使う。
 
