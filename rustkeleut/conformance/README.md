@@ -19,7 +19,8 @@ RustKeleut の差分試験の材料である。
 | `effects/` | G の節の継続の取り出しと再開の試験(`g.t`。生成器、深い再帰の底の yield、2 回目の resume、再開の間の回収、G と N と T の節の重なり、メソッドの呼び出しと引数の多い関数の中の yield)と、ハンドラと継続の再開を何千回もくり返し、段の設定の組(`kt`、`ka`、`km`)で取り出しと再開が段の境目をまたぐ試験(`tier.t`)。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験(`parse.t` は `keleut dump ast`、`typecheck.t` は `keleut check`、`repl.t` は `keleut repl` で走らせる)。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
-`float/`、`kir-fixtures/` は、それぞれを受け入れるマイルストーンで足す。
+計画 6.1 節と 8.1 節が挙げる `float/` のディレクトリは置かない。
+Float64 の印字は、`prim/prim.t`(LangSpec §16.2 の綴り、libm、Float64 から整数への変換)と、crate `keleut-rtcore` の試験 `tests/fltcmp.rs`(glibc の印字との比べ合わせ。M85)で確かめる。
 どれも cram の形の `.t` で書き、`.kel` は `.t` の横か `.t` のヒアドキュメントに置く。
 `.t` のコマンドは `diktor` でなく `keleut` を呼ぶ。
 `keleut run` の呼び出しは、shim が組ごとに振り分ける(次の「組」の節の表の右の欄)。
@@ -135,6 +136,8 @@ Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む�
 そのため `--pairs` を省くと `dk` と `kf` を除いた組を走らせ、`dk-ir` を基準にする。
 `kf` も Diktor の木の評価器で走り、`keleut run --max-depth` の限度を持たないからである。
 `--pairs` に `dk` か `kf` を書くと 64 で終わる。
+`--pairs` に LLVM の後段の組を含めて `--suite depth` を走らせるときは、`--jobs` を 6 ほどにする。
+32 コア、31 GB の機械で既定の並列の数(CPU の数)にすると、組 `ka` と `kr-ka` の `depth/gresume.t` がメモリ不足で OOM killer に止められる(終了状態 137。M93、M101)。
 深さの試験では、どの組でも終了状態 70(予備の検査)を失敗にする。
 どのスイートでも、走らせる試験が 1 つも無ければ 1 で終わる。
 `FILES` を与えたときは、スイートの代わりにその `.t` と `.kel` を走らせる。
