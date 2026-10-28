@@ -4,7 +4,7 @@
 //! |---|---|
 //! | `kconform [--pairs P,…] [--suite S] [--extra=FLAG…] [FILES…]` | 組ごとに走らせ、組の間で比べ、各組を `.t` に記録した期待とも比べる |
 //! | `kconform expect FILES…` | 組の間で比べずに走らせ、`.t` に記録した期待とだけ比べる |
-//! | `kconform kir-roundtrip` | コーパスの全件で、KIR の往復と 2 つのプロセスの書き出しの一致を確かめる |
+//! | `kconform kir-roundtrip` | コーパスの全件で、KIR の往復と 2 つのプロセスの書き出しの一致を確かめ、`conformance/kir-fixtures/` の見本を両方の読み手で読む |
 //! | `kconform extract-corpus` | cram のヒアドキュメントから `.kel` を抜き出し、`conformance/corpus/` に置く |
 //!
 //! PATH の先頭に置く shim は、`kconform __shim diktor|keleut ARGS…` を呼ぶ(`shim` モジュール)。
@@ -1013,6 +1013,7 @@ fn main_extract(o: &Options) -> u8 {
 fn main_roundtrip(o: &Options) -> u8 {
     let cfg = roundtrip::Config {
         corpus: o.corpus_dir(),
+        fixtures: o.conformance().join("kir-fixtures"),
         diktor: absolute(&o.diktor_path()),
         keleut: absolute(&o.keleut_path()),
         jobs: o.jobs,

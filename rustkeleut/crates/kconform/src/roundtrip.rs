@@ -12,9 +12,16 @@
 //! 7. 6 のバイナリを `keleut kir dis` で印字したテキストが、Diktor のテキストと一致する(テキスト → バイナリ → テキストの往復)。
 //! 8. 同じ旗の `keleut emit-kir` と `keleut emit-kir --text` が 0 で終わり、書いたバイナリとテキストが Diktor のものと一致する。
 //!
+//! 続いて、`conformance/kir-fixtures/` の各版の見本(IRSpec 14 節)について、次のことを確かめる。
+//!
+//! 9. `.kir` の見本を `diktor --run-ir` と `keleut run --frontend diktor --backend interp --tier interp-only` で走らせ、
+//!    `diktor --run-ir` がプログラムの結果(0 か 3)で終わり、`keleut run` の終了状態、標準出力、標準エラーがそれと一致する
+//!    (3 は実行時エラーで終わる見本である。読み込みと検証の失敗は 65 なので、ここで見分けられる)。
+//! 10. `.kir` と `.kirt` の見本がどれも `keleut kir verify` に通る。
+//!
 //! 旗は索引のものを使う。
 //! 索引の旗が `?` のときは、旗なしで書き出し、型検査の誤り(1)なら `--no-prelude` で試し直す。
-//! `--diktor-only` では 4〜8 を行わない(RustKeleut の側がまだ無いときの確認に使う)。
+//! `--diktor-only` では 4〜8 と 10 を行わず、9 は `diktor --run-ir` が 0 で終わることだけを確かめる(RustKeleut の側がまだ無いときの確認に使う)。
 
 use crate::corpus::{self, Entry};
 use crate::util::{TempDir, par_map, wait_timeout};
@@ -27,6 +34,8 @@ use std::time::Duration;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub corpus: PathBuf,
+    /// 見本のディレクトリ(`conformance/kir-fixtures`)である。無ければ 9 と 10 を行わない。
+    pub fixtures: PathBuf,
     pub diktor: PathBuf,
     pub keleut: PathBuf,
     pub jobs: usize,
@@ -214,6 +223,97 @@ fn check_inner(e: &Entry, cfg: &Config) -> std::io::Result<Verdict> {
     Ok(Verdict::Pass)
 }
 
+/// 見本のディレクトリの下の `.kir` と `.kirt` を、パスの順に集める。
+fn fixture_files(dir: &Path) -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|x| x == "kir" || x == "kirt") {
+                v.push(p);
+            }
+        }
+    }
+    v.sort();
+    v
+}
+
+/// 見本の 1 つを確かめる(9 と 10)。
+fn check_fixture(path: &Path, cfg: &Config) -> std::io::Result<Verdict> {
+    let work = TempDir::new("kconform-fx", false)?;
+    let dir = work.path();
+    let name = path.file_name().unwrap().to_string_lossy().into_owned();
+    std::fs::copy(path, dir.join(&name))?;
+    let binary = name.ends_with(".kir");
+    let d = if binary {
+        let r = run(
+            &cfg.diktor,
+            "diktor",
+            &["--run-ir", &name],
+            dir,
+            cfg.timeout,
+        )?;
+        if !matches!(r.code, Some(0 | 3)) {
+            return Ok(Verdict::Fail("fixture-diktor", describe(&r)));
+        }
+        Some(r)
+    } else {
+        None
+    };
+    if cfg.diktor_only {
+        return Ok(Verdict::Pass);
+    }
+    let k = |args: &[&str]| run(&cfg.keleut, "keleut", args, dir, cfg.timeout);
+    let r = k(&["kir", "verify", &name])?;
+    if r.code != Some(0) {
+        return Ok(Verdict::Fail("fixture-verify", describe(&r)));
+    }
+    if let Some(d) = d {
+        let r = k(&[
+            "run",
+            "--frontend",
+            "diktor",
+            "--backend",
+            "interp",
+            "--tier",
+            "interp-only",
+            &name,
+        ])?;
+        if r.code != d.code {
+            return Ok(Verdict::Fail("fixture-run", describe(&r)));
+        }
+        if r.stdout != d.stdout || r.stderr != d.stderr {
+            return Ok(Verdict::Fail(
+                "fixture-run",
+                "keleut run の出力が diktor --run-ir と一致しない".to_string(),
+            ));
+        }
+    }
+    Ok(Verdict::Pass)
+}
+
+/// 見本を全部確かめ、(見本の数、失敗の数)を返す。
+fn check_fixtures(cfg: &Config) -> (usize, usize) {
+    let files = fixture_files(&cfg.fixtures);
+    let verdicts = par_map(&files, cfg.jobs, |p| {
+        check_fixture(p, cfg).unwrap_or_else(|e| Verdict::Fail("io", e.to_string()))
+    });
+    let mut fails = 0;
+    for (p, v) in files.iter().zip(&verdicts) {
+        if let Verdict::Fail(step, msg) = v {
+            fails += 1;
+            println!("失敗 {} [{step}]: {msg}", p.display());
+        }
+    }
+    (files.len(), fails)
+}
+
 /// コーパスの全件を確かめ、終了状態を返す(0 は全件が通ったこと)。
 pub fn main(cfg: &Config) -> u8 {
     let entries = match corpus::read_index(&cfg.corpus) {
@@ -261,5 +361,11 @@ pub fn main(cfg: &Config) -> u8 {
             ""
         }
     );
-    if fails == 0 { 0 } else { 1 }
+    let (nfx, fx_fails) = check_fixtures(cfg);
+    println!(
+        "kir-roundtrip: 見本 {nfx} 個({})のうち、通った {} 個、失敗 {fx_fails} 個",
+        cfg.fixtures.display(),
+        nfx - fx_fails
+    );
+    if fails == 0 && fx_fails == 0 { 0 } else { 1 }
 }
