@@ -2,7 +2,7 @@
 //!
 //! `keleut dump tokens|ast|lir|bytecode|llvm FILE` の 2 語目で、受け持つ関数を選ぶ。
 //! 表に無い名前は使い方の誤り(64)である。
-//! `llvm` は feature `llvm` を付けずに組むと未実装(4)である。
+//! `llvm` は、feature `llvm`(既定で有効)を `--no-default-features` で外して組むと未実装(4)である。
 
 use crate::exit;
 

@@ -13,7 +13,9 @@ keleut-rt = { path = "../keleut-rt" }
 llvm-sys = { version = "=221.1.1", features = ["prefer-dynamic"], optional = true }
 
 [features]
-# LLVM 22 の共有ライブラリに結合する。無ければ crate は空になる(`cargo build` は LLVM 抜きで組める)。
+# 既定で LLVM 22 の共有ライブラリに結合する(計画 6.1 節、P241)。
+default = ["llvm"]
+# 外すと crate は空になる(`cargo build --no-default-features` は LLVM 抜きで組める)。
 llvm = ["dep:llvm-sys"]
 
 [dev-dependencies]

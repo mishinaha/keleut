@@ -24,8 +24,9 @@
 //! `--native-stack` を与えたときは、KIR の読み込みと検証のスタックもフロントエンドと同じ大きさにし、
 //! 入れ子の限度をそれに収まる深さまで下げる(計画 6.11 節。[`kir_limits`])。
 //! 後段はインタプリタ(`--backend interp`)、WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)、
-//! LLVM の JIT(`--backend jit`。M91。crate keleut-llvm。feature `llvm` で組んだときだけ使え、無ければ未実装の 4)である。
-//! 既定の後段は、feature `llvm` で組んだときは `jit`、そうでなければ `interp` である(計画 6.2 節)。
+//! LLVM の JIT(`--backend jit`。M91。crate keleut-llvm)である。
+//! JIT は feature `llvm`(既定で有効。計画 6.1 節、P241)で組んだときだけ使え、`--no-default-features` で外して組めば未実装の 4 である。
+//! 既定の後段は、feature `llvm` で組んだときは `jit`、外して組んだときは `interp` である(計画 6.2 節)。
 //! `--backend jit` の段の設定(`--tier`。M92)は `interp-only`、`jit-only`、`threshold=N`、`alternating=SEED`、`mixed=SEED` で、
 //! 既定は `threshold=1000` である(しきい値の既定は M93 で決める。P249)。
 //! `--backend` を省いて `interp-only` 以外の `--tier` を与えたときは `jit` で走る。
@@ -51,8 +52,8 @@ pub const USAGE: &str = "\
 usage: keleut run [OPTIONS] FILE.kel... | FILE.kir
 
 options:
-  --backend interp|jit|wasm   back end (default: jit in a build with the llvm feature, else interp;
-                              jit needs a build with the llvm feature)
+  --backend interp|jit|wasm   back end (default: jit, or interp in a build without the llvm feature;
+                              jit needs the llvm feature, which is on by default)
   --tier MODE                 interp-only|jit-only|threshold=N|alternating=SEED|mixed=SEED
                               (jit only, ignored by --backend interp|wasm; default threshold=1000;
                               a mode other than interp-only selects --backend jit when --backend
@@ -335,7 +336,7 @@ fn run_jit(o: &Options) -> u8 {
 
 #[cfg(not(feature = "llvm"))]
 fn run_jit(_: &Options) -> u8 {
-    eprintln!("keleut: 未実装: 後段 jit(feature llvm を付けずに組みました)");
+    eprintln!("keleut: 未実装: 後段 jit(feature llvm を外して組みました)");
     exit::UNIMPLEMENTED
 }
 
@@ -471,7 +472,7 @@ usage: keleut dump llvm [--frontend diktor|rust] [--prelude FILE | --no-prelude]
        FILE.kel... | FILE.kir
 
 prints the LLVM IR that the jit back end makes for every function it can compile
-(the format is for inspection only; needs a build with the llvm feature)
+(the format is for inspection only; needs the llvm feature, which is on by default)
 ";
 
 /// `keleut dump llvm …` の入口である。引数の先頭は `llvm` である。
@@ -518,7 +519,7 @@ fn dump_llvm_of(o: &Options) -> u8 {
 
 #[cfg(not(feature = "llvm"))]
 fn dump_llvm_of(_: &Options) -> u8 {
-    eprintln!("keleut: 未実装: dump llvm(feature llvm を付けずに組みました)");
+    eprintln!("keleut: 未実装: dump llvm(feature llvm を外して組みました)");
     exit::UNIMPLEMENTED
 }
 
