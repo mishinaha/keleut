@@ -242,3 +242,107 @@ fn 深さの試験群は_dk_と_kf_を走らせず_試験が無ければ失敗�
     let (code, out) = kconform(&d.0, &fake, &["--pairs", "dk-ir", "--suite", "depth"]);
     assert_eq!(code, 1, "{out}");
 }
+
+/// 偽の keleut を置く。
+/// `--version` には `version` を印字し、ほかの引数ではそれを印字する。
+fn fake_keleut(d: &Path, name: &str, version: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let k = d.join(format!("kbin-{name}/keleut"));
+    std::fs::create_dir_all(k.parent().unwrap()).unwrap();
+    std::fs::write(
+        &k,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then printf '{version}'; exit 0; fi\nprintf 'fake %s\\n' \"$*\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&k, std::fs::Permissions::from_mode(0o755)).unwrap();
+    k
+}
+
+/// 偽の keleut を使って kconform を走らせ、終了状態、標準出力、標準エラー出力を返す。
+fn kconform_with_keleut(
+    d: &Path,
+    fake: &Path,
+    keleut: &Path,
+    args: &[&str],
+) -> (i32, String, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_kconform"))
+        .arg("--root")
+        .arg(d)
+        .arg("--diktor")
+        .arg(fake)
+        .arg("--keleut")
+        .arg(keleut)
+        .arg("--known-diffs")
+        .arg(d.join("known-diffs.toml"))
+        .args(args)
+        .env("TMPDIR", d)
+        .output()
+        .unwrap();
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// LLVM の後段の組の名前である。
+const JIT_PAIRS: &str = "kj,kt,ka,km,kr-kj,kr-kt,kr-ka,kr-km";
+
+#[test]
+fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
+    let d = Dir::new("nojit");
+    let fake = setup(&d.0);
+    let t = d.0.join("echo.t");
+    std::fs::write(&t, "  $ echo hi\n  hi\n").unwrap();
+    let t = t.to_str().unwrap();
+    let nojit = fake_keleut(&d.0, "nojit", "keleut 0.1.0\\nbackends: interp wasm\\n");
+
+    // --pairs に LLVM の後段の組を書けば、使い方の誤りとして 64 で終わる。
+    let (code, out, err) = kconform_with_keleut(&d.0, &fake, &nojit, &["--pairs", "ki,kj", t]);
+    assert_eq!(code, 64, "{out}{err}");
+    assert!(err.contains("kj"), "{err}");
+    assert!(err.contains("feature llvm を外して組まれています"), "{err}");
+
+    // --pairs を省けば、LLVM の後段の組を除いたことを知らせて、残りの組を走らせる。
+    let (_, out, err) = kconform_with_keleut(&d.0, &fake, &nojit, &[t]);
+    assert!(
+        err.contains(&format!("LLVM の後段の組 {JIT_PAIRS} を走らせません")),
+        "{err}"
+    );
+    let ran = ran_pairs(&out);
+    assert_eq!(
+        ran,
+        ["dk", "dk-ir", "kf", "ki", "kw", "x-ir", "kr-ki", "kr-kw"],
+        "{out}"
+    );
+
+    // 後段 jit を持つ keleut と、後段の行を印字しない keleut では、組を除かない。
+    for (name, version) in [
+        ("jit", "keleut 0.1.0\\nbackends: interp jit wasm\\n"),
+        ("noline", "keleut 0.1.0\\n"),
+    ] {
+        let k = fake_keleut(&d.0, name, version);
+        let (_, out, err) = kconform_with_keleut(&d.0, &fake, &k, &[t]);
+        assert!(!err.contains("を走らせません"), "{name}: {err}");
+        assert!(!err.contains("feature llvm"), "{name}: {out}{err}");
+        let ran = ran_pairs(&out);
+        for p in [
+            "kj", "kt", "ka=1", "ka=8", "km=4", "kr-kj", "kr-ka=8", "kr-km=1",
+        ] {
+            assert!(ran.contains(&p.to_string()), "{name}, {p}: {out}");
+        }
+    }
+}
+
+/// 要約の行から、走らせた組の名札を取り出す。
+fn ran_pairs(out: &str) -> Vec<String> {
+    let line = out
+        .lines()
+        .find(|l| l.starts_with("kconform: 組 "))
+        .unwrap_or_else(|| panic!("要約の行が無い: {out}"));
+    let rest = &line["kconform: 組 ".len()..];
+    let list = &rest[..rest.find('(').unwrap()];
+    list.split(',').map(str::to_string).collect()
+}

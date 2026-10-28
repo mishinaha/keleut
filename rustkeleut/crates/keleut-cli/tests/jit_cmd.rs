@@ -1,4 +1,4 @@
-//! `keleut run --backend jit` の試験(M91、M92。feature `llvm` を付けたときだけ走る)。
+//! `keleut run --backend jit` の試験(M91、M92。feature `llvm` で組んだときだけ走る。`llvm` は既定の feature である)。
 //!
 //! `tests/fixtures/run/` の各 KIR を `--backend jit --tier jit-only` で走らせ、
 //! 標準出力、標準エラー、終了状態が記録(インタプリタの結果)と一致することを確かめる。
