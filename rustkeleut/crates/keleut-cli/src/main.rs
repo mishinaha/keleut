@@ -18,7 +18,7 @@ mod run_cmd;
 
 /// 終了状態の定数である(計画 6.2 節の表)。
 mod exit {
-    /// 未実装の機能を使った(feature `llvm` を付けずに組んだときの後段 `jit` など)。
+    /// 未実装の機能を使った(feature `llvm` を外して組んだときの後段 `jit` など)。
     #[cfg_attr(feature = "llvm", allow(dead_code))]
     pub const UNIMPLEMENTED: u8 = 4;
     /// 使い方の誤り。
@@ -42,6 +42,16 @@ commands:
   repl                                   interactive session
   compat-diktor ARGS...                  interpret Diktor's flags
 ";
+
+/// この構築で使える後段の名前である(`keleut --version` の 2 行目に印字する)。
+///
+/// `jit` は feature `llvm`(既定で有効)で組んだときだけ入る。
+/// kconform はこの行を読み、LLVM の後段の組を走らせられるかを決める。
+const BACKENDS: &str = if cfg!(feature = "llvm") {
+    "interp jit wasm"
+} else {
+    "interp wasm"
+};
 
 /// サブコマンドを受け持つ関数である。
 /// 引数の列(先頭はサブコマンドの名前)を受け取り、終了状態を返す。
@@ -73,6 +83,7 @@ fn dispatch(args: &[String]) -> u8 {
     }
     if name == "--version" {
         println!("keleut {}", env!("CARGO_PKG_VERSION"));
+        println!("backends: {BACKENDS}");
         return 0;
     }
     match COMMANDS.iter().find(|(n, _)| n == name) {
@@ -114,5 +125,15 @@ mod tests {
     fn 名前の無い呼び出しと知らない名前は使い方の誤りになる() {
         assert_eq!(dispatch(&argv(&[])), exit::USAGE);
         assert_eq!(dispatch(&argv(&["nosuch"])), exit::USAGE);
+    }
+
+    #[test]
+    fn 後段の一覧は_feature_llvm_に従う() {
+        assert_eq!(
+            BACKENDS.split(' ').any(|b| b == "jit"),
+            cfg!(feature = "llvm")
+        );
+        assert!(BACKENDS.split(' ').any(|b| b == "interp"));
+        assert!(BACKENDS.split(' ').any(|b| b == "wasm"));
     }
 }
