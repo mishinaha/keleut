@@ -214,6 +214,9 @@ fn run_inner(case: &Case, pair: &Pair, cfg: &Config) -> std::io::Result<CaseResu
         .current_dir(&root)
         .env_remove("TESTDIR")
         .env_remove("DIKTOR_VIA_IR")
+        // `keleut run --frontend diktor` がいつも PATH の diktor(shim)を通るように、
+        // `$KELEUT_DIKTOR` を子に渡さない(本物の diktor は `KCONFORM_REAL_DIKTOR` で渡す)。
+        .env_remove("KELEUT_DIKTOR")
         .env("PATH", path)
         .env("LC_ALL", "C")
         .env("TMPDIR", &tmp)
