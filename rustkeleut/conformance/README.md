@@ -13,7 +13,7 @@ RustKeleut の差分試験の材料である。
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
 | `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
 | `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |
-| `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215)。LLVM の後段の組(`kj`、`kt`、`ka`、`km`)では shim がこの旗を除くので、組の段で走る |
+| `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215)。LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)では shim がこの旗を除くので、組の段で走る |
 | `stack/` | ネイティブのスタックの試験。`--native-stack 512k` で、JIT の関数の深い末尾でない再帰の後の構造的な `Eq` の比べ方と、20 万段の構造的な `Eq` の入れ子が、どの後段でも同じ結果になることを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `effects/` | G の節の継続の取り出しと再開の試験(`g.t`。生成器、深い再帰の底の yield、2 回目の resume、再開の間の回収、G と N と T の節の重なり、メソッドの呼び出しと引数の多い関数の中の yield)と、ハンドラと継続の再開を何千回もくり返し、段の設定の組(`kt`、`ka`、`km`)で取り出しと再開が段の境目をまたぐ試験(`tier.t`)。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験(`parse.t` は `keleut dump ast`、`typecheck.t` は `keleut check`、`repl.t` は `keleut repl` で走らせる)。Diktor が基準にならないので `kconform expect` でだけ走らせる |
@@ -26,7 +26,7 @@ RustKeleut の差分試験の材料である。
 ## 組
 
 組は KIR の書き手と実行系の組である(計画 8.2 節)。
-`--pairs` を省くと、いま使える組のうち LLVM の後段の組(`kj`、`kt`、`ka`、`km`)を除いたすべてを走らせる(下の `kj` の段落を見よ)。
+`--pairs` を省くと、いま使える組のうち LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)を除いたすべてを走らせる(下の `kj` の段落を見よ)。
 基準の組は、`--pairs` に書いた順に依らず、`dk` があれば `dk`、無ければ `dk-ir`、それも無ければ最初に挙げた組である。
 ほかの組は基準の組と比べる。
 要約の行の「基準」が、選んだ組を示す。
@@ -45,6 +45,18 @@ RustKeleut の差分試験の材料である。
 | `kw` | `ki` と同じく、本物の `diktor --emit-ir` が 0 なら `keleut run --backend wasm FILE.kir` | `keleut run --backend wasm` |
 | `x-ir` | `keleut emit-kir` の後の `diktor --run-ir` | 同じく |
 | `kr-ki` | `keleut run --frontend rust --backend interp --tier interp-only` に同じ旗とファイル | `keleut run --frontend rust --backend interp --tier interp-only` |
+| `kr-kj` | `keleut run --frontend rust --backend jit --tier jit-only` に同じ旗とファイル | `keleut run --frontend rust --backend jit --tier jit-only` |
+| `kr-kt` | `keleut run --frontend rust --tier threshold=1` に同じ旗とファイル | `keleut run --frontend rust --tier threshold=1` |
+| `kr-ka` | 種 1〜8 のそれぞれで、`keleut run --frontend rust --tier alternating=SEED` に同じ旗とファイル | `keleut run --frontend rust --tier alternating=SEED` |
+| `kr-km` | 種 1〜4 のそれぞれで、`keleut run --frontend rust --tier mixed=SEED` に同じ旗とファイル | `keleut run --frontend rust --tier mixed=SEED` |
+| `kr-kw` | `keleut run --frontend rust --backend wasm` に同じ旗とファイル | `keleut run --frontend rust --backend wasm` |
+
+`keleut run` の既定のフロントエンドは、M99 から Rust(`--frontend rust`)である。
+Diktor が KIR を書く組(`ki`、`kj`、`kt`、`ka`、`km`、`kw`)は、組の選択肢の先頭に `--frontend diktor` を置く。
+表の右の欄の `keleut run` には、どれもこの旗が前に付く。
+`.t` の中の `keleut run FILE.kel` は、`--frontend diktor` で PATH の `diktor`(shim)を `--emit-ir` で呼び、shim はそれを本物の diktor に渡す。
+kconform は `.t` を走らせるシェルから `KELEUT_DIKTOR` を除くので、`keleut run` はいつも shim を呼ぶ。
+`kconform expect` が `keleut run` に足す選択肢(組 `ki` と同じ)も `--frontend diktor` を含む。
 
 組 `kf` は、Rust のフロントエンド(crate `keleut-front`。`keleut dump` と `keleut check` が使う)を Diktor と比べるために足した組である(M96)。
 組 `ki` は Diktor が書いた KIR を RustKeleut のインタプリタで走らせ、後段だけを比べる。
@@ -63,24 +75,28 @@ JIT にできる関数(M92 から `handle`、`resume`、`perform` を含む関�
 `kconform --pairs ki,kj,kt,ka,km` のように名を挙げて走らせる。
 組 `kr-ki` は Rust のフロントエンドが書いた KIR をインタプリタで走らせる(M100)。
 KIR は `keleut run --frontend rust` がプロセスの中で書き、ファイルを介さない。
+組 `kr-kj`、`kr-kt`、`kr-ka`、`kr-km`、`kr-kw` は、同じく Rust のフロントエンドが書いた KIR を、それぞれ `kj`、`kt`、`ka`、`km`、`kw` と同じ後段の設定で走らせる(M99)。
+`kr-ka` と `kr-km` は、`ka` と `km` と同じく種ごとに 1 つの実体として走る。
+`kr-kj`、`kr-kt`、`kr-ka`、`kr-km` は `kj` と同じく feature `llvm` を付けて組んだ `keleut` でだけ走るので、`--pairs` を省いたときの組に入れていない。
 `kw` で V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut run` は 3 でなく 70 で終わる。
 このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
 `ERROR(OutOfMemory)` と終了状態 3 になるのは `N_alloc_max` を超える確保だけで、`oom/` はそれを確かめる。
 これは §15.5 からの既知の逸脱(P252、台帳 V215。計画 6.5 節)で、既知の差には登録していない。
-LLVM の後段の組(`kj`、`kt`、`ka`、`km`)でも、プロセスのメモリ(仮想メモリの上限、Rust と LLVM のヒープ)が尽きると、`keleut run` は 3 でなく SIGABRT(終了状態 134)で終わることがある。
+LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)でも、プロセスのメモリ(仮想メモリの上限、Rust と LLVM のヒープ)が尽きると、`keleut run` は 3 でなく SIGABRT(終了状態 134)で終わることがある。
 このときも `cancel` 節は走らず、バッファに残っていた標準出力は失われる。
 止まる場所は、LLVM の確保(ORC の `JIT session error: Cannot allocate memory` の後の確保の失敗)のことも、`Interp::fx_call` の `Vec` のような失敗を返さない小さな確保のことも、ある。
 `ERROR(OutOfMemory)` と終了状態 3 を保証するのは、GC のヒープが尽きたときと `N_alloc_max` を超える確保だけである。
 V215 と同じく既知の逸脱として扱い(M92 の記録)、差分試験には入れず、既知の差にも登録していない。
 
 shim は組の選択肢を先に、コマンドの引数を後に並べ、`keleut run` は後に書いた旗を使う。
-LLVM の後段の組(`kj`、`kt`、`ka`、`km`)では、shim がコマンドの `--backend` を除き、組の後段で走らせる。
+LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)では、shim がコマンドの `--backend` を除き、組の後段で走らせる。
+shim は LLVM の後段の組かどうかを、組の名前でなく組の選択肢(`--backend jit` か、`--backend` が無く `interp-only` でない `--tier`)で見分ける。
 そのほかの組では、コマンドの `--backend` が組の後段に勝つ。
 どちらの場合も、組の後段と違う `--backend` を書いたコマンドを、kconform は「組の後段の上書き」の行で報告する。
 いまは、`gc/gc.t` の `ulimit -v 524288` の 2 つのコマンドが報告される。
 組 `kw` ではインタプリタで走り(組の比べ方から漏れる)、LLVM の後段の組では旗を除いて組の段で走る。
 
-`dk`、`dk-ir`、`x-ir` を除くすべての組(`kf`、RustKeleut の後段の組、`kr-ki`)は、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump` に、`--type-check` の呼び出しを `keleut check` に振り向ける。
+`dk`、`dk-ir`、`x-ir` を除くすべての組(`kf`、RustKeleut の後段の組、`kr-*`)は、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump` に、`--type-check` の呼び出しを `keleut check` に振り向ける。
 `dk`、`dk-ir`、`x-ir` は、これらを本物の diktor に渡す。
 `--type-check` を含まず `--strict-exhaustive` を含む呼び出しは、Diktor がプログラムを実行するので、組 `dk-ir` と `ki` では実行の呼び出しとして振り分ける。
 Diktor の IR の旗(`--emit-ir`、`--run-ir`、`--max-depth` など)を含む呼び出しは、組 `x-ir` の書き出しを除いて本物の diktor に渡す。
@@ -133,7 +149,9 @@ against = "record"                # 省略できる。"record" か "pair"
 
 組の間の差は、基準でない側の組の名前で照らし合わせる。
 RustKeleut の後段の組(`ki kj kt ka km kw`。`ka` と `km` は種ごとの実体)は、既知の差の一覧に関係なく、互いに完全に一致しなければならない(D499)。
-`kconform` は、これらの組のうち誤りの無い最初の組を基準にし、ほかの組の結果を正規化せずに比べる。
+Rust のフロントエンドで走る組(`kr-ki kr-kj kr-kt kr-ka kr-km kr-kw`。`kr-ka` と `kr-km` は種ごとの実体)も、互いに完全に一致しなければならない。
+`kconform` は、書き手ごとに 2 つの群(`ki kj kt ka km kw` と `kr-*`)を作り、群ごとに誤りの無い最初の組を基準にして、ほかの組の結果を正規化せずに比べる。
+書き手の違う組(`ki` と `kr-ki` など)は、診断の文面の接頭辞が違ってよい(V217)ので、この比べ方では比べない。
 後段の間の差は、どの項目にも当たらず、すべて登録の無い差に数える。
 M88 は、M94 の一時の登録(下の V220)のために、`when = "unimplemented"` の項目が後段の間の差にも当たる一時の例外を足した。
 M95 で G の節を入れたので、その登録とともにこの例外を消した。
@@ -203,11 +221,12 @@ dune はこれらの行を捨てるので、kconform もこれらを記録との
 ```sh
 cargo build --release
 target/release/kconform --pairs dk,ki --suite all              # Diktor と keleut run を比べる
-target/release/kconform                                        # 使える組のうち kj kt ka km を除いてすべて走らせる
+target/release/kconform                                        # 使える組のうち kj kt ka km kr-kj kr-kt kr-ka kr-km を除いてすべて走らせる
 target/release/kconform --pairs ki,kj --suite all              # JIT をインタプリタと比べる(--features llvm で組む)
 target/release/kconform --pairs ki,kj,kt,ka,km --suite all     # 段の切り替えの組も比べる(--features llvm で組む)
 target/release/kconform --pairs dk --check-shim ../diktor/test/*.t  # shim が本物の diktor に渡すことの自己検査
 target/release/kconform --pairs dk,kr-ki --suite all           # Rust のフロントエンドとインタプリタを Diktor と比べる
+target/release/kconform --pairs dk,kr-ki,kr-kj,kr-kt,kr-ka,kr-km,kr-kw,x-ir --suite all  # Rust のフロントエンドを各後段で比べる(--features llvm で組む)
 target/release/kconform expect conformance/frontend-depth/repl.t  # REPL が限度の後で入力を続けること
 target/release/kconform expect conformance/kir-bad/*.t         # 記録した期待とだけ比べる
 target/release/kconform kir-roundtrip                          # コーパスの全件で KIR を往復させる
