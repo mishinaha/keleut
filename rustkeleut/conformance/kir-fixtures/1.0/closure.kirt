@@ -1,0 +1,128 @@
+(kir 1 0 0)
+(unit "builtin" (paths))
+(unit "prelude" (paths))
+(unit "main" (paths "closure.kel"))
+(type "builtin/Boolean")
+(type "builtin/Int32")
+(type "builtin/Int64")
+(type "builtin/Float64")
+(type "builtin/String")
+(type "builtin/Never")
+(type "builtin/Ref")
+(type "builtin/Array")
+(type "builtin/MutableArray")
+(type "main/Shape" (ctor Circle 1) (ctor Rect 2))
+(class "builtin/Add" (method add 0))
+(class "builtin/Sub" (method sub 0))
+(class "builtin/Mul" (method mul 0))
+(class "builtin/Div" (method div 0))
+(class "builtin/Rem" (method rem 0))
+(class "builtin/Neg" (method neg 0))
+(class "builtin/Eq" (method eq 0))
+(class "builtin/Ord" (method lt 0) (method le 0) (method gt 0) (method ge 0))
+(class "builtin/Show" (method show 0))
+(global "builtin/Ref.new" builtin)
+(global "builtin/Ref.get" builtin)
+(global "builtin/Ref.set" builtin)
+(global "builtin/Array.length" builtin)
+(global "builtin/Array.get" builtin)
+(global "builtin/Array.each" builtin)
+(global "builtin/MutableArray.new" builtin)
+(global "builtin/MutableArray.length" builtin)
+(global "builtin/MutableArray.get" builtin)
+(global "builtin/MutableArray.set" builtin)
+(global "builtin/MutableArray.freeze" builtin)
+(global "builtin/pinned" builtin)
+(global "main/area" fn "main/area")
+(global "main/scale" fn "main/scale")
+(global "main/p" value any)
+(global "main/q" value any)
+(global "main/a" value i32)
+(global "main/b" value i32)
+(fn "main/area" lambda yield
+  (params any)
+  (locals i32 i32 i32 i32 i32)
+  (dicts 0)
+  (caps)
+  (result i32)
+  (match
+    (local 0)
+    (clause
+      (ctor "main/Shape" Circle
+        (field 0 (bind 1)))
+      (opcall "builtin/Mul" mul
+        (dbuiltin "builtin/Mul" "builtin/Int32")
+        (opcall "builtin/Mul" mul (dbuiltin "builtin/Mul" "builtin/Int32") (lit i32 3) (local 1))
+        (local 1)))
+    (clause
+      (ctor "main/Shape" Rect
+        (field 0 (bind 2))
+        (field 1 (bind 3)))
+      (guard
+        (opcall "builtin/Eq" eq (dbuiltin "builtin/Eq" "builtin/Int32") (local 2) (local 3)))
+      (opcall "builtin/Mul" mul (dbuiltin "builtin/Mul" "builtin/Int32") (local 2) (local 2)))
+    (clause
+      (ctor "main/Shape" Rect
+        (field 0 (bind 4))
+        (field 1 (bind 5)))
+      (opcall "builtin/Mul" mul (dbuiltin "builtin/Mul" "builtin/Int32") (local 4) (local 5)))))
+(fn "main/scale" lambda yield
+  (params i32)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (closure "main/scale$0" (local 0)))
+(fn "main/scale$0" lambda noyield
+  (params any)
+  (locals)
+  (dicts 0)
+  (caps i32)
+  (result i32)
+  (opcall "builtin/Mul" mul
+    (dbuiltin "builtin/Mul" "builtin/Int32")
+    (env 0)
+    (call ntail noyield (global "main/area") (local 0))))
+(fn "main/p" thunk yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_extend x
+    (lit i32 1)
+    (rec_extend y (lit i32 2) (rec_empty))))
+(fn "main/q" thunk yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_update x (global "main/p") (lit i32 10)))
+(fn "main/$init4" thunk yield
+  (params)
+  (locals)
+  (dicts 0)
+  (caps)
+  (result any)
+  (rec_extend _item
+    (call ntail noyield
+      (call ntail noyield (global "main/scale") (lit i32 2))
+      (construct "main/Shape" Rect
+        (field 0 (lit i32 3))
+        (field 1 (lit i32 4))))
+    (rec_extend _item
+      (rec_select x (global "main/q"))
+      (rec_empty))))
+(init "builtin")
+(init "prelude")
+(init "main"
+  (def_fns "main/area")
+  (def_fns "main/scale")
+  (def_value "main/p" "main/p")
+  (def_value "main/q" "main/q")
+  (def_pattern "main/$init4"
+    (globals "main/a" "main/b")
+    (record closed
+      (field _item (bind 0))
+      (field _item (bind 1)))))

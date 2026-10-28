@@ -10,6 +10,7 @@ RustKeleut の差分試験の材料である。
 | `known-diffs.toml`、`known-diffs-*.toml` | 既知の差の一覧。`kconform` は `known-diffs.toml` と、その横の `known-diffs-*.toml`(一時の登録。いまは無い)を読み、どれにも無い差が 1 件でもあれば失敗する |
 | `corpus/` | `kconform extract-corpus` が `diktor/test/*.t` のヒアドキュメントから抜き出した `.kel` と、その索引 `index.tsv` |
 | `kir-bad/` | 不正な KIR。`keleut kir` がどれも 65 で拒否することを確かめる |
+| `kir-fixtures/` | KIR の各版の見本(IRSpec 14 節)。副版ごとのディレクトリ(いまは `1.0/`)に、両方の読み手が読む正しい `.kir` と `.kirt` を置く。`--suite all` の組 `dk`、`dk-ir`、`kf`、`x-ir` では `keleut run FILE.kir` が `diktor --run-ir` になるので、Diktor の読み手も同じ見本を読む。`kconform kir-roundtrip` も見本を両方の読み手で読む |
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
 | `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
 | `oom/` | 1 回の確保の上限 `N_alloc_max` を超える確保がメモリの不足になり、`cancel` 節を走らせて 3 で終わる試験。記録は `keleut run` の結果である |

@@ -1,0 +1,6 @@
+let s = show
+let a = !true || false
+echoln(s(a))
+echoln(s(1 + 2))
+let big: Int32 = 99999999999
+echoln(s(big))
