@@ -24,17 +24,34 @@ fn header() {
     let mut x = b.clone();
     x[1] = 1;
     assert_eq!(err(&x), "位置 0: マジックが KIR のものではありません");
+    // 主版が違えば、副版を問わずに拒否する(IRSpec 14 節)。
     let mut x = b.clone();
-    x[6] = 2;
+    x[4] = 0;
+    x[6] = 3;
     assert_eq!(
         err(&x),
-        "位置 8: 版 0.2 は読めません(読めるのは 0.3 だけです)"
+        "位置 8: 版 0.3 は読めません(読めるのは主版 1 の版だけです)"
     );
     let mut x = b.clone();
-    x[4] = 1;
+    x[4] = 2;
     assert_eq!(
         err(&x),
-        "位置 8: 版 1.3 は読めません(読めるのは 0.3 だけです)"
+        "位置 8: 版 2.0 は読めません(読めるのは主版 1 の版だけです)"
+    );
+    // 主版が同じなら、副版の新しいファイルも読み、その副版を保って書く。
+    let mut x = b.clone();
+    x[6] = 0xff;
+    x[7] = 0xff;
+    let p = kir::read_kir(&x).unwrap();
+    assert_eq!(p.version, (1, 0xffff));
+    assert_eq!(kir::write_kir(&p).unwrap(), x);
+    // 副版が新しくても、知らない機能のビットは拒否する。
+    let mut x = b.clone();
+    x[6] = 1;
+    x[11] = 0x80;
+    assert_eq!(
+        err(&x),
+        "位置 12: 必要な機能のビット 0x80000000 を処理できません"
     );
     let mut x = b.clone();
     x[8] = 1;

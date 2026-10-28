@@ -804,10 +804,10 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
     };
     let major = u16le(&mut r)?;
     let minor = u16le(&mut r)?;
-    if (major, minor) != (u32::from(VERSION.0), u32::from(VERSION.1)) {
+    if major != u32::from(VERSION.0) {
         return r.fail(format!(
-            "版 {major}.{minor} は読めません(読めるのは {}.{} だけです)",
-            VERSION.0, VERSION.1
+            "版 {major}.{minor} は読めません(読めるのは主版 {} の版だけです)",
+            VERSION.0
         ));
     }
     let features = {

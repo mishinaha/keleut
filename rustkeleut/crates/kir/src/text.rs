@@ -1810,11 +1810,15 @@ impl Parser<'_> {
         let minor = self.uint()?;
         let features = self.uint()?;
         self.close()?;
-        if (major, minor) != (u32::from(VERSION.0), u32::from(VERSION.1)) {
+        if major != u32::from(VERSION.0) {
             return self.fail(format!(
-                "版 {major}.{minor} は読めません(読めるのは {}.{} だけです)",
-                VERSION.0, VERSION.1
+                "版 {major}.{minor} は読めません(読めるのは主版 {} の版だけです)",
+                VERSION.0
             ));
+        }
+        // 副版はどの値も受け付けるが、バイナリの見出しの u16 に収まらなければ書けない。
+        if minor > u32::from(u16::MAX) {
+            return self.fail(format!("副版 {minor} が u16 の範囲にありません"));
         }
         if features != 0 {
             return self.fail(format!(

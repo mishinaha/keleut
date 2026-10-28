@@ -1,6 +1,6 @@
 //! KIR(Keleut Intermediate Representation)の型、バイナリとテキストの読み書き、検証器。
 //!
-//! 規範は親リポジトリの `doc/IRSpec.md`(版 0.3)である。
+//! 規範は親リポジトリの `doc/IRSpec.md`(版 1.0)である。
 //! バイナリとテキストは、Diktor の書き手(`diktor --emit-ir`、`--emit-ir-text`)とバイト単位で同じに読み書きする。
 //!
 //! | 入口 | 働き | 規範 |

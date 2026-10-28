@@ -776,8 +776,11 @@ pub struct Program {
     pub nodes: Nodes,
 }
 
-/// この crate が読み書きする版。
-pub const VERSION: (u16, u16) = (0, 3);
+/// この crate が書く版(主版、副版)。
+///
+/// 読み手は主版だけを比べ、副版は問わない(IRSpec 14 節)。
+/// 副版が足すのは、読み飛ばせる節と、必要な機能のビットで守る新しい命令だけだからである。
+pub const VERSION: (u16, u16) = (1, 0);
 
 /// 記号の単位の鍵(最後の `/` より前の部分。`/` が無ければ記号そのもの)。
 pub fn unit_of_symbol(sym: &str) -> &str {

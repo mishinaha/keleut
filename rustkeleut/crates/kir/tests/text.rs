@@ -41,8 +41,22 @@ fn non_canonical_spellings_are_rejected() {
     assert!(syntax(&t.replace("(lit i32 0)", "(lit i32 00)")).contains("整数"));
     assert!(syntax(&t.replace("(lit i32 0)", "(lit i32 -0)")).contains("整数"));
     syntax(&t.replace("(lit i32 0)", "(lit i32 2147483648)"));
-    syntax(&t.replace("(kir 0 3 0)", "(kir 0 2 0)"));
-    syntax(&t.replace("(kir 0 3 0)", "(kir 0 3 1)"));
+    syntax(&t.replace("(kir 1 0 0)", "(kir 0 3 0)"));
+    syntax(&t.replace("(kir 1 0 0)", "(kir 2 0 0)"));
+    syntax(&t.replace("(kir 1 0 0)", "(kir 1 0 1)"));
+    syntax(&t.replace("(kir 1 0 0)", "(kir 1 65536 0)"));
+}
+
+/// 主版が同じなら、副版の新しいテキストも読む(IRSpec 14 節)。
+/// 型は読んだ副版を持ち、書き出しもその副版を書く。
+#[test]
+fn newer_minor_is_read() {
+    let t = base();
+    let newer = t.replace("(kir 1 0 0)", "(kir 1 7 0)");
+    let p = kir::read_kirt(newer.as_bytes()).unwrap();
+    assert_eq!(p.version, (1, 7));
+    kir::verify(&p).unwrap();
+    assert_eq!(kir::write_kirt(&p).unwrap(), newer.as_bytes());
 }
 
 #[test]
@@ -61,7 +75,7 @@ fn names_must_resolve() {
     );
     assert!(syntax(&t.replace("(init \"prelude\")", "(init \"prelud\")")).contains("init"));
     syntax(&t.replace("(init \"main\"", "(junk) (init \"main\""));
-    syntax(&format!("{t}(kir 0 3 0)\n"));
+    syntax(&format!("{t}(kir 1 0 0)\n"));
     // 名前は UTF-8 でなければならない(文字列のリテラルは任意のバイト列でよい)
     syntax(&t.replace(
         r#"(global "main/total" value i64)"#,
