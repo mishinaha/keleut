@@ -1,13 +1,13 @@
 //! RustKeleut のコマンド行の入口 `keleut` である。
 //!
 //! サブコマンドの一覧と終了状態は、計画 261024-1 の 6.2 節に従う。
-//! 本ファイルは振り分けだけを持ち、各サブコマンドの中身は後のマイルストーンで足す。
-//! まだ中身の無いサブコマンドは、「未実装」として終了状態 4 で終わる。
+//! 本ファイルは振り分けだけを持ち、各サブコマンドの中身はそれぞれのモジュールにある。
 
 use std::process::ExitCode;
 
 mod build_cmd;
 mod check_cmd;
+mod compat_cmd;
 mod dump_cmd;
 mod emit_kir_cmd;
 mod front_cmd;
@@ -18,7 +18,8 @@ mod run_cmd;
 
 /// 終了状態の定数である(計画 6.2 節の表)。
 mod exit {
-    /// 未実装の機能を使った。
+    /// 未実装の機能を使った(feature `llvm` を付けずに組んだときの後段 `jit` など)。
+    #[cfg_attr(feature = "llvm", allow(dead_code))]
     pub const UNIMPLEMENTED: u8 = 4;
     /// 使い方の誤り。
     pub const USAGE: u8 = 64;
@@ -57,16 +58,8 @@ const COMMANDS: &[(&str, Handler)] = &[
     ("build", build_cmd::main),
     ("dump", dump_cmd::main),
     ("repl", repl_cmd::main),
-    ("compat-diktor", unimplemented_command),
+    ("compat-diktor", compat_cmd::main),
 ];
-
-/// まだ中身の無いサブコマンドである。
-///
-/// 引数の先頭はサブコマンドの名前である。
-fn unimplemented_command(args: &[String]) -> u8 {
-    eprintln!("keleut: 未実装: サブコマンド {}", args[0]);
-    exit::UNIMPLEMENTED
-}
 
 /// 引数の列(プログラム名を除く)を振り分け、終了状態を返す。
 fn dispatch(args: &[String]) -> u8 {
@@ -121,14 +114,5 @@ mod tests {
     fn 名前の無い呼び出しと知らない名前は使い方の誤りになる() {
         assert_eq!(dispatch(&argv(&[])), exit::USAGE);
         assert_eq!(dispatch(&argv(&["nosuch"])), exit::USAGE);
-    }
-
-    #[test]
-    fn 中身の無いサブコマンドは未実装になる() {
-        for (name, _) in COMMANDS {
-            if !["kir", "dump", "check", "run", "emit-kir", "build", "repl"].contains(name) {
-                assert_eq!(dispatch(&argv(&[name])), exit::UNIMPLEMENTED);
-            }
-        }
     }
 }

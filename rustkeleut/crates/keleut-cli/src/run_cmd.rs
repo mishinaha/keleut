@@ -32,6 +32,10 @@
 //! `--backend interp` と `--backend wasm` は `--tier` を受け付けて使わない
 //! (組 `kt` などの選択肢を足しても、`--backend interp` を書いたコマンドはインタプリタで走る)。
 //!
+//! 内部の旗 `--source-only`(使い方には載せない)を与えると、名前が `.kir` や `.kirt` で終わる入力も
+//! Keleut のソースとしてフロントエンドに渡す。
+//! `keleut compat-diktor` が、すべての入力をソースとして読む Diktor と同じにするために使う。
+//!
 //! `keleut dump bytecode` も同じ読み方で入力を LIR にし、インタプリタのバイトコードを印字する([`dump_bytecode`])。
 //!
 //! 終了状態は、プログラムの結果(0、3、4、74)、KIR の読み込みと検証の失敗が 65、
@@ -80,10 +84,12 @@ pub(crate) struct Options {
     frontend: String,
     front_args: Vec<String>,
     files: Vec<PathBuf>,
+    /// 名前によらず、すべての入力をソースとして読む(内部の旗 `--source-only`)。
+    source_only: bool,
 }
 
 /// 大きさの綴り(`512k`、`64m`、`1g`、バイトの数)を読む。
-fn parse_size(s: &str) -> Option<u64> {
+pub(crate) fn parse_size(s: &str) -> Option<u64> {
     let (num, mul) = match s.as_bytes().last()? {
         b'k' | b'K' => (&s[..s.len() - 1], 1u64 << 10),
         b'm' | b'M' => (&s[..s.len() - 1], 1u64 << 20),
@@ -114,6 +120,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
         frontend: "rust".to_string(),
         front_args: Vec::new(),
         files: Vec::new(),
+        source_only: false,
     };
     let mut i = 0;
     while i < args.len() {
@@ -155,6 +162,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
             }
             "--gc-stress" => o.gc_stress = true,
             "--no-yield-prune" => o.yield_prune = false,
+            "--source-only" => o.source_only = true,
             "--frontend" => {
                 let v = value(a)?;
                 if !matches!(v.as_str(), "diktor" | "rust") {
@@ -176,7 +184,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
     if o.files.is_empty() {
         return Err("missing input file".to_string());
     }
-    let kir = o.files.iter().filter(|f| is_kir(f)).count();
+    let kir = o.files.iter().filter(|f| o.kir_input(f)).count();
     if kir > 0 && (o.files.len() > 1 || !o.front_args.is_empty()) {
         return Err(
             "a .kir or .kirt file must be the only input and takes no front-end options".into(),
@@ -248,6 +256,11 @@ fn emit_with_diktor(o: &Options) -> Result<Vec<u8>, u8> {
 }
 
 impl Options {
+    /// `p` を KIR のファイルとして読むか(`--source-only` のときは読まない)。
+    fn kir_input(&self, p: &Path) -> bool {
+        !self.source_only && is_kir(p)
+    }
+
     /// 後段の名前(`--backend` を省いたときの既定を当てたもの)。
     fn backend(&self) -> &str {
         match (self.backend.as_deref(), self.tier.as_deref()) {
@@ -329,7 +342,8 @@ fn run_jit(_: &Options) -> u8 {
 /// 入力を読み(`.kel` ならフロントエンドを通し)、KIR を検証して LIR に下ろす。
 /// 失敗すれば、診断を標準エラーに書いて終了状態を返す。
 pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
-    let data = if is_kir(&o.files[0]) {
+    let direct = o.kir_input(&o.files[0]);
+    let data = if direct {
         match std::fs::read(&o.files[0]) {
             Ok(d) => d,
             Err(e) => {
@@ -349,8 +363,8 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
     };
     let limits = kir_limits(o);
     let read = match o.files[0].extension().and_then(|e| e.to_str()) {
-        Some("kir") => kir::read_kir_with,
-        Some("kirt") => kir::read_kirt_with,
+        Some("kir") if direct => kir::read_kir_with,
+        Some("kirt") if direct => kir::read_kirt_with,
         _ => kir::read_any_with,
     };
     let prog = match read(&data, &limits) {

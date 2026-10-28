@@ -497,3 +497,40 @@ fn native_stack_は_kir_の読み込みのスタックも決める() {
     assert!(r.stdout.is_empty());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn source_only_は名前が_kir_で終わる入力もソースとして読む() {
+    let d = scratch("source-only");
+    std::fs::write(d.join("x.kir"), "echoln(\"hi\")\n").unwrap();
+    std::fs::write(d.join("a.kel"), "echoln(\"a\")\n").unwrap();
+    // 内部の旗が無ければ、`.kir` は KIR として読み(65)、`.kel` と混ぜれば使い方の誤り(64)である。
+    let r = keleut_in(&d, &["run", "--backend", "interp", "x.kir"]);
+    assert_eq!(r.status.code(), Some(65), "{r:?}");
+    let r = keleut_in(&d, &["run", "--backend", "interp", "a.kel", "x.kir"]);
+    assert_eq!(r.status.code(), Some(64), "{r:?}");
+    for (args, out) in [
+        (
+            &["run", "--source-only", "--backend", "interp", "x.kir"][..],
+            &b"hi\n"[..],
+        ),
+        (
+            &[
+                "run",
+                "--source-only",
+                "--backend",
+                "interp",
+                "a.kel",
+                "x.kir",
+            ],
+            b"a\nhi\n",
+        ),
+    ] {
+        let r = keleut_in(&d, args);
+        assert_eq!(
+            (r.status.code(), r.stdout.as_slice()),
+            (Some(0), out),
+            "{args:?}: {r:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}
