@@ -5,13 +5,14 @@
 //! - `.kir`(バイナリ)か `.kirt`(テキスト)の 1 ファイルは、そのまま読む。
 //! - `.kel` のファイルは、フロントエンドで KIR にする。
 //!   フロントエンドは `--frontend diktor|rust` で選ぶ。
-//!   既定は `diktor` で、M99 の後半で決めるまでそのままにする。
+//!   既定は `rust` である(M99。速さの関門を通ったので切り替えた。計画 7 節)。
 //!   - `--frontend diktor` は、`$KELEUT_DIKTOR`(無ければ PATH の `diktor`)を `--emit-ir` で子プロセスとして呼ぶ。
 //!     Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
 //!   - `--frontend rust` は、keleut-front でプロセスの中で型検査して KIR を書く
 //!     ([`crate::emit_kir_cmd::program_for_run`])。
 //!     診断と終了状態は `diktor --emit-ir` と同じで、フロントエンドのスレッドは既定のスタックで走る
 //!     (`--native-stack` はインタプリタのスタックのままである)。
+//!     仮想メモリの上限があれば、スタックをそれに合わせて小さくし、入れ子の限度を下げる。
 //!
 //!   `--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive` は、どちらのフロントエンドにもそのまま渡す。
 //!
@@ -53,7 +54,8 @@ options:
                               and then at short jittered intervals (for testing;
                               interp and jit; ignored by --backend wasm)
   --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
-  --frontend diktor|rust      front end for .kel files (default: diktor via $KELEUT_DIKTOR)
+  --frontend diktor|rust      front end for .kel files (default: rust; diktor runs
+                              $KELEUT_DIKTOR, else diktor on PATH)
   --prelude FILE, --no-prelude, --import-path DIR, --strict-exhaustive
                               passed to the front end
 ";
@@ -101,7 +103,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
         native_stack: None,
         gc_stress: false,
         yield_prune: true,
-        frontend: "diktor".to_string(),
+        frontend: "rust".to_string(),
         front_args: Vec::new(),
         files: Vec::new(),
     };
@@ -371,7 +373,8 @@ fn verify_and_lower(
 
 /// `keleut dump bytecode` の使い方である。
 pub const DUMP_USAGE: &str = "\
-usage: keleut dump bytecode [--prelude FILE | --no-prelude] [--import-path DIR] FILE.kel... | FILE.kir
+usage: keleut dump bytecode [--frontend diktor|rust] [--prelude FILE | --no-prelude] [--import-path DIR]
+       FILE.kel... | FILE.kir
 
 prints the interpreter's bytecode of every function (the format is for inspection only)
 ";
@@ -426,7 +429,8 @@ pub fn dump_bytecode(args: &[String]) -> u8 {
 
 /// `keleut dump llvm` の使い方である。
 pub const DUMP_LLVM_USAGE: &str = "\
-usage: keleut dump llvm [--prelude FILE | --no-prelude] [--import-path DIR] FILE.kel... | FILE.kir
+usage: keleut dump llvm [--frontend diktor|rust] [--prelude FILE | --no-prelude] [--import-path DIR]
+       FILE.kel... | FILE.kir
 
 prints the LLVM IR that the jit back end makes for every function it can compile
 (the format is for inspection only; needs a build with the llvm feature)
@@ -565,5 +569,14 @@ mod tests {
         };
         assert_eq!(b(&["a.kel"]), dflt);
         assert_eq!(b(&["--tier", "interp-only", "a.kel"]), dflt);
+        // 既定のフロントエンドは rust で、`--frontend diktor` で Diktor を選べる。
+        let f = |a: &[&str]| parse(&argv(a)).unwrap().frontend;
+        assert_eq!(f(&["a.kel"]), "rust");
+        assert_eq!(f(&["--frontend", "diktor", "a.kel"]), "diktor");
+        assert_eq!(
+            f(&["--frontend", "diktor", "--frontend", "rust", "a.kel"]),
+            "rust"
+        );
+        assert!(parse(&argv(&["--frontend", "ocaml", "a.kel"])).is_err());
     }
 }

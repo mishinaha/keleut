@@ -4,8 +4,8 @@
 //! `program.wasm`、`rt.wasm`、`main.mjs` を `DIR` に書く。
 //! `node DIR/main.mjs` だけで走る(スタックは `Worker` の `resourceLimits.stackSizeMb` で取る)。
 //!
-//! 入力の読み方と選択肢(`--max-depth`、`--prelude`、`--no-prelude`、`--import-path`、`--no-yield-prune`)は
-//! `keleut run` と同じである。
+//! 入力の読み方と選択肢(`--frontend`、`--max-depth`、`--prelude`、`--no-prelude`、`--import-path`、`--no-yield-prune`)は
+//! `keleut run` と同じである(既定のフロントエンドは `rust`)。
 //! `--max-depth` は `main.mjs` が使う論理的な深さの限度になる。
 //! 終了状態は、成功が 0、使い方の誤りが 64、KIR の不正が 65、翻訳と検証と書き出しの失敗が 70 である。
 
@@ -20,6 +20,8 @@ writes program.wasm, rt.wasm and main.mjs to DIR (run with: node DIR/main.mjs)
 options:
   --max-depth N               logical depth limit L used by main.mjs (default 1048576)
   --no-yield-prune            treat every resume point as able to receive a yield (pass 11 off)
+  --frontend diktor|rust      front end for .kel files (default: rust; diktor runs
+                              $KELEUT_DIKTOR, else diktor on PATH)
   --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
 ";
 
@@ -48,7 +50,7 @@ pub fn main(args: &[String]) -> u8 {
                 }
                 i += 2;
             }
-            "--backend" | "--tier" | "--native-stack" | "--gc-stress" | "--frontend" => {
+            "--backend" | "--tier" | "--native-stack" | "--gc-stress" => {
                 eprint!("keleut: unknown option: {}\n{USAGE}", rest[i]);
                 return exit::USAGE;
             }
