@@ -10,13 +10,19 @@
 //!     Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
 //!   - `--frontend rust` は、keleut-front でプロセスの中で型検査して KIR を書く
 //!     ([`crate::emit_kir_cmd::program_for_run`])。
-//!     診断と終了状態は `diktor --emit-ir` と同じで、フロントエンドのスレッドは既定のスタックで走る
-//!     (`--native-stack` はインタプリタのスタックのままである)。
+//!     診断と終了状態は `diktor --emit-ir` と同じである。
+//!     `--native-stack` は、インタプリタと JIT のスタックとともに、フロントエンドのスレッドのスタックも決める(計画 6.11 節)。
+//!     フロントエンドは、構文解析の限度をそのスタックに収まる深さまで下げる(`keleut check --native-stack` と同じ)。
+//!     フロントエンドが構文解析の限度の下限(64 段)に要るスタックより小さい値は、その大きさまで上げて使う
+//!     ([`crate::emit_kir_cmd::front_stack_for_run`])。
+//!     `--native-stack` を与えなければ、フロントエンドは既定の 8 GiB のスタックで走り、
 //!     仮想メモリの上限があれば、スタックをそれに合わせて小さくし、入れ子の限度を下げる。
 //!
 //!   `--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive` は、どちらのフロントエンドにもそのまま渡す。
 //!
 //! 読み込んだ KIR を検証し、LIR に下ろして、後段で実行する。
+//! `--native-stack` を与えたときは、KIR の読み込みと検証のスタックもフロントエンドと同じ大きさにし、
+//! 入れ子の限度をそれに収まる深さまで下げる(計画 6.11 節。[`kir_limits`])。
 //! 後段はインタプリタ(`--backend interp`)、WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)、
 //! LLVM の JIT(`--backend jit`。M91。crate keleut-llvm。feature `llvm` で組んだときだけ使え、無ければ未実装の 4)である。
 //! 既定の後段は、feature `llvm` で組んだときは `jit`、そうでなければ `interp` である(計画 6.2 節)。
@@ -49,7 +55,9 @@ options:
                               is not given)
   --max-depth N               logical depth limit L (default 1048576)
   --native-stack BYTES        native stack of the mutator thread (suffix k, m or g; at least 512k;
-                              interp and jit; ignored by --backend wasm)
+                              interp and jit; ignored by --backend wasm), of the rust front-end
+                              thread and of KIR reading and verification (lowers their nesting
+                              limits to what fits; raised to the front end's minimum when smaller)
   --gc-stress                 collect garbage at the first allocation of every allocation site
                               and then at short jittered intervals (for testing;
                               interp and jit; ignored by --backend wasm)
@@ -333,12 +341,13 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
             }
         }
     } else if o.frontend == "rust" {
-        let prog = crate::emit_kir_cmd::program_for_run(&o.files, &o.front_args)?;
-        return verify_and_lower(o, &prog, &kir::Limits::default());
+        let stack = o.native_stack.map(crate::emit_kir_cmd::front_stack_for_run);
+        let prog = crate::emit_kir_cmd::program_for_run(&o.files, &o.front_args, stack)?;
+        return verify_and_lower(o, &prog, &kir_limits(o));
     } else {
         emit_with_diktor(o)?
     };
-    let limits = kir::Limits::default();
+    let limits = kir_limits(o);
     let read = match o.files[0].extension().and_then(|e| e.to_str()) {
         Some("kir") => kir::read_kir_with,
         Some("kirt") => kir::read_kirt_with,
@@ -355,6 +364,21 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
     verify_and_lower(o, &prog, &limits)
 }
 
+/// KIR の読み込み、検証、LIR への下ろしの限度を返す(計画 6.11 節)。
+///
+/// `--native-stack` を与えたときは、フロントエンドと同じ大きさ([`crate::emit_kir_cmd::front_stack_for_run`])の
+/// スタックで読み込みと検証を走らせ、入れ子の限度をそのスタックに収まる深さまで下げる。
+/// 下ろしの入れ子の限度も同じ値にする(下ろしのスタックは、その限度から決まる)。
+/// 与えなければ、限度は `N_nest` で、スタックはそれに足りる大きさである。
+fn kir_limits(o: &Options) -> kir::Limits {
+    match o.native_stack {
+        Some(s) => {
+            kir::Limits::with_stack(kir::N_NEST, crate::emit_kir_cmd::front_stack_for_run(s))
+        }
+        None => kir::Limits::default(),
+    }
+}
+
 /// KIR を検証して LIR に下ろす。失敗すれば、診断を標準エラーに書いて終了状態を返す。
 fn verify_and_lower(
     o: &Options,
@@ -365,7 +389,7 @@ fn verify_and_lower(
         eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
         return Err(e.exit_code() as u8);
     }
-    keleut_lir::lower_opts(prog, kir::N_NEST, o.yield_prune).map_err(|e| {
+    keleut_lir::lower_opts(prog, limits.max_nest, o.yield_prune).map_err(|e| {
         eprintln!("keleut: {e}");
         e.exit_code() as u8
     })

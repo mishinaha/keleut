@@ -32,7 +32,8 @@ use crate::exit;
 use crate::front_cmd::{MAX_STACK_BYTES, io_msg, parse_bytes, stdout_closed};
 use keleut_front::Limits;
 use keleut_front::types::check::{
-    CheckOptions, Stop, check_limits, check_program, on_check_stack, render_line,
+    CHECK_STACK_BYTES_PER_LEVEL, CheckOptions, MIN_CHECK_NEST, Stop, check_limits, check_program,
+    on_check_stack, render_line,
 };
 use keleut_front::types::emit::program_of_checked;
 use keleut_front::types::load::{StdFs, UnitKeyError};
@@ -393,18 +394,44 @@ const SPAWN_FAILED: &str = "フロントエンドのスレッドを作れませ�
 /// フロントエンドのスレッドを作り直すときのスタックの下限(16 MiB)である。
 const MIN_RUN_FRONT_STACK: usize = 16 << 20;
 
+/// 構文解析の限度を下限の [`MIN_CHECK_NEST`] 段にできる、最も小さいフロントエンドのスタック(バイト)を返す。
+///
+/// リリースの構築で約 384 KiB、最適化なしの構築で約 2.3 MiB である。
+fn min_front_stack() -> usize {
+    let mut s = MIN_CHECK_NEST * CHECK_STACK_BYTES_PER_LEVEL;
+    while check_limits(MIN_CHECK_NEST, Some(s)).is_err() {
+        s += 64 << 10;
+    }
+    s
+}
+
+/// `keleut run` の `--native-stack` から、フロントエンドのスレッドのスタックを決める。
+///
+/// 与えた大きさを、[`min_front_stack`] から [`MAX_STACK_BYTES`] までに丸める。
+/// 小さい側を使い方の誤りにしないのは、同じ値がインタプリタと JIT のスタックでもあり、
+/// 実行時のために与えた `--native-stack 512k` が、最適化なしの構築でフロントエンドに足りないからである。
+pub(crate) fn front_stack_for_run(native_stack: u64) -> usize {
+    usize::try_from(native_stack)
+        .unwrap_or(usize::MAX)
+        .clamp(min_front_stack(), MAX_STACK_BYTES)
+}
+
 /// `keleut run --frontend rust` のフロントエンドである。
 ///
 /// `front_args` は `keleut run` が受けたフロントエンドの旗(`--no-prelude`、`--prelude PATH`、`--import-path DIR`、
 /// `--strict-exhaustive`)である。
 /// 手順、診断、終了状態は `diktor --emit-ir` と同じで、KIR をファイルに書く代わりに返す
 /// (入れ子の深さは、バイナリに符号化して確かめる)。
-/// フロントエンドのスレッドは既定の大きさのスタックで走らせる(`keleut run` の `--native-stack` はインタプリタのスタックである)。
-/// 仮想メモリの上限(`ulimit -v`)があれば、スタックを初めから上限の 4 分の 1 までにし、収まる深さまで入れ子の限度を下げる。
+///
+/// `front_stack` は `keleut run` の `--native-stack` から決めたフロントエンドのスタックである([`front_stack_for_run`])。
+/// 与えたときは、そのスタックで走らせ、`keleut check --native-stack` と同じく、収まる深さまで構文解析の限度を下げる。
+/// 与えなかったときは既定の大きさのスタックで走らせ、仮想メモリの上限(`ulimit -v`)があれば、
+/// スタックを初めから上限の 4 分の 1 までにし、収まる深さまで入れ子の限度を下げる。
 /// スレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は 16 MiB。[`build_on_front_stack`])。
 pub(crate) fn program_for_run(
     files: &[std::path::PathBuf],
     front_args: &[String],
+    front_stack: Option<usize>,
 ) -> Result<kir::Program, u8> {
     let mut check = CheckOptions {
         no_prelude: false,
@@ -431,14 +458,15 @@ pub(crate) fn program_for_run(
         }
         i += 1;
     }
-    let limits = match check_limits(check.max_nest, None) {
+    let limits = match check_limits(check.max_nest, front_stack) {
         Ok(l) => l,
         Err(msg) => {
             eprintln_now(&format!("keleut: {msg}"));
             return Err(exit::USAGE);
         }
     };
-    let r = build_on_front_stack(&mut check, strict, limits, true);
+    check.max_nest = limits.max_nest;
+    let r = build_on_front_stack(&mut check, strict, limits, front_stack.is_none());
     let prog = match r {
         Ok(r) => r?,
         Err(msg) => {
@@ -476,5 +504,15 @@ mod tests {
         assert!(opts(&["--typo", "a.kel"]).is_err());
         assert!(opts(&[]).is_err());
         assert!(opts(&["--native-stack", "256k", "a.kel"]).is_err());
+    }
+
+    #[test]
+    fn 実行の_native_stack_からフロントエンドのスタックを決める() {
+        let min = min_front_stack();
+        assert!(check_limits(MIN_CHECK_NEST, Some(min)).is_ok());
+        assert!(check_limits(MIN_CHECK_NEST, Some(min - (64 << 10))).is_err());
+        assert_eq!(front_stack_for_run(512 << 10), (512 << 10).max(min));
+        assert_eq!(front_stack_for_run(64 << 20), 64 << 20);
+        assert_eq!(front_stack_for_run(1 << 40), MAX_STACK_BYTES);
     }
 }

@@ -181,25 +181,31 @@ fn 既定のフロントエンドは_rust_で_diktor_も選べる() {
     let r = run(&["run", "--frontend", "diktor", "a.kel"]);
     assert_eq!(r.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&r.stderr).contains("を起動できません"));
-    // 仮想メモリの上限の下では、フロントエンドのスレッドのスタックを上限に合わせて小さくする。
+    // 仮想メモリの上限の下では、`--native-stack` を与えなければ、フロントエンドのスレッドのスタックを上限に合わせて小さくする
+    // (`--max-depth 1000` はインタプリタのスタックを上限に収めるためである)。
+    // `--native-stack` を与えれば、フロントエンドもそのスタックで走る(V227)。
     // LLVM を付けない構築では、スタックを小さくしなくても深さの限度に見込むスタックで作り直せて通る。
     // feature `llvm` の構築では `libLLVM.so` が仮想メモリの大部分を使うので、この確かめは小さくすることに頼る。
     // 最適化なしの構築では、KIR の符号化と検証のスレッド(約 797 MiB)が上限に収まらないので確かめない。
     if !cfg!(debug_assertions) {
-        let r = Command::new("sh")
-            .arg("-c")
-            .arg("ulimit -v 524288; exec \"$0\" run --native-stack 512k --backend interp a.kel")
-            .arg(env!("CARGO_BIN_EXE_keleut"))
-            .current_dir(&d)
-            .stdin(Stdio::null())
-            .output()
-            .unwrap();
-        assert_eq!(
-            (r.status.code(), r.stdout.as_slice()),
-            (Some(0), &b"3\n"[..]),
-            "ulimit -v: {}",
-            String::from_utf8_lossy(&r.stderr)
-        );
+        for opts in ["--native-stack 512k", "--max-depth 1000"] {
+            let r = Command::new("sh")
+                .arg("-c")
+                .arg(format!(
+                    "ulimit -v 524288; exec \"$0\" run {opts} --backend interp a.kel"
+                ))
+                .arg(env!("CARGO_BIN_EXE_keleut"))
+                .current_dir(&d)
+                .stdin(Stdio::null())
+                .output()
+                .unwrap();
+            assert_eq!(
+                (r.status.code(), r.stdout.as_slice()),
+                (Some(0), &b"3\n"[..]),
+                "ulimit -v, {opts}: {}",
+                String::from_utf8_lossy(&r.stderr)
+            );
+        }
     }
     // `keleut build` も既定で Rust のフロントエンドを使い、`--frontend diktor` を受け付ける。
     let out = d.join("out");
@@ -384,4 +390,110 @@ fn 小さすぎるネイティブのスタックは使い方の誤りになる()
         .parse()
         .unwrap();
     assert_eq!(r.status.code(), Some(want), "{r:?}");
+}
+
+#[test]
+fn native_stack_はフロントエンドのスタックも決める() {
+    // V227: `keleut run` の `--native-stack` は、インタプリタのスタックとともに Rust のフロントエンドのスタックも決める。
+    let d = scratch("front-stack");
+    let mut e = String::from("1");
+    for _ in 0..20000 {
+        e = format!("1 + ({e})");
+    }
+    std::fs::write(
+        d.join("deep.kel"),
+        format!("echoln(\"before\")\nlet x = {e}\necholn(show(x))\n"),
+    )
+    .unwrap();
+    std::fs::write(d.join("a.kel"), "echoln(show(1 + 2))\n").unwrap();
+    // 既定のスタックでは 2 万段の式が型検査に通り、実行して 0 で終わる。
+    let r = keleut_in(&d, &["run", "--backend", "interp", "deep.kel"]);
+    assert_eq!(
+        (r.status.code(), r.stdout.as_slice()),
+        (Some(0), &b"before\n20001\n"[..]),
+        "{}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    // 4 MiB では構文解析の限度が下がり、`keleut check --native-stack 4m` と同じく構文解析の限度の 2 で終わる。
+    let r = keleut_in(
+        &d,
+        &[
+            "run",
+            "--native-stack",
+            "4m",
+            "--backend",
+            "interp",
+            "deep.kel",
+        ],
+    );
+    assert_eq!(r.status.code(), Some(2), "{r:?}");
+    assert!(
+        String::from_utf8_lossy(&r.stderr).contains("処理系の限度: 構文解析で再帰が深すぎます"),
+        "{r:?}"
+    );
+    assert!(r.stdout.is_empty());
+    // フロントエンドの下限より小さい値(最適化なしの構築の 512 KiB)は、下限まで上げて使い、使い方の誤りにしない。
+    let r = keleut_in(
+        &d,
+        &[
+            "run",
+            "--native-stack",
+            "512k",
+            "--backend",
+            "interp",
+            "a.kel",
+        ],
+    );
+    assert_eq!(
+        (r.status.code(), r.stdout.as_slice()),
+        (Some(0), &b"3\n"[..]),
+        "{}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn native_stack_は_kir_の読み込みのスタックも決める() {
+    // 計画 6.11 節: `--native-stack` は KIR の読み込みと検証のスタックも決め、入れ子の限度をそれに収まる深さまで下げる。
+    let d = scratch("kir-stack");
+    let mut e = String::from("1");
+    for _ in 0..3000 {
+        e = format!("1 + ({e})");
+    }
+    std::fs::write(
+        d.join("deep.kel"),
+        format!("echoln(\"before\")\nlet x = {e}\necholn(show(x))\n"),
+    )
+    .unwrap();
+    let r = keleut_in(&d, &["emit-kir", "-o", "deep.kir", "deep.kel"]);
+    assert_eq!(r.status.code(), Some(0), "{r:?}");
+    // 既定のスタックでは読めて、実行して 0 で終わる。
+    let r = keleut_in(&d, &["run", "--backend", "interp", "deep.kir"]);
+    assert_eq!(
+        (r.status.code(), r.stdout.as_slice()),
+        (Some(0), &b"before\n3001\n"[..]),
+        "{}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    // 4 MiB では入れ子の限度が下がり、スタックあふれで落ちずに 65 で終わる。
+    let r = keleut_in(
+        &d,
+        &[
+            "run",
+            "--native-stack",
+            "4m",
+            "--backend",
+            "interp",
+            "deep.kir",
+        ],
+    );
+    assert_eq!(r.status.code(), Some(65), "{r:?}");
+    assert!(
+        String::from_utf8_lossy(&r.stderr)
+            .contains("処理系の限度: KIR の読み込みで入れ子が深すぎます"),
+        "{r:?}"
+    );
+    assert!(r.stdout.is_empty());
+    let _ = std::fs::remove_dir_all(&d);
 }
