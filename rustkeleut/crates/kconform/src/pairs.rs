@@ -52,11 +52,28 @@ pub const AVAILABLE: &[&str] = &[
 
 /// `--pairs` を省いたときに走らせる組である。
 ///
-/// 計画 8.1 節は [`AVAILABLE`] のすべてを走らせるとするが、LLVM の後段の組 `kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km` は除く。
-/// これらは feature `llvm` を付けて組んだ `keleut` でだけ走り(`llvm` は既定の feature でない)、
-/// 付けずに組んだ `keleut` ではどのコマンドも未実装の 4 で終わるからである。
-/// これらの組は `--pairs` で名を挙げて走らせる。
-pub const DEFAULT: &[&str] = &["dk", "dk-ir", "kf", "ki", "kw", "x-ir", "kr-ki", "kr-kw"];
+/// 計画 8.1 節のとおり、[`AVAILABLE`] のすべてである。
+/// LLVM の後段の組([`needs_jit`])は、feature `llvm`(既定で有効)で組んだ `keleut` でだけ走る。
+/// `--no-default-features` で組んだ `keleut` では、kconform はそれらの組を除き、除いた組を標準エラーに書く。
+pub const DEFAULT: &[&str] = AVAILABLE;
+
+/// 組の名前が LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)かどうかを返す。
+///
+/// 組の実体の選択肢で見分ける([`is_jit_args`])。
+/// 知らない名前なら `false` を返す。
+pub fn needs_jit(name: &str) -> bool {
+    expand(name).is_some_and(|ps| ps.iter().any(|p| is_jit_args(&p.args)))
+}
+
+/// `keleut --version` の出力から、その `keleut` が後段 `jit` を持つかを返す。
+///
+/// 2 行目の `backends: …` に `jit` があれば持つ。
+/// その行が無い出力(読めない出力)なら `None` を返す。
+pub fn version_has_jit(out: &str) -> Option<bool> {
+    out.lines()
+        .find_map(|l| l.strip_prefix("backends:"))
+        .map(|bs| bs.split_whitespace().any(|b| b == "jit"))
+}
 
 /// `kconform expect` が `keleut run` に足す選択肢(組 `ki`)である。
 ///
@@ -212,6 +229,30 @@ mod tests {
                 "{n}"
             );
         }
+    }
+
+    #[test]
+    fn 既定の組は使える組のすべてで_llvm_の組を見分ける() {
+        assert_eq!(DEFAULT, AVAILABLE);
+        let jit: Vec<&str> = NAMES.iter().copied().filter(|n| needs_jit(n)).collect();
+        assert_eq!(
+            jit,
+            ["kj", "kt", "ka", "km", "kr-kj", "kr-kt", "kr-ka", "kr-km"]
+        );
+        assert!(!needs_jit("zz"));
+    }
+
+    #[test]
+    fn keleut_の版の出力から後段_jit_を読む() {
+        assert_eq!(
+            version_has_jit("keleut 0.1.0\nbackends: interp jit wasm\n"),
+            Some(true)
+        );
+        assert_eq!(
+            version_has_jit("keleut 0.1.0\nbackends: interp wasm\n"),
+            Some(false)
+        );
+        assert_eq!(version_has_jit("keleut 0.1.0\n"), None);
     }
 
     #[test]

@@ -34,7 +34,9 @@ usage: kconform [OPTIONS] [--pairs P,...] [--suite all|depth] [--extra=FLAG...] 
        kconform extract-corpus [--from DIR] [--corpus DIR] [--check]
 
 options:
-  --pairs P,...       the pairs to run (default: dk, dk-ir, kf, ki, kw, x-ir, kr-ki, kr-kw;
+  --pairs P,...       the pairs to run (default: all pairs; the LLVM pairs kj, kt, ka, km and
+                      kr-kj, kr-kt, kr-ka, kr-km are left out, with a note, when keleut was built
+                      without the llvm feature, and naming them is then an error;
                       --suite depth leaves out dk and kf and rejects them)
   --root DIR          the rustkeleut directory (default: the one kconform was built from)
   --diktor PATH       the real diktor (default: $KELEUT_DIKTOR, else ROOT/../diktor/_build/install/default/bin/diktor)
@@ -938,11 +940,48 @@ fn main_default(o: &Options) -> u8 {
         }
         run_pairs.extend(ps);
     }
+    let jit_names: Vec<&str> = names
+        .iter()
+        .map(String::as_str)
+        .filter(|n| pairs::needs_jit(n))
+        .collect();
+    if !jit_names.is_empty() && !keleut_has_jit(o) {
+        if o.pairs.is_some() {
+            eprintln!(
+                "kconform: 組 {} は LLVM の後段を使いますが、{} は feature llvm を外して組まれています(cargo build --release で組み直してください)",
+                jit_names.join(","),
+                o.keleut_path().display()
+            );
+            return 64;
+        }
+        eprintln!(
+            "kconform: {} は feature llvm を外して組まれているので、LLVM の後段の組 {} を走らせません",
+            o.keleut_path().display(),
+            jit_names.join(",")
+        );
+        run_pairs.retain(|p| !pairs::needs_jit(p.name));
+    }
     if run_pairs.is_empty() {
         eprintln!("kconform: --pairs is empty");
         return 64;
     }
     run_suite(o, run_pairs, true)
+}
+
+/// 使う `keleut` が後段 `jit`(feature `llvm`)を持つかを、`keleut --version` で確かめる。
+///
+/// `keleut` を起動できないか、出力に後段の行が無いときは、持つとみなす。
+/// そのときは組の実行そのものが失敗として報告されるので、ここでは組を除かない。
+fn keleut_has_jit(o: &Options) -> bool {
+    let out = std::process::Command::new(o.keleut_path())
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output();
+    match out {
+        Ok(out) => pairs::version_has_jit(&String::from_utf8_lossy(&out.stdout)).unwrap_or(true),
+        Err(_) => true,
+    }
 }
 
 fn main_expect(o: &Options) -> u8 {
