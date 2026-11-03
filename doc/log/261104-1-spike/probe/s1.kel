@@ -1,0 +1,3 @@
+let k: {m: Int32, n: Int32} = {n = 1, m = 2}
+echoln(show(k))
+echoln(show({c = 3 extends {a = 1, b = 2}}))

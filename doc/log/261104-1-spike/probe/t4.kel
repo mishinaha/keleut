@@ -1,0 +1,2 @@
+let f(r: {y: {b: Int32, a: Int32}, x: Int32}): Int32 = r match { case {y = {b = 9, a = 9}, x = 9} => 0 }
+let main = f({y = {b = 1, a = 2}, x = 3})

@@ -1,0 +1,12 @@
+k : {m: Int32, n: Int32} = {n = 1, m = 2}
+q : {y: Int32, x: Int32} = {y = 1, x = 2}
+t : {x: Int32, y: Int32} = {y = 1, x = 5}
+base : {a: Int32, b: Int32} = {a = 1, b = 2}
+e : {c: Int32, a: Int32, b: Int32} = {c = 3, a = 1, b = 2}
+d : {x: Int32, x: Int32, y: Int32} = {x = 1, x = 2, y = 3}
+tp : (Int32, {b: Int32, a: Int32}) = (1, {b = 1, a = 2})
+<stdin>:8:8: 構文エラー: 付近のトークンを確認してください
+pick : (A) => A = <fn>
+g : {n: Int32, m: Int32} = {n = 1, m = 2}
+h : Option[{n: Int32, m: Int32}] = Some({n = 1, m = 2})
+w : {b: Int32, a: Int32} = {a = 3, b = 4}

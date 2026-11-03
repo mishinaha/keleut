@@ -1,0 +1,5 @@
+let base = {a = 1, b = 2}
+let r = {c = 3 extends base}
+let f(x: {a: Int32, b: Int32, c: Int32}): Int32 = x match { case {a = 9, b, c} => b }
+let g(x: {b: Int32, a: Int32}): Int32 = x match { case {a = 9, b} => b }
+let _ = g({a = 1, b = 2})

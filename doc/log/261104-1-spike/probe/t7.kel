@@ -1,0 +1,2 @@
+let r = {x = 1 extends {x = 2, y = 3}}
+let main = r match { case {x = 9, ...rest} => 0 }

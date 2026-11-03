@@ -1,0 +1,12 @@
+let k: {m: Int32, n: Int32} = {n = 1, m = 2}
+let q = {y = 1, x = 2}
+let t = {q with x = 5}
+let base = {a = 1, b = 2}
+let e = {c = 3 extends base}
+let d = {x = 1 extends {x = 2, y = 3}}
+let tp = (1, {b = 1, a = 2})
+let v: [Int32] = [1]
+let pick[A](x: A): A = x
+let g = pick({n = 1, m = 2})
+let h = Some({n = 1, m = 2})
+let w = if false then {b = 1, a = 2} else {a = 3, b = 4}

@@ -1,0 +1,3 @@
+let t = (1, 2)
+let r = {z = 3 extends t}
+let main = r match { case {z = 9, ...rest} => 0 }

@@ -1,0 +1,5 @@
+let f(r: {b: Int32, a: Int32}): Int32 = r match { case {b = 9, a = 9} => 0 }
+f({a = 1, b = 2})
+let q = {c = 1, d = 2}
+let g(r: {d: Int32, c: Int32}): Int32 = r match { case {d = 9, c = 9} => 0 }
+g({c = 1, d = 2})

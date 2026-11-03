@@ -1,0 +1,4 @@
+effect A = { a: () => Unit }
+effect Fail = { fail: () => Unit }
+let chk(r: {a: Int32, b: Int32}): Unit = r match { case {a = 9, b} => {} }
+let r = (perform fail() handle { case a() => resume() case cancel => chk({a = 1, b = 2}) }) handle { case fail() => echoln("caught") }

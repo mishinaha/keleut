@@ -1,0 +1,5 @@
+== /home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_emit/0004-rec.kel
+3c3
+< t : {y: String, x: Boolean, x: Int32} = {x = true, x = 1, y = "t"}
+---
+> t : {y: String, x: Boolean, x: Int32} = {y = "t", x = true, x = 1}

@@ -1,0 +1,55 @@
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/classes/0002-ml9c.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/dictionary_passing/0026-externc.kel	実行時エラー: 未実装のプリミティブ: foo
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/dictionary_passing/0029-valhole2.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/dictionary_passing/0033-dexpval.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/dictionary_passing/0031-insthole2.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0008-hole.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0009-affine.kel	実行時エラー: resume は高々1回しか呼べません(アフィン)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0010-divzero.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0011-holecancel.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0014-tailresume.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0016-clauseresumed.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0017-resumeinner.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0015-clauseerr.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0018-resumeinnerdeep.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0019-resumeinnerpre.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0020-resumeret.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0021-resumestop.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0022-resumeguard.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/eval/0039-gexc.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/extern_c/0002-cunk.kel	実行時エラー: 未実装のプリミティブ: nosuch
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/extern_c/0005-mun.kel	実行時エラー: 未実装のプリミティブ: M.__no_such(実装名 __no_such が見つかりません)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/instance_init/0010-inidiv.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/instance_init/0011-inipremdiv.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/invariants/0015-reorderindirect_a.kel	実行時エラー: 未束縛の変数: g
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/invariants/0017-reorderindirect_c.kel	実行時エラー: 未束縛の変数: g
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/invariants/0019-reorderinst_a.kel	実行時エラー: R[L] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/invariants/0021-reorderinsthole_a.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/invariants/0022-reorderinsthole_b.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_depth/0019-rs2.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_emit/0001-lit.kel	実行時エラー: 数値リテラルが範囲外です: 4294967295
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_emit/0008-top.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_emit/0013-inst0.kel	実行時エラー: Sz[B] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_emit/0012-fwd.kel	実行時エラー: 未束縛の変数: M.h
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_emit/0014-req.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/ir_run/0002-err.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/never_ops/0023-guarderror.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/never_ops/0025-clauseerror.kel	実行時エラー: panic: in clause
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/never_ops/0030-cancelperform.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/numeric/0006-nomatch.kel	実行時エラー: match のどの節にも一致しません: 0.30000000000000004
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/region/0015-parread.kel	実行時エラー: ??? に到達しました
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/resolved_names/0006-early.kel	実行時エラー: 未束縛の変数: late
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/resume_guard/0003-matchguard2.kel	実行時エラー: resume は高々1回しか呼べません(アフィン)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/resume_guard/0006-nestresume.kel	実行時エラー: resume は高々1回しか呼べません(アフィン)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/resume_guard/0007-nestresumediv.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/run_exit/0003-exitrt.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/run_exit/0004-exitcancel.kel	実行時エラー: ゼロ除算です
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/run_exit/0006-initcall.kel	実行時エラー: 未束縛の変数: g
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/run_exit/0007-initinst.kel	実行時エラー: R[L] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/typecheck_m5/0009-tup1.kel	実行時エラー: match のどの節にも一致しません: (false,)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/typecheck_m5/0010-tup0.kel	実行時エラー: match のどの節にも一致しません: ()
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/typecheck_m7/0023-v10d.kel	実行時エラー: パターンに値が一致しません: false
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/verify_fixes/0015-abi.kel	実行時エラー: 未実装のプリミティブ: __nosuch_prim_name
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/verify_fixes/0016-abi2.kel	実行時エラー: 未実装のプリミティブ: cos
+/home/sumito3478/repo/keleut/rustkeleut/conformance/corpus/verify_fixes/0040-instorder.kel	実行時エラー: Eq[Box] のインスタンスは宣言より前の位置では使えません(実行はまだ実体を持ちません。インスタンス宣言を使用より前に置いてください)
+/home/sumito3478/repo/keleut/rustkeleut/conformance/kir-fixtures/1.0/ops.kel	実行時エラー: 数値リテラルが範囲外です: 99999999999
