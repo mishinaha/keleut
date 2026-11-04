@@ -1,6 +1,6 @@
 # 計画 261104-3 の改訂(075805d)の再検証の指摘と反証
 
-観点は changes(改訂で変えた箇所)、design(設計と試験)、decisions(裁定、文案、台帳)の 3 つで、観点ごとに検証者を 1 人立てた。
+観点は changes、design、decisions の 3 つで、観点ごとに検証者を 1 人立てた。
 各指摘に反証者を 2 人立てた。
 指摘は 23 件である。
 指摘と反証の本文は検証者と反証者が英語で書いたもので、そのまま載せる。
@@ -9,7 +9,7 @@ scratchpad のパスは検証のときのもので、残していない。
 
 ## changes-0
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: medium
 - 節: 5.1 D575 (launcher script DIR/run); 8 D575 rationale; fix for facts-0/feasible-0
 - 反証: 2 人のうち 0 人
@@ -36,7 +36,7 @@ The finding holds, so it is not refuted. Section 5.1 of the plan (lines 720-734)
 
 ## changes-1
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: medium
 - 節: 4.1 D566 (row 3 of the §15.5 table); fix for spec-1
 - 反証: 2 人のうち 0 人
@@ -63,7 +63,7 @@ The finding holds. doc/LangSpec.md:1784 has row 3 as `| 実行時エラー | 初
 
 ## changes-2
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: medium
 - 節: 4.5 M111 test (injection after cont_resume failure); fix for tests-3
 - 反証: 2 人のうち 0 人
@@ -90,7 +90,7 @@ I confirmed the problem. In stack.rs:127-143, take_mem hands back `self.armed` b
 
 ## changes-3
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: low
 - 節: 4.2 試験用の失敗 (hard in the conversion role); 4.4 test `conv:check:hard:0`; fix in 075805d
 - 反証: 2 人のうち 0 人
@@ -117,7 +117,7 @@ I confirmed the problem in the plan text. Lines 456-457 say the conversion-role 
 
 ## changes-4
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: low
 - 節: 5.1 D575 and the M112 acceptance (dash)
 - 反証: 2 人のうち 0 人
@@ -144,7 +144,7 @@ I confirmed the problem. Plan line 732 says "dash では試していないので
 
 ## changes-5
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: low
 - 節: 4.2 D568 item 1 (conversion-role _exit rationale)
 - 反証: 2 人のうち 2 人
@@ -179,7 +179,7 @@ I checked the code and the finding does not hold. The plan says the conversion r
 
 ## changes-6
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: low
 - 節: 4.2 M108 test (call_args site); fix for feasible-1/tests-4
 - 反証: 2 人のうち 0 人
@@ -212,7 +212,7 @@ Nothing else in the plan makes this conditional. The suggested fix is correct: o
 
 ## changes-7
 
-- 観点: changes(改訂で変えた箇所)
+- 観点: changes
 - 重さ: low
 - 節: 4.1 D567 item 2 versus the 13.9 exclusion
 - 反証: 2 人のうち 0 人
@@ -239,7 +239,7 @@ The finding holds; this is low severity. Plan line 413 (D567 item 2) gives the I
 
 ## design-0
 
-- 観点: design(設計と試験)
+- 観点: design
 - 重さ: high
 - 節: 3.1 tests (Worker-path test) / 7.2 M106 acceptance
 - 反証: 2 人のうち 0 人
@@ -278,7 +278,7 @@ I confirmed the problem, so the finding is not refuted. I reproduced it at the c
 
 ## design-1
 
-- 観点: design(設計と試験)
+- 観点: design
 - 重さ: high
 - 節: 4.5 (D571) / M111 injection test
 - 反証: 2 人のうち 0 人
@@ -323,7 +323,7 @@ I checked this against the code and the plan, and the finding holds. First, rust
 
 ## design-2
 
-- 観点: design(設計と試験)
+- 観点: design
 - 重さ: medium
 - 節: 4.2 (D568) item 3 and M108 tests
 - 反証: 2 人のうち 0 人
@@ -359,7 +359,7 @@ I checked the finding against the plan and the code, and it holds. Plan 4.2 item
 
 ## design-3
 
-- 観点: design(設計と試験)
+- 観点: design
 - 重さ: medium
 - 節: 4.2 (D568) tests / M108 unit test
 - 反証: 2 人のうち 0 人
@@ -386,7 +386,7 @@ I checked this against the plan and it holds. Line 463 of the plan puts the wrap
 
 ## design-4
 
-- 観点: design(設計と試験)
+- 観点: design
 - 重さ: medium
 - 節: 7.2 M108 acceptance (sweep_as.sh)
 - 反証: 2 人のうち 0 人
@@ -419,7 +419,7 @@ I confirmed the finding at HEAD, though it matters less than it first looks. I r
 
 ## design-5
 
-- 観点: design(設計と試験)
+- 観点: design
 - 重さ: low
 - 節: 4.2 (D568) translation role / 4.4 item 6
 - 反証: 2 人のうち 0 人
@@ -456,7 +456,7 @@ One part I could not confirm: the claim that this race is "the usual case" under
 
 ## decisions-0
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: medium
 - 節: 5.2 D578 (new LangSpec §6.6 sentence), 6 table, P264
 - 反証: 2 人のうち 0 人
@@ -487,7 +487,7 @@ So the sentence, as worded, would make the existing behaviour of both REPLs non-
 
 ## decisions-1
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: medium
 - 節: 5.2 D578 (V241), 10 台帳, 13.5
 - 反証: 2 人のうち 0 人
@@ -514,7 +514,7 @@ I confirmed the finding, so it is not refuted. doc/log/261002-2-plan.md line 557
 
 ## decisions-2
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: medium
 - 節: 5.2 D578 (V244)
 - 反証: 2 人のうち 0 人
@@ -553,7 +553,7 @@ The plan does not mention this normalization anywhere: there are no hits for D56
 
 ## decisions-3
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: medium
 - 節: 4.1 D567 / 6 table (IRSpec 13.9 and 14 history row)
 - 反証: 2 人のうち 0 人
@@ -580,7 +580,7 @@ I checked the finding against the repo and it holds. IRSpec 13.9 (doc/IRSpec.md:
 
 ## decisions-4
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: low
 - 節: 4.1 D566 (LangSpec §15.5 table)
 - 反証: 2 人のうち 0 人
@@ -607,7 +607,7 @@ I confirmed the finding, so it is not refuted. doc/LangSpec.md lines 1781-1785 g
 
 ## decisions-5
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: low
 - 節: 5.2 D577 (new §6.6 list sentence)
 - 反証: 2 人のうち 0 人
@@ -634,7 +634,7 @@ I confirmed the problem. Line 787 of doc/log/261104-3-plan.md (inside D577, the 
 
 ## decisions-6
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: low
 - 節: 4.2 D568 / 6 table / 7.3 M108
 - 反証: 2 人のうち 0 人
@@ -667,7 +667,7 @@ I checked this against doc/log/261104-3-plan.md and the problem is real. Line 50
 
 ## decisions-7
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: low
 - 節: 10 台帳 / 5.1 D575 / 5.2 D576
 - 反証: 2 人のうち 0 人
@@ -694,7 +694,7 @@ I confirmed the finding. Section 10's ledger table (plan lines 1017-1042) has no
 
 ## decisions-8
 
-- 観点: decisions(裁定、文案、台帳)
+- 観点: decisions
 - 重さ: low
 - 節: 5.3 D580 (V212)
 - 反証: 2 人のうち 0 人
