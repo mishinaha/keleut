@@ -1,0 +1,7 @@
+// ヒープを使い尽くす。cancel 節が走ってから 3 で終わるのが §15.5 の求める結果である。
+effect Res = { use: () => Unit }
+let rec build(n: Int32, acc: List[Int32]): List[Int32] = if n == 0 then acc else build(n - 1, Cons(n, acc))
+let rec len(l: List[Int32], k: Int32): Int32 = l match { case Nil => k case Cons(_, t) => len(t, k + 1) }
+let main(): Int32 = run h { len(build(2000000000, Nil), 0) } handle { case use() => resume(()) case cancel => echoln("cancel") }
+echoln("before")
+echoln(show(main()))

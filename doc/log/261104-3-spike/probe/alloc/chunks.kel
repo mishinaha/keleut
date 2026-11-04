@@ -1,0 +1,11 @@
+// 値スタックの塊が回収されないことの測定(M90 の 4)。
+// MODE 1: 深い再帰だけ、MODE 2: リストの作り直しだけ、MODE 3: 深い再帰から戻った後にリストを作り直す。
+// 塊を返すなら 3 の最大の常駐の大きさは 1 と 2 の大きいほうに近く、返さなければ和に近い。
+let rec deep(n: Int32): Int32 = if n == 0 then 0 else 1 + deep(n - 1)
+let rec build(n: Int32, acc: List[Int32]): List[Int32] = if n == 0 then acc else build(n - 1, Cons(n, acc))
+let rec len(l: List[Int32], k: Int32): Int32 = l match { case Nil => k case Cons(_, t) => len(t, k + 1) }
+let rec rounds(r: Int32, k: Int32): Int32 = if r == 0 then k else rounds(r - 1, k + len(build(DEPTH / 4, Nil), 0))
+let mode = MODE
+let a = if mode == 2 then 0 else deep(DEPTH)
+let b = if mode == 1 then 0 else rounds(4, 0)
+echoln(show(a + b))

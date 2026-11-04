@@ -1,0 +1,83 @@
+== n=99999 keleut repl
+y : Int32 = 1
+x : Int32 = 100000
+1
+_ : Int32 = 100001
+exit=0
+== n=99999 diktor --repl
+y : Int32 = 1
+x : Int32 = 100000
+1
+_ : Int32 = 100001
+exit=0
+== n=99999 keleut run
+100000
+exit=0
+== n=99999 diktor
+100000
+exit=0
+== n=99999 diktor --emit-ir
+exit=0
+== n=100000 keleut repl
+y : Int32 = 1
+<stdin>: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+1
+! <stdin>:4:1: 型エラー: 未束縛の変数: x
+exit=0
+== n=100000 diktor --repl
+y : Int32 = 1
+x : Int32 = 100001
+1
+_ : Int32 = 100002
+exit=0
+== n=100000 keleut run
+keleut: KIR を書き出せません: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+exit=1
+== n=100000 diktor
+100001
+exit=0
+== n=100000 diktor --emit-ir
+diktor: KIR を書き出せません: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+exit=1
+== n=150000 keleut repl
+y : Int32 = 1
+<stdin>: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+1
+! <stdin>:4:1: 型エラー: 未束縛の変数: x
+exit=0
+== n=150000 diktor --repl
+y : Int32 = 1
+x : Int32 = 150001
+1
+_ : Int32 = 150002
+exit=0
+== n=150000 keleut run
+keleut: KIR を書き出せません: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+exit=1
+== n=150000 diktor
+150001
+exit=0
+== n=150000 diktor --emit-ir
+diktor: KIR を書き出せません: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+exit=1
+== n=199999 keleut repl
+y : Int32 = 1
+<stdin>: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+1
+! <stdin>:4:1: 型エラー: 未束縛の変数: x
+exit=0
+== n=199999 diktor --repl
+y : Int32 = 1
+x : Int32 = 200000
+1
+_ : Int32 = 200001
+exit=0
+== n=199999 keleut run
+file199999.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+exit=2
+== n=199999 diktor
+200000
+exit=0
+== n=199999 diktor --emit-ir
+diktor: KIR を書き出せません: 処理系の限度: KIR の書き出しで入れ子が深すぎます
+exit=1

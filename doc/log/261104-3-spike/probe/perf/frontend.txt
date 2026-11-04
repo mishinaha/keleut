@@ -1,0 +1,9 @@
+# 2026-11-04 15:18、負荷の平均 14〜16。15 回の中央値と最小値。check --no-prelude の行は名前が束縛されない誤り(rc=1)で、前置きの費用の測定ではない。
+med=10.2ms min=9.2ms rc=0 :: keleut run --backend interp hello.kir
+med=12.3ms min=11.0ms rc=0 :: keleut run --backend interp hello.kel
+med=10.7ms min=9.2ms rc=0 :: keleut check hello.kel
+med=9.1ms min=7.0ms rc=1 :: keleut check --no-prelude hello.kel
+med=11.5ms min=8.7ms rc=0 :: keleut emit-kir -o null hello.kel
+med=15.0ms min=13.1ms rc=0 :: keleut emit-kir -o null typecheck.kel
+med=917.6ms min=885.3ms rc=0 :: keleut run --backend interp typecheck.kir
+med=869.0ms min=816.7ms rc=0 :: keleut run --backend interp typecheck.kel

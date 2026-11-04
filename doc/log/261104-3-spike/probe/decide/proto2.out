@@ -1,0 +1,15 @@
+== 試作 2(開き直し) diktor (木)
+0 4194313
+== 試作 2 diktor --repl
+0 4194365
+== 試作 2 親の旗
+exit 0 parent O_NONBLOCK after child: True
+== 試作 2 /dev/full
+diktor: 標準出力に書き出せません: No space left on device
+exit=74
+== 試作 2 閉じた標準出力
+diktor: 標準出力に書き出せません: Bad file descriptor
+exit=74
+== 試作 2 ファイルへの追記
+first
+hi

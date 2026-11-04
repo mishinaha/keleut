@@ -1,0 +1,16 @@
+effect Gen = { yield: (Int32) => Unit }
+effect Stop = { stop: (Int32) => Never }
+let arr = run h { let m = MutableArray.new(5, 0); MutableArray.set(m, 0, 10); MutableArray.set(m, 1, 20); MutableArray.set(m, 2, 30); MutableArray.set(m, 3, 40); MutableArray.set(m, 4, 50); MutableArray.freeze(m) }
+let collect(): List[Int32] = Array.each(arr, fn(x) => perform yield(x)) handle { case yield(x) => { let r = resume(()); Cons(x, r) } case return(u) => Nil }
+let rec show_list(xs: List[Int32]): String = xs match { case Nil => "" case Cons(x, t) => show(x) + " " + show_list(t) }
+echoln(show_list(collect()))
+let sum(): Int32 = run h {
+  let acc = Ref.new(0)
+  Array.each(arr, fn(x) => perform yield(x)) handle { case yield(x) => { Ref.set(acc, Ref.get(acc) + x); resume(()) } }
+  Ref.get(acc)
+}
+echoln(show(sum()))
+let first_big(): Int32 = { Array.each(arr, fn(x) => if x > 25 then perform stop(x) else echoln("skip " + show(x))); 0 } handle { case stop(x) => x case cancel => echoln("cancel") }
+echoln(show(first_big()))
+let p(): Int32 = pinned(fn() => { perform yield(7); 8 }) handle { case yield(x) => { echoln("pinned yield " + show(x)); let r = resume(()); r + 1 } }
+echoln(show(p()))

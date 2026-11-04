@@ -1,0 +1,8 @@
+keleut: 標準出力に書き出せません: Bad file descriptor
+keleut check >&-: 74
+diktor: 標準出力に書き出せません: Bad file descriptor
+diktor --type-check >&-: 74
+keleut: 標準出力に書き出せません: No space left on device
+keleut check >/dev/full: 74
+keleut 0.1.0
+backends: interp jit wasm

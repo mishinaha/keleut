@@ -1,0 +1,14 @@
+// M89 の残した制限の 1: 使われていない大きな継続に、メモリの不足を注入できない場合。
+// G の節(resume が末尾にない)の本体が、resume の前にヒープを使い尽くす。
+// LangSpec §13.6 によれば、破棄する計算の中のハンドラの cancel 節(inner)、
+// そのハンドラ自身の cancel 節(own)、外側の cancel 節(outer)の順に走ってから 3 で終わる。
+effect Op = { op: () => Int32 }
+effect Res = { use: () => Unit }
+let rec deep(n: Int32): Int32 = if n == 0 then perform op() else 1 + deep(n - 1)
+let rec build(n: Int32, acc: List[Int32]): List[Int32] = if n == 0 then acc else build(n - 1, Cons(n, acc))
+let rec len(l: List[Int32], k: Int32): Int32 = l match { case Nil => k case Cons(_, t) => len(t, k + 1) }
+let inner(): Int32 = run h { deep(DEPTH) } handle { case use() => resume(()) case cancel => echoln("inner cancel") }
+let mid(): Int32 = inner() handle { case op() => 1 + resume(len(build(2000000000, Nil), 0)) case cancel => echoln("own cancel") }
+let outer(): Int32 = run h { mid() } handle { case use() => resume(()) case cancel => echoln("outer cancel") }
+echoln("before")
+echoln(show(outer()))

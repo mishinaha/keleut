@@ -1,0 +1,3 @@
+diktor cccd8cb を git archive で写した木で dune runtest > rt.txt 2>&1 を走らせた(diktor/test は変えていない)。
+試作 1(proto-driver.diff。V218-1 と V223): 終了状態 0、出力 0 行
+試作 2(proto2-driver.diff。V218-2 だけ): 終了状態 0、出力 0 行

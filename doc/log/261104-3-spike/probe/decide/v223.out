@@ -1,0 +1,21 @@
+== diktor 閉じた標準入力
+diktor: 標準出力に書き出せません: Bad file descriptor
+exit=74
+== diktor ディレクトリの標準入力
+diktor: 標準出力に書き出せません: Is a directory
+exit=74
+== diktor 閉じた標準入力(--no-prelude)
+diktor: 標準出力に書き出せません: Bad file descriptor
+exit=74
+== keleut 閉じた標準入力
+keleut: 標準入力を読めません: Bad file descriptor
+exit=74
+== keleut ディレクトリの標準入力
+keleut: 標準入力を読めません: Is a directory
+exit=74
+== keleut 閉じた標準入力(--no-prelude)
+keleut: 標準入力を読めません: Bad file descriptor
+exit=74
+== diktor 閉じた標準入力のファイル実行(比較: 標準入力を読まない)
+a
+exit=0

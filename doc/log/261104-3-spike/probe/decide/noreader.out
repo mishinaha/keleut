@@ -1,0 +1,8 @@
+== 今の diktor
+exit 74 diktor: 標準出力に書き出せません: Broken pipe
+== 試作 1(clear_nonblock)
+exit 74 diktor: 標準出力に書き出せません: Broken pipe
+== 試作 2(開き直し)
+exit 74 diktor: 標準出力に書き出せません: Broken pipe
+== keleut run
+exit 74 keleut: 標準出力に書き出せません: Broken pipe

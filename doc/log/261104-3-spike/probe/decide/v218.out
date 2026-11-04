@@ -1,0 +1,22 @@
+== diktor (木)
+内部エラー: 予期しない例外です: Sys_blocked_io
+Fatal error: exception Sys_blocked_io
+2 65536
+== diktor --run-ir
+内部エラー: 予期しない例外です: Sys_blocked_io
+Fatal error: exception Sys_blocked_io
+2 65536
+== diktor --repl
+内部エラー: 予期しない例外です: Sys_blocked_io
+Fatal error: exception Sys_blocked_io
+2 61479
+== keleut run
+0 4194313
+== keleut run --backend wasm
+0 4194313
+== keleut repl
+0 4194365
+== diktor --via-ir
+内部エラー: 予期しない例外です: Sys_blocked_io
+Fatal error: exception Sys_blocked_io
+2 65536

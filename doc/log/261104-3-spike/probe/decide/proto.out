@@ -1,0 +1,13 @@
+== proto diktor (木)
+0 4194313
+== proto diktor --repl
+0 4194365
+== proto --repl 閉じた標準入力
+diktor: 標準入力を読めません: Bad file descriptor
+exit=74
+== proto --repl ディレクトリ
+diktor: 標準入力を読めません: Is a directory
+exit=74
+== proto 閉じた標準出力
+diktor: 標準出力に書き出せません: Bad file descriptor
+exit=74

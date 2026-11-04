@@ -1,0 +1,35 @@
+# 2026-11-04 15:12、Node v26.9.0。doc/log/261024-1-spike/wasm/ の fx.mjs、fx2.mjs、fx3.mjs、utf8.mjs をそのまま走らせた。
+## node fx.mjs (no flag)
+FAIL fx: CompileError: WebAssembly.instantiate(): core stack switching not enabled (enable with --experimental-wasm-wasmfx) @+14
+FAIL fx_encoder: CompileError: WebAssembly.instantiate(): core stack switching not enabled (enable with --experimental-wasm-wasmfx) @+14
+## --experimental-wasm-wasmfx fx.mjs
+PASS fx: sum(10)=55 (expect 55), sum(1e6)=1784293664 (expect 1784293664) in 145.5 ms
+PASS fx_encoder: sum(10)=55 (expect 55), sum(1e6)=1784293664 (expect 1784293664) in 126.3 ms
+## fx2
+PASS bind_test: 42
+PASS resume_throw_test: 507
+
+
+#
+# Fatal error in , line 0
+# unimplemented code
+#
+#
+#
+exit 0
+## fx3
+validate: true
+compiled
+
+
+#
+# Fatal error in , line 0
+# unimplemented code
+#
+#
+#
+exit 
+## utf8 no flag
+FAIL TypeError: WebAssembly.instantiate(): Import #0 "wasm:text-decoder": module is not an object or function
+## utf8 flag
+PASS builtin text-decoder: "Kあ" (builtin used: true)

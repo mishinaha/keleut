@@ -1,0 +1,9 @@
+// 生きているリスト(LIVE 要素)を持ったまま、すぐ死ぬレコードを 2,000 万個作る。
+// 動かさないマークスイープでは、回収のたびに生きているリストに印を付け直す。
+let rec mk(i: Int32, acc: List[Int32]): List[Int32] = if i == 0 then acc else mk(i - 1, Cons(i, acc))
+let rec len(xs: List[Int32], a: Int32): Int32 = xs match { case Nil => a case Cons(_, t) => len(t, a + 1) }
+let step(p: {x: Int32, y: Int32}): {x: Int32, y: Int32} = {x = p.y, y = (p.x + p.y + 1) % 1000003}
+let rec churn(i: Int32, p: {x: Int32, y: Int32}): Int32 = if i == 0 then p.x + p.y else churn(i - 1, step(p))
+let live = mk(LIVE, Nil)
+echoln(show(churn(20000000, {x = 1, y = 2})))
+echoln(show(len(live, 0)))

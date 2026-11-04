@@ -1,0 +1,2 @@
+let p: {x: Int32, y: Int32} = {y = 1, x = 5}
+let q: {m: Int32, n: Int32} = {n = 1 extends {m = 2}}

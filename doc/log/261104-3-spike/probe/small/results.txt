@@ -1,0 +1,62 @@
+# 2026-11-04 測定(32 コア、31 GB、WSL2)。機械は他の作業で負荷が高く(load 9〜38)、壁時計の時間は回によって 2〜4 倍ぶれた。
+# 常駐の大きさ(ru_maxrss)は安定。measure.py で測る。入力は gen_decls.py と gen_block.py で作る。
+# d160k = gen_decls.py 160000、d160kl = gen_decls.py 160000 list、b120k = gen_block.py 120000、deep = 99,000 段の 1 + (...)
+
+## keleut check と diktor --type-check(HEAD の release)
+d160k keleut check : max RSS 606 MB   (cpu 1.9〜8.4 s。負荷でぶれる)
+d160k diktor       : max RSS 361 MB   (cpu 3.1 s。同じ時刻)
+b120k keleut check : max RSS 408 MB   cpu 1.35 s
+b120k diktor       : max RSS 171 MB   cpu 3.17 s(同じ時刻)
+20k/40k/80k decls  : keleut 117/206/357 MB, diktor 53/97/184 MB, cpu はほぼ同じ(0.34/0.72/1.30 と 0.36/0.74/1.38)
+
+## 同じ組みで forget(従来)と drop(KELEUT_FREE_FRONT=1)、5 回の中央値
+check d160k forget : cpu 1.884 s, max RSS 607 MB
+check d160k drop   : cpu 2.022 s, max RSS 602 MB   (+7 %)
+check b120k forget : cpu 0.791 s, max RSS 408 MB
+check b120k drop   : cpu 0.935 s, max RSS 408 MB   (+18 %)
+deep check forget/drop : 0.464 / 0.468 s, 265 MB(既定の 8 GiB のスタックで drop は落ちない)
+
+## keleut run(.kel は Rust のフロントエンドを経る)と、同じプログラムの .kir、3 回の中央値
+d160k  run .kel interp: 901 MB / run .kir interp: 392 MB
+d160k  run .kel jit   : 956 MB / run .kir jit   : 434 MB
+d160kl run .kel interp: forget 917 MB, drop 722 MB / .kir 431 MB
+d160kl run .kel jit   : forget 1023 MB, drop 722 MB / .kir 500 MB
+emit-kir d160k        : max RSS 722 MB(check の 607 MB に KIR の組み立てと符号化が乗る)
+d10l(小さい)          : .kel 90 MB / .kir 88 MB
+
+## ulimit -v の下の keleut run --native-stack 512k --backend interp d160kl.kel
+ulimit -v 1500000 : forget 0, drop 0
+ulimit -v 1450000 : forget 3(実行時エラー: メモリ不足です), drop 0
+ulimit -v 1400000 : forget 3, drop 0
+ulimit -v 1350000 : forget 70(KIR を符号化できません: KIR の処理のスレッドを作れません: Resource temporarily unavailable), drop 0
+ulimit -v 1300000 : forget 70, drop 0
+ulimit -v 1250000 : forget 70, drop 0
+ulimit -v 1200000 : forget 134, drop 134(memory allocation of 20971520 bytes failed。フロントエンドの中の確保の失敗。V230 と同じ形)
+emit-kir 1250000  : forget 70, drop 0 / 1200000: どちらも 134
+run d160kl.kir 1250000 : 0
+
+## --native-stack 512k / 1m の小さいスタックでのブロック(200〜20,000 文)
+forget と drop で check と run の終了状態は同じ(限度 128 / 384 を超えるものは 2、200 文の 1m は 0)。134 は無い。
+
+## バイトコードの統計(conformance/corpus の 1,091 本を keleut dump bytecode。プレリュードの関数を本ごとに数える)
+funcs=74339 slots>256=0 max_slots=14 words=2418324 insts=832041 operand_words=1586283 operands<256=1492443(94.1 %)
+
+## Float64 のリテラルと印字(floatlit.kel。期待は floatlit.expected = diktor の木の評価器の出力)
+dk-ir、x-ir、keleut run --frontend rust|diktor × --backend interp|jit|wasm(jit は --tier jit-only):どれも差 0
+接尾辞と桁区切り(3f64, 1_000.5, 0x10f64, 0x1_0f64, 1_0e1_0, 0b101f64, 0o17f64, 99999999999999999999f64, 0xffffffffffffffffff_f64):
+diktor と keleut run(rust)で出力と終了状態が一致(0x10f64 は 69476、0xff..._f64 は「数値リテラルが範囲外です」で 3、0b/0o と f64 は構文エラー 2)
+
+## スロットが 256 を超える関数(gen_slots.py N。N 個の Int32 を生かしたまま id を呼ぶ)
+keleut dump bytecode の最大の関数(any raw words): N=300 → 3 302 8104、N=3000 → 3 3002 81004、N=20000 → 3 20002 540004
+diktor の木の評価器、keleut run --backend interp|wasm|jit(--tier jit-only)の出力が N=300、3000、20000 で一致(45150 45450 など)
+
+## Array.each と pinned の中の perform(eachfx.kel、期待 eachfx.expected = diktor の木の評価器)
+G の節の末尾でない resume で集める、末尾の resume で足す、Never の操作で途中で抜ける、pinned の中の yield。
+dk-ir、keleut run --frontend rust|diktor × interp、wasm、jit の jit-only / threshold=1 / alternating=1..3 / mixed=1..2、interp --gc-stress:どれも差 0
+16 進の浮動小数の綴り(0x1p3, 0x1.8, 0x1.8f64, 0x1p3f64)は diktor と keleut run がどちらも同じ構文エラーで 2。1e5f64 と 1.5f64 は同じ値で 0。
+
+## 小さいスタックで受け付ける最大の深さの木を drop する(KELEUT_FREE_FRONT=1、check と run)
+512k: ブロック 124 文、1 + (...) 125 段、fn(x) => 125 段 → check 0、run 0
+1m  : 380 / 381 / 381 → check 0、run 0
+4m  : 1788 / 1789 / 1789 → check 0。run はブロックと 1 + (...) が 65(KIR の検証で入れ子が深すぎます。HEAD の forget でも同じ。記録 261024-3 の M101 の 8)、fn は 0
+frontend-depth/typecheck.t の big.kel(f_16): --native-stack 4m で check 1、run 1(forget と同じ)、既定のスタックの run 0

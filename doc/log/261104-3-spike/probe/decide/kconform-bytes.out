@@ -1,0 +1,6 @@
+== --diktor /home/sumito3478/repo/keleut/diktor/_build/install/default/bin/diktor
+kconform: 組 dk,dk-ir,kf,x-ir,ki(基準 dk)、1 個の試験、17 個のコマンド(記録と比べた 85 個)、差 0 件、既知の差 25 件、失敗 0 件
+kconform: 正規化の前の記録との不一致 20 件、shim の呼び出し 77 回、diktor を含むコマンド 0 個のうち shim を通らないもの 0 個、使われなかった既知の差 0 件
+== --diktor WORK/dk/_build/default/bin/main.exe
+kconform: 組 dk,dk-ir,kf,x-ir,ki(基準 dk)、1 個の試験、17 個のコマンド(記録と比べた 85 個)、差 0 件、既知の差 20 件、失敗 0 件
+kconform: 正規化の前の記録との不一致 16 件、shim の呼び出し 77 回、diktor を含むコマンド 0 個のうち shim を通らないもの 0 個、使われなかった既知の差 2 件

@@ -1,0 +1,81 @@
+# 2026-11-04 15:21、負荷の平均 9。keleut run --backend jit(既定の threshold=1000)を perf record -F 10000 で測り、perfmap.py で nm の記号に写した(番地 = ip - 写像の先頭 + pgoff - p_offset + p_vaddr)。記号は直前の大域の記号なので、インライン展開された関数は呼んだ側に数える。perf-*.map は JIT のコード。
+== tail64 (kt1000 既定、perf -F 10000)
+samples 539
+ 17.44% keleut_interp::native::krt_box
+ 15.40% <keleut_rt::heap::Heap>::sweep
+ 15.03% perf-925446.map
+ 13.17% <keleut_rt::ctx::Rt>::box_i64
+ 11.50% <keleut_rt::heap::Heap>::try_alloc
+ 10.20% <keleut_rt::ctx::Rt>::alloc
+  5.19% libc.so.6
+  2.97% libLLVM.so.22.1
+  2.78% [unknown]
+  2.41% <keleut_interp::interp::Interp>::exec_inner
+  2.23% ld-linux-x86-64.so.2
+  0.74% <keleut_interp::interp::Interp>::tail_enter
+  0.37% libstdc++.so.6.0.36
+  0.19% keleut_lir::depth::around_call::<<keleut_lir::lower::Low>::dyn_method::{closure#1}>
+== tailf64 (kt1000 既定、perf -F 10000)
+samples 507
+ 16.77% keleut_interp::native::krt_box
+ 15.98% <keleut_rt::heap::Heap>::sweep
+ 14.60% <keleut_rt::heap::Heap>::try_alloc
+ 12.82% perf-925730.map
+ 10.06% <keleut_rt::ctx::Rt>::box_f64
+  9.66% <keleut_rt::ctx::Rt>::alloc
+  5.33% libc.so.6
+  3.94% [unknown]
+  3.35% libLLVM.so.22.1
+  2.76% ld-linux-x86-64.so.2
+  2.17% <keleut_interp::interp::Interp>::exec_inner
+  1.38% <keleut_interp::interp::Interp>::native_target
+  0.79% <keleut_interp::interp::Interp>::tail_enter
+  0.20% keleut_lir::frame::points_counted
+== gen (kt1000 既定、perf -F 10000)
+samples 1713
+ 20.14% libc.so.6
+ 12.61% <keleut_interp::interp::Interp>::native_fx
+  9.22% <keleut_interp::interp::Interp>::fx
+  7.36% <keleut_interp::interp::Interp>::code
+  6.77% keleut_interp::native::krt_fx
+  4.26% libLLVM.so.22.1
+  4.14% <keleut_interp::interp::Interp>::fx_call
+  2.80% <keleut_interp::interp::Interp>::exec_inner
+  2.74% <keleut_rt::ctx::Rt>::cont_new
+  2.57% <keleut_interp::interp::Interp>::fx::{closure#0}
+  2.28% perf-926034.map
+  1.81% <keleut_interp::interp::Interp>::run_from
+  1.52% <keleut_rt::ctx::Rt>::collect
+  1.34% <alloc::vec::Vec<keleut_rt::value::Word> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<ke
+== tailresume (kt1000 既定、perf -F 10000)
+samples 1223
+ 31.81% libc.so.6
+ 11.12% <keleut_interp::interp::Interp>::native_fx
+  9.08% <keleut_interp::interp::Interp>::fx_call
+  6.21% libLLVM.so.22.1
+  6.05% keleut_interp::native::krt_fx
+  4.99% <keleut_interp::interp::Interp>::code
+  4.58% <keleut_interp::interp::Interp>::fx
+  4.25% <keleut_rt::ctx::Rt>::hr
+  4.01% perf-926468.map
+  3.11% <alloc::vec::Vec<keleut_rt::value::Word> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<ke
+  1.96% ld-linux-x86-64.so.2
+  1.72% <keleut_rt::ctx::Rt>::hr_index
+  1.31% [unknown]
+  1.31% <alloc::raw_vec::RawVecInner>::finish_grow
+== records (kt1000 既定、perf -F 10000)
+samples 825
+  9.58% perf-927006.map
+  9.21% libc.so.6
+  8.12% libLLVM.so.22.1
+  7.76% <keleut_rt::ctx::Rt>::rec_field
+  7.03% <keleut_rt::heap::Heap>::sweep
+  6.79% krt_shape_find
+  5.45% <keleut_interp::interp::Interp>::exec_inner
+  5.21% <keleut_rt::heap::Heap>::try_alloc
+  4.36% <keleut_rt::ctx::Rt>::rec_update
+  3.64% <keleut_rt::ctx::Rt>::rec_new
+  3.64% <keleut_rtcore::ShapeTable>::labels
+  3.27% keleut_interp::native::krt_rec_field
+  3.15% <keleut_rt::ctx::Rt>::alloc
+  2.79% keleut_interp::native::krt_rec_new

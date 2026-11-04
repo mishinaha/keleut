@@ -1,0 +1,4 @@
+let rec dbl(s: String, n: Int32): String = if n == 0 then s else dbl(s + s, n - 1)
+let s = dbl("0123456789abcdef", 17)
+echo(s)
+echoln("after")

@@ -1,0 +1,16 @@
+let a = 1
+let s = "a\"b\n"
+let f = 1.5
+let l = Cons("p", Cons("q", Nil))
+let o = Some("x")
+let t = (1, "a")
+let rs = {name = "n"}
+let u = ()
+let g = fn(x: Int32) => x + 1
+let r = {y = 2, x = 1}
+let e = {z = 4 extends {x = 1, y = 2}}
+let d = {x = 1, x = 2}
+newtype Color = Red | Rgb(Int32, Int32, Int32)
+let c = Rgb(1, 2, 3)
+:type a + 1
+a == 1

@@ -1,0 +1,17 @@
+--- a/lib/driver.ml	2026-11-04 15:24:11.746296993 +0900
++++ b/lib/driver.ml	2026-11-04 15:24:02.621142423 +0900
+@@ -1642,6 +1642,14 @@
+      (128 + 13 = 141)、終了コードの規約の外に出る。無視すれば、書き込みが EPIPE で失敗して
+      Sys_error を投げ、出力エラーの 74 で終わる *)
+   (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
++  (try
++     match (Unix.fstat Unix.stdout).Unix.st_kind with
++     | Unix.S_FIFO | Unix.S_CHR ->
++         let fd = Unix.openfile "/proc/self/fd/1" [ Unix.O_WRONLY ] 0 in
++         Unix.dup2 fd Unix.stdout;
++         Unix.close fd
++     | _ -> ()
++   with Unix.Unix_error _ -> ());
+   match parse_args (Array.to_list Sys.argv |> List.tl) with
+   | Error msg ->
+       Printf.eprintf "diktor: %s\n%s" msg usage;

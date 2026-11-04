@@ -1,0 +1,7 @@
+kconform: 組 dk,dk-ir,kf,ki,kj,kt,ka=1,ka=2,ka=3,ka=4,ka=5,ka=6,ka=7,ka=8,km=1,km=2,km=3,km=4,kw,x-ir,kr-ki,kr-kj,kr-kt,kr-ka=1,kr-ka=2,kr-ka=3,kr-ka=4,kr-ka=5,kr-ka=6,kr-ka=7,kr-ka=8,kr-km=1,kr-km=2,kr-km=3,kr-km=4,kr-kw(基準 dk)、1173 個の試験、4737 個のコマンド(記録と比べた 131256 個)、差 0 件、既知の差 1508 件、失敗 0 件
+kconform: 正規化の前の記録との不一致 614 件、shim の呼び出し 227149 回、diktor を含むコマンド 100008 個のうち shim を通らないもの 0 個、使われなかった既知の差 22 件
+      2 組の後段の上書き: /home/sumito3478/repo/keleut/rustkeleut/conformance/gc/gc.t:36 [組]: --backend interp が組の wasm に勝った
+     28 組の後段の上書き: /home/sumito3478/repo/keleut/rustkeleut/conformance/gc/gc.t:36 [組]: --backend interp を除いて jit で走らせた
+      2 組の後段の上書き: /home/sumito3478/repo/keleut/rustkeleut/conformance/gc/gc.t:52 [組]: --backend interp が組の wasm に勝った
+     28 組の後段の上書き: /home/sumito3478/repo/keleut/rustkeleut/conformance/gc/gc.t:52 [組]: --backend interp を除いて jit で走らせた
+exit 0 secs 849

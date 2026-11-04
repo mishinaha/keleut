@@ -1,0 +1,20 @@
+diktor exit=0
+keleut exit=0
+== diktor
+a : Int32 = 1
+s : String = "a\"b\n"
+f : Float64 = 1.5
+l : List[String] = [p, q]
+o : Option[String] = Some(x)
+t : (Int32, String) = (1, "a")
+rs : {name: String} = {name = "n"}
+u : {} = ()
+g : (Int32) => Int32 = <fn>
+r : {y: Int32, x: Int32} = {y = 2, x = 1}
+e : {z: Int32, x: Int32, y: Int32} = {z = 4, x = 1, y = 2}
+d : {x: Int32, x: Int32} = {x = 1, x = 2}
+c : Color = Rgb(1, 2, 3)
+Int32
+_ : Boolean = true
+== diff diktor keleut
+same

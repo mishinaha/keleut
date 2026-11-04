@@ -1,0 +1,20 @@
+--- a/lib/driver.ml	2026-11-04 15:18:48.911808844 +0900
++++ b/lib/driver.ml	2026-11-04 15:18:48.918753804 +0900
+@@ -1431,6 +1431,9 @@
+       print_string (if Buffer.length buf = 0 then "> " else ". ");
+       flush_stdout_or_die ());
+     match In_channel.input_line stdin with
++    | exception Sys_error msg ->
++        Printf.eprintf "diktor: 標準入力を読めません: %s\n" msg;
++        safe_exit 74
+     | None ->
+         if Buffer.length buf > 0 then (
+           if interactive then print_newline ();
+@@ -1642,6 +1645,7 @@
+      (128 + 13 = 141)、終了コードの規約の外に出る。無視すれば、書き込みが EPIPE で失敗して
+      Sys_error を投げ、出力エラーの 74 で終わる *)
+   (try Sys.set_signal Sys.sigpipe Sys.Signal_ignore with Invalid_argument _ -> ());
++  (try Unix.clear_nonblock Unix.stdout with Unix.Unix_error _ -> ());
+   match parse_args (Array.to_list Sys.argv |> List.tl) with
+   | Error msg ->
+       Printf.eprintf "diktor: %s\n%s" msg usage;

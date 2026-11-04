@@ -1,0 +1,9 @@
+# 2026-11-04 15:17〜15:18、負荷の平均 17〜22。livegc.kel の LIVE を 1、100000、1000000、4000000 に置き換え、keleut run --backend jit|wasm を 3 回ずつ(中央値と最小値)。
+livegc_1.kel jit med=1113ms min=1111ms rc=0 ['keleut: gc: 回収 76 回', '0.082 秒']
+livegc_1.kel wasm med=950ms min=910ms rc=0 
+livegc_100000.kel jit med=1136ms min=1130ms rc=0 ['keleut: gc: 回収 76 回', '0.108 秒']
+livegc_100000.kel wasm med=897ms min=894ms rc=0 
+livegc_1000000.kel jit med=1406ms min=1323ms rc=0 ['keleut: gc: 回収 22 回', '0.215 秒']
+livegc_1000000.kel wasm med=1087ms min=1079ms rc=0 
+livegc_4000000.kel jit med=1647ms min=1509ms rc=0 ['keleut: gc: 回収 9 回', '0.202 秒']
+livegc_4000000.kel wasm med=1647ms min=1623ms rc=0 

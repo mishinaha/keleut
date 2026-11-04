@@ -1,0 +1,4 @@
+== 試作の diktor
+exit 0 parent O_NONBLOCK after child: False
+== keleut run
+exit 0 parent O_NONBLOCK after child: True

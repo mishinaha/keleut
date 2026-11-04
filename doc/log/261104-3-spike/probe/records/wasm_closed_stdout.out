@@ -1,0 +1,9 @@
+hi
+node main.mjs: 0
+node main.mjs >&-: 0
+keleut: 標準出力に書き出せません: No space left on device
+node main.mjs >/dev/full: 74
+keleut: 標準出力に書き出せません: Bad file descriptor
+keleut run --backend wasm >&-: 74
+keleut: 標準出力に書き出せません: Bad file descriptor
+keleut run --backend interp >&-: 74
