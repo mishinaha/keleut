@@ -936,8 +936,10 @@ fn show_call(
 /// 値の構造に沿った表示(Diktor の `Value.show ~fn_name:false`)。
 ///
 /// [`Rt::show`] と同じ形で、関数の値(組み込みの値、`extern`、メソッドの値を含む)をすべて `<fn>` と書く。
-/// レコードのフィールドは、型の配置([`Layout`])が分かれば型の行の順(Diktor の拡張の順)に、
-/// 分からなければ実行時の正準の配置の順に書く。
+/// レコードのフィールドは、型の配置([`Layout`])が分かれば型の行の順に書き、値の表示の順を型の表示の順にそろえる。
+/// 配置が分からないとき(型の大きさや配置の表の上限を超えたときを含む)と、配置のラベルの集まりが値と合わないときは、
+/// ラベルの綴りのバイト列の順に書く(安定な整列で、同じラベルは正準の配置のとおり外側から)。
+/// 正準の配置の順(ラベルの番号の順)は受理しなかった入力を含むセッションの履歴で決まるので、表示に使わない(V231)。
 /// 深い値でもネイティブのスタックを使わないよう、明示の作業の列でたどる。
 fn show_value(rt: &Rt<'_>, w: Word, ls: &Layouts, root: usize) -> Vec<u8> {
     enum Item {
@@ -1017,8 +1019,13 @@ fn show_value(rt: &Rt<'_>, w: Word, ls: &Layouts, root: usize) -> Vec<u8> {
                     .iter()
                     .map(|&l| p.labels[l as usize].as_str())
                     .collect();
-                // 型の行の順に並べ替える。ラベルの集まりが型と違えば、正準の配置のままにする。
+                // 型の行の順に並べ替える。配置が無いか、ラベルの集まりが型と違えば、ラベルの綴りの順にする。
                 let mut order: Vec<(usize, usize)> = (0..n).map(|i| (i, 0)).collect();
+                order.sort_by(|&(a, _), &(b, _)| {
+                    display_name(names[a])
+                        .cmp(display_name(names[b]))
+                        .then_with(|| names[a].cmp(names[b]))
+                });
                 if let Layout::Record(fs) = layout(lid)
                     && fs.len() == n
                 {

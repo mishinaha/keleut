@@ -87,10 +87,12 @@ pub struct Shown {
 
 /// 値の表示に使う、型から読んだ配置である。
 ///
-/// 実行時のレコードはフィールドを正準の配置(ラベルの番号の順)で持つが、Diktor はレコードを拡張の順(外側から)に表示する。
-/// 型の行も拡張の順に並ぶので、表示はレコードのフィールドを型の行の順に並べ替える。
+/// 実行時のレコードはフィールドを正準の配置(ラベルの番号の順)で持つ。
+/// 表示は、値の表示の順を型の表示(`名前 : 型 = 値` の型)の順にそろえるため、レコードのフィールドを型の行の順に並べ替える。
+/// ラベルの番号は受理しなかった入力を含むセッションの履歴で決まるので、表示に正準の配置の順を使わない。
 /// 配置は再帰する型のために表の添字で指し合う。
 /// 0 番は型の分からない値である。
+/// 型の分からない値のレコードは、フィールドをラベルの綴りの順で書く(`keleut repl` の `show_value`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
     /// 型の分からない値(型変数、関数など)。子も型が分からないものとして表示する。
@@ -113,9 +115,15 @@ pub struct Layouts {
 }
 
 /// 配置の表に置く項目の数の上限(正則でない再帰型で表が限りなく伸びないようにする)。
+/// 届いた後の型は型の分からない値として表示する。
 const LAYOUT_BUDGET: usize = 4096;
-/// 型の鍵の長さの上限。超えた型は型の分からない値として表示する。
-const LAYOUT_KEY_MAX: usize = 4096;
+/// 配置を作る型の大きさの上限(`Session::layout_key` の数え方で、この値を含む)。
+///
+/// 超えた型は型の分からない値として表示する。
+/// 上限は表示する値全体の型に掛かり、外側の型の大きさが上限を超えると、内側のレコードにも配置を作らない。
+/// `Int32` のフィールド N 個のレコードの大きさは 2N + 1 なので、表示する値全体がレコードのとき、配置を使うのはフィールド 409 個までである。
+/// 大きさは型の構造だけで決まり、通し番号の桁数に依らないので、配置を使うかどうかは受理しなかった入力に依らない。
+const LAYOUT_SIZE_MAX: usize = 820;
 
 /// [`Session::check`] の結果である。
 pub enum Outcome {
@@ -479,17 +487,25 @@ impl Session {
     }
 
     /// 型の構造の鍵。型変数は `?` にする(型変数の位置の値は型の分からない値として表示する)。
-    fn layout_key(&mut self, t: Ty, out: &mut String) -> R<()> {
+    ///
+    /// `size` に型の大きさを足していき、[`LAYOUT_SIZE_MAX`] を超えたところでたどるのをやめて `false` を返す。
+    /// 大きさは、たどった型の節(型構成子、レコード、ヴァリアント、`?`)の数とレコードとヴァリアントのフィールドの数の和で、
+    /// 通し番号の綴りの長さを含めない。
+    /// 上限の内側の型では鍵を最後まで作るので、別の型が同じ鍵になることはない。
+    fn layout_key(&mut self, t: Ty, out: &mut String, size: &mut usize) -> R<bool> {
         super::guard()?;
-        if out.len() > LAYOUT_KEY_MAX {
-            return Ok(());
+        *size += 1;
+        if *size > LAYOUT_SIZE_MAX {
+            return Ok(false);
         }
         let t = self.tc.repr(t);
         match self.tc.node(t) {
             TyNode::Con(n, args) => {
                 out.push_str(&format!("C{n}["));
                 for a in args.iter() {
-                    self.layout_key(*a, out)?;
+                    if !self.layout_key(*a, out, size)? {
+                        return Ok(false);
+                    }
                     out.push(',');
                 }
                 out.push(']');
@@ -501,16 +517,22 @@ impl Session {
                     '<'
                 });
                 let (fs, _) = self.tc.row_fields(row);
+                *size += fs.len();
+                if *size > LAYOUT_SIZE_MAX {
+                    return Ok(false);
+                }
                 for (l, f) in fs {
                     out.push_str(&format!("{l}:"));
-                    self.layout_key(f, out)?;
+                    if !self.layout_key(f, out, size)? {
+                        return Ok(false);
+                    }
                     out.push(',');
                 }
                 out.push('}');
             }
             _ => out.push('?'),
         }
-        Ok(())
+        Ok(true)
     }
 
     /// 型 `t` の配置を表に置き、その添字を返す。
@@ -525,8 +547,7 @@ impl Session {
             return Ok(0);
         }
         let mut key = String::new();
-        self.layout_key(t, &mut key)?;
-        if key.len() > LAYOUT_KEY_MAX || ls.nodes.len() >= LAYOUT_BUDGET {
+        if !self.layout_key(t, &mut key, &mut 0)? || ls.nodes.len() >= LAYOUT_BUDGET {
             return Ok(0);
         }
         if let Some(&i) = memo.get(&key) {
