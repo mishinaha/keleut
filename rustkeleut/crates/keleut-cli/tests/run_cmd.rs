@@ -279,7 +279,11 @@ fn compare_one(diktor: &str, corpus: &Path, rel: &str, flags: &str) -> Verdict {
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    if d.status.code() == k.status.code() && d.stdout == k.stdout && d.stderr == k.stderr {
+    // 標準エラーの `<値>` のレコードの順は付録 B が読み手に任せるので、並べ替えてから比べる(D561)。
+    if d.status.code() == k.status.code()
+        && d.stdout == k.stdout
+        && kconform::fieldsort::same_output(&d.stderr, &k.stderr)
+    {
         return Verdict::Same;
     }
     if k.status.code() == Some(4) && String::from_utf8_lossy(&k.stderr).contains("keleut: 未実装:")

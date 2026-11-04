@@ -288,7 +288,8 @@ fn check_fixture(path: &Path, cfg: &Config) -> std::io::Result<Verdict> {
         if r.code != d.code {
             return Ok(Verdict::Fail("fixture-run", describe(&r)));
         }
-        if r.stdout != d.stdout || r.stderr != d.stderr {
+        // 標準エラーの `<値>` のレコードの順は付録 B が読み手に任せるので、並べ替えてから比べる(D561)。
+        if r.stdout != d.stdout || !kconform::fieldsort::same_output(&r.stderr, &d.stderr) {
             return Ok(Verdict::Fail(
                 "fixture-run",
                 "keleut run の出力が diktor --run-ir と一致しない".to_string(),

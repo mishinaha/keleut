@@ -594,6 +594,83 @@ fn describe(f: &Path, d: &Output, k: &Output) -> String {
     )
 }
 
+/// REPL の表示の行(`名前 : 型 = 値`)なら、値の綴りの始まりの位置を返す。
+///
+/// 行が `名前 : ` で始まるとき、文字列と括弧を数えながら ` : ` の後ろの括弧の外の最初の ` = ` を探す。
+fn repl_value_start(l: &[u8]) -> Option<usize> {
+    let colon = l.windows(3).position(|w| w == b" : ")?;
+    if colon == 0 || l[..colon].contains(&b' ') {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut i = colon + 3;
+    while i < l.len() {
+        match l[i] {
+            b'"' => {
+                i += 1;
+                while i < l.len() && l[i] != b'"' {
+                    i += if l[i] == b'\\' { 2 } else { 1 };
+                }
+            }
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth = depth.checked_sub(1)?,
+            b' ' if depth == 0 && l[i..].starts_with(b" = ") => return Some(i + 3),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// REPL の標準出力の各行で、`<値>` と表示の値のレコードのフィールドを並べ替える(計画 261104-1 の 5.2 節)。
+///
+/// 表示の行は ` = ` の後ろに `kconform::fieldsort::sort_value` を当て、ほかの行には `sort_line` を当てる。
+/// 読めない値は変えない。
+/// 表示の行の扱いはこの試験だけのもので、kconform の正規化には入れない(計画 261104-1 の 2.3 節)。
+fn sort_repl(out: &[u8]) -> Vec<u8> {
+    use kconform::fieldsort::{sort_line, sort_value};
+    let mut v = Vec::with_capacity(out.len());
+    for (i, l) in out.split(|&b| b == b'\n').enumerate() {
+        if i > 0 {
+            v.push(b'\n');
+        }
+        match repl_value_start(l) {
+            Some(at) => match sort_value(&l[at..]) {
+                Some(x) => {
+                    v.extend_from_slice(&l[..at]);
+                    v.extend_from_slice(&x);
+                }
+                None => v.extend_from_slice(l),
+            },
+            None => v.extend_from_slice(&sort_line(l)),
+        }
+    }
+    v
+}
+
+#[test]
+fn repl_の表示の行を並べ替える() {
+    let s = |x: &str| String::from_utf8(sort_repl(x.as_bytes())).unwrap();
+    assert_eq!(
+        s("t : {y: String, x: Boolean, x: Int32} = {y = \"t\", x = true, x = 1}\n"),
+        "t : {y: String, x: Boolean, x: Int32} = {x = true, x = 1, y = \"t\"}\n"
+    );
+    assert_eq!(
+        s(
+            "f : ({b: Int32, a: Int32}) => Int32 = <fn>\n_ : (Int32, {q: Int32, p: Int32}) = (1, {q = 2, p = 3})"
+        ),
+        "f : ({b: Int32, a: Int32}) => Int32 = <fn>\n_ : (Int32, {q: Int32, p: Int32}) = (1, {p = 3, q = 2})"
+    );
+    // 表示の行でない行は sort_line の規則に従う。
+    assert_eq!(s("{b = 1, a = 2}"), "{b = 1, a = 2}");
+    assert_eq!(
+        s("実行時エラー: パターンに値が一致しません: {b = 1, a = 2}"),
+        "実行時エラー: パターンに値が一致しません: {a = 2, b = 1}"
+    );
+    // 読めない値は変えない。
+    assert_eq!(s("x : Int32 = {b = 1, a"), "x : Int32 = {b = 1, a");
+}
+
 /// `KELEUT_DIKTOR` があれば、その diktor を返す。
 fn diktor() -> Option<PathBuf> {
     std::env::var_os("KELEUT_DIKTOR").map(PathBuf::from)
@@ -637,8 +714,8 @@ fn コーパスを_repl_に読ませて_diktor_と比べる() {
         ch.stdin.take().unwrap().write_all(src.as_bytes()).unwrap();
         let d = ch.wait_with_output().unwrap();
         let k = keleut_in(Some(dir), &["repl"], &src);
-        // レコードの更新(`{r with l = …}`)の値は、Diktor はフィールドの位置を保ち、keleut は型の行の順に表示する。
-        let out_differs = d.stdout != k.stdout && !src.contains(" with ");
+        // レコードのフィールドの表示の順は処理系が決める(D558)ので、並べ替えてから比べる(D561)。
+        let out_differs = d.stdout != k.stdout && sort_repl(&d.stdout) != sort_repl(&k.stdout);
         if out_differs || d.status.code() != k.status.code() {
             bad.push(describe(&f, &d, &k));
         }

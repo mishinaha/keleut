@@ -20,6 +20,10 @@ keleut-rtcore = { path = "../keleut-rtcore" }
 keleut-wasm = { path = "../keleut-wasm" }
 kir = { path = "../kir" }
 
+[dev-dependencies]
+# Diktor の出力と比べる試験が、`<値>` のレコードのフィールドを並べ替えてから比べるために使う(計画 261104-1 の 5.2 節)。
+kconform = { path = "../kconform" }
+
 [features]
 # LLVM の後段は既定で組む(計画 6.1 節、P241)。
 # `--no-default-features` で外すと、インタプリタと WasmGC だけの `keleut` になる。
