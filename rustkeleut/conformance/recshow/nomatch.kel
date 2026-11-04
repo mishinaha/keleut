@@ -1,0 +1,13 @@
+effect A = { a: () => {} }
+effect Fail = { fail: () => {} }
+effect Two = { a2: ({c: Int32, a: Int32, b: Int32}) => Int32, b2: ({c: Int32, a: Int32, b: Int32}) => Int32 }
+let base = {a = 1, b = 2}
+let x(): Int32 @ {Two} = perform b2({c = 3 extends base})
+let inner(): Int32 = x() handle { case a2(r) => resume(1) case b2(r) => resume(2) }
+let r = (perform fail() handle {
+    case a() => resume()
+    case cancel => { let _ = inner(); {} }
+  }) handle {
+  case fail() => {}
+}
+let z = inner()
