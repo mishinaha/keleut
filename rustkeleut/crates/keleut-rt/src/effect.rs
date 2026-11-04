@@ -141,6 +141,8 @@ impl Pending {
 }
 
 /// 付録 B の 9 番の文面の `<操作><値>` の `<値>`(引数の組の綴り)。
+///
+/// 呼び手は各引数の綴り `shown` を [`crate::ctx::Rt::show`] で作るので、レコードのフィールドの順はそれに従う。
 pub fn args_text(shown: &[Vec<u8>]) -> Vec<u8> {
     let mut out = b"(".to_vec();
     for (i, s) in shown.iter().enumerate() {

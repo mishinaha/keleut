@@ -479,6 +479,8 @@ function runProgram(dir, META, exit) {
   }
 
   // 値の印字(crate keleut-rt の Rt::show と同じ)。深い値でも JS のスタックを使わないよう、作業の列でたどる。
+  // レコードのフィールドは Rt::show と同じく正準の配置の順に書く。付録 B はラベルの違うフィールドどうしの順を読み手に任せるが、
+  // 後段の群の中では出力が一致しなければならない(D499)ので、この順を Rt::show と変えてはならない。
   function show(v0) {
     const parts = [];
     const work = [{ v: v0 }];
