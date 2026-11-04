@@ -29,3 +29,17 @@
 | `c92.kel` | `diktor --emit-ir c92.kir c92.kel` の後の `diktor --run-ir c92.kir` | 13 分 31 秒の時点で常駐 6.3 GB、出力なし。止めた |
 
 この入力は Diktor を基準にする組では試験にできない。
+
+## 3. 閉じた標準出力を Node の前に見分ける起動の台本(検証の後に追加)
+
+`launcher.sh` は、fd 1 を fd 3 に複製できるかで閉じた標準出力を見分ける台本の試作である(指摘 facts-0、feasible-0 への答え)。
+`: >&1` は bash で閉じた fd 1 を見分けなかったので、`true 3>&1` を使う。
+
+| コマンド | 結果 |
+| --- | --- |
+| `bash launcher.sh >&-` | 文面を標準エラーに書いて 74 |
+| `bash launcher.sh >/dev/null` | 0 |
+| `bash launcher.sh \| cat` | `ok`、0 |
+
+この機械の `/bin/sh` は bash である。
+dash では試していない。
