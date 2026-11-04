@@ -164,6 +164,105 @@ fn レコードのフィールドは型の行の順に表示する() {
     );
 }
 
+/// 受理した入力の表示の行(受理しなかった入力が書く `! ` と `実行時エラー:` の行を除く)。
+fn accepted_lines(input: &str) -> Vec<String> {
+    let (out, code) = repl(&[], input);
+    assert_eq!(code, Some(0), "{out}");
+    out.lines()
+        .filter(|l| !l.starts_with("! ") && !l.starts_with("実行時エラー:"))
+        .map(str::to_string)
+        .collect()
+}
+
+/// セッション A の入力 `a` と、前に受理しない入力 `pre` を挟んだセッション B の入力が、同じ表示になることを確かめる。
+/// 返り値は A の表示の行である。
+fn same_display(a: &str, pre: &str, b: &str) -> Vec<String> {
+    let la = accepted_lines(a);
+    let lb = accepted_lines(&format!("{pre}{b}"));
+    if la != lb {
+        let i = (0..la.len().max(lb.len()))
+            .find(|&i| la.get(i) != lb.get(i))
+            .unwrap();
+        let ca: Vec<char> = la.get(i).map_or("", String::as_str).chars().collect();
+        let cb: Vec<char> = lb.get(i).map_or("", String::as_str).chars().collect();
+        let p = (0..ca.len().max(cb.len()))
+            .find(|&p| ca.get(p) != cb.get(p))
+            .unwrap_or(0);
+        let window = |c: &[char]| -> String {
+            let lo = p.saturating_sub(200).min(c.len());
+            let hi = (p + 200).min(c.len());
+            c[lo..hi].iter().collect()
+        };
+        panic!(
+            "受理しなかった入力で表示が変わる(行 {i}、文字 {p} から)\nA: {}\nB: {}",
+            window(&ca),
+            window(&cb)
+        );
+    }
+    la
+}
+
+fn fields(labels: impl Iterator<Item = (String, usize)>) -> String {
+    labels
+        .map(|(l, v)| format!("{l} = {v}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// 型の配置の上限を超えるレコードの表示は、受理しなかった入力に依らない(V231、D559)。
+///
+/// 600 個のフィールドのレコードは型の配置を使わず、フィールドをラベルの綴りの順で書く。
+/// セッション B は、同じラベルを正の順で使って実行時エラーで止まる入力を先に置く。
+#[test]
+fn 上限を超えるレコードの表示は受理しなかった入力に依らない() {
+    let fwd = fields((0..600).map(|i| (format!("f{i:03}"), i)));
+    let rev = fields((0..600).rev().map(|i| (format!("f{i:03}"), i)));
+    let a = format!("let r = {{{rev}}}\n");
+    let pre = format!("let w = {{{fwd}}}.f000 / 0\n");
+    let la = same_display(&a, &pre, &a);
+    assert_eq!(la.len(), 1);
+    assert!(la[0].ends_with(&format!("= {{{fwd}}}")), "{}", la[0]);
+}
+
+/// 型の配置を使うかどうかの判定は、受理しなかった入力に依らない(V231、D559)。
+///
+/// 両方のセッションで、400 個のラベルを正の順で使うレコードを受理させてから、同じラベルを逆の順で書いたリテラルを受理させる。
+/// セッション B は、多くの新しい名前を使う型エラーの入力を先に置く(通し番号の桁が増える)。
+/// 400 個のフィールドの型は配置の上限の内側なので、逆の順のリテラルは型の行の順で書く。
+#[test]
+fn 配置を使うかどうかの判定は受理しなかった入力に依らない() {
+    let fwd = fields((0..400).map(|i| (format!("f{i}"), i)));
+    let rev = fields((0..400).rev().map(|i| (format!("f{i}"), i)));
+    let g = fields((0..9000).map(|i| (format!("g{i}"), 1)));
+    let a = format!("let q = {{{fwd}}}\nlet r = {{{rev}}}\n");
+    let pre = format!("let z = {{{g}}} + 1\n");
+    let la = same_display(&a, &pre, &a);
+    assert_eq!(la.len(), 2);
+    assert!(la[1].ends_with(&format!("= {{{rev}}}")), "{}", la[1]);
+}
+
+/// 正則でない再帰型の値の中のレコードの表示は、受理しなかった入力に依らない(V231、D559)。
+///
+/// 深さ 10 の値の型は配置の上限を超えるので、中のレコードをラベルの綴りの順で書く。
+/// セッション B は、同じラベルを逆の順で初めて使い、実行時エラーで止まる入力を先に置く。
+#[test]
+fn 正則でない再帰型の値の表示は受理しなかった入力に依らない() {
+    fn lit(d: usize) -> String {
+        if d == 0 {
+            "{b = 1, a = 2}".to_string()
+        } else {
+            let s = lit(d - 1);
+            format!("({s}, {s})")
+        }
+    }
+    let v = format!("{}L({}){}", "N(".repeat(10), lit(10), ")".repeat(10));
+    let a = format!("newtype T[a] = L(a) | N(T[(a, a)])\nlet v: T[{{b: Int32, a: Int32}}] = {v}\n");
+    let la = same_display(&a, "let w = {a = 1, b = 2}.a / 0\n", &a);
+    assert_eq!(la.len(), 1);
+    assert!(la[0].contains("{a = 2, b = 1}"), "{}", la[0]);
+    assert!(!la[0].contains("{b = 1, a = 2}"), "{}", la[0]);
+}
+
 /// 試験のための一時のファイルを書き、そのパスを返す。
 fn temp_file(name: &str, text: &str) -> String {
     let p = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
