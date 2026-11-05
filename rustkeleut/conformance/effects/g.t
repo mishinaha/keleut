@@ -160,3 +160,57 @@ T の節の本体が外側の G の操作を起こし、内側のハンドラの
   $ keleut run via.kel
   4003
   2214
+
+組み込みの Array.each と pinned の中の perform を取り出す。
+組み込みの本体は LIR の関数なので、その中の呼び出しも再開点を持ち、継続は組み込みのフレームを含む。
+G の節の末尾でない resume で、Array.each の中の yield を集める:
+
+  $ cat > each_collect.kel <<'EOF'
+  > effect Gen = { yield: (Int32) => Unit }
+  > let arr = run h { let m = MutableArray.new(5, 0); MutableArray.set(m, 0, 10); MutableArray.set(m, 1, 20); MutableArray.set(m, 2, 30); MutableArray.set(m, 3, 40); MutableArray.set(m, 4, 50); MutableArray.freeze(m) }
+  > let collect(): List[Int32] = Array.each(arr, fn(x) => perform yield(x)) handle { case yield(x) => { let r = resume(()); Cons(x, r) } case return(u) => Nil }
+  > let rec show_list(xs: List[Int32]): String = xs match { case Nil => "." case Cons(x, t) => show(x) + " " + show_list(t) }
+  > echoln(show_list(collect()))
+  > EOF
+  $ keleut run each_collect.kel
+  10 20 30 40 50 .
+
+G の節の末尾の resume で、Array.each の中の yield の値を足す:
+
+  $ cat > each_sum.kel <<'EOF'
+  > effect Gen = { yield: (Int32) => Unit }
+  > let arr = run h { let m = MutableArray.new(5, 0); MutableArray.set(m, 0, 10); MutableArray.set(m, 1, 20); MutableArray.set(m, 2, 30); MutableArray.set(m, 3, 40); MutableArray.set(m, 4, 50); MutableArray.freeze(m) }
+  > let sum(): Int32 = run h {
+  >   let acc = Ref.new(0)
+  >   Array.each(arr, fn(x) => perform yield(x)) handle { case yield(x) => { Ref.set(acc, Ref.get(acc) + x); resume(()) } }
+  >   Ref.get(acc)
+  > }
+  > echoln(show(sum()))
+  > EOF
+  $ keleut run each_sum.kel
+  150
+
+Never を返す操作で、Array.each の途中から抜ける。
+操作を処理したハンドラが自分で継続を破棄するので、そのハンドラ自身の cancel 節は走らず、操作節の値がハンドラ式の値になる:
+
+  $ cat > each_stop.kel <<'EOF'
+  > effect Stop = { stop: (Int32) => Never }
+  > let arr = run h { let m = MutableArray.new(5, 0); MutableArray.set(m, 0, 10); MutableArray.set(m, 1, 20); MutableArray.set(m, 2, 30); MutableArray.set(m, 3, 40); MutableArray.set(m, 4, 50); MutableArray.freeze(m) }
+  > let first_big(): Int32 = { Array.each(arr, fn(x) => if x > 25 then perform stop(x) else echoln("skip " + show(x))); 0 } handle { case stop(x) => x case cancel => echoln("cancel") }
+  > echoln(show(first_big()))
+  > EOF
+  $ keleut run each_stop.kel
+  skip 10
+  skip 20
+  30
+
+pinned の中で yield し、G の節の末尾でない resume で再開する:
+
+  $ cat > pinned_yield.kel <<'EOF'
+  > effect Gen = { yield: (Int32) => Unit }
+  > let p(): Int32 = pinned(fn() => { perform yield(7); 8 }) handle { case yield(x) => { echoln("pinned yield " + show(x)); let r = resume(()); r + 1 } }
+  > echoln(show(p()))
+  > EOF
+  $ keleut run pinned_yield.kel
+  pinned yield 7
+  9
