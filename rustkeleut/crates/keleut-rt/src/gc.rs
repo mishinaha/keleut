@@ -835,9 +835,24 @@ impl Rt<'_> {
     ///
     /// 後退の道を持たない確保が失敗したら、印付けを打ち切り、ヒープを回収の前のままにして
     /// [`Stop::OutOfMemory`] を返す(このモジュールの冒頭の「回収の中の確保」)。
+    ///
+    /// 回収の後に、生きているフレームより後ろの値スタックの塊を返す([`ValueStack::release_after_collect`])。
+    /// 生きているフレームの最も上は、状態語が `YIELD` ならその `perform` のフレーム、そうでなければ [`GcState::top`] である。
+    /// 印付けを打ち切ったときも返す。
+    /// 捨てる塊のフレームは根としてたどっておらず、塊を返すことは確保をしないからである。
     pub fn collect(&mut self) -> Result<(), Stop> {
-        let _site = alloc::site(Site::Collect);
-        handled(|| self.collect_in_scope())
+        let r = {
+            let _site = alloc::site(Site::Collect);
+            handled(|| self.collect_in_scope())
+        };
+        let mut live = self.gc.top;
+        if let Pending::Yield { top: y, .. } = self.pending
+            && (live == NATIVE_CALLER || y > live)
+        {
+            live = y;
+        }
+        self.stack.release_after_collect(live);
+        r
     }
 
     fn collect_in_scope(&mut self) -> Result<(), Stop> {

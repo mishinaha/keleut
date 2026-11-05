@@ -1531,8 +1531,9 @@ impl<'p> Interp<'p> {
 
     /// `cont_make hr`。自分宛ての `YIELD` から継続を作る。
     ///
-    /// 写しの領域は、状態語を取り出す前に確保の失敗を返す形(`try_reserve`)で取る。
+    /// 写しの領域は、状態語を下ろす前に確保の失敗を返す形(`try_reserve`)で取る。
     /// 取れなければ [`Interp::fail_into_segment`] で、まだ値スタックに残る区間の最上段にメモリの不足を注入する。
+    /// 継続を表に入れて添字の箱を取れなかったときも同じである。
     fn cont_make(&mut self, st: &mut St, hr: Word) -> Result<Word, Stop> {
         let (t, top) = match &self.rt.pending {
             Pending::Yield { hr: t, top, .. } => (*t, *top),
@@ -1589,9 +1590,13 @@ impl<'p> Interp<'p> {
             sizes[i] = words as u32;
             pos = f[3];
         }
+        // 状態語は継続を表に入れた後で下ろす。
+        // 表に入れる確保が回収を起こしても、区間のフレームは状態語の `YIELD` の根として値スタックに残る。
+        // 回収は生きているフレームより後ろの塊を返すので、下ろしてからだと、継続を作れなかったときに
+        // [`Interp::fail_into_segment`] が移る区間の最上段が、返した塊にあることになる。
         let Pending::Yield {
             clause, args, cut, ..
-        } = std::mem::take(&mut self.rt.pending)
+        } = self.rt.pending.clone()
         else {
             unreachable!("上で確かめた");
         };
@@ -1607,7 +1612,10 @@ impl<'p> Interp<'p> {
             alive: true,
         };
         match self.rt.cont_new(c) {
-            Ok(k) => Ok(k),
+            Ok(k) => {
+                self.rt.pending = Pending::None;
+                Ok(k)
+            }
             Err(Stop::OutOfMemory) => self.fail_into_segment(st, top),
             Err(e) => Err(e),
         }
@@ -1625,7 +1633,7 @@ impl<'p> Interp<'p> {
 
     /// `cont_resume k v`。今のフレームの上に継続のフレームを写し戻し、最上段の `perform` に `v` を渡して続ける。
     ///
-    /// `v` が退避した状態語なら、それを最上段に注入して巻き戻す。
+    /// `v` が退避した状態語なら、フレームを置き直さずに [`Interp::cont_inject`] で注入して巻き戻す。
     fn cont_resume(
         &mut self,
         st: &mut St,
@@ -1634,6 +1642,9 @@ impl<'p> Interp<'p> {
         v: Word,
     ) -> Result<Option<Word>, Stop> {
         let ki = self.rt.cont_index(k)?;
+        if self.rt.is_kind(v, Kind::Pending) {
+            return self.cont_inject(st, rp, ki, v);
+        }
         let base = st.depth();
         let mut below = st.fpos;
         let mut top = st.fpos + st.code().frame_words as u64;
@@ -1690,10 +1701,6 @@ impl<'p> Interp<'p> {
             return Err(bug("フレームの無い継続"));
         }
         self.move_to(st, below)?;
-        if self.rt.is_kind(v, Kind::Pending) {
-            self.rt.pending = self.rt.pending_unbox(v)?;
-            return Err(Stop::Pending);
-        }
         // SAFETY: fp は最上段のフレーム(G の節に取り出された perform)の見出しを指す。
         let trp = (unsafe { *st.fp } >> 32) as u32;
         if trp & YIELDED == 0 {
@@ -1703,6 +1710,67 @@ impl<'p> Interp<'p> {
         st.set(e.dst, v.0);
         st.pc = e.pc_after as usize;
         Ok(None)
+    }
+
+    /// 継続 `ki` に退避した状態語 `v` を注入する(`cont_resume` の `v` が状態語のとき)。
+    ///
+    /// 使われていない継続にメモリの不足を注入するとき、継続のフレームを [`keleut_rt::stack::ValueStack::place`] で置き直すと塊の確保が要り、
+    /// それも取れなければ継続の中の `cancel` 節が走らない。
+    /// そこで、継続の写しの領域をそのまま 1 つの塊として値スタックにつなぎ([`keleut_rt::stack::ValueStack::link_copy`])、塊の領域を取らずに置く。
+    /// 写しのフレームの見出しの 1 番の語(深さ)と 3 番の語(呼び出し元の位置)は、ふつうの再開と同じく書き直す。
+    /// 塊の列を広げられなければ、継続を変えずにメモリの不足を返す。
+    fn cont_inject(
+        &mut self,
+        st: &mut St,
+        rp: u32,
+        ki: usize,
+        v: Word,
+    ) -> Result<Option<Word>, Stop> {
+        let base = st.depth();
+        let top = st.fpos + st.code().frame_words as u64;
+        if self.rt.conts[ki].sizes.is_empty() {
+            return Err(bug("フレームの無い継続"));
+        }
+        let frames = std::mem::take(&mut self.rt.conts[ki].frames);
+        let at = match self.rt.stack.link_copy(top, frames) {
+            Ok(at) => at,
+            Err((_, frames)) => {
+                self.rt.conts[ki].frames = frames;
+                return Err(Stop::OutOfMemory);
+            }
+        };
+        let sizes = std::mem::take(&mut self.rt.conts[ki].sizes);
+        let rh = self.rt_handle.map(|f| f.0);
+        let (mut pos, mut below) = (at, st.fpos);
+        for &sz in &sizes {
+            let p = self.rt.stack.ptr_at(pos);
+            // SAFETY: p は写しの塊の中のフレームの見出しを指す。
+            let (func, depth) = unsafe {
+                *p.add(1) = base.wrapping_add(*p.add(1));
+                *p.add(3) = below;
+                (*p as u32, *p.add(1))
+            };
+            // 写し戻したハンドラのフレームのハンドラ記録の深さを、新しい深さにする。
+            if Some(func) == rh {
+                // SAFETY: $rt_handle のフレームの any の区画の 0 番はハンドラ記録である。
+                let h = Word(unsafe { *p.add(HEADER_WORDS) });
+                self.rt.hr_mut(h)?.h = depth;
+            }
+            below = pos;
+            pos += u64::from(sz);
+        }
+        let c = &mut self.rt.conts[ki];
+        c.used = true;
+        let (hr, cut) = (c.hr, c.cut);
+        let chain = self.rt.chain;
+        let r = self.rt.hr_mut(hr)?;
+        r.parent = chain;
+        r.h = base;
+        self.rt.chain = cut;
+        st.set_resume(rp);
+        self.move_to(st, below)?;
+        self.rt.pending = self.rt.pending_unbox(v)?;
+        Err(Stop::Pending)
     }
 
     // ---- JIT のフレームのエフェクト(`crate::native` の実行時の関数から) ----
