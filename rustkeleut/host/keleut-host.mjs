@@ -10,6 +10,9 @@
 //   環境変数 KELEUT_WASM_DIRECT が 1 なら、この Node のスタック(`keleut run` が RLIMIT_STACK と
 //   `--stack-size` を上げて起動する)で走らせる。
 //   そうでなければ、`Worker` の `resourceLimits.stackSizeMb` でスタックを取って走らせる(`node main.mjs` だけで走る形)。
+//   Worker のスタックは META.bProg(プログラムの 1 段に見込むバイト数)で決め、STACK_CAP_KIB で切る
+//   (k = 0 の大きさより小さくは切らない)。
+//   環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックの大きさを標準エラーに 1 行書く。
 //   環境変数 KELEUT_WASM_RMDIR がこのファイルの場所を指すとき(`keleut run` の一時の場所)は、
 //   2 つの `.wasm` を読んだ後でその場所を消す。
 //   起動と読み込みの失敗、捕まえなかった例外は、内部エラーの 70 で終わる。
@@ -29,7 +32,10 @@ import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, workerData } from 'node:worker_threads';
 
 const NODE_MIN = [26, 9, 0];
+// k = 0 のプログラムの 1 段に見込むバイト数と、スタックの大きさの上限(KiB)。
+// crate keleut-wasm の B_WASM と STACK_CAP_KIB と同じ値である。
 const B_WASM = 1536;
+const STACK_CAP_KIB = 16777216;
 const BUFFER_BYTES = 65536;
 
 // 型紙の種類(meta.rs の kind)。
@@ -756,15 +762,24 @@ export async function start(META) {
     writeQuiet(2, enc.encode(`keleut: 内部エラー: Node ${NODE_MIN.join('.')} 以上が要ります(この Node は ${process.versions.node})\n`));
     exit(70);
   }
+  // 環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックの大きさを標準エラーに 1 行書く(測定と試験用)。
+  const stats = process.env.KELEUT_WASM_STATS !== undefined;
   if (process.env.KELEUT_WASM_DIRECT === '1') {
+    if (stats) writeQuiet(2, enc.encode('keleut-host: path=direct\n'));
     runProgram(dir, META, exit);
     return;
   }
   // RLIMIT_STACK と --stack-size を上げずに起動されたので、Worker のスタックで走らせる(D545)。
+  // 大きさは (L + R) × B_prog + 32 MiB で、keleut run の --stack-size と同じ式である(crate keleut-wasm の stack_size_kib)。
+  // B_prog はプログラムの 1 段に見込むバイト数で、META.bProg にある(crate keleut-wasm の b_prog)。
+  // STACK_CAP_KIB を超えたら切るが、B_WASM で求めた k = 0 の大きさより小さくはしない。
   const L = META.maxDepth;
   const R = Math.max(1024, Math.floor(L / 64));
-  const stackKiB = Math.ceil(((L + R) * B_WASM + 32 * 1024 * 1024) / 1024);
+  const need = (b) => Math.ceil(((L + R) * b + 32 * 1024 * 1024) / 1024);
+  let stackKiB = need(META.bProg);
+  if (stackKiB > STACK_CAP_KIB) stackKiB = Math.max(STACK_CAP_KIB, need(B_WASM));
   const stackSizeMb = Math.ceil(stackKiB / 1024) + 64;
+  if (stats) writeQuiet(2, enc.encode(`keleut-host: path=worker stackSizeMb=${stackSizeMb}\n`));
   let w;
   try {
     w = new Worker(new URL(import.meta.url), {

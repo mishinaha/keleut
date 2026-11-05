@@ -1,0 +1,4 @@
+effect Q = { q: (Int32) => Never }
+effect Zz = { zz: () => Unit }
+let rec go(m: Int32): Int32 @ {Console} = if m == 0 then { echoln("bottom"); 0 } else { let a0 = m * 3; let q = (perform q(m)) handle { case q(x0) => { let z = (x0) handle { case zz() => resume(()) case return(x1) => { let b0 = x1 * 3; let z = go(x1 - 1); z + (b0 - b0) } }; z + 0 } }; q + (a0 - a0) }
+echoln(show(go(3)))

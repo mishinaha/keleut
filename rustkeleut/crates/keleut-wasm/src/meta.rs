@@ -186,10 +186,15 @@ fn js_list<T>(out: &mut String, xs: &[T], f: impl Fn(&mut String, &T)) {
 }
 
 /// ホストに渡す表(JSON の 1 つのオブジェクト)。
-pub fn meta_json(prog: &Program, t: &Templates, max_depth: u64) -> String {
+pub fn meta_json(prog: &Program, t: &Templates, max_depth: u64, b_prog: u64, k: u32) -> String {
     let mut o = String::new();
     o.push_str("{\"maxDepth\":");
     o.push_str(&max_depth.to_string());
+    // host の Worker の経路がスタックの大きさを決める 1 段のバイト数 B_prog と、その k(crate の b_prog と clause_path)。
+    o.push_str(",\"bProg\":");
+    o.push_str(&b_prog.to_string());
+    o.push_str(",\"cancelNest\":");
+    o.push_str(&k.to_string());
     o.push_str(",\"templates\":");
     js_list(&mut o, &t.list, |o, (k, a, s)| {
         o.push_str(&format!("[{k},{a},"));

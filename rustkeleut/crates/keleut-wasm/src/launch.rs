@@ -5,7 +5,10 @@
 //!
 //! `keleut run --backend wasm` は 3 つを一時の場所(`$TMPDIR/keleut-wasm-PID-N-NANOS`、0700)に書き、`node` を子プロセスで起動する。
 //! 子の `RLIMIT_STACK` を `S = --stack-size + 64 MiB` にし(`pre_exec` の中の `setrlimit`)、
-//! `--stack-size` に `(L + R) × B_wasm + 32 MiB`(KiB)を渡す(M79 の記録の 1.5 節で改めた式)。
+//! `--stack-size` に `(L + R) × B_prog + 32 MiB`(KiB)を渡す(M79 の記録の 1.5 節で改めた式)。
+//! `B_prog` はプログラムの 1 段に見込むバイト数で、`cancel` 節の中にハンドラ式が無く、再帰の道になる `return` 節も無ければ `B_wasm` である(`crate::b_prog`)。
+//! そうでないプログラムは、既定の L でもスタックが V8 の上限を超えるので、`Worker` の経路で走る。
+//! スタックは [`crate::STACK_CAP_KIB`] で切る。
 //! 次のときは、`main.mjs` が `Worker` の `resourceLimits.stackSizeMb` で走らせる。
 //!
 //! - `RLIMIT_STACK` の硬い限度が `S` より小さいとき。
@@ -35,7 +38,7 @@ use std::process::Command;
 
 use keleut_lir::Program;
 
-use crate::{Options, STACK_SIZE_MAX_KIB, compile, stack_size_kib};
+use crate::{Options, STACK_SIZE_MAX_KIB, compile, stack_need_kib, stack_size_kib};
 
 /// Node 側の実行時。
 pub const HOST_JS: &str = include_str!("../../../host/keleut-host.mjs");
@@ -45,26 +48,44 @@ pub fn main_mjs(meta: &str) -> String {
     format!("{HOST_JS}\nawait start({meta});\n")
 }
 
-/// 翻訳し、検証と trap の検査をした出力(`program.wasm` と `main.mjs`)。
+/// 翻訳し、検証と trap の検査をした出力(`program.wasm`、`main.mjs`、プログラムの 1 段のバイト数 `B_prog`)。
 ///
 /// 環境変数 `KELEUT_WASM_STATS` があれば、翻訳の統計を標準エラーに書く(測定用)。
-pub fn build_outputs(prog: &Program, max_depth: u64) -> Result<(Vec<u8>, String), String> {
+/// 統計の行の後ろには `k`、`B_prog`、`r`([`crate::clause_path`] の値)を書く。
+/// 切る前の大きさ [`crate::stack_need_kib`] より小さいスタックを使うときは、その切り方も書く。
+/// [`crate::STACK_CAP_KIB`] で切ったときは `、スタックを STACK_CAP で切った`、
+/// `STACK_CAP` が `k = 0` の大きさより小さく、`k = 0` の大きさで切ったときは `、スタックを k = 0 の大きさで切った` である。
+pub fn build_outputs(prog: &Program, max_depth: u64) -> Result<(Vec<u8>, String, u64), String> {
     let out = compile(prog, &Options { max_depth })?;
     crate::check::validate(&out.program)?;
     // rt.wasm は C の線形メモリのコードなので、trap の検査器でなく検証だけを通す。
     crate::check::validate(keleut_rtcore::RT_WASM).map_err(|e| format!("rt.wasm: {e}"))?;
     let rep = crate::check::trap_check(&out.program)?;
     if std::env::var_os("KELEUT_WASM_STATS").is_some() {
+        let need = stack_need_kib(max_depth, out.stats.b_prog);
+        let size = stack_size_kib(max_depth, out.stats.b_prog);
+        let cut = if need <= size {
+            ""
+        } else if size == crate::STACK_CAP_KIB {
+            "、スタックを STACK_CAP で切った"
+        } else {
+            "、スタックを k = 0 の大きさで切った"
+        };
         eprintln!(
-            "keleut-wasm: {:?}、program.wasm {} バイト、検査した関数 {} 個(補助関数 {} 個)、命令 {} 個",
+            "keleut-wasm: {:?}、program.wasm {} バイト、検査した関数 {} 個(補助関数 {} 個)、命令 {} 個、k = {}、B_prog = {} バイト、r = {}{}",
             out.stats,
             out.program.len(),
             rep.funcs,
             rep.safe,
-            rep.ops
+            rep.ops,
+            out.stats.cancel_nest,
+            out.stats.b_prog,
+            out.stats.ret_chain,
+            cut
         );
     }
-    Ok((out.program, main_mjs(&out.meta)))
+    let b = out.stats.b_prog;
+    Ok((out.program, main_mjs(&out.meta), b))
 }
 
 /// 3 つのファイルを `dir` に書く。
@@ -78,7 +99,7 @@ pub fn write_dir(dir: &Path, program: &[u8], main: &str) -> std::io::Result<()> 
 
 /// `keleut build --target wasm -o DIR` の本体。
 pub fn build(prog: &Program, max_depth: u64, dir: &Path) -> Result<(), String> {
-    let (program, main) = build_outputs(prog, max_depth)?;
+    let (program, main, _) = build_outputs(prog, max_depth)?;
     write_dir(dir, &program, &main).map_err(|e| format!("{}: {e}", dir.display()))
 }
 
@@ -218,8 +239,10 @@ fn address_space_unlimited() -> bool {
 }
 
 /// スタックの大きさの計画(`--stack-size` の KiB と RLIMIT_STACK のバイト数。使えなければ `None` で Worker の経路)。
-pub fn stack_plan(max_depth: u64) -> Option<(u64, u64)> {
-    let kib = stack_size_kib(max_depth);
+///
+/// `b_prog` はプログラムの 1 段に見込むバイト数 `B_prog` である。
+pub fn stack_plan(max_depth: u64, b_prog: u64) -> Option<(u64, u64)> {
+    let kib = stack_size_kib(max_depth, b_prog);
     let s = (kib + (64 << 10)).saturating_mul(1024);
     if kib > STACK_SIZE_MAX_KIB || !address_space_unlimited() {
         return None;
@@ -283,7 +306,7 @@ fn exit_status(status: std::process::ExitStatus) -> u8 {
 
 /// `keleut run --backend wasm` の本体。終了状態を返す。
 pub fn run(prog: &Program, o: &RunOptions) -> u8 {
-    let (program, main) = match build_outputs(prog, o.max_depth) {
+    let (program, main, b_prog) = match build_outputs(prog, o.max_depth) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("keleut: 内部エラー: {e}");
@@ -310,7 +333,7 @@ pub fn run(prog: &Program, o: &RunOptions) -> u8 {
     drop(program);
     let node = std::env::var_os("KELEUT_NODE").unwrap_or_else(|| "node".into());
     let mut cmd = Command::new(&node);
-    let plan = stack_plan(o.max_depth);
+    let plan = stack_plan(o.max_depth, b_prog);
     if let Some((kib, _)) = plan {
         cmd.arg(format!("--stack-size={kib}"))
             .env("KELEUT_WASM_DIRECT", "1");

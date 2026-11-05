@@ -1,0 +1,7 @@
+effect Stop = { stop: () => Int32 }
+effect Zz = { zz: () => Unit }
+effect Q = { q: (Int32) => Never }
+effect Ask = { ask: () => Int32 }
+echoln(show((perform ask()) handle { case ask() => { let r = resume(1); r + 1 } }))
+let rec go(m: Int32): Int32 @ {Stop, Console} = if m == 0 then { echoln("bottom"); 0 } else { let q = (perform stop()) handle { case zz() => resume(()) case cancel => { let r = { let x = m; (x) handle { case zz() => resume(()) case return(x) => { let r2 = { let s = perform stop(); s } handle { case zz() => resume(()) case cancel => { let r3 = (x) handle { case zz() => resume(()) case return(x) => { let r2 = { let s = perform stop(); s } handle { case zz() => resume(()) case cancel => { let r3 = (x) handle { case zz() => resume(()) case return(x) => { let r2 = { let s = perform stop(); s } handle { case zz() => resume(()) case cancel => { let r3 = { let k = x - 1; let z = go(k); z + 0 } handle { case stop() => 0 }; if r3 + 0 != 0 then echoln("bad") else () } }; r2 + 0 } }; if r3 + 0 != 0 then echoln("bad") else () } }; r2 + 0 } }; if r3 + 0 != 0 then echoln("bad") else () } }; r2 + 0 } } }; if r + 0 != 0 then echoln("bad") else () } }; q + 0 }
+echoln(show(go(3) handle { case stop() => 7 }))

@@ -1,0 +1,3 @@
+effect Zz = { zz: () => Unit }
+let f(m: Int32): Int32 @ {Console} = (m) handle { case zz() => resume(()) case return(x) => { echoln("close " + show(x)); x } }
+echoln(show(f(3)))

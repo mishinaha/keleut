@@ -82,7 +82,7 @@ use wasm_encoder::{BlockType, Function, HeapType, Ieee64, RefType, ValType};
 use crate::emit::{EQ, F64, Fb, HEQ, HI31, I32, I64, ctf, hrf, imp, rv, svf};
 use crate::meta::{self, arg, kind};
 use crate::rt::{self, H};
-use crate::{B_WASM, Cg, FKey, cls, frame_estimate, pk};
+use crate::{B_WASM, Cg, E_RRES, E_RTH, FKey, cls, frame_estimate, pk};
 
 /// 1 回の `array.new_fixed` で作る要素の数の上限(V8 は 10,000)。
 const NEW_FIXED_MAX: usize = 1000;
@@ -427,12 +427,6 @@ struct Tr<'a, 'p> {
     /// 1 段のバイト数の推定の予算([`budget_of`])。
     budget: u64,
 }
-
-/// ハンドラのフレームの関数 `$rt_handle` の 1 段のバイト数の推定の上限(翻訳した推定が超えたら翻訳の誤り)。
-const E_RTH: u64 = 320;
-
-/// `rt_resume` の補助関数の 1 段のバイト数の推定(局所 5 個、引数 3 個)。
-const E_RRES: u64 = 8 * 5 + 24 * 3 + 64;
 
 /// 関数の 1 段のバイト数の推定の予算。
 ///

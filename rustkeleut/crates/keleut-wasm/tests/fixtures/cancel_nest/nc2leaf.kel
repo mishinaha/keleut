@@ -1,0 +1,3 @@
+effect Q = { q: (Int32) => Never }
+let f(m: Int32): Int32 @ {Console} = (perform q(m)) handle { case q(x0) => { let z = (perform q(x0)) handle { case q(x1) => { echoln("leaf " + show(x1)); x1 } }; z + 1 } }
+echoln(show(f(3)))

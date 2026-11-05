@@ -54,13 +54,356 @@ pub fn wire_arity(n: u32) -> u32 {
     if n > P_DIRECT { P_DIRECT + 1 } else { n }
 }
 
-/// `--stack-size` に渡す KiB(`(L + R) × B_wasm + 32 MiB`。M79 の 1.5 節)。
-pub fn stack_size_kib(max_depth: u64) -> u64 {
+/// ハンドラのフレームの関数 `$rt_handle` の 1 段のバイト数の推定の上限 `E_rth`(翻訳した推定が超えたら翻訳の誤り)。
+pub const E_RTH: u64 = 320;
+
+/// `rt_resume` の補助関数の 1 段のバイト数の推定 `E_rres`(局所 5 個、引数 3 個)。
+pub const E_RRES: u64 = 8 * 5 + 24 * 3 + 64;
+
+/// プログラムの 1 段に見込むバイト数 `B_prog`(計画 261104-3 の D564 と、その実施記録の M106 の節)。
+///
+/// `B_prog = B_wasm + k × (B_wasm − E_rres) + R(r)` である。
+/// `R(0) = 0`、`r ≥ 1` なら `R(r) = r × B_wasm − E_rth` とする。
+/// `k` と `r` は [`clause_path`] の値で、同じ深さに重なる節の 1 本の道に沿って数える。
+///
+/// `cancel` 節の中にハンドラ式があると、論理的な 1 つの深さに、ハンドラ式を書いた関数と `$rt_handle` の上に、
+/// さらに `cancel` 節と内側の `$rt_handle` が重なる。
+/// 重なる 1 組の予算は `(B_wasm − E_rth − E_rres) + E_rth = B_wasm − E_rres` である。
+/// `rt_resume` は 1 つの深さに 1 つしか重ならないので、組ごとには足さない。
+///
+/// `return` 節と種類 N の操作節は、`$rt_handle` が末尾で呼んで自分を置き換えるので、ハンドラ式を書いた関数と同じ深さに載る。
+/// 鎖の長さが `r` なら、深さ `h` には、ハンドラ式を書いた関数(予算 `B_wasm − E_rth − E_rres`)、
+/// `r` 個の節(どれも予算 `B_wasm`)、最後の節の呼ぶ `$rt_handle` と `rt_resume` が重なる。
+/// 和は `B_wasm + r × B_wasm − E_rth` で、`R(r)` はこの和から `B_wasm` を引いたものである。
+/// 鎖の 2 つ目からの節は、前の節が末尾でなく呼んだ `$rt_handle` の場所に載り、その `$rt_handle` は予算に入っていないので、節ごとに `B_wasm` を足す。
+/// `cancel` 節と、`return` 節や N の節が 1 本の道に交互に並ぶときは、2 つの重なりを足す。
+/// 道の 2 つ目からの節は、前の節が末尾でなく呼んだ `$rt_handle` の上(`cancel` 節)か、その `$rt_handle` の場所(`return` 節と N の節)に載る。
+/// どちらの場合も前の節のフレームは残るので、どの節の分も別々に要る。
+/// `k = 0` かつ `r = 0` なら `B_prog = B_wasm` である。
+pub fn b_prog(k: u32, r: u32) -> u64 {
+    let rr = if r == 0 {
+        0
+    } else {
+        u64::from(r).saturating_mul(B_WASM) - E_RTH
+    };
+    B_WASM
+        .saturating_add(u64::from(k).saturating_mul(B_WASM - E_RRES))
+        .saturating_add(rr)
+}
+
+/// 関数ごとに、直の呼び出し(末尾の呼び出しも含む)をたどって深い再帰の道に届くかを求める。
+///
+/// 関数 `f` から直の呼び出しをたどって届く関数(`f` 自身も含む)の中に、次のどちらかがあれば真である。
+///
+/// - 値の呼び出し、メソッドの呼び出し、`perform` を持つ関数か、`$rt_handle`(節と本体を値として呼ぶ)。
+/// - 直の呼び出しの循環に入る関数。
+///
+/// どちらも無ければ、`f` から呼ぶ関数の入れ子の深さは有限で、`f` の上に論理的な段を際限なく積むことはない。
+/// 直の呼び出しのグラフの強連結成分を Tarjan の方法で求め、呼ばれる側の成分から順に決める。
+fn reaches_recursion(prog: &Program) -> Vec<bool> {
+    let n = prog.funcs.len();
+    // 関数ごとの(値やメソッドの呼び出しか perform を持つか、直に呼ぶ関数)。
+    let info: Vec<(bool, Vec<usize>)> = prog
+        .funcs
+        .iter()
+        .map(|f| {
+            let mut open = f.kind == FuncKind::Handler;
+            let mut direct = Vec::new();
+            for b in &f.blocks {
+                for i in &b.insts {
+                    match i {
+                        Inst::CallDirect { func, .. } => direct.push(func.index()),
+                        Inst::CallValue { .. }
+                        | Inst::CallMethod { .. }
+                        | Inst::Fx {
+                            op: FxOp::Perform { .. },
+                            ..
+                        } => open = true,
+                        _ => {}
+                    }
+                }
+                match &b.term {
+                    keleut_lir::Term::TailCallDirect { func, .. } => direct.push(func.index()),
+                    keleut_lir::Term::TailCallValue { .. }
+                    | keleut_lir::Term::TailCallMethod { .. } => open = true,
+                    _ => {}
+                }
+            }
+            (open, direct)
+        })
+        .collect();
+    // Tarjan の方法を明示のスタックで行う(呼び出しの鎖が長くても Rust のスタックを使い切らない)。
+    let mut index = vec![usize::MAX; n];
+    let mut low = vec![0usize; n];
+    let mut on = vec![false; n];
+    let mut st: Vec<usize> = Vec::new();
+    let mut reach = vec![false; n];
+    let mut next = 0usize;
+    for s in 0..n {
+        if index[s] != usize::MAX {
+            continue;
+        }
+        let mut work = vec![(s, 0usize)];
+        index[s] = next;
+        low[s] = next;
+        next += 1;
+        st.push(s);
+        on[s] = true;
+        while let Some(&mut (v, ref mut pos)) = work.last_mut() {
+            if let Some(&w) = info[v].1.get(*pos) {
+                *pos += 1;
+                if index[w] == usize::MAX {
+                    index[w] = next;
+                    low[w] = next;
+                    next += 1;
+                    st.push(w);
+                    on[w] = true;
+                    work.push((w, 0));
+                } else if on[w] {
+                    low[v] = low[v].min(index[w]);
+                }
+                continue;
+            }
+            work.pop();
+            if let Some(&(u, _)) = work.last() {
+                low[u] = low[u].min(low[v]);
+            }
+            if low[v] != index[v] {
+                continue;
+            }
+            // v を根とする成分を取り出す。呼ばれる側の成分は先に決まっている。
+            let mut comp = Vec::new();
+            loop {
+                let w = st.pop().unwrap();
+                on[w] = false;
+                comp.push(w);
+                if w == v {
+                    break;
+                }
+            }
+            let cyclic = comp.len() > 1 || info[v].1.contains(&v);
+            let r = cyclic
+                || comp.iter().any(|&w| {
+                    info[w].0 || info[w].1.iter().any(|&g| !comp.contains(&g) && reach[g])
+                });
+            for &w in &comp {
+                reach[w] = r;
+            }
+        }
+    }
+    reach
+}
+
+/// 同じ深さに重なる節の道の、`cancel` 節の数 `k` と、数える `return` 節と分類 N の操作節の数 `r`(`B_prog` の `k` と `r`。[`b_prog`])。
+///
+/// LIR から求める。
+/// 扱う節は、種類 `cancelclause` の関数、種類 `retclause` の関数、分類 N の操作節の関数の 3 つである。
+/// 節の関数は、ハンドラ式を書いた関数の中で `closure_new` で作られ、`handler_new` に渡される(`doc/lir.md` の 16.2 節)。
+/// そのため、節 `f` が `closure_new` で作る節 `g` は、`f` の中に直に書いたハンドラ式の節である。
+/// 節 `f` から、`f` が作る節 `g` へ辺を引き、辺をたどる道ごとに 1 つの深さに重なるバイト数を見積もる。
+///
+/// 3 つの節は、どれもハンドラ式を書いた関数と同じ深さに重なる。
+/// `cancel` 節は `$rt_handle` と同じ深さで走り、その中のハンドラ式の `$rt_handle` を末尾でなく呼ぶ(IRSpec 5.3 節)。
+/// `return` 節と分類 N の操作節は、`$rt_handle` が末尾で呼んで自分を置き換える(`rustkeleut/doc/lir.md` 16.3 節)。
+/// そのため、`cancel` 節と、`return` 節や N の節が交互に入れ子になった道でも、道の節はすべて同じ深さに重なる。
+/// ハンドラ式の本体、ラムダ、分類 T と G の操作節の中のハンドラ式は別の関数になり、深さを 1 つ増やして走るので、道に入れない。
+///
+/// 道に入れる節と、その重みは次のとおりである。
+///
+/// - `handler_new` を持つ `cancel` 節は `k` に 1 を足す(重み `B_wasm − E_rres`)。
+///   `handler_new` を持たない `cancel` 節は道の終わりで、何も足さない。
+/// - 深い再帰の道に届く `return` 節と N の節は `r` に 1 を足す(重み `B_wasm`、道に 1 つでもあれば全体から `E_rth` を引く)。
+///   届かない節(`echoln` のような葉の関数だけを呼ぶ節)は道の終わりで、何も足さない。
+/// - ただし、`return` 節が無く N の節が 1 つだけの道では、その N の節を数えない(`r = 0`)。
+///   N の節が 1 つだけで重なる形は、測った 1 段のバイト数が `B_wasm` に収まったからである。
+///
+/// 返すのは、重み([`b_prog`] の値)が最大の道の `(k, r)` である。
+/// 道の重みの最大を `k` と `r` の別々の最大から求めると、交互の鎖を見落とすので、1 本の道に沿って数える。
+/// 節は字面の入れ子なので辺は循環しないが、念のため開いている途中の節は道の終わりと見る。
+pub fn clause_path(prog: &Program) -> (u32, u32) {
+    let n = prog.funcs.len();
+    let reach = reaches_recursion(prog);
+    // 分類 N の操作節の関数。handler_new の被演算子は本体、受け継ぐ継続、節の関数の値(書いた順)、return 節、cancel 節である。
+    let mut never = vec![false; n];
+    // handler_new を持つ関数。
+    let mut has_handler = vec![false; n];
+    for (fi, f) in prog.funcs.iter().enumerate() {
+        let mut made: HashMap<keleut_lir::Reg, FuncId> = HashMap::new();
+        for i in f.blocks.iter().flat_map(|b| &b.insts) {
+            match i {
+                Inst::ClosureNew { dst, func, .. } => {
+                    made.insert(*dst, *func);
+                }
+                Inst::Fx {
+                    op: FxOp::HandlerNew { ops, .. },
+                    args,
+                    ..
+                } => {
+                    has_handler[fi] = true;
+                    for (j, (_, class)) in ops.iter().enumerate() {
+                        if *class == ClauseClass::N
+                            && let Some(g) = args.get(2 + j).and_then(|a| made.get(a))
+                        {
+                            never[g.index()] = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let kind = |i: usize| prog.funcs[i].kind;
+    let is_cancel = |i: usize| kind(i) == FuncKind::Kir(keleut_lir::FnKind::Cancelclause);
+    let is_ret = |i: usize| kind(i) == FuncKind::Kir(keleut_lir::FnKind::Retclause);
+    let in_set = |i: usize| is_cancel(i) || is_ret(i) || never[i];
+    // 節ごとの作る節。
+    let kids: Vec<Vec<usize>> = prog
+        .funcs
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            if !in_set(i) {
+                return Vec::new();
+            }
+            f.blocks
+                .iter()
+                .flat_map(|b| &b.insts)
+                .filter_map(|x| match x {
+                    Inst::ClosureNew { func, .. } if in_set(func.index()) => Some(func.index()),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
+    // 節から始まる道の最良を、道の種類ごとに持つ。
+    // p0 は return 節も N の節も無い道の k、p1 は N の節が 1 つだけで return 節の無い道の k、
+    // pc は r を数える道の (k, r) である(どれも重みが最大のもの。None はその種類の道が無い)。
+    #[derive(Clone, Copy, Default)]
+    struct Best {
+        p0: Option<u32>,
+        p1: Option<u32>,
+        pc: Option<(u32, u32)>,
+    }
+    let weight_c = |(k, r): (u32, u32)| b_prog(k, r);
+    let better = |a: Option<(u32, u32)>, b: (u32, u32)| match a {
+        Some(x) if weight_c(x) >= weight_c(b) => Some(x),
+        _ => Some(b),
+    };
+    let leaf = Best {
+        p0: Some(0),
+        p1: None,
+        pc: None,
+    };
+    let mut memo: Vec<Option<Best>> = vec![None; n];
+    let mut open = vec![false; n];
+    let mut best = (0u32, 0u32);
+    for s in 0..n {
+        if !in_set(s) {
+            continue;
+        }
+        // 明示のスタックで深さ優先に求める(入れ子が深くても Rust のスタックを使い切らない)。
+        let mut stack = vec![(s, false)];
+        while let Some((v, done)) = stack.pop() {
+            if memo[v].is_some() {
+                continue;
+            }
+            let counts = if is_cancel(v) {
+                has_handler[v]
+            } else {
+                reach[v]
+            };
+            if !counts {
+                memo[v] = Some(leaf);
+                continue;
+            }
+            if !done {
+                if !open[v] {
+                    open[v] = true;
+                    stack.push((v, true));
+                    for &g in &kids[v] {
+                        if memo[g].is_none() && !open[g] {
+                            stack.push((g, false));
+                        }
+                    }
+                }
+                continue;
+            }
+            // 子の道の最良(開いている途中の子は道の終わりと見る)。どの節でも道をそこで終えられる。
+            let mut c = leaf;
+            for &g in &kids[v] {
+                let b = memo[g].unwrap_or(leaf);
+                c.p0 = c.p0.max(b.p0);
+                c.p1 = c.p1.max(b.p1);
+                if let Some(x) = b.pc {
+                    c.pc = better(c.pc, x);
+                }
+            }
+            let mut me = Best::default();
+            if is_cancel(v) {
+                me.p0 = c.p0.map(|k| k + 1);
+                me.p1 = c.p1.map(|k| k + 1);
+                me.pc = c.pc.map(|(k, r)| (k + 1, r));
+            } else {
+                // 2 つ目の return 節か N の節が加わると、1 つだけの N の節も数える。
+                if let Some(k) = c.p1 {
+                    me.pc = better(me.pc, (k, 2));
+                }
+                if let Some((k, r)) = c.pc {
+                    me.pc = better(me.pc, (k, r.saturating_add(1)));
+                }
+                let k0 = c.p0.unwrap_or(0);
+                if is_ret(v) {
+                    me.pc = better(me.pc, (k0, 1));
+                } else {
+                    me.p1 = Some(k0);
+                }
+            }
+            memo[v] = Some(me);
+        }
+        let b = memo[s].unwrap_or(leaf);
+        for x in [b.p0.map(|k| (k, 0)), b.p1.map(|k| (k, 0)), b.pc]
+            .into_iter()
+            .flatten()
+        {
+            if weight_c(x) > weight_c(best) {
+                best = x;
+            }
+        }
+    }
+    best
+}
+
+/// スタックの大きさの上限 `STACK_CAP`(KiB。16 GiB)。
+///
+/// `B_prog` は `k` に比例して大きくなるので、`k` の大きいプログラムのスタックを上限で切る。
+/// 切らないと、`Worker` を作れずに浅い深さでも起動のときに 70 になる。
+/// この機械の Node 26.9.0 は `resourceLimits.stackSizeMb` が 16,448 と 32,000 の `Worker` を作れ、64,000 では作れなかった。
+/// 既定の L では、`k` が 10 までのプログラムは切らない。
+/// `k = 0` の大きさより小さくは切らない([`stack_size_kib`])。
+/// host の `STACK_CAP_KIB` と同じ値である。
+pub const STACK_CAP_KIB: u64 = 16 << 20;
+
+/// 上限で切る前のスタックの大きさ(KiB。`(L + R) × B_prog + 32 MiB`、`R = max(1024, L / 64)`。M79 の 1.5 節)。
+pub fn stack_need_kib(max_depth: u64, b_prog: u64) -> u64 {
     let r = (max_depth / 64).max(1024);
     (max_depth.saturating_add(r))
-        .saturating_mul(B_WASM)
+        .saturating_mul(b_prog)
         .saturating_add(32 << 20)
         .div_ceil(1024)
+}
+
+/// `--stack-size` と `Worker` のスタックに使う KiB。
+///
+/// [`stack_need_kib`] が [`STACK_CAP_KIB`] を超えるときは `STACK_CAP_KIB` で切る。
+/// ただし `k = 0` の大きさ(`B_prog = B_wasm`)より小さくはしない。
+/// `k = 0` のプログラムの振る舞いを変えないためである(取れない大きさのスタックは、前と同じく起動のときに 70 になる)。
+pub fn stack_size_kib(max_depth: u64, b_prog: u64) -> u64 {
+    let need = stack_need_kib(max_depth, b_prog);
+    if need <= STACK_CAP_KIB {
+        need
+    } else {
+        STACK_CAP_KIB.max(stack_need_kib(max_depth, B_WASM))
+    }
 }
 
 /// V8 の `--stack-size` が受け付ける最大の KiB(M79 の 1.3 節)。
@@ -192,6 +535,12 @@ pub struct Stats {
     pub split_funcs: usize,
     /// 1 つの LIR の関数を分けた部分の数の最大。
     pub max_parts: usize,
+    /// 重みが最大の節の道の `cancel` 節の数 `k`([`clause_path`])。
+    pub cancel_nest: u32,
+    /// 重みが最大の節の道の、数える `return` 節と N の節の数 `r`([`clause_path`])。
+    pub ret_chain: u32,
+    /// プログラムの 1 段に見込むバイト数 `B_prog`([`b_prog`])。
+    pub b_prog: u64,
 }
 
 fn cexpr(insns: Vec<Instruction<'static>>) -> ConstExpr {
@@ -564,7 +913,15 @@ pub fn compile(prog: &Program, opts: &Options) -> Result<Output, String> {
             P_DIRECT + PACKED_MAX
         ));
     }
-    let meta = meta::meta_json(prog, &cg.tpl, opts.max_depth);
+    (cg.stats.cancel_nest, cg.stats.ret_chain) = clause_path(prog);
+    cg.stats.b_prog = b_prog(cg.stats.cancel_nest, cg.stats.ret_chain);
+    let meta = meta::meta_json(
+        prog,
+        &cg.tpl,
+        opts.max_depth,
+        cg.stats.b_prog,
+        cg.stats.cancel_nest,
+    );
     let stats = cg.stats.clone();
     let program = cg.m.finish();
     Ok(Output {
@@ -581,11 +938,148 @@ mod tests {
     #[test]
     fn スタックの大きさは_m79_の記録の値() {
         // M79 の記録の 1.5 節: L = 2^20 で --stack-size = 1,630,208 KiB。
-        assert_eq!(stack_size_kib(1 << 20), 1_630_208);
-        assert!(stack_size_kib(1 << 20) <= STACK_SIZE_MAX_KIB);
-        assert!(stack_size_kib(2_000_000) > STACK_SIZE_MAX_KIB);
+        assert_eq!(stack_size_kib(1 << 20, B_WASM), 1_630_208);
+        assert!(stack_size_kib(1 << 20, B_WASM) <= STACK_SIZE_MAX_KIB);
+        assert!(stack_size_kib(2_000_000, B_WASM) > STACK_SIZE_MAX_KIB);
         // 局所 178 個、引数 2 個の関数がちょうど B_wasm に収まる(M79 の 1.5 節)。
         assert_eq!(frame_estimate(178, 2), 1536);
         assert!(frame_estimate(179, 2) > B_WASM);
+    }
+
+    /// `tests/fixtures/cancel_nest/NAME.kir` を読んで LIR に下ろす。
+    ///
+    /// `.kir` は同じ名前の `.kel` を `keleut emit-kir -o NAME.kir NAME.kel` で書いたものである。
+    /// `a`〜`f` は計画 261104-3 の探りの `gen.py MODE 2 3` の出力で、`a`〜`e` は `GADD=1` で書いた。
+    /// `r` は形 R(`return` 節が `go` を呼び返す)の小さな版、`r0` は `return` 節が `echoln` だけを呼ぶ形である。
+    /// `r3` は `return` 節の鎖 3 段、`nc3` と `nc1` は分類 N の操作節の鎖 3 段と 1 段で、
+    /// M106 の検証の探りの `rch.py 3 1 1 3`、`nch.py 3 1 1 3`、`nch.py 1 1 1 3` の出力である。
+    /// `nc2leaf` は内側の N の節が `echoln` だけを呼ぶ 2 段、`mix` は N の節の中の `return` 節が `go` を呼び返す形である。
+    /// `alt3` は M106 の再検証の探りの `gen3.py 3 0 3` の出力で、`cancel` 節と N の節が交互に 3 組重なる。
+    /// `alt3r` は同じく `KIND=r gen3.py 3 0 3` の出力で、N の節の代わりに `return` 節を使う。
+    /// `alt1n` は `gen3.py 1 0 3` の出力で、`cancel` 節、N の節、`cancel` 節の順に重なる。
+    fn lowered(name: &str) -> Program {
+        let path = format!(
+            "{}/tests/fixtures/cancel_nest/{name}.kir",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let k = kir::load(&std::fs::read(&path).unwrap()).unwrap();
+        keleut_lir::lower(&k).unwrap()
+    }
+
+    #[test]
+    fn cancel_節の中のハンドラ式の入れ子の段の数() {
+        // cancel 節の中に直に書いたハンドラ式(a、c)、その中で G の節が末尾で resume する形(f)は 1。
+        // b は cancel 節の中のハンドラ式の本体にもう 1 つの cancel 節つきのハンドラ式を書くが、
+        // 本体は深さを 1 つ増やして走るので、どちらの cancel 節も 1 段である。
+        for name in ["a", "b", "c", "f"] {
+            assert_eq!(clause_path(&lowered(name)), (1, 0), "{name}");
+        }
+        // cancel 節の中に直に cancel 節つきのハンドラ式を書き、その cancel 節の中にさらにハンドラ式を書くと 2。
+        assert_eq!(clause_path(&lowered("n2")), (2, 0));
+        // どちらの cancel 節も何も捕獲しない形でも、cancel 節の関数の値はハンドラ式を書いた関数の中で作る。
+        assert_eq!(clause_path(&lowered("n2nc")), (2, 0));
+        // cancel 節がハンドラ式を持たない形(d は関数を呼ぶだけ、n0 は値を書くだけ)と、cancel 節の無い対照 e は 0。
+        for name in ["d", "e", "n0"] {
+            assert_eq!(clause_path(&lowered(name)), (0, 0), "{name}");
+        }
+    }
+
+    #[test]
+    fn 同じ深さに重なる節の鎖() {
+        // return 節が go を呼び返す形 R は r = 1、echoln だけを呼ぶ形 r0 と cancel 節の形は r = 0。
+        assert_eq!(clause_path(&lowered("r")), (0, 1));
+        for name in ["r0", "a", "c", "e", "f", "n2"] {
+            assert_eq!(clause_path(&lowered(name)).1, 0, "{name}");
+        }
+        // return 節の中に直に書いたハンドラ式の return 節を 3 段重ねた形 r3 は r = 3。
+        assert_eq!(clause_path(&lowered("r3")), (0, 3));
+        // 分類 N の操作節を 3 段重ねた形 nc3 は r = 3。
+        // 1 つだけの N の節(nc1)と、内側の N の節が葉の関数だけを呼ぶ 2 段(nc2leaf)は数えない。
+        assert_eq!(clause_path(&lowered("nc3")), (0, 3));
+        for name in ["nc1", "nc2leaf"] {
+            assert_eq!(clause_path(&lowered(name)), (0, 0), "{name}");
+        }
+        // N の節の中に直に書いたハンドラ式の return 節が go を呼び返す形 mix は r = 2。
+        assert_eq!(clause_path(&lowered("mix")), (0, 2));
+        // cancel 節と N の節が交互に並ぶ形 alt3(cancel 節 4 つと N の節 3 つ)は、1 本の道に沿って k = 4、r = 3。
+        // k と r を別々に数えると (1, 0) になり、B_prog が足りずに既定の L の内側で 70 になった。
+        assert_eq!(clause_path(&lowered("alt3")), (4, 3));
+        assert_eq!(b_prog(4, 3), 1536 + 4 * 1360 + 3 * 1536 - 320);
+        // return 節を使う同じ形 alt3r も同じ。
+        assert_eq!(clause_path(&lowered("alt3r")), (4, 3));
+        // cancel 節の中の N の節が 1 つだけの形 alt1n は、N の節を数えず k = 2(cancel 節 2 つ)。
+        assert_eq!(clause_path(&lowered("alt1n")), (2, 0));
+        // r ≥ 1 では B_wasm に r × B_wasm − E_rth を足す(r = 1 は 1,040 + 1,536 + 176 = 2,752)。
+        assert_eq!(b_prog(0, 1), 2752);
+        assert_eq!(b_prog(0, 2), 2752 + 1536);
+        assert_eq!(b_prog(0, 6), 1536 + 6 * 1536 - 320);
+        assert_eq!(b_prog(1, 1), 2896 + 1216);
+        let out = compile(&lowered("r"), &Options { max_depth: 600_000 }).unwrap();
+        assert_eq!(
+            (out.stats.cancel_nest, out.stats.ret_chain, out.stats.b_prog),
+            (0, 1, 2752)
+        );
+        assert!(
+            out.meta
+                .starts_with("{\"maxDepth\":600000,\"bProg\":2752,\"cancelNest\":0,"),
+            "{}",
+            &out.meta[..80]
+        );
+        // 既定の L では、k = 0 なら r が 9 まで、r = 0 なら k が 10 まで STACK_CAP で切らない。
+        assert!(stack_need_kib(1 << 20, b_prog(0, 9)) <= STACK_CAP_KIB);
+        assert!(stack_need_kib(1 << 20, b_prog(0, 10)) > STACK_CAP_KIB);
+    }
+
+    #[test]
+    fn b_prog_とスタックの大きさ() {
+        // k = 0 では B_prog = B_wasm で、スタックの大きさは前と同じ。
+        assert_eq!(b_prog(0, 0), B_WASM);
+        assert_eq!(stack_size_kib(1 << 20, b_prog(0, 0)), 1_630_208);
+        // k = 1 では 1,040 + 320 + 1,040 + 320 + 176 = 2,896 バイト。
+        assert_eq!(b_prog(1, 0), 2896);
+        assert_eq!(b_prog(2, 0), 2896 + 1360);
+        // L = 600,000、k = 1 のスタックは V8 の --stack-size の上限より小さい。
+        assert_eq!(stack_size_kib(600_000, b_prog(1, 0)), 1_756_157);
+        assert!(stack_size_kib(600_000, b_prog(1, 0)) <= STACK_SIZE_MAX_KIB);
+        // 既定の L では k = 1 で上限を超えるので Worker の経路になり、k = 10 までは STACK_CAP で切らない。
+        assert!(stack_size_kib(1 << 20, b_prog(1, 0)) > STACK_SIZE_MAX_KIB);
+        assert!(stack_need_kib(1 << 20, b_prog(10, 0)) <= STACK_CAP_KIB);
+        assert!(stack_need_kib(1 << 20, b_prog(11, 0)) > STACK_CAP_KIB);
+        // STACK_CAP で切る。
+        assert_eq!(stack_size_kib(1 << 20, b_prog(11, 0)), STACK_CAP_KIB);
+        assert_eq!(stack_size_kib(1 << 20, b_prog(u32::MAX, 0)), STACK_CAP_KIB);
+        // k = 0 の大きさより小さくは切らない(k = 0 のプログラムは前と同じ)。
+        let l = 100_000_000;
+        assert!(stack_need_kib(l, B_WASM) > STACK_CAP_KIB);
+        assert_eq!(stack_size_kib(l, B_WASM), stack_need_kib(l, B_WASM));
+        assert_eq!(stack_size_kib(l, b_prog(1, 0)), stack_need_kib(l, B_WASM));
+        assert_eq!(
+            stack_size_kib(u64::MAX, b_prog(u32::MAX, 0)),
+            stack_need_kib(u64::MAX, B_WASM)
+        );
+        // host の Worker の経路も同じ上限と下限を使う。
+        for line in [
+            format!("const STACK_CAP_KIB = {STACK_CAP_KIB};"),
+            format!("const B_WASM = {B_WASM};"),
+        ] {
+            assert!(
+                launch::HOST_JS.contains(&line),
+                "host/keleut-host.mjs に {line} が無い"
+            );
+        }
+    }
+
+    #[test]
+    fn meta_に_b_prog_と_k_を書く() {
+        let out = compile(&lowered("c"), &Options { max_depth: 600_000 }).unwrap();
+        assert_eq!((out.stats.cancel_nest, out.stats.b_prog), (1, 2896));
+        assert!(
+            out.meta
+                .starts_with("{\"maxDepth\":600000,\"bProg\":2896,\"cancelNest\":1,"),
+            "{}",
+            &out.meta[..80]
+        );
+        let out = compile(&lowered("e"), &Options { max_depth: 600_000 }).unwrap();
+        assert_eq!((out.stats.cancel_nest, out.stats.b_prog), (0, B_WASM));
     }
 }

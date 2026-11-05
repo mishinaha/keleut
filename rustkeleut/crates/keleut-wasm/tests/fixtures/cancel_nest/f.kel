@@ -1,0 +1,4 @@
+effect Stop = { stop: () => Int32, ask: () => Int32 }
+effect Zz = { zz: () => Unit }
+let rec go(m: Int32): Int32 @ {Stop, Console} = if m == 0 then { echoln("bottom"); 0 } else { let a0 = m * 3; let a1 = m * 4; let q = (perform stop()) handle { case zz() => resume(()) case cancel => { let a0 = m * 3; let a1 = m * 4; let r = { let k = m - 1; let a0 = k * 3; let a1 = k * 4; let a = perform ask(); let z = go(k); z + a - 2 + ((a0 + a1) - (a0 + a1)) } handle { case stop() => 0 case ask() => if m < 0 then { let t = resume(1); t } else resume(2) }; if r + ((a0 + a1) - (a0 + a1)) != 0 then echoln("bad") else () } }; q + ((a0 + a1) - (a0 + a1)) }
+echoln(show(go(3) handle { case stop() => 7 case ask() => 5 }))

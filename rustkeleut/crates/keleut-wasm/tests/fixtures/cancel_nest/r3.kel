@@ -1,0 +1,3 @@
+effect Zz = { zz: () => Unit }
+let rec go(m: Int32): Int32 @ {Console} = if m == 0 then { echoln("bottom"); 0 } else { let m0 = m * 3; let q = (m) handle { case zz() => resume(()) case return(x0) => { let x00 = x0 * 3; let z = (x0) handle { case zz() => resume(()) case return(x1) => { let x10 = x1 * 3; let z = (x1) handle { case zz() => resume(()) case return(x2) => { let x20 = x2 * 3; let z = go(x2 - 1); z + ((x20) - (x20)) } }; z + ((x10) - (x10)) } }; z + ((x00) - (x00)) } }; q + ((m0) - (m0)) }
+echoln(show(go(3)))

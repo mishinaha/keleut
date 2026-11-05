@@ -1,0 +1,6 @@
+effect Stop = { stop: () => Int32 }
+effect Zz = { zz: () => Unit }
+effect Ask = { ask: () => Int32 }
+echoln(show((perform ask()) handle { case ask() => { let r = resume(1); r + 1 } }))
+let rec lv(n: Int32): Unit @ {Console} = if n == 0 then echoln("bottom") else { let a0 = n * 3; let a1 = n * 4; let r = { let k = n + 1; let a0 = k * 3; let a1 = k * 4; let q = (perform stop()) handle { case zz() => resume(()) case cancel => lv(n - 1) }; q + ((a0 + a1) - (a0 + a1)) } handle { case stop() => 0 }; if r + ((a0 + a1) - (a0 + a1)) != 0 then echoln("bad") else () }
+lv(3)

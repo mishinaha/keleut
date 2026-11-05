@@ -1,0 +1,4 @@
+effect Stop = { stop: () => Int32 }
+effect Zz = { zz: () => Unit }
+let rec go(n: Int32): Int32 @ {Stop, Console} = if n == 0 then { echoln("bottom"); 0 } else (perform stop()) handle { case zz() => resume(()) case cancel => echoln(show(n)) }
+echoln(show(go(3) handle { case stop() => 7 }))
