@@ -158,6 +158,8 @@ fn jit_thread(
     };
     // 翻訳の役割が大域の確保器の予備を使ったら、翻訳をやめる(`keleut_rt::alloc`)。
     let mut gave_up = false;
+    // 仮想メモリの上限は起動のときに 1 回だけ読む。上限が無ければ翻訳の前に残りを調べない。
+    let as_limit = address_space_limit();
     while let Ok((f, wait)) = req.recv() {
         busy.store(true, Ordering::SeqCst);
         if stop.load(Ordering::SeqCst) {
@@ -176,6 +178,17 @@ fn jit_thread(
             // 予備なしで翻訳すると、Rust の確保の失敗がプロセスを止める(134)ので、
             // 印が立ったときと同じく、以後の翻訳をやめてインタプリタで続ける。
             gave_up = true;
+            busy.store(false, Ordering::SeqCst);
+            if wait && rep.send(Ok(0)).is_err() {
+                break;
+            }
+            continue;
+        }
+        if let Some(limit) = as_limit
+            && !room_for_translation(limit, virtual_size())
+        {
+            // 仮想メモリの残りが少ない。LLVM の中の確保の失敗は捕まえられないので、この関数は翻訳せずにインタプリタで続ける。
+            // 次の頼みでまた調べる。
             busy.store(false, Ordering::SeqCst);
             if wait && rep.send(Ok(0)).is_err() {
                 break;
@@ -401,4 +414,96 @@ pub fn dump_ir(prog: &Program) -> Result<String, String> {
         }
     }
     Ok(s)
+}
+
+/// 翻訳の前に残しておく仮想メモリの余裕(64 MiB)である。
+///
+/// `RLIMIT_AS` の上限と今の仮想の大きさの差がこれを下回れば、翻訳しない。
+const JIT_AS_ROOM: u64 = 64 << 20;
+
+/// 仮想メモリの軟らかい上限(`RLIMIT_AS`。バイト)を返す。上限が無ければ `None` である。
+fn address_space_limit() -> Option<u64> {
+    #[repr(C)]
+    struct RLimit {
+        cur: u64,
+        max: u64,
+    }
+    unsafe extern "C" {
+        fn getrlimit(resource: i32, rlim: *mut RLimit) -> i32;
+    }
+    /// Linux の `RLIMIT_AS`。
+    const RLIMIT_AS: i32 = 9;
+    let mut r = RLimit { cur: 0, max: 0 };
+    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
+    if unsafe { getrlimit(RLIMIT_AS, &mut r) } != 0 || r.cur == u64::MAX {
+        return None;
+    }
+    Some(r.cur)
+}
+
+/// `/proc/self/statm` の最初の欄(仮想の大きさ。ページ)をバイトにして返す。読めなければ `None` である。
+///
+/// 残りが少ないときに呼ぶので、ヒープに確保せず、スタックの領域に読む。
+fn virtual_size() -> Option<u64> {
+    use std::io::Read;
+    unsafe extern "C" {
+        fn sysconf(name: i32) -> i64;
+    }
+    /// Linux の `_SC_PAGESIZE`。
+    const SC_PAGESIZE: i32 = 30;
+    let mut buf = [0u8; 128];
+    let n = std::fs::File::open("/proc/self/statm")
+        .and_then(|mut f| f.read(&mut buf))
+        .ok()?;
+    let pages = parse_statm_size(&buf[..n])?;
+    // SAFETY: sysconf は libc の関数で、引数は定数である。
+    let page = unsafe { sysconf(SC_PAGESIZE) };
+    pages.checked_mul(u64::try_from(page).ok().filter(|&p| p > 0)?)
+}
+
+/// `/proc/self/statm` の文面から最初の欄(ページの数)を読む。
+fn parse_statm_size(s: &[u8]) -> Option<u64> {
+    let end = s.iter().position(|&b| b == b' ').unwrap_or(s.len());
+    std::str::from_utf8(&s[..end]).ok()?.trim().parse().ok()
+}
+
+/// 上限 `limit` と仮想の大きさ `size`(どちらもバイト)から、翻訳してよいかを決める。
+///
+/// 差が [`JIT_AS_ROOM`] 以上なら真である。
+/// 大きさを読めなかったとき(`None`)は真にし、今までどおり翻訳する。
+fn room_for_translation(limit: u64, size: Option<u64>) -> bool {
+    match size {
+        Some(size) => limit.saturating_sub(size) >= JIT_AS_ROOM,
+        None => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn statm_first_field() {
+        assert_eq!(parse_statm_size(b"12345 678 9 1 0 2 0\n"), Some(12345));
+        assert_eq!(parse_statm_size(b"42\n"), Some(42));
+        assert_eq!(parse_statm_size(b""), None);
+        assert_eq!(parse_statm_size(b"x 1"), None);
+    }
+
+    #[test]
+    fn room_threshold() {
+        let limit = 512 << 20;
+        assert!(room_for_translation(limit, Some(limit - JIT_AS_ROOM)));
+        assert!(!room_for_translation(limit, Some(limit - JIT_AS_ROOM + 1)));
+        assert!(!room_for_translation(limit, Some(limit + 1)));
+        assert!(room_for_translation(limit, None));
+    }
+
+    #[test]
+    fn reads_own_virtual_size() {
+        // 試験のプロセスの仮想の大きさは 0 より大きく、ページの倍数である。
+        let size = virtual_size().expect("/proc/self/statm を読めない");
+        assert!(size > 0);
+        assert_eq!(size % 4096, 0);
+    }
 }
