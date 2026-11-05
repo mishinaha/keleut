@@ -2,6 +2,10 @@
 //!
 //! 出力は `program.wasm`、`rt.wasm`、`main.mjs` の 3 つである。
 //! `main.mjs` は `host/keleut-host.mjs` の後ろに、表(JSON)を渡して起動する 1 行を足したものである。
+//! `keleut build` は、このほかに起動の台本 `run`([`RUN_SH`]、実行の許可付き)を書く。
+//! 台本は Node の前に標準出力が閉じているかを確かめ、`keleut run --backend wasm` と同じく `KELEUT_STDOUT_CLOSED` で host に伝える。
+//! Node は起動のときに閉じた fd 1 を `/dev/null` で開き直すので、`node DIR/main.mjs` を直に走らせると、
+//! 閉じた標準出力を `/dev/null` に向けた実行と見分けられず、書いても 0 で終わる。
 //!
 //! `keleut run --backend wasm` は 3 つを一時の場所(`$TMPDIR/keleut-wasm-PID-N-NANOS`、0700)に書き、`node` を子プロセスで起動する。
 //! 子の `RLIMIT_STACK` を `S = --stack-size + 64 MiB` にし(`pre_exec` の中の `setrlimit`)、
@@ -48,6 +52,25 @@ pub const HOST_JS: &str = include_str!("../../../host/keleut-host.mjs");
 pub fn main_mjs(meta: &str) -> String {
     format!("{HOST_JS}\nawait start({meta});\n")
 }
+
+/// `keleut build` が `DIR/run` に書く起動の台本。
+///
+/// fd 1 を fd 3 に複製できなければ、標準出力は閉じている。
+/// 閉じていれば `KELEUT_STDOUT_CLOSED=1` を渡し、開いていれば環境に残った `KELEUT_STDOUT_CLOSED` を除いて、
+/// `node` を `main.mjs` で起動する。
+/// 確かめるのは、`$(...)` のように記述子を開く処理より前である。
+/// `main.mjs` は `dirname "$0"` で探すので、`run` は自分の道筋か、`DIR` へのシンボリックリンクを通して起動する。
+/// `run` そのものへのシンボリックリンクから起動すると、Node が `MODULE_NOT_FOUND` を出して 1 で終わる。
+pub const RUN_SH: &str = r#"#!/bin/sh
+# keleut build の出力の起動の台本。node main.mjs を直に走らせると、閉じた標準出力を見分けられない。
+if { true 3>&1; } 2>/dev/null; then
+  unset KELEUT_STDOUT_CLOSED
+else
+  KELEUT_STDOUT_CLOSED=1
+  export KELEUT_STDOUT_CLOSED
+fi
+exec node "$(dirname "$0")/main.mjs" "$@"
+"#;
 
 /// 翻訳し、検証と trap の検査をした出力(`program.wasm`、`main.mjs`、プログラムの 1 段のバイト数 `B_prog`)。
 ///
@@ -98,10 +121,22 @@ pub fn write_dir(dir: &Path, program: &[u8], main: &str) -> std::io::Result<()> 
     Ok(())
 }
 
+/// 起動の台本 [`RUN_SH`] を `dir/run` に、実行の許可(0755)を付けて書く。
+pub fn write_run(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let p = dir.join("run");
+    std::fs::write(&p, RUN_SH)?;
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755))
+}
+
 /// `keleut build --target wasm -o DIR` の本体。
+///
+/// 3 つのファイルと起動の台本 `run` を書く。
 pub fn build(prog: &Program, max_depth: u64, dir: &Path) -> Result<(), String> {
     let (program, main, _) = build_outputs(prog, max_depth)?;
-    write_dir(dir, &program, &main).map_err(|e| format!("{}: {e}", dir.display()))
+    write_dir(dir, &program, &main)
+        .and_then(|()| write_run(dir))
+        .map_err(|e| format!("{}: {e}", dir.display()))
 }
 
 /// 実行の選択肢。

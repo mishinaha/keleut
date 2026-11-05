@@ -1,8 +1,10 @@
 //! サブコマンド `keleut build` である(計画 261024-1 の 6.2 節)。
 //!
 //! `keleut build --target wasm -o DIR [OPTIONS] FILE.kel… | FILE.kir` は、WasmGC の後段の出力
-//! `program.wasm`、`rt.wasm`、`main.mjs` を `DIR` に書く。
-//! `node DIR/main.mjs` だけで走る(スタックは `Worker` の `resourceLimits.stackSizeMb` で取る)。
+//! `program.wasm`、`rt.wasm`、`main.mjs` と起動の台本 `run` を `DIR` に書く。
+//! `DIR/run` か `node DIR/main.mjs` だけで走る(スタックは `Worker` の `resourceLimits.stackSizeMb` で取る)。
+//! `DIR/run` は閉じた標準出力を Node の前に見分け、`keleut run --backend wasm` と同じく、書いたときに 74 で終える。
+//! `node DIR/main.mjs` を直に走らせると、閉じた標準出力を見分けない。
 //!
 //! 入力の読み方と選択肢(`--frontend`、`--max-depth`、`--prelude`、`--no-prelude`、`--import-path`、`--no-yield-prune`)は
 //! `keleut run` と同じである(既定のフロントエンドは `rust`)。
@@ -15,7 +17,8 @@ use crate::{exit, run_cmd};
 pub const USAGE: &str = "\
 usage: keleut build --target wasm -o DIR [OPTIONS] FILE.kel... | FILE.kir
 
-writes program.wasm, rt.wasm and main.mjs to DIR (run with: node DIR/main.mjs)
+writes program.wasm, rt.wasm, main.mjs and the launcher run to DIR
+(run with: DIR/run; node DIR/main.mjs also works but cannot detect a closed stdout)
 
 options:
   --max-depth N               logical depth limit L used by main.mjs (default 1048576)

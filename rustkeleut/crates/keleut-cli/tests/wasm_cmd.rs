@@ -6,6 +6,7 @@
 //!   (記録は `diktor --run-ir` の結果で、インタプリタの試験と同じものである)。
 //! - `keleut build` の出力を `node DIR/main.mjs` だけで走らせる(`Worker` のスタックの経路)。
 //! - 起動のときに閉じていた標準出力は、インタプリタと同じく 74 になる。
+//!   `keleut build` の起動の台本 `DIR/run` も、閉じた標準出力で `keleut run --backend wasm` と同じ終わり方をする。
 //! - 環境変数 `KELEUT_DIKTOR` を与えると、大きなフレームの形になる関数、ブロックの多い関数、引数の多い関数を、
 //!   インタプリタと WasmGC の後段で走らせて比べる。
 //!   何度も呼ぶ大きな関数(部分に分ける関数)と、多くの型のクロージャを呼ぶ関数も比べる。
@@ -131,7 +132,7 @@ fn build_の出力は_node_だけで走る() {
             "{}",
             String::from_utf8_lossy(&r.stderr)
         );
-        for f in ["program.wasm", "rt.wasm", "main.mjs"] {
+        for f in ["program.wasm", "rt.wasm", "main.mjs", "run"] {
             assert!(out.join(f).exists(), "{n}: {f}");
         }
         let r = Command::new(node())
@@ -178,6 +179,114 @@ fn 閉じた標準出力は_74_になる() {
     assert_eq!(w.status.code(), Some(74));
     assert_eq!(w.status.code(), i.status.code());
     assert_eq!(w.stderr, i.stderr);
+}
+
+/// `sh -c` で `CMD` を走らせる。
+///
+/// `KELEUT_NODE` があれば、その場所を `PATH` の先頭に置く(`DIR/run` は `PATH` の `node` を起動する)。
+fn sh_out(cmd: &str, envs: &[(&str, &str)]) -> Output {
+    let mut c = Command::new("sh");
+    c.arg("-c").arg(cmd).stdin(Stdio::null());
+    if let Some(n) = std::env::var_os("KELEUT_NODE") {
+        let n = PathBuf::from(n);
+        if let Some(d) = n.parent().filter(|d| !d.as_os_str().is_empty()) {
+            let mut p = d.as_os_str().to_owned();
+            p.push(":");
+            p.push(std::env::var_os("PATH").unwrap_or_default());
+            c.env("PATH", p);
+        }
+    }
+    c.env_remove("KELEUT_STDOUT_CLOSED")
+        .env_remove("KELEUT_WASM_DIRECT")
+        .envs(envs.iter().copied())
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
+    if !have_node() {
+        eprintln!("node が無いので飛ばす");
+        return;
+    }
+    let d = scratch("launcher");
+    let k = env!("CARGO_BIN_EXE_keleut");
+    // 書くプログラム、書かないプログラム、書く前に実行時エラーで止まるプログラム。
+    let progs = [
+        (
+            "writes",
+            "with_stdout(fn() => println(\"hello\"))\n",
+            74,
+            "hello\n",
+        ),
+        ("quiet", "let x = 1\n", 0, ""),
+        ("error", "let x: Int32 = 1 / 0\n", 3, ""),
+    ];
+    for (name, src, closed, open) in progs {
+        let kel = d.join(format!("{name}.kel"));
+        std::fs::write(&kel, src).unwrap();
+        let out = d.join(name);
+        let r = keleut_in(
+            &d,
+            &[
+                "build",
+                "--target",
+                "wasm",
+                "-o",
+                out.to_str().unwrap(),
+                kel.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(
+            r.status.code(),
+            Some(0),
+            "{name}: {}",
+            String::from_utf8_lossy(&r.stderr)
+        );
+        let run = out.join("run");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let m = std::fs::metadata(&run).unwrap().permissions().mode();
+            assert_eq!(m & 0o777, 0o755, "{name}: run の許可");
+        }
+        let run = run.display();
+        let kel = kel.display();
+        // 閉じた標準出力。
+        let a = sh_out(&format!("'{run}' >&-"), &[]);
+        let b = sh_out(&format!("'{k}' run --backend wasm '{kel}' >&-"), &[]);
+        assert_eq!(a.status.code(), Some(closed), "{name}: DIR/run >&-");
+        assert_eq!(
+            (a.status.code(), &a.stderr),
+            (b.status.code(), &b.stderr),
+            "{name}: DIR/run >&- と keleut run --backend wasm >&-"
+        );
+        // 開いた標準出力。
+        let n = sh_out(&format!("'{run}' >/dev/null"), &[]);
+        let ok = if closed == 74 { 0 } else { closed };
+        assert_eq!(n.status.code(), Some(ok), "{name}: DIR/run >/dev/null");
+        let a = sh_out(&format!("'{run}'"), &[]);
+        let m = Command::new(node())
+            .arg(out.join("main.mjs"))
+            .env_remove("KELEUT_STDOUT_CLOSED")
+            .env_remove("KELEUT_WASM_DIRECT")
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(a.stdout, open.as_bytes(), "{name}: DIR/run の出力");
+        assert_eq!(
+            (&a.stdout, &a.stderr, a.status.code()),
+            (&m.stdout, &m.stderr, m.status.code()),
+            "{name}: DIR/run と node DIR/main.mjs"
+        );
+        // 環境に残った KELEUT_STDOUT_CLOSED は、開いた標準出力では除く。
+        let e = sh_out(&format!("'{run}'"), &[("KELEUT_STDOUT_CLOSED", "1")]);
+        assert_eq!(
+            (e.status.code(), &e.stdout),
+            (Some(ok), &a.stdout),
+            "{name}: KELEUT_STDOUT_CLOSED=1 DIR/run"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// `.kel` を Diktor で KIR にし、両方の後段で走らせて結果を比べる。

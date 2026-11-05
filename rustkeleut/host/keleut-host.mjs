@@ -4,6 +4,13 @@
 // `main.mjs` にし、`program.wasm` と `rt.wasm` の横に置く。
 // META は、診断の文面の型紙と、値の印字に要る名前の表である(crate keleut-wasm の meta.rs)。
 //
+// 閉じた標準出力: Node は起動のときに閉じた fd 1 を /dev/null で開き直すので、このファイルの中では
+// 閉じた標準出力を /dev/null に向けた実行と見分けられない。
+// そこで、Node の前に確かめた側が環境変数 KELEUT_STDOUT_CLOSED を 1 にして渡し、host は最初の書き込みで
+// `keleut: 標準出力に書き出せません: Bad file descriptor` を書いて 74 で終える。
+// 渡すのは `keleut run --backend wasm` と、`keleut build` が書く起動の台本 DIR/run である。
+// `node DIR/main.mjs` を直に走らせると閉じた標準出力を見分けられず、書いても 0 で終わる。
+//
 // 受け持つことは次のとおりである。
 //
 // - 起動: `rt.wasm` を先に作り、その線形メモリと関数を `program.wasm` に渡す。
