@@ -343,6 +343,38 @@ ledger = "V217"
 against = "pair"
 
 [[diff]]
+file = "conformance/bytes/bytes.t"
+line = 103
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 103
+pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 106
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "record"
+
+[[diff]]
+file = "conformance/bytes/bytes.t"
+line = 106
+pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+against = "pair"
+
+[[diff]]
 file = "conformance/bytes/sinkfail.t"
 line = 26
 pairs = ["dk", "dk-ir", "kf", "x-ir"]

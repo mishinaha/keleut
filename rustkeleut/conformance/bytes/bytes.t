@@ -90,3 +90,19 @@ Diktor は Sys_blocked_io の例外で止まる(この試験は Diktor と一致
 
   $ keleut run m74.kel > /dev/null 2> /dev/full
   [3]
+
+書き出しの失敗の種類に依らず、OS の誤りの文を診断に書いて 74 になる。
+つながっていない AF_INET の SOCK_DGRAM のソケットと、つながっていない AF_UNIX の SOCK_STREAM のソケットを標準出力にする(期待は Diktor と同じ。診断の名前だけが違う):
+
+  $ cat > sock.py <<'EOF'
+  > import socket, subprocess, sys
+  > kinds = {"inet-dgram": (socket.AF_INET, socket.SOCK_DGRAM), "unix-stream": (socket.AF_UNIX, socket.SOCK_STREAM)}
+  > s = socket.socket(*kinds[sys.argv[1]])
+  > print(subprocess.run(sys.argv[2:], stdout=s.fileno()).returncode)
+  > EOF
+  $ python3 sock.py inet-dgram keleut run hello.kel
+  keleut: 標準出力に書き出せません: Destination address required
+  74
+  $ python3 sock.py unix-stream keleut run hello.kel
+  keleut: 標準出力に書き出せません: Transport endpoint is not connected
+  74

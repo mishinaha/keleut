@@ -111,3 +111,13 @@ Diktor は 10 万段も型検査に通す(0 で終わる)。
   $ keleut check ids10.kel; echo "exit: $?"
   ids10.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
   exit: 2
+
+else if の鎖も、ソースの入れ子 1 段で木が 2 段深くなる。
+5 万段の鎖は上の elif.kel のとおり型検査に通り、10 万段の鎖は構文解析の限度で 2 になる。
+Diktor は 10 万段の鎖も型検査に通す(0 で終わる)。
+この差は台帳の V237 で、読み込みに要する領域の処理系の限度(LangSpec §15.5)として閉じてある:
+
+  $ awk 'BEGIN { printf "let f(n: Int32): Int32 = "; for (i = 0; i < 100000; i++) printf "if n == %d then %d else ", i, i; print "0" }' > elif10.kel
+  $ keleut check elif10.kel; echo "exit: $?"
+  elif10.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+  exit: 2
