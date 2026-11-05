@@ -11,7 +11,7 @@
 //!   ブロックは位相の順に並び、枝はどれも番号の大きいブロックへ向かう。
 //! - 関数の境目は一様で、引数も戻り値も `any` である(D503)。
 
-pub use crate::live::{Point, Points};
+pub use crate::live::{LiveWork, Point, Points};
 pub use kir::{Abi, ClassId, ClauseClass, FnKind, GlobalId, InstanceId, Rep, TypeId};
 
 macro_rules! id_type {
@@ -977,26 +977,31 @@ impl Term {
 
     /// 読むレジスタ。
     pub fn uses(&self) -> Vec<Reg> {
+        let mut v = Vec::new();
+        self.for_each_use(|r| v.push(r));
+        v
+    }
+
+    /// 読むレジスタを順に `f` に渡す。確保をしない(回収の中で使う)。
+    pub fn for_each_use(&self, mut f: impl FnMut(Reg)) {
         match self {
-            Term::Jump(_) | Term::Unimplemented { .. } => Vec::new(),
-            Term::Branch { cond, .. } => vec![*cond],
-            Term::Return(r) => vec![*r],
-            Term::TailCallDirect { args, .. } => args.clone(),
+            Term::Jump(_) | Term::Unimplemented { .. } => {}
+            Term::Branch { cond, .. } => f(*cond),
+            Term::Return(r) => f(*r),
+            Term::TailCallDirect { args, .. } | Term::Fx { args, .. } => {
+                args.iter().copied().for_each(f)
+            }
             Term::TailCallValue { callee, args, .. } => {
-                let mut v = vec![*callee];
-                v.extend_from_slice(args);
-                v
+                f(*callee);
+                args.iter().copied().for_each(f);
             }
             Term::TailCallMethod {
                 dict, own, args, ..
             } => {
-                let mut v = vec![*dict];
-                v.extend_from_slice(own);
-                v.extend_from_slice(args);
-                v
+                f(*dict);
+                own.iter().chain(args).copied().for_each(f);
             }
-            Term::Error { operand, .. } => operand.iter().copied().collect(),
-            Term::Fx { args, .. } => args.clone(),
+            Term::Error { operand, .. } => operand.iter().copied().for_each(f),
         }
     }
 }
@@ -1081,6 +1086,13 @@ impl Inst {
 
     /// 読むレジスタ(被演算子の順)。
     pub fn uses(&self) -> Vec<Reg> {
+        let mut v = Vec::new();
+        self.for_each_use(|r| v.push(r));
+        v
+    }
+
+    /// 読むレジスタを被演算子の順に `f` に渡す。確保をしない(回収の中で使う)。
+    pub fn for_each_use(&self, mut f: impl FnMut(Reg)) {
         use Inst::*;
         match self {
             Const { .. }
@@ -1095,8 +1107,8 @@ impl Inst {
             | InstIsInit { .. }
             | InstMarkInit { .. }
             | InstGetValue { .. }
-            | UnimplementedValue { .. } => Vec::new(),
-            Move { src, .. } | Box { src, .. } | Unbox { src, .. } => vec![*src],
+            | UnimplementedValue { .. } => {}
+            Move { src, .. } | Box { src, .. } | Unbox { src, .. } => f(*src),
             IntNeg { a, .. }
             | FloatNeg { a, .. }
             | FloatMath { a, .. }
@@ -1108,63 +1120,84 @@ impl Inst {
             | Show { a, .. }
             | ArrayLen { a, .. }
             | MArrayLen { a, .. }
-            | MArrayFreeze { a, .. } => vec![*a],
+            | MArrayFreeze { a, .. } => f(*a),
             IntArith { a, b, .. }
             | IntCmp { a, b, .. }
             | FloatArith { a, b, .. }
             | FloatCmp { a, b, .. }
             | BoolEq { a, b, .. }
             | StrConcat { a, b, .. }
-            | StrCmp { a, b, .. } => vec![*a, *b],
-            StrSub { s, pos, len, .. } => vec![*s, *pos, *len],
-            CtorNew { fields, .. } | RecNew { fields, .. } => fields.clone(),
-            CtorTag { v, .. } | CtorField { v, .. } | VariantTag { v, .. } => vec![*v],
-            VariantPayload { v, .. } => vec![*v],
-            VariantNew { payload, .. } => vec![*payload],
+            | StrCmp { a, b, .. } => {
+                f(*a);
+                f(*b);
+            }
+            StrSub { s, pos, len, .. } => {
+                f(*s);
+                f(*pos);
+                f(*len);
+            }
+            CtorNew { fields, .. } | RecNew { fields, .. } => fields.iter().copied().for_each(f),
+            CtorTag { v, .. } | CtorField { v, .. } | VariantTag { v, .. } => f(*v),
+            VariantPayload { v, .. } => f(*v),
+            VariantNew { payload, .. } => f(*payload),
             RecGet { rec, .. }
             | RecField { rec, .. }
             | RecHas { rec, .. }
-            | RecRestrict { rec, .. } => vec![*rec],
-            RecExtend { rec, value, .. } | RecUpdate { rec, value, .. } => vec![*rec, *value],
-            ClosureNew { caps, .. } => caps.clone(),
-            ClosureSetCap { clo, value, .. } => vec![*clo, *value],
+            | RecRestrict { rec, .. } => f(*rec),
+            RecExtend { rec, value, .. } | RecUpdate { rec, value, .. } => {
+                f(*rec);
+                f(*value);
+            }
+            ClosureNew { caps, .. } => caps.iter().copied().for_each(f),
+            ClosureSetCap { clo, value, .. } => {
+                f(*clo);
+                f(*value);
+            }
             MethodNew { dict, own, .. } => {
-                let mut v = vec![*dict];
-                v.extend_from_slice(own);
-                v
+                f(*dict);
+                own.iter().copied().for_each(f);
             }
-            DictInst { premises, .. } => premises.clone(),
+            DictInst { premises, .. } => premises.iter().copied().for_each(f),
             DictRecord { fields, .. } | DictVariant { fields, .. } => {
-                fields.iter().map(|(_, r)| *r).collect()
+                fields.iter().map(|(_, r)| *r).for_each(f)
             }
-            GlobalSet { src, .. } | InstSetValue { src, .. } => vec![*src],
-            RefNew { value, .. } => vec![*value],
-            RefGet { r, .. } => vec![*r],
-            RefSet { r, value } => vec![*r, *value],
-            ArrayGet { a, index, .. } | MArrayGet { a, index, .. } => vec![*a, *index],
-            MArrayNew { len, init, .. } => vec![*len, *init],
-            MArraySet { a, index, value } => vec![*a, *index, *value],
-            CallDirect { args, .. } => args.clone(),
+            GlobalSet { src, .. } | InstSetValue { src, .. } => f(*src),
+            RefNew { value, .. } => f(*value),
+            RefGet { r, .. } => f(*r),
+            RefSet { r, value } => {
+                f(*r);
+                f(*value);
+            }
+            ArrayGet { a, index, .. } | MArrayGet { a, index, .. } => {
+                f(*a);
+                f(*index);
+            }
+            MArrayNew { len, init, .. } => {
+                f(*len);
+                f(*init);
+            }
+            MArraySet { a, index, value } => {
+                f(*a);
+                f(*index);
+                f(*value);
+            }
+            CallDirect { args, .. } => args.iter().copied().for_each(f),
             CallValue { callee, args, .. } => {
-                let mut v = vec![*callee];
-                v.extend_from_slice(args);
-                v
+                f(*callee);
+                args.iter().copied().for_each(f);
             }
             CallMethod {
                 dict, own, args, ..
             } => {
-                let mut v = vec![*dict];
-                v.extend_from_slice(own);
-                v.extend_from_slice(args);
-                v
+                f(*dict);
+                own.iter().chain(args).copied().for_each(f);
             }
-            DictApp { f, dicts, .. } => {
-                let mut v = vec![*f];
-                v.extend_from_slice(dicts);
-                v
+            DictApp { f: g, dicts, .. } => {
+                f(*g);
+                dicts.iter().copied().for_each(f);
             }
-            ConsoleWrite { s, .. } => vec![*s],
-            Fx { args, .. } => args.clone(),
+            ConsoleWrite { s, .. } => f(*s),
+            Fx { args, .. } => args.iter().copied().for_each(f),
         }
     }
 

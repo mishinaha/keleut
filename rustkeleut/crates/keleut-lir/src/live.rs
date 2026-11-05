@@ -7,7 +7,7 @@
 //! こうすると、持つ量の合計は差分の量の合計の 2 倍を超えず、1 つの点の集合を作り直す手間は
 //! その集合の大きさに比例する。
 
-use std::collections::HashMap;
+use std::collections::TryReserveError;
 
 use crate::ir::{BlockId, Reg};
 
@@ -66,37 +66,72 @@ impl Points {
 
     /// `i` 番目の点で生きているレジスタ(番号の昇順)。
     pub fn live(&self, i: usize) -> Vec<Reg> {
+        let mut out = Vec::new();
+        let mut work = LiveWork::default();
+        self.live_into(i, &mut out, &mut work)
+            .unwrap_or_else(|_| std::alloc::handle_alloc_error(std::alloc::Layout::new::<Reg>()));
+        out
+    }
+
+    /// `i` 番目の点で生きているレジスタ(番号の昇順)を `out` に足す。
+    ///
+    /// `out` と作業域 `work` の領域は `try_reserve` で取り、取れなければ失敗を返す。
+    /// ほかに確保をしないので、GC は回収の中でこれを使い、`out` と `work` を使い回す。
+    /// 失敗したとき、`out` には途中までのレジスタが残りうる。
+    pub fn live_into(
+        &self,
+        i: usize,
+        out: &mut Vec<Reg>,
+        work: &mut LiveWork,
+    ) -> Result<(), TryReserveError> {
         let j = self.snap[i] as usize;
         let e = self.entries[j];
         let base = &self.data[e.start as usize..(e.start + e.nadd) as usize];
         if i == j {
-            return base.to_vec();
+            out.try_reserve(base.len())?;
+            out.extend_from_slice(base);
+            return Ok(());
         }
-        // 写しから前へ差分を順に当てる。各レジスタの最後の当て方だけが効く。
-        let mut over: HashMap<Reg, bool> = HashMap::new();
-        for k in (i..j).rev() {
+        // 写しから前へ差分を順に当てる。各レジスタでは、i に最も近い点の当て方だけが効き、
+        // 同じ点では除くほうが効く。
+        // (レジスタ、点、足すか)を並べて昇順に整列すると、各レジスタの最初の組が効く当て方である。
+        let over = &mut work.over;
+        over.clear();
+        let n: usize = (i..j)
+            .map(|k| (self.entries[k].nadd + self.entries[k].nrem) as usize)
+            .sum();
+        over.try_reserve(n)?;
+        for k in i..j {
             let e = self.entries[k];
             let s = e.start as usize;
             let a = e.nadd as usize;
             for &r in &self.data[s..s + a] {
-                over.insert(r, true);
+                over.push((r, k as u32, true));
             }
             for &r in &self.data[s + a..s + a + e.nrem as usize] {
-                over.insert(r, false);
+                over.push((r, k as u32, false));
             }
         }
-        let mut set: Vec<Reg> = base
-            .iter()
-            .copied()
-            .filter(|r| over.get(r) != Some(&false))
-            .collect();
-        set.extend(
-            over.iter()
-                .filter(|&(r, &on)| on && base.binary_search(r).is_err())
-                .map(|(&r, _)| r),
-        );
-        set.sort_unstable();
-        set
+        over.sort_unstable();
+        over.dedup_by_key(|x| x.0);
+        out.try_reserve(base.len() + over.len())?;
+        let (mut x, mut y) = (0, 0);
+        while x < base.len() || y < over.len() {
+            if y >= over.len() || (x < base.len() && base[x] < over[y].0) {
+                out.push(base[x]);
+                x += 1;
+            } else {
+                let (r, _, on) = over[y];
+                if on {
+                    out.push(r);
+                }
+                if x < base.len() && base[x] == r {
+                    x += 1;
+                }
+                y += 1;
+            }
+        }
+        Ok(())
     }
 
     /// 点と、そこで生きているレジスタを順に返す。
@@ -123,6 +158,12 @@ impl Points {
         }
         b.finish()
     }
+}
+
+/// [`Points::live_into`] の作業域。使い回すと、領域を取り直さない。
+#[derive(Debug, Default)]
+pub struct LiveWork {
+    over: Vec<(Reg, u32, bool)>,
 }
 
 /// `from` から `to` への差分(足すもの、除くもの)。どれも昇順。
@@ -239,9 +280,14 @@ mod tests {
             .collect();
         let p = Points::from_sets(sets.clone());
         assert_eq!(p.len(), sets.len());
+        let (mut out, mut work) = (Vec::new(), LiveWork::default());
         for (i, (pt, s)) in sets.iter().enumerate() {
             assert_eq!(p.point(i), *pt);
             assert_eq!(&p.live(i), s);
+            // 出力先と作業域を使い回しても同じ集合になる。
+            out.clear();
+            p.live_into(i, &mut out, &mut work).unwrap();
+            assert_eq!(&out, s);
         }
     }
 

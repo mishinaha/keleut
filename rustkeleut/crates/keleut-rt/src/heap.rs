@@ -261,6 +261,15 @@ impl Heap {
         self.since_gc >= self.trigger
     }
 
+    /// 次の回収の時機を、今から 1 つの間隔(前の掃除で決めたもの)の後にずらす。
+    ///
+    /// GC([`crate::gc`])が印付けを打ち切ったときに呼ぶ。
+    /// 掃除をしないので、前の回収の後に確保した量はそのままでは回収の時機を超えたままになり、
+    /// 次の確保(`cancel` 節の確保)がすぐまた回収を起こすからである。
+    pub fn defer_collect(&mut self) {
+        self.since_gc = 0;
+    }
+
     fn over_limit(&self, words: u64) -> bool {
         matches!(self.limit_words, Some(l) if self.held_words + words > l)
     }

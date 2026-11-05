@@ -24,6 +24,27 @@
 //! 列を広げられないとき(システムの確保の失敗)は、溢れの印を立てて列に積むのをやめ、
 //! 列が空になったら、ヒープの印の付いた箱をすべて走査し直す(溢れが無くなるまで繰り返す)。
 //!
+//! ## 回収の中の確保
+//!
+//! 回収の全体は、失敗を自分で扱う範囲([`crate::alloc::handled`])で走る。
+//! 回収の中の確保は、どれも `try_reserve` か `try_reserve_exact` で取る。
+//! 失敗したときの扱いは、確保に後退の道があるかで分かれる。
+//!
+//! | 確保 | 失敗したとき |
+//! | --- | --- |
+//! | 印付けの列 | 溢れの印を立て、上の走査し直しに後退する |
+//! | 掃除の中の確保(ページの列の作り直し、手元のページ) | 掃除がその場で後退する([`crate::heap::Heap::sweep`]) |
+//! | 関数ごとの根の覚え書き(`FuncRoots`)、行ごとの根のスロット、生きているレジスタの集合を作る作業域 | 印付けを打ち切る |
+//!
+//! 覚え書きと行のスロットは、どの関数のどの行をたどるかが印付けの中で決まるので、回収の前に取っておけない。
+//! 覚え書きと行は、取れたときだけ覚える(途中まで作った行を覚えると、次の回収がその行の根を見落とす)。
+//!
+//! 印付けを打ち切ったら、付けた印を確保をしない走査で消し、表の項目の印付け済みの状態も戻す。
+//! 掃除をせずに [`Stop::OutOfMemory`] を返すので、ヒープの中身は回収の前と同じである。
+//! そのあと `cancel` 節の確保が続けて回収を起こさないように、ヒープの回収の時機を 1 つの間隔だけ後にずらす
+//! ([`crate::heap::Heap::defer_collect`])。
+//! `--gc-stress` の規則 1(初めて通る確保の場所で回収する)も、次に回収を終えるまで止める。
+//!
 //! ## フレームの点
 //!
 //! 見出しの 0 番の語の上位 32 ビットは、フレームが止まっている点である。
@@ -42,7 +63,7 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use keleut_lir::{FuncId, FxOp, Inst, Program, Reg, Slot, Term};
+use keleut_lir::{FuncId, FxOp, Inst, LiveWork, Program, Reg, Slot, Term};
 
 use crate::Rt;
 use crate::alloc::{self, Role, Site, handled};
@@ -225,6 +246,14 @@ pub struct GcState {
     overflow: bool,
     funcs: Vec<Option<FuncRoots>>,
     tmp: Vec<u32>,
+    /// 生きているレジスタの集合の出力先(回収のたびに使い回す)。
+    live: Vec<Reg>,
+    /// [`keleut_lir::Points::live_into`] の作業域。
+    live_work: LiveWork,
+    /// 前の回収が印付けを打ち切ったか(次に回収を終えるまで `--gc-stress` の規則 1 を止める)。
+    aborted: bool,
+    /// 印付けを打ち切った回収の回数。
+    pub aborts: u64,
 }
 
 impl GcState {
@@ -292,6 +321,10 @@ impl GcState {
             overflow: false,
             funcs: (0..nfuncs).map(|_| None).collect(),
             tmp: Vec::new(),
+            live: Vec::new(),
+            live_work: LiveWork::default(),
+            aborted: false,
+            aborts: 0,
         }
     }
 }
@@ -303,6 +336,8 @@ struct Marker<'a> {
     work: u64,
     /// 走査したフレーム(値スタックと継続の写し)の数。
     frames: u64,
+    /// 後退の道を持たない確保が失敗し、印付けを打ち切るか。
+    failed: bool,
 }
 
 impl Marker<'_> {
@@ -332,52 +367,118 @@ impl Marker<'_> {
     }
 }
 
-fn any_slots(prog: &Program, f: FuncId, regs: &[Reg], out: &mut Vec<u32>) {
+/// 回収の中の、後退の道を持たない確保の失敗。
+struct NoRoom;
+
+/// `regs` のうち `any` の区画に置かれたもののスロットを `out` に足す。
+fn any_slots(prog: &Program, f: FuncId, regs: &[Reg], out: &mut Vec<u32>) -> Result<(), NoRoom> {
     let fr = prog.funcs[f.index()]
         .frame
         .as_ref()
         .expect("パス 12 を済ませた関数");
+    out.try_reserve(regs.len()).map_err(|_| NoRoom)?;
     for r in regs {
         if let Slot::Any(n) = fr.slot[r.index()] {
             out.push(n);
         }
     }
+    Ok(())
+}
+
+/// `visit` が渡すレジスタのうち `any` の区画に置かれたもののスロットを `out` に足す。
+fn any_uses(
+    prog: &Program,
+    f: FuncId,
+    visit: impl FnOnce(&mut dyn FnMut(Reg)),
+    out: &mut Vec<u32>,
+) -> Result<(), NoRoom> {
+    let fr = prog.funcs[f.index()]
+        .frame
+        .as_ref()
+        .expect("パス 12 を済ませた関数");
+    let mut ok = true;
+    visit(&mut |r| {
+        if let Slot::Any(n) = fr.slot[r.index()] {
+            if out.try_reserve(1).is_ok() {
+                out.push(n);
+            } else {
+                ok = false;
+            }
+        }
+    });
+    if ok { Ok(()) } else { Err(NoRoom) }
+}
+
+/// `v` を長さちょうどの領域に写す(`into_boxed_slice` が領域を取り直さないように)。
+fn boxed(v: &[u32]) -> Result<Box<[u32]>, NoRoom> {
+    let mut b = Vec::new();
+    b.try_reserve_exact(v.len()).map_err(|_| NoRoom)?;
+    b.extend_from_slice(v);
+    Ok(b.into_boxed_slice())
+}
+
+/// 行の根を作るときに使い回す領域。
+struct Work<'a> {
+    tmp: &'a mut Vec<u32>,
+    live: &'a mut Vec<Reg>,
+    live_work: &'a mut LiveWork,
 }
 
 impl FuncRoots {
-    fn new(prog: &Program, f: FuncId) -> FuncRoots {
+    fn new(prog: &Program, f: FuncId) -> Result<FuncRoots, NoRoom> {
         let func = &prog.funcs[f.index()];
         let fr = func.frame.as_ref().expect("パス 12 を済ませた関数");
-        let tails: Vec<u32> = func
-            .blocks
-            .iter()
-            .enumerate()
-            .filter(|(_, b)| {
-                matches!(
-                    b.term,
-                    Term::TailCallValue { .. } | Term::TailCallMethod { .. }
-                )
-            })
-            .map(|(i, _)| i as u32)
-            .collect();
+        let is_tail = |b: &keleut_lir::Block| {
+            matches!(
+                b.term,
+                Term::TailCallValue { .. } | Term::TailCallMethod { .. }
+            )
+        };
+        let mut tails = Vec::new();
+        tails
+            .try_reserve_exact(func.blocks.iter().filter(|b| is_tail(b)).count())
+            .map_err(|_| NoRoom)?;
+        tails.extend(
+            func.blocks
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| is_tail(b))
+                .map(|(i, _)| i as u32),
+        );
         let nrp = fr.resume_points.len();
         let n = nrp + tails.len();
-        FuncRoots {
+        let mut rows = Vec::new();
+        rows.try_reserve_exact(n).map_err(|_| NoRoom)?;
+        rows.resize_with(n, || None);
+        let mut phase = Vec::new();
+        phase.try_reserve_exact(n).map_err(|_| NoRoom)?;
+        phase.resize_with(n, || None);
+        Ok(FuncRoots {
             nrp,
             tails,
-            rows: (0..n).map(|_| None).collect(),
-            phase: (0..n).map(|_| None).collect(),
+            rows,
+            phase,
             rt_handle: prog.rt_handle == Some(f),
-        }
+        })
     }
 
-    fn row(&mut self, prog: &Program, f: FuncId, row: usize) -> &[u32] {
+    fn row(
+        &mut self,
+        prog: &Program,
+        f: FuncId,
+        row: usize,
+        w: &mut Work<'_>,
+    ) -> Result<&[u32], NoRoom> {
         if self.rows[row].is_none() {
-            let mut v = Vec::new();
+            w.tmp.clear();
             if row < self.nrp {
                 let func = &prog.funcs[f.index()];
                 let fr = func.frame.as_ref().expect("パス 12 を済ませた関数");
-                any_slots(prog, f, &fr.resume_points.live(row), &mut v);
+                w.live.clear();
+                fr.resume_points
+                    .live_into(row, w.live, w.live_work)
+                    .map_err(|_| NoRoom)?;
+                any_slots(prog, f, w.live, w.tmp)?;
                 let pt = fr.resume_points.point(row);
                 let inst = &func.blocks[pt.block.index()].insts[pt.index as usize];
                 if matches!(
@@ -387,33 +488,42 @@ impl FuncRoots {
                         ..
                     }
                 ) {
-                    any_slots(prog, f, &inst.uses(), &mut v);
+                    any_uses(prog, f, |g| inst.for_each_use(g), w.tmp)?;
                 }
             }
             if self.rt_handle {
-                v.push(0);
+                w.tmp.try_reserve(1).map_err(|_| NoRoom)?;
+                w.tmp.push(0);
             }
-            self.rows[row] = Some(v.into_boxed_slice());
+            // 作り終えた行だけを覚える。
+            self.rows[row] = Some(boxed(w.tmp)?);
         }
-        self.rows[row].as_deref().unwrap_or(&[])
+        Ok(self.rows[row].as_deref().unwrap_or(&[]))
     }
 
-    fn phase(&mut self, prog: &Program, f: FuncId, row: usize) -> &[u32] {
+    fn phase(
+        &mut self,
+        prog: &Program,
+        f: FuncId,
+        row: usize,
+        w: &mut Work<'_>,
+    ) -> Result<&[u32], NoRoom> {
         if self.phase[row].is_none() {
-            let mut v = Vec::new();
+            w.tmp.clear();
             let func = &prog.funcs[f.index()];
             if row < self.nrp {
                 let fr = func.frame.as_ref().expect("パス 12 を済ませた関数");
                 let pt = fr.resume_points.point(row);
                 let inst = &func.blocks[pt.block.index()].insts[pt.index as usize];
-                any_slots(prog, f, &inst.uses(), &mut v);
+                any_uses(prog, f, |g| inst.for_each_use(g), w.tmp)?;
             } else {
                 let b = self.tails[row - self.nrp] as usize;
-                any_slots(prog, f, &func.blocks[b].term.uses(), &mut v);
+                let term = &func.blocks[b].term;
+                any_uses(prog, f, |g| term.for_each_use(g), w.tmp)?;
             }
-            self.phase[row] = Some(v.into_boxed_slice());
+            self.phase[row] = Some(boxed(w.tmp)?);
         }
-        self.phase[row].as_deref().unwrap_or(&[])
+        Ok(self.phase[row].as_deref().unwrap_or(&[]))
     }
 }
 
@@ -421,13 +531,23 @@ impl FuncRoots {
 struct Frames<'a, 'p> {
     prog: &'p Program,
     funcs: &'a mut Vec<Option<FuncRoots>>,
-    tmp: &'a mut Vec<u32>,
+    work: Work<'a>,
 }
 
 impl Frames<'_, '_> {
     /// 見出しが `p` のフレームの根のスロットに印を付ける。
     /// `point` が [`NO_POINT`] でなければ、見出しの点の代わりにそれを使う(最上段の安全点)。
+    /// 根を作る確保が失敗したら、`m.failed` を立てて戻る。
     fn scan(&mut self, m: &mut Marker<'_>, p: *const u64, point: u32) {
+        if m.failed {
+            return;
+        }
+        if self.scan_inner(m, p, point).is_err() {
+            m.failed = true;
+        }
+    }
+
+    fn scan_inner(&mut self, m: &mut Marker<'_>, p: *const u64, point: u32) -> Result<(), NoRoom> {
         // SAFETY: p はフレームの見出しを指し、フレームは見出しの 2 番の語の大きさを持つ。
         let h0 = unsafe { *p };
         let f = FuncId(h0 as u32);
@@ -440,32 +560,45 @@ impl Frames<'_, '_> {
             // SAFETY: n は関数のフレームの any の区画のスロットである。
             unsafe { *p.add(HEADER_WORDS + n as usize) }
         };
-        let fr = self.funcs[f.index()].get_or_insert_with(|| FuncRoots::new(self.prog, f));
+        let entry = &mut self.funcs[f.index()];
+        if entry.is_none() {
+            // 作り終えた覚え書きだけを覚える。
+            *entry = Some(FuncRoots::new(self.prog, f)?);
+        }
+        let fr = entry.as_mut().expect("直前に入れた");
+        let w = &mut self.work;
         if pt & SAFEPOINT != 0 {
             let i = (pt & POINT_MASK) as usize;
             let frame = self.prog.funcs[f.index()]
                 .frame
                 .as_ref()
                 .expect("パス 12 を済ませた関数");
-            self.tmp.clear();
-            any_slots(self.prog, f, &frame.safepoints.live(i), self.tmp);
+            w.tmp.clear();
+            w.live.clear();
+            frame
+                .safepoints
+                .live_into(i, w.live, w.live_work)
+                .map_err(|_| NoRoom)?;
+            any_slots(self.prog, f, w.live, w.tmp)?;
             if fr.rt_handle {
-                self.tmp.push(0);
+                w.tmp.try_reserve(1).map_err(|_| NoRoom)?;
+                w.tmp.push(0);
             }
-            for &n in self.tmp.iter() {
+            for &n in w.tmp.iter() {
                 m.word(slot(n));
             }
-            return;
+            return Ok(());
         }
         let row = (pt & !(PHASE | YIELDED)) as usize;
-        for &n in fr.row(self.prog, f, row) {
+        for &n in fr.row(self.prog, f, row, w)? {
             m.word(slot(n));
         }
         if pt & PHASE != 0 {
-            for &n in fr.phase(self.prog, f, row) {
+            for &n in fr.phase(self.prog, f, row, w)? {
                 m.word(slot(n));
             }
         }
+        Ok(())
     }
 
     /// 位置 `pos` の最上段から、ネイティブの呼び出し元か位置 `stop` のフレームの手前まで、呼び出し元の鎖をたどる。
@@ -478,7 +611,7 @@ impl Frames<'_, '_> {
         stop: u64,
         mut point: u32,
     ) {
-        while pos != NATIVE_CALLER && pos != stop {
+        while pos != NATIVE_CALLER && pos != stop && !m.failed {
             let p = stack.ptr_at_ro(pos);
             m.work += 1;
             m.frames += 1;
@@ -493,6 +626,9 @@ impl Frames<'_, '_> {
     fn cont(&mut self, m: &mut Marker<'_>, c: &Cont) {
         let mut off = 0usize;
         for &sz in &c.sizes {
+            if m.failed {
+                return;
+            }
             m.frames += 1;
             self.scan(m, c.frames[off..].as_ptr(), NO_POINT);
             off += sz as usize;
@@ -547,7 +683,7 @@ impl Tables<'_> {
     /// 項目 `i` を走査する(初めてのときだけ)。
     fn entry(&mut self, m: &mut Marker<'_>, fr: &mut Frames<'_, '_>, t: Table, i: usize) {
         let st = &mut self.gc[t as usize].state[i];
-        if *st != LIVE {
+        if *st != LIVE || m.failed {
             return;
         }
         *st = MARKED;
@@ -644,7 +780,7 @@ impl Rt<'_> {
         let mut collected = false;
         let stress = self.gc.stress && self.stress_now();
         if stress || self.heap.should_collect() {
-            self.collect();
+            self.collect()?;
             collected = true;
             if alloc::take_flag(Role::Exec) {
                 return Err(Stop::OutOfMemory);
@@ -654,7 +790,11 @@ impl Rt<'_> {
             return Ok(p);
         }
         if !collected {
-            self.collect();
+            if self.collect().is_err() {
+                // ヒープが尽きた後の回収を打ち切った。回収を終えても取れなかったときと同じく、
+                // GC のヒープの予備に切り替えてから、メモリの不足にする。
+                return Err(self.heap.exhausted(words).into());
+            }
             if alloc::take_flag(Role::Exec) {
                 return Err(Stop::OutOfMemory);
             }
@@ -681,7 +821,7 @@ impl Rt<'_> {
             };
             ((h & 0xffff_ffff) << 32) | point as u64
         };
-        if !g.tested.contains(&site) {
+        if !g.aborted && !g.tested.contains(&site) {
             // 覚える領域を取れなくても回収はする(覚えなければ次も回収する)。
             if handled(|| g.tested.try_reserve(1)).is_ok() {
                 g.tested.insert(site);
@@ -692,8 +832,15 @@ impl Rt<'_> {
     }
 
     /// 回収する。
-    pub fn collect(&mut self) {
+    ///
+    /// 後退の道を持たない確保が失敗したら、印付けを打ち切り、ヒープを回収の前のままにして
+    /// [`Stop::OutOfMemory`] を返す(このモジュールの冒頭の「回収の中の確保」)。
+    pub fn collect(&mut self) -> Result<(), Stop> {
         let _site = alloc::site(Site::Collect);
+        handled(|| self.collect_in_scope())
+    }
+
+    fn collect_in_scope(&mut self) -> Result<(), Stop> {
         let t0 = Instant::now();
         let Rt {
             prog,
@@ -721,6 +868,8 @@ impl Rt<'_> {
             overflow,
             funcs,
             tmp,
+            live,
+            live_work,
             ..
         } = gc;
         *overflow = false;
@@ -730,8 +879,17 @@ impl Rt<'_> {
             overflow,
             work: 0,
             frames: 0,
+            failed: false,
         };
-        let mut fr = Frames { prog, funcs, tmp };
+        let mut fr = Frames {
+            prog,
+            funcs,
+            work: Work {
+                tmp,
+                live,
+                live_work,
+            },
+        };
         let mut tabs = Tables {
             handlers,
             conts,
@@ -755,24 +913,53 @@ impl Rt<'_> {
         for &o in outer.iter().rev() {
             fr.walk(&mut m, stack, o, NATIVE_CALLER, NO_POINT);
         }
-        loop {
+        while !m.failed {
             while let Some(w) = m.stack.pop() {
+                if m.failed {
+                    break;
+                }
                 tabs.children(&mut m, &mut fr, w as *mut u64);
             }
-            if !*m.overflow {
+            if m.failed || !*m.overflow {
                 break;
             }
             // 溢れた。印の付いた箱をすべて走査し直す(子に印が付いていれば何もしない)。
             *m.overflow = false;
             heap.for_each_object(|p| {
                 // SAFETY: p は生きている箱の見出しを指す。
-                if unsafe { *p } & MARK != 0 {
+                if !m.failed && unsafe { *p } & MARK != 0 {
                     tabs.children(&mut m, &mut fr, p);
                     while let Some(w) = m.stack.pop() {
+                        if m.failed {
+                            break;
+                        }
                         tabs.children(&mut m, &mut fr, w as *mut u64);
                     }
                 }
             });
+        }
+        if m.failed {
+            // 印付けを打ち切る。付けた印を確保をせずに消し、掃除をしない。
+            m.stack.clear();
+            *m.overflow = false;
+            heap.for_each_object(|p| {
+                // SAFETY: p は生きている箱の見出しを指す。
+                unsafe { *p &= !MARK };
+            });
+            for g in tables.iter_mut() {
+                for st in g.state.iter_mut() {
+                    if *st == MARKED {
+                        *st = LIVE;
+                    }
+                }
+            }
+            // `cancel` 節の確保がすぐまた回収を起こさないように、回収の時機をずらす。
+            heap.defer_collect();
+            gc.allocs_since = 0;
+            gc.aborted = true;
+            gc.aborts += 1;
+            gc.time += t0.elapsed();
+            return Err(Stop::OutOfMemory);
         }
         // 箱に印の付かなかった表の項目を外す。
         let mut freed = 0u64;
@@ -815,13 +1002,15 @@ impl Rt<'_> {
             .max(1);
         gc.freed_entries += freed;
         gc.collections += 1;
+        gc.aborted = false;
         gc.time += t0.elapsed();
+        Ok(())
     }
 
     /// 回収の統計の 1 行(`KELEUT_GC_STATS` を与えたときに標準エラーに書く)。
     pub fn gc_stats(&self) -> String {
         format!(
-            "keleut: gc: 回収 {} 回、{:.3} 秒、外した表の項目 {}、持っている語 {}、表の項目 {}/{}/{}、試した確保の場所 {}\n",
+            "keleut: gc: 回収 {} 回、{:.3} 秒、外した表の項目 {}、持っている語 {}、表の項目 {}/{}/{}、試した確保の場所 {}、打ち切った回収 {}\n",
             self.gc.collections,
             self.gc.time.as_secs_f64(),
             self.gc.freed_entries,
@@ -830,6 +1019,7 @@ impl Rt<'_> {
             self.gc.tables[1].live(),
             self.gc.tables[2].live(),
             self.gc.tested.len(),
+            self.gc.aborts,
         )
     }
 }
