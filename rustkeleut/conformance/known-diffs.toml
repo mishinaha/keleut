@@ -445,26 +445,22 @@ pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka",
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# V218: 標準出力が非ブロッキングのパイプのとき、Diktor は書き込みの EAGAIN を Sys_blocked_io の例外で受けて、
-# 内部エラーの後に 2 で終わる。keleut run は計画 6.5 節の出力の規約のとおり待って書き直し、0 で終わる。
-# bytes.t の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf、x-ir)が記録と違い(against = "record")、
-# 組 ki が組 dk と違う(against = "pair")。
+# 組 ki などの対話的な実行の呼び出し(keleut repl)も、標準入力を読めないときの診断の接頭辞は keleut: である。
+# 終了状態(74)と理由の文は同じである。
 
 [[diff]]
-file = "conformance/bytes/bytes.t"
-line = 50
-pairs = ["dk", "dk-ir", "kf", "x-ir"]
-reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
-ledger = "V218"
-against = "record"
-
-[[diff]]
-file = "conformance/bytes/bytes.t"
-line = 50
+file = "diktor/test/repl_stdin.t"
+line = 8
 pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "Diktor は非ブロッキングの標準出力で Sys_blocked_io の内部エラーになる(keleut は待って書き直す)"
-ledger = "V218"
-against = "pair"
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
+
+[[diff]]
+file = "diktor/test/repl_stdin.t"
+line = 14
+pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
+reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
+ledger = "V217"
 
 # 組 kf の実行と型検査の呼び出し(M98 から import を含めてすべて keleut check)が、
 # 入力や import 先を開けないときの診断の接頭辞も keleut: である。終了状態(64)と診断の種類は同じである。

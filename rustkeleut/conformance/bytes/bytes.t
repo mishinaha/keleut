@@ -30,7 +30,7 @@ NUL と、文字の途中で切った不正な UTF-8 のバイト列もそのま
 
 非ブロッキングのパイプでは、書き込みが EAGAIN で返る。
 keleut は待ってから書き直すので、バイト列は欠けず、終了状態は 0 である。
-Diktor は Sys_blocked_io の例外で止まる(この試験は Diktor と一致しない):
+Diktor も起動のときに O_NONBLOCK を外すので、同じく欠けずに書く:
 
   $ cat > nb.py <<'EOF'
   > import fcntl, os, subprocess, sys, time
