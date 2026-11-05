@@ -12,16 +12,19 @@ RustKeleut の差分試験の材料である。
 | `kir-bad/` | 不正な KIR。`keleut kir` がどれも 65 で拒否することを確かめる |
 | `kir-fixtures/` | KIR の各版の見本(IRSpec 14 節)。副版ごとのディレクトリ(いまは `1.0/`)に、両方の読み手が読む正しい `.kir` と `.kirt` を置く。`--suite all` の組 `dk`、`dk-ir`、`kf`、`x-ir` では `keleut run FILE.kir` が `diktor --run-ir` になるので、Diktor の読み手も同じ見本を読む。`kconform kir-roundtrip` も見本を両方の読み手で読む |
 | `init/`、`prim/`、`bytes/` | `keleut run` の試験(初期化、プリミティブ、出力の規約)。記録は `keleut run` の結果である |
+| `float/` | `Float64` のリテラルの読みと境界の値の印字の試験(計画 261104-3 の D574)。範囲を超えるリテラル、最小の非正規化数と最大の有限値の前後の丸め、接尾辞 `f64` と桁区切り、構文エラーになる綴り(1 件ずつのファイル)と、`a * b + c` を引数の値と定数の式で計算して丸めが変わらないことを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `depth/` | 論理的な深さの試験(IRSpec 11 節)。`keleut run --max-depth N` で走らせ、`--suite depth` で組 `dk-ir` と RustKeleut の組の間で比べる |
 | `oom/` | メモリの不足が `cancel` 節を走らせて 3 で終わる試験。`oom.t` は 1 回の確保の上限 `N_alloc_max` を超える確保を確かめる。`shape.t` は、拡張を 3,000 段つないだ関数を `ulimit -v 524288` の下で走らせ、形の表を広げられないときを確かめる(D569)。`shape.t` は `.kel` を上限を置かずに `keleut emit-kir` で `.kir` にし、上限の下では `.kir` だけを `--backend interp` で走らせる(`gc/` と同じく、組 `kw` と `kr-kw` でもインタプリタで走り、LLVM の後段の組では shim が旗を除いて JIT の後段を選ぶが、3,000 段の関数は翻訳の費用が `JIT_COST_MAX` を超えてインタプリタに残る。JIT の拡張の道 `krt_rec_op` は `crates/keleut-cli/tests/oom_cmd.rs` の `--tier jit-only` の例が 300 段の鎖で確かめる)。記録は `keleut run` の結果である。Diktor は `oom.t` でも `shape.t` でも 0 で終わるので、Diktor で走らせる組の記録との差と RustKeleut の組の組 `dk` との差を、既知の差に登録してある(`oom.t` は台帳 V215、`shape.t` は台帳 V240) |
 | `gc/` | 回収の試験(計画 6.5 節)。100 万要素のリストを `--native-stack 512k` で作って走査する試験、`ulimit -v 524288` の下で確保の合計が上限を超えるプログラムとエフェクトの表の項目を回収する試験、構造的な `Eq` の入れ子の中の回収の試験、切り出し中のページをちょうど使い切ったときの掃除の試験。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する。`ulimit -v 524288` の 2 つのコマンドは `--backend interp` を書くので、組 `kw` でもインタプリタで走る(Node は仮想メモリの上限 512 MiB の下で起動できない。台帳 V215)。LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)では shim がこの旗を除くので、組の段で走る |
 | `stack/` | ネイティブのスタックの試験。`--native-stack 512k` で、JIT の関数の深い末尾でない再帰の後の構造的な `Eq` の比べ方と、20 万段の構造的な `Eq` の入れ子が、どの後段でも同じ結果になることを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
-| `effects/` | G の節の継続の取り出しと再開の試験(`g.t`。生成器、深い再帰の底の yield、2 回目の resume、再開の間の回収、G と N と T の節の重なり、メソッドの呼び出しと引数の多い関数の中の yield)と、ハンドラと継続の再開を何千回もくり返し、段の設定の組(`kt`、`ka`、`km`)で取り出しと再開が段の境目をまたぐ試験(`tier.t`)。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
+| `frame/` | スロットの多い関数のフレームの試験(計画 261104-3 の D573)。`slots.t` は、300 個の `Int32` を生かしたまま `id` を呼ぶ関数を `awk` で作り、スロットが 256 を超える関数が全組で同じ結果になることを確かめる。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
+| `effects/` | G の節の継続の取り出しと再開の試験(`g.t`。生成器、深い再帰の底の yield、2 回目の resume、再開の間の回収、G と N と T の節の重なり、メソッドの呼び出しと引数の多い関数の中の yield、組み込みの `Array.each` と `pinned` の中の yield と Never を返す操作)と、ハンドラと継続の再開を何千回もくり返し、段の設定の組(`kt`、`ka`、`km`)で取り出しと再開が段の境目をまたぐ試験(`tier.t`)。記録は `keleut run` の結果で、Diktor の木の評価器とも一致する |
 | `recshow/` | レコードを含む `<値>` の綴りの試験(計画 261104-1 の D562)。各値を、`cancel` 節の打ち切りの記録の行と最上位の実行時エラーの行の 2 つの形で書く。付録 B の 9 番(ハンドラのどの節にも一致しない)はソースから書けないので、手で書いた `nomatch.kirt` を `keleut kir asm` で組んだ `nomatch.kir` を走らせ、cram の中で `keleut kir dis` の出力が `nomatch.kirt` と同じことを確かめる(`nomatch.kel` は `.kirt` を作り直すための元で、どのコマンドも走らせない)。記録は `keleut run` の結果である。記録と Diktor との比較では、打ち切りの記録の行はフィールドを並べ替えてから比べるので順のほかの綴りを見張り、実行時エラーの行は種別の語の後ろを切るので中身を見張らない。後段の群(`ki kj kt ka km kw` と `kr-*`)の中は正規化せずに比べるので、印字の 2 つの実装(crate keleut-rt の `Rt::show` と host の `show`)が同じ順で書くことを見張る。この見張りは同じ群の組を 2 つ以上いっしょに走らせたときだけ働くので、少なくとも `ki` と `kw`、`kr-ki` と `kr-kw` を同時に走らせる |
 | `frontend-depth/` | Rust のフロントエンド(crate `keleut-front`)の入れ子の限度の試験(`parse.t` は `keleut dump ast`、`typecheck.t` は `keleut check`、`repl.t` は `keleut repl` で走らせる)。Diktor が基準にならないので `kconform expect` でだけ走らせる |
 
-計画 6.1 節と 8.1 節が挙げる `float/` のディレクトリは置かない。
-Float64 の印字は、`prim/prim.t`(LangSpec §16.2 の綴り、libm、Float64 から整数への変換)と、crate `keleut-rtcore` の試験 `tests/fltcmp.rs`(glibc の印字との比べ合わせ。M85)で確かめる。
+`Float64` は 2 つのディレクトリで確かめる。
+`float/` はリテラルの読みと境界の値の印字を、`prim/` は演算と libm と整数への変換を受け持つ。
+印字の関数そのものは、crate `keleut-rtcore` の試験 `tests/fltcmp.rs`(glibc の印字との比べ合わせ。M85)も確かめる。
 どれも cram の形の `.t` で書き、`.kel` は `.t` の横か `.t` のヒアドキュメントに置く。
 `.t` のコマンドは `diktor` でなく `keleut` を呼ぶ。
 `keleut run` の呼び出しは、shim が組ごとに振り分ける(次の「組」の節の表の右の欄)。
