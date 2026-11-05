@@ -541,6 +541,26 @@ fn repl_ulimit(kib: u64, args: &str, input: &str) -> Output {
     feed(c.spawn().unwrap(), input)
 }
 
+/// 仮想メモリの上限の下でも、実行のスレッドと下ろしのスレッドを縮めてセッションを続ける。
+///
+/// 下ろしのスタックは、検証が実際に使った深さの上限に見合う大きさにする。
+/// 直す前は、`ulimit -v 1000000` の下で実行のスレッド(約 1.1 GB)を作れずに 70 だった。
+/// フロントエンドのスレッドは `keleut repl` では上限に合わせて縮めないので、`--native-stack 64m` で小さくしておく
+/// (最適化なしの構築の既定の大きさでは、上限 3,000,000 KiB でも作れない)。
+/// この形は、リリースの構築でも最適化なしの構築でも 600,000 KiB から 0 で、500,000 KiB では限度の行と 1 である。
+#[cfg(target_os = "linux")]
+#[test]
+fn 仮想メモリの上限の下でも実行と下ろしのスレッドを縮めて続ける() {
+    let r = repl_ulimit(1_000_000, "--native-stack 64m", "let x = 1\nx + 1\n");
+    assert_eq!(
+        String::from_utf8_lossy(&r.stdout),
+        "x : Int32 = 1\n_ : Int32 = 2\n",
+        "{}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    assert_eq!(r.status.code(), Some(0));
+}
+
 /// 実行時エラーで止まった入力の大域の値は、回収の根から外す。
 ///
 /// 30 万要素のリストを束縛してからゼロ除算で止まる入力を 40 回続ける(1 回の約 9 MiB で、残せば合計は約 370 MiB)。
