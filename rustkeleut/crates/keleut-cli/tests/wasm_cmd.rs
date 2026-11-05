@@ -704,3 +704,554 @@ fn 無視する扱いで起動されたシグナルでは_interp_と同じく終
     }
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// `let a0 = V * 3; …` を `nv` 個と、それらを使う式(値は 0)。
+fn live_lets(var: &str, nv: usize) -> (String, String) {
+    if nv == 0 {
+        return (String::new(), "0".into());
+    }
+    let ls: String = (0..nv)
+        .map(|i| format!("let a{i} = {var} * {}; ", i + 3))
+        .collect();
+    let s = (0..nv)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    (ls, format!("({s}) - ({s})"))
+}
+
+/// `cancel` 節の中に直に書いたハンドラ式を重ねるプログラム(計画 261104-3 の探りの `gen.py` の形 c と形 f)。
+///
+/// 形 c(`GADD=1`)では、`go` が値を生かしてハンドラ式を末尾でなく書き、その `cancel` 節が値を生かして
+/// ハンドラ式を直に書き、その本体が値を生かして `go` を末尾でなく呼ぶ。
+/// 論理的な同じ深さに `go`、`$rt_handle`、`cancel` 節、内側の `$rt_handle` が重なる。
+/// 形 f では、内側のハンドラ式に G の節 `ask` を足し、本体が `ask` を `perform` してから `go` を呼ぶ。
+/// G の節は末尾で `resume` するので、内側の `$rt_handle` は `rt_resume` として本体を写し戻す。
+/// どちらも 1 つの `n` が論理的な 2 段で、出力は形 c が `2`、`bottom`、`7`、形 f が `bottom`、`7` である。
+fn cancel_nest_src(shape: char, nv: usize, n: u32) -> String {
+    let (lm, cm) = live_lets("m", nv);
+    let (lk, ck) = live_lets("k", nv);
+    let mut s = String::new();
+    if shape == 'c' {
+        s.push_str("effect Stop = { stop: () => Int32 }\neffect Zz = { zz: () => Unit }\n");
+        s.push_str("effect Ask = { ask: () => Int32 }\n");
+        s.push_str(
+            "echoln(show((perform ask()) handle { case ask() => { let r = resume(1); r + 1 } }))\n",
+        );
+        s.push_str(&format!(
+            "let rec go(m: Int32): Int32 @ {{Stop, Console}} = if m == 0 then {{ echoln(\"bottom\"); 0 }} else \
+             {{ {lm}let q = (perform stop()) handle {{ case zz() => resume(()) \
+             case cancel => {{ {lm}let r = {{ let k = m - 1; {lk}let z = go(k); z + ({ck}) }} handle {{ case stop() => 0 }}; \
+             if r + ({cm}) != 0 then echoln(\"bad\") else () }} }}; q + ({cm}) }}\n"
+        ));
+        s.push_str(&format!(
+            "echoln(show(go({n}) handle {{ case stop() => 7 }}))\n"
+        ));
+    } else {
+        s.push_str(
+            "effect Stop = { stop: () => Int32, ask: () => Int32 }\neffect Zz = { zz: () => Unit }\n",
+        );
+        s.push_str(&format!(
+            "let rec go(m: Int32): Int32 @ {{Stop, Console}} = if m == 0 then {{ echoln(\"bottom\"); 0 }} else \
+             {{ {lm}let q = (perform stop()) handle {{ case zz() => resume(()) \
+             case cancel => {{ {lm}let r = {{ let k = m - 1; {lk}let a = perform ask(); let z = go(k); z + a - 2 + ({ck}) }} \
+             handle {{ case stop() => 0 case ask() => if m < 0 then {{ let t = resume(1); t }} else resume(2) }}; \
+             if r + ({cm}) != 0 then echoln(\"bad\") else () }} }}; q + ({cm}) }}\n"
+        ));
+        s.push_str(&format!(
+            "echoln(show(go({n}) handle {{ case stop() => 7 case ask() => 5 }}))\n"
+        ));
+    }
+    s
+}
+
+/// `cancel` 節の中のハンドラ式を `--max-depth 600000` の限度の近く(論理的な深さ約 598,000)まで重ねる。
+fn deep_cancel_nest(d: &Path) -> PathBuf {
+    let kel = d.join("c92.kel");
+    std::fs::write(&kel, cancel_nest_src('c', 92, 299_000)).unwrap();
+    kel
+}
+
+fn run_depth(d: &Path, args: &[&str], kel: &Path) -> (Vec<u8>, Vec<u8>, Option<i32>) {
+    let mut a = vec!["run"];
+    a.extend_from_slice(args);
+    a.extend_from_slice(&["--max-depth", "600000", kel.to_str().unwrap()]);
+    let o = keleut_in(d, &a);
+    (o.stdout, o.stderr, o.status.code())
+}
+
+#[test]
+fn cancel_節の中のハンドラ式を重ねても_interp_と同じ() {
+    if !have_node() {
+        return;
+    }
+    // 1 段が B_wasm を超える形(V234)。スタックは B_prog で決まり、--stack-size の直の経路で走る。
+    let d = scratch("cancel-nest");
+    let kel = deep_cancel_nest(&d);
+    let w = run_depth(&d, &["--backend", "wasm"], &kel);
+    let i = run_depth(&d, &["--backend", "interp"], &kel);
+    assert_eq!(
+        (&i.0[..], i.2),
+        (&b"2\nbottom\n7\n"[..], Some(0)),
+        "{}",
+        String::from_utf8_lossy(&i.1)
+    );
+    assert_eq!(w, i, "{}", String::from_utf8_lossy(&w.1));
+    // 直す前の keleut は Worker の経路でなら host の 64 MiB の余裕で通るので、直の経路を通ったことを確かめる。
+    // 仮想メモリの上限などで直の経路を取れない環境では、この試験は直したことを見分けられない。
+    let stats = wasm_stats_stderr(&d, &kel);
+    assert!(
+        stats.contains("keleut-host: path=direct\n"),
+        "直の経路を通らなかった(RLIMIT_AS が有限か、RLIMIT_STACK の上限が低い): {stats}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `KELEUT_WASM_STATS=1` で `keleut run --backend wasm --max-depth 600000` を走らせた標準エラー。
+fn wasm_stats_stderr(d: &Path, kel: &Path) -> String {
+    let o = Command::new(env!("CARGO_BIN_EXE_keleut"))
+        .args([
+            "run",
+            "--backend",
+            "wasm",
+            "--max-depth",
+            "600000",
+            kel.to_str().unwrap(),
+        ])
+        .current_dir(d)
+        .env("KELEUT_WASM_STATS", "1")
+        .env_remove("KELEUT_WASM_DIRECT")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&o.stderr).into_owned()
+}
+
+#[cfg(feature = "llvm")]
+#[test]
+fn cancel_節の中のハンドラ式を重ねても_jit_only_と同じ() {
+    if !have_node() {
+        return;
+    }
+    let d = scratch("cancel-nest-jit");
+    let kel = deep_cancel_nest(&d);
+    let w = run_depth(&d, &["--backend", "wasm"], &kel);
+    let j = run_depth(&d, &["--backend", "jit", "--tier", "jit-only"], &kel);
+    assert_eq!(
+        (&j.0[..], j.2),
+        (&b"2\nbottom\n7\n"[..], Some(0)),
+        "{}",
+        String::from_utf8_lossy(&j.1)
+    );
+    assert_eq!(w, j, "{}", String::from_utf8_lossy(&w.1));
+    let stats = wasm_stats_stderr(&d, &kel);
+    assert!(
+        stats.contains("keleut-host: path=direct\n"),
+        "直の経路を通らなかった(RLIMIT_AS が有限か、RLIMIT_STACK の上限が低い): {stats}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `keleut build --target wasm --max-depth 600000` で書く。
+fn build_600000(d: &Path, kel: &Path, out: &Path) {
+    build_at(d, kel, out, "600000");
+}
+
+/// `KELEUT_WASM_STATS=1 keleut build --target wasm --max-depth DEPTH` で書き、標準エラーを返す。
+fn build_at(d: &Path, kel: &Path, out: &Path, depth: &str) -> String {
+    let r = Command::new(env!("CARGO_BIN_EXE_keleut"))
+        .args([
+            "build",
+            "--target",
+            "wasm",
+            "--max-depth",
+            depth,
+            "-o",
+            out.to_str().unwrap(),
+            kel.to_str().unwrap(),
+        ])
+        .current_dir(d)
+        .env("KELEUT_WASM_STATS", "1")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&r.stderr).into_owned();
+    assert_eq!(r.status.code(), Some(0), "{err}");
+    err
+}
+
+#[test]
+fn worker_の経路のスタックは_b_prog_で決まる() {
+    if !have_node() {
+        return;
+    }
+    let d = scratch("cancel-nest-meta");
+    let kel = d.join("c.kel");
+    std::fs::write(&kel, cancel_nest_src('c', 92, 1000)).unwrap();
+    let out = d.join("out");
+    build_600000(&d, &kel, &out);
+    let main = std::fs::read_to_string(out.join("main.mjs")).unwrap();
+    // k = 1 なので B_prog = 1,040 + 320 + 1,040 + 320 + 176 = 2,896。
+    assert!(
+        main.contains("\"bProg\":2896,\"cancelNest\":1,"),
+        "META に bProg と cancelNest が無い"
+    );
+    let r = Command::new(node())
+        .arg(out.join("main.mjs"))
+        .env_remove("KELEUT_WASM_DIRECT")
+        .env("KELEUT_WASM_STATS", "1")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(r.stdout, b"2\nbottom\n7\n");
+    assert_eq!(r.status.code(), Some(0));
+    // (L + R) × B_prog + 32 MiB を KiB に切り上げ、MiB に切り上げて 64 MiB を足す。
+    let (l, b) = (600_000u64, 2896u64);
+    let kib = ((l + (l / 64).max(1024)) * b + (32 << 20)).div_ceil(1024);
+    let mb = kib.div_ceil(1024) + 64;
+    assert_eq!(mb, 1779);
+    assert_eq!(
+        String::from_utf8_lossy(&r.stderr),
+        format!("keleut-host: path=worker stackSizeMb={mb}\n")
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn worker_の経路で_g_の節の再開を重ねても_interp_と同じ() {
+    if !have_node() {
+        return;
+    }
+    // 形 f: 内側の $rt_handle が rt_resume として本体を写し戻す。
+    let d = scratch("cancel-nest-worker");
+    let kel = d.join("f92.kel");
+    std::fs::write(&kel, cancel_nest_src('f', 92, 299_000)).unwrap();
+    let out = d.join("out");
+    build_600000(&d, &kel, &out);
+    let r = Command::new(node())
+        .arg(out.join("main.mjs"))
+        .env_remove("KELEUT_WASM_DIRECT")
+        .env_remove("KELEUT_WASM_STATS")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let i = run_depth(&d, &["--backend", "interp"], &kel);
+    assert_eq!(
+        (&i.0[..], i.2),
+        (&b"bottom\n7\n"[..], Some(0)),
+        "{}",
+        String::from_utf8_lossy(&i.1)
+    );
+    assert_eq!(
+        (r.stdout, r.stderr, r.status.code()),
+        i,
+        "node DIR/main.mjs と keleut run --backend interp"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn worker_のスタックは_stack_cap_で切る() {
+    if !have_node() {
+        return;
+    }
+    // k = 1、L = 6,000,000 では (L + R) × B_prog + 32 MiB が STACK_CAP(16 GiB)を超える。
+    let d = scratch("cancel-nest-cap");
+    let kel = d.join("c.kel");
+    std::fs::write(&kel, cancel_nest_src('c', 92, 1000)).unwrap();
+    let out = d.join("out");
+    let err = build_at(&d, &kel, &out, "6000000");
+    assert!(
+        err.contains("k = 1、B_prog = 2896 バイト、r = 0、スタックを STACK_CAP で切った\n"),
+        "{err}"
+    );
+    let r = Command::new(node())
+        .arg(out.join("main.mjs"))
+        .env_remove("KELEUT_WASM_DIRECT")
+        .env("KELEUT_WASM_STATS", "1")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    // 16 GiB に host の 64 MiB を足した値。
+    assert_eq!(
+        String::from_utf8_lossy(&r.stderr),
+        "keleut-host: path=worker stackSizeMb=16448\n"
+    );
+    let i = keleut_in(
+        &d,
+        &[
+            "run",
+            "--backend",
+            "interp",
+            "--max-depth",
+            "6000000",
+            kel.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        (&i.stdout[..], i.status.code()),
+        (&b"2\nbottom\n7\n"[..], Some(0))
+    );
+    assert_eq!((r.stdout, r.status.code()), (i.stdout, i.status.code()));
+    // STACK_CAP が k = 0 の大きさより小さい深さでは、k = 0 の大きさで切る(書くだけで走らせない)。
+    let out2 = d.join("out2");
+    let err = build_at(&d, &kel, &out2, "2000000000");
+    assert!(
+        err.contains("、スタックを k = 0 の大きさで切った\n"),
+        "{err}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `return` 節が値を生かして `go` を末尾でなく呼ぶプログラム(実施記録 261104-4 の M106 の形 R)。
+///
+/// `go` は値を `nv` 個生かしてハンドラ式を末尾でなく書き、その `return` 節は値を `nv2` 個生かして `go` を呼ぶ。
+/// `$rt_handle` が `return` 節を末尾で呼んで置き換えるので、論理的な同じ深さに `go` と `return` 節が重なる。
+/// 1 つの `n` が論理的な 1 段で、出力は `2`、`bottom`、`0` である。
+fn ret_clause_src(nv: usize, nv2: usize, n: u32) -> String {
+    let (lm, cm) = live_lets("m", nv);
+    let (lx, cx) = live_lets("x", nv2);
+    let mut s = String::new();
+    s.push_str("effect Stop = { stop: () => Int32 }\neffect Zz = { zz: () => Unit }\n");
+    s.push_str("effect Ask = { ask: () => Int32 }\n");
+    s.push_str(
+        "echoln(show((perform ask()) handle { case ask() => { let r = resume(1); r + 1 } }))\n",
+    );
+    s.push_str(&format!(
+        "let rec go(m: Int32): Int32 @ {{Console}} = if m == 0 then {{ echoln(\"bottom\"); 0 }} else \
+         {{ {lm}let q = (m) handle {{ case zz() => resume(()) \
+         case return(x) => {{ {lx}let z = go(x - 1); z + ({cx}) }} }}; q + ({cm}) }}\n"
+    ));
+    s.push_str(&format!("echoln(show(go({n})))\n"));
+    s
+}
+
+#[test]
+fn return_節が重なっても既定の限度の内側で_interp_と同じ() {
+    if !have_node() {
+        return;
+    }
+    // 1 段が約 1,801 バイトで B_wasm を超える形。直す前の keleut は既定の L の内側の深さ 1,000,000 で 70 になった。
+    let d = scratch("ret-overlap");
+    let kel = d.join("r.kel");
+    std::fs::write(&kel, ret_clause_src(92, 155, 1_000_000)).unwrap();
+    let run = |backend: &str| {
+        let o = keleut_in(&d, &["run", "--backend", backend, kel.to_str().unwrap()]);
+        (o.stdout, o.stderr, o.status.code())
+    };
+    let i = run("interp");
+    assert_eq!(
+        (&i.0[..], i.2),
+        (&b"2\nbottom\n0\n"[..], Some(0)),
+        "{}",
+        String::from_utf8_lossy(&i.1)
+    );
+    let w = run("wasm");
+    assert_eq!(w, i, "{}", String::from_utf8_lossy(&w.1));
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// 同じ深さに重なる節の鎖のプログラム(M106 の検証の探りの `rch.py` と `nch.py`)。
+///
+/// `never` が偽なら、`go` の書くハンドラ式の `return` 節が、値を生かしてハンドラ式を直に書き、
+/// その `return` 節がさらにハンドラ式を書くことを `chain` 段まで重ね、最後の `return` 節が `go` を呼ぶ。
+/// `never` が真なら、`return` 節の代わりに分類 N の操作節 `q` を重ねる。
+/// どちらの節も `$rt_handle` が末尾で呼んで自分を置き換えるので、鎖の節はすべて同じ深さに重なる。
+/// `gadd` が真なら、先頭に G の節を持つハンドラ式を 1 つ書く。
+fn clause_chain_src(
+    never: bool,
+    gadd: bool,
+    chain: usize,
+    nv: usize,
+    nv2: usize,
+    n: u32,
+) -> String {
+    let lets = |v: &str, k: usize| -> (String, String) {
+        if k == 0 {
+            return (String::new(), "0".into());
+        }
+        let ls: String = (0..k)
+            .map(|i| format!("let {v}{i} = {v} * {}; ", i + 3))
+            .collect();
+        let s = (0..k)
+            .map(|i| format!("{v}{i}"))
+            .collect::<Vec<_>>()
+            .join(" + ");
+        (ls, format!("({s}) - ({s})"))
+    };
+    let mut out = vec![if never {
+        "effect Q = { q: (Int32) => Never }".to_string()
+    } else {
+        "effect Zz = { zz: () => Unit }".to_string()
+    }];
+    if gadd {
+        out.push("effect Ask = { ask: () => Int32 }".into());
+        out.push(
+            "echoln(show((perform ask()) handle { case ask() => { let r = resume(1); r + 1 } }))"
+                .into(),
+        );
+    }
+    // 節の頭(`x{j}` を受け取る節を持つハンドラ式の、節の本体の前まで)。
+    let head = |subject: &str, j: usize| {
+        if never {
+            format!("(perform q({subject})) handle {{ case q(x{j}) => ")
+        } else {
+            format!("({subject}) handle {{ case zz() => resume(()) case return(x{j}) => ")
+        }
+    };
+    let (lm, cm) = lets("m", nv);
+    let mut inner = String::new();
+    for j in (0..chain).rev() {
+        let v = format!("x{j}");
+        let (lx, cx) = lets(&v, nv2);
+        let body = if j == chain - 1 {
+            format!("go({v} - 1)")
+        } else {
+            format!("{}{inner} }}", head(&v, j + 1))
+        };
+        inner = format!("{{ {lx}let z = {body}; z + ({cx}) }}");
+    }
+    out.push(format!(
+        "let rec go(m: Int32): Int32 @ {{Console}} = if m == 0 then {{ echoln(\"bottom\"); 0 }} else \
+         {{ {lm}let q = {}{inner} }}; q + ({cm}) }}",
+        head("m", 0)
+    ));
+    out.push(format!("echoln(show(go({n})))"));
+    let mut s = out.join("\n");
+    s.push('\n');
+    s
+}
+
+/// 節の鎖のプログラムを `--backend wasm` と `--backend interp` で走らせ、同じであることを確かめる。
+///
+/// `max_depth` が `None` なら既定の L で走らせる。
+fn clause_chain_same(tag: &str, src: String, max_depth: Option<&str>, expect: &[u8]) {
+    let d = scratch(tag);
+    let kel = d.join("c.kel");
+    std::fs::write(&kel, src).unwrap();
+    let run = |backend: &str| {
+        let mut args = vec!["run", "--backend", backend];
+        if let Some(l) = max_depth {
+            args.extend(["--max-depth", l]);
+        }
+        args.push(kel.to_str().unwrap());
+        let o = keleut_in(&d, &args);
+        (o.stdout, o.stderr, o.status.code())
+    };
+    let i = run("interp");
+    assert_eq!(
+        (&i.0[..], i.2),
+        (expect, Some(0)),
+        "{}",
+        String::from_utf8_lossy(&i.1)
+    );
+    let w = run("wasm");
+    assert_eq!(w, i, "{}", String::from_utf8_lossy(&w.1));
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn return_節の鎖が重なっても既定の限度の内側で_interp_と同じ() {
+    if !have_node() {
+        return;
+    }
+    // return 節の鎖 6 段(r = 6)。直す前の keleut と、r を真偽で数えた版(B_prog = 2,752)は、深さ約 1,000,000 で 70 になった。
+    clause_chain_same(
+        "ret-chain",
+        clause_chain_src(false, false, 6, 60, 60, 1_000_000),
+        None,
+        b"bottom\n0\n",
+    );
+}
+
+#[test]
+fn n_の節の鎖が重なっても既定の限度の内側で_interp_と同じ() {
+    if !have_node() {
+        return;
+    }
+    // 分類 N の操作節の鎖 6 段(r = 6)。1 段は約 4,194 バイトである。
+    // 直す前の keleut は B_prog = B_wasm のまま直の経路で走り、L = 400,000 で深さ約 399,000 の入力が 70 になった。
+    // 既定の L と深さ 1,000,000 でも同じく 70 になるが、kw で 60 秒かかるので L を下げた。
+    clause_chain_same(
+        "never-chain",
+        clause_chain_src(true, true, 6, 60, 60, 399_000),
+        Some("400000"),
+        b"2\nbottom\n0\n",
+    );
+}
+
+/// `cancel` 節と、分類 N の操作節(`never` が偽なら `return` 節)が交互に重なるプログラム(M106 の再検証の探りの `gen3.py`)。
+///
+/// `go` の書くハンドラ式の `cancel` 節が、N の節を持つハンドラ式を直に書く。
+/// その N の節は、`cancel` 節を持つハンドラ式を直に書き、その `cancel` 節がさらに N の節を持つハンドラ式を書く。
+/// これを `d` 組重ね、最後の `cancel` 節の中のハンドラ式の本体が `go` を末尾でなく呼ぶ。
+/// 道の節はすべて同じ深さに重なる。
+/// 1 つの `n` が論理的な 2 段で、出力は `2`、`bottom`、`7` である(`cancel` 節の中の `perform` の抑制を標準エラーに書く)。
+fn alt_chain_src(never: bool, d: usize, nv: usize, n: u32) -> String {
+    let lets = |var: &str, p: &str| -> (String, String) {
+        if nv == 0 {
+            return (String::new(), "0".into());
+        }
+        let ls: String = (0..nv)
+            .map(|i| format!("let {p}{i} = {var} * {}; ", i + 3))
+            .collect();
+        let s = (0..nv)
+            .map(|i| format!("{p}{i}"))
+            .collect::<Vec<_>>()
+            .join(" + ");
+        (ls, format!("(({s}) - ({s}))"))
+    };
+    let mut out = vec![
+        "effect Stop = { stop: () => Int32 }".to_string(),
+        "effect Zz = { zz: () => Unit }".into(),
+        "effect Q = { q: (Int32) => Never }".into(),
+        "effect Ask = { ask: () => Int32 }".into(),
+        "echoln(show((perform ask()) handle { case ask() => { let r = resume(1); r + 1 } }))"
+            .into(),
+    ];
+    let (lm, cm) = lets("m", "a");
+    let (lf, cf) = lets("m", "b");
+    let (lk, ck) = lets("k", "d");
+    let mut expr =
+        format!("{{ let k = x - 1; {lk}let z = go(k); z + {ck} }} handle {{ case stop() => 0 }}");
+    for i in 0..d {
+        let (lx, cx) = lets("x", &format!("c{i}_"));
+        let (ly, cy) = lets("x", &format!("e{i}_"));
+        let canc = format!(
+            "{{ let s = perform stop(); s }} handle {{ case zz() => resume(()) case cancel => \
+             {{ {ly}let r3 = {expr}; if r3 + {cy} != 0 then echoln(\"bad\") else () }} }}"
+        );
+        let body = format!("{{ {lx}let r2 = {canc}; r2 + {cx} }}");
+        expr = if never {
+            format!("(perform q(x)) handle {{ case q(x) => {body} }}")
+        } else {
+            format!("(x) handle {{ case zz() => resume(()) case return(x) => {body} }}")
+        };
+    }
+    out.push(format!(
+        "let rec go(m: Int32): Int32 @ {{Stop, Console}} = if m == 0 then {{ echoln(\"bottom\"); 0 }} else \
+         {{ {lm}let q = (perform stop()) handle {{ case zz() => resume(()) case cancel => \
+         {{ {lf}let r = {{ let x = m; {expr} }}; if r + {cf} != 0 then echoln(\"bad\") else () }} }}; q + {cm} }}"
+    ));
+    out.push(format!(
+        "echoln(show(go({n}) handle {{ case stop() => 7 }}))"
+    ));
+    let mut s = out.join("\n");
+    s.push('\n');
+    s
+}
+
+#[test]
+fn cancel_節と_n_の節が交互に重なっても_interp_と同じ() {
+    if !have_node() {
+        return;
+    }
+    // cancel 節と N の節を交互に 4 組重ねる(k = 5、r = 4、B_prog = 14,160 バイト)。1 段は約 3,543 バイトである。
+    // k と r を別々に数えた版は B_prog = 2,896 のままで、L = 300,000 で深さ約 298,000 の入力が 70 になった。
+    clause_chain_same(
+        "alt-chain",
+        alt_chain_src(true, 4, 40, 149_000),
+        Some("300000"),
+        b"2\nbottom\n7\n",
+    );
+}
