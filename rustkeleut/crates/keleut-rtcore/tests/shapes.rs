@@ -26,7 +26,7 @@ impl Model {
 
 #[test]
 fn shapes_match_model() {
-    let mut t = ShapeTable::with_capacity(1, 0);
+    let mut t = ShapeTable::with_capacity(1, 0).unwrap();
     let mut m = Model {
         shapes: vec![vec![]],
         ids: HashMap::from([(vec![], 0)]),
@@ -48,7 +48,7 @@ fn shapes_match_model() {
                 // 書いた順のラベル(重なりを含む)から作る。
                 let k = rnd(8) as usize;
                 let written: Vec<u32> = (0..k).map(|_| rnd(12) as u32).collect();
-                let got = t.intern(&written, &mut pos);
+                let got = t.intern(&written, &mut pos).unwrap();
                 let mut sorted = written.clone();
                 sorted.sort();
                 assert_eq!(got.0, m.intern(sorted.clone()));
@@ -60,7 +60,7 @@ fn shapes_match_model() {
                 }
             }
             1 => {
-                let (got, p) = t.extend(ShapeId(id), label);
+                let (got, p) = t.extend(ShapeId(id), label).unwrap();
                 let mut l = m.shapes[id as usize].clone();
                 let lb = l.partition_point(|&x| x < label);
                 l.insert(lb, label);
@@ -68,7 +68,7 @@ fn shapes_match_model() {
                 assert_eq!(got.0, m.intern(l));
             }
             2 => {
-                let got = t.restrict(ShapeId(id), label);
+                let got = t.restrict(ShapeId(id), label).unwrap();
                 let l = &m.shapes[id as usize];
                 match l.iter().position(|&x| x == label) {
                     None => assert_eq!(got, None),

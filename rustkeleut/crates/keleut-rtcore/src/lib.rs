@@ -152,49 +152,74 @@ impl ShapeId {
     pub const EMPTY: ShapeId = ShapeId(0);
 }
 
+/// 形の表を広げる確保の失敗。
+///
+/// 領域を取れないときと、広げた容量を C の表が受け付けないとき(形が 2^30 個を超える、ラベルの数が u32 を超える、大きさが size_t を超える)に返す。
+/// 失敗した操作は表を変えない。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutOfMemory;
+
 /// レコードの形の表(rtcore の `krt_shapes` を包む)。
 ///
 /// 形はラベルの番号の列で、番号の昇順に並べ、同じラベルは外側のものを先に置く。
 /// フィールドの値の配列もこの順に並べる。
 /// 表が満ちたら、容量を倍にした表に写してやり直す。
-/// 広げた容量を C の表が受け付けないとき(形が 2^30 個を超える、ラベルの数が u32 を超える、大きさが size_t を超える)は panic する。
+/// 新しい表を取れないときや、広げた容量を C の表が受け付けないときは、表を変えずに [`OutOfMemory`] を返す。
+///
+/// 表の領域は大域の確保器の `alloc_zeroed` で取り、失敗を null で受け取る。
+/// 呼び手は、確保の失敗が大域の確保器の予備を使わないように、操作を失敗を自分で扱う範囲(keleut-rt の `alloc::handled`)で呼ぶ。
 pub struct ShapeTable {
-    mem: Vec<u64>,
+    mem: Box<[u64]>,
     cap_shapes: u32,
     cap_labels: u32,
 }
 
-impl Default for ShapeTable {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ShapeTable {
     /// 小さな容量の空の表を作る。
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, OutOfMemory> {
         Self::with_capacity(64, 256)
     }
 
     /// 形を `cap_shapes` 個、ラベルを合計 `cap_labels` 個まで持てる空の表を作る。
-    pub fn with_capacity(cap_shapes: u32, cap_labels: u32) -> Self {
+    pub fn with_capacity(cap_shapes: u32, cap_labels: u32) -> Result<Self, OutOfMemory> {
         let cap_shapes = cap_shapes.max(1);
-        let mut mem = Self::alloc(cap_shapes, cap_labels);
-        // SAFETY: mem は krt_shapes_bytes のバイト数以上で、8 バイト境界にある。
-        let t = unsafe { sys::krt_shapes_init(mem.as_mut_ptr().cast(), cap_shapes, cap_labels) };
-        assert!(!t.is_null(), "形の表の容量が大きすぎる");
-        ShapeTable {
+        let mem = Self::fresh(cap_shapes, cap_labels)?;
+        Ok(ShapeTable {
             mem,
             cap_shapes,
             cap_labels,
-        }
+        })
     }
 
-    fn alloc(cap_shapes: u32, cap_labels: u32) -> Vec<u64> {
+    /// 0 で埋めた表の領域を取る。
+    ///
+    /// `vec![0; n]` と同じく `alloc_zeroed` で取るので、使わないページには触れない。
+    fn alloc(cap_shapes: u32, cap_labels: u32) -> Result<Box<[u64]>, OutOfMemory> {
         // SAFETY: 引数を読むだけである。
         let bytes = unsafe { sys::krt_shapes_bytes(cap_shapes, cap_labels) };
-        assert!(bytes != 0, "形の表の容量が大きすぎる");
-        vec![0u64; bytes.div_ceil(8)]
+        if bytes == 0 {
+            return Err(OutOfMemory);
+        }
+        let words = bytes.div_ceil(8);
+        let layout = std::alloc::Layout::array::<u64>(words).map_err(|_| OutOfMemory)?;
+        // SAFETY: bytes は 0 でないので layout の大きさは 0 でない。
+        let p = unsafe { std::alloc::alloc_zeroed(layout) }.cast::<u64>();
+        if p.is_null() {
+            return Err(OutOfMemory);
+        }
+        // SAFETY: p は Layout::array::<u64>(words) で取った、0 で埋めた words 語の領域であり、Box<[u64]> の解放の配置と同じである。
+        Ok(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, words)) })
+    }
+
+    /// 容量の表の領域を取り、空の表に初期化する。
+    fn fresh(cap_shapes: u32, cap_labels: u32) -> Result<Box<[u64]>, OutOfMemory> {
+        let mut mem = Self::alloc(cap_shapes, cap_labels)?;
+        // SAFETY: mem は krt_shapes_bytes のバイト数以上で、8 バイト境界にある。
+        let t = unsafe { sys::krt_shapes_init(mem.as_mut_ptr().cast(), cap_shapes, cap_labels) };
+        if t.is_null() {
+            return Err(OutOfMemory);
+        }
+        Ok(mem)
     }
 
     fn raw(&self) -> *const sys::KrtShapes {
@@ -206,33 +231,31 @@ impl ShapeTable {
     }
 
     /// 容量を倍にした表に写す。
-    fn grow(&mut self) {
-        let cap_shapes = self.cap_shapes.checked_mul(2).expect("形の表が大きすぎる");
-        let cap_labels = self
-            .cap_labels
-            .max(16)
-            .checked_mul(2)
-            .expect("形の表が大きすぎる");
-        let mut mem = Self::alloc(cap_shapes, cap_labels);
-        // SAFETY: mem は新しい表の大きさを持ち、self.mem は初期化した表である。
+    ///
+    /// 新しい表を取れなければ、いまの表をそのまま残して [`OutOfMemory`] を返す。
+    fn grow(&mut self) -> Result<(), OutOfMemory> {
+        let cap_shapes = self.cap_shapes.checked_mul(2).ok_or(OutOfMemory)?;
+        let cap_labels = self.cap_labels.max(16).checked_mul(2).ok_or(OutOfMemory)?;
+        let mut mem = Self::fresh(cap_shapes, cap_labels)?;
+        // SAFETY: mem は新しい容量で初期化した表で、self.mem は初期化した表である。
+        // 新しい表は古い表の形とラベルをすべて持てる容量なので、写しは失敗しない。
         unsafe {
-            let dst = sys::krt_shapes_init(mem.as_mut_ptr().cast(), cap_shapes, cap_labels);
-            assert!(!dst.is_null());
-            assert_eq!(sys::krt_shapes_copy(dst, self.raw()), 0);
+            assert_eq!(sys::krt_shapes_copy(mem.as_mut_ptr().cast(), self.raw()), 0);
         }
         self.mem = mem;
         self.cap_shapes = cap_shapes;
         self.cap_labels = cap_labels;
+        Ok(())
     }
 
     /// 満ちたら広げて、`f` をやり直す。
-    fn retry(&mut self, mut f: impl FnMut(*mut sys::KrtShapes) -> u32) -> u32 {
+    fn retry(&mut self, mut f: impl FnMut(*mut sys::KrtShapes) -> u32) -> Result<u32, OutOfMemory> {
         loop {
             let r = f(self.raw_mut());
             if r != SHAPE_FULL {
-                return r;
+                return Ok(r);
             }
-            self.grow();
+            self.grow()?;
         }
     }
 
@@ -245,15 +268,23 @@ impl ShapeTable {
     /// 書いた順のラベル(先に書いたものが外側)から形を作る。
     ///
     /// `positions` には、書いた i 番目のフィールドの、正準の配置での位置が入る。
-    pub fn intern(&mut self, labels: &[u32], positions: &mut Vec<u32>) -> ShapeId {
-        let n = u32::try_from(labels.len()).expect("ラベルが多すぎる");
+    /// `positions` を伸ばす確保も、失敗すれば [`OutOfMemory`] を返す。
+    pub fn intern(
+        &mut self,
+        labels: &[u32],
+        positions: &mut Vec<u32>,
+    ) -> Result<ShapeId, OutOfMemory> {
+        let n = u32::try_from(labels.len()).map_err(|_| OutOfMemory)?;
         positions.clear();
+        positions
+            .try_reserve_exact(labels.len())
+            .map_err(|_| OutOfMemory)?;
         positions.resize(labels.len(), 0);
         let pos = positions.as_mut_ptr();
         // SAFETY: labels と positions はどちらも n 個の要素を持つ。
-        let r = self.retry(|t| unsafe { sys::krt_shape_intern(t, labels.as_ptr(), n, pos) });
+        let r = self.retry(|t| unsafe { sys::krt_shape_intern(t, labels.as_ptr(), n, pos) })?;
         assert_ne!(r, SHAPE_NONE);
-        ShapeId(r)
+        Ok(ShapeId(r))
     }
 
     /// 形のラベルの列(正準の配置)。
@@ -277,23 +308,27 @@ impl ShapeTable {
     }
 
     /// `id` の外側に `label` を重ねた形と、新しいフィールドの位置。
-    pub fn extend(&mut self, id: ShapeId, label: u32) -> (ShapeId, u32) {
+    pub fn extend(&mut self, id: ShapeId, label: u32) -> Result<(ShapeId, u32), OutOfMemory> {
         let mut pos = 0u32;
         let p = &mut pos as *mut u32;
         // SAFETY: p は生きている u32 を指す。
-        let r = self.retry(|t| unsafe { sys::krt_shape_extend(t, id.0, label, p) });
+        let r = self.retry(|t| unsafe { sys::krt_shape_extend(t, id.0, label, p) })?;
         assert_ne!(r, SHAPE_NONE, "形の番号が不正");
-        (ShapeId(r), pos)
+        Ok((ShapeId(r), pos))
     }
 
     /// `id` から `label` の最も外側のフィールドを除いた形と、除いた位置。
-    /// `label` を持たなければ `None` を返す。
-    pub fn restrict(&mut self, id: ShapeId, label: u32) -> Option<(ShapeId, u32)> {
+    /// `label` を持たなければ `Ok(None)` を返す。
+    pub fn restrict(
+        &mut self,
+        id: ShapeId,
+        label: u32,
+    ) -> Result<Option<(ShapeId, u32)>, OutOfMemory> {
         let mut pos = 0u32;
         let p = &mut pos as *mut u32;
         // SAFETY: p は生きている u32 を指す。
-        let r = self.retry(|t| unsafe { sys::krt_shape_restrict(t, id.0, label, p) });
-        (r != SHAPE_NONE).then_some((ShapeId(r), pos))
+        let r = self.retry(|t| unsafe { sys::krt_shape_restrict(t, id.0, label, p) })?;
+        Ok((r != SHAPE_NONE).then_some((ShapeId(r), pos)))
     }
 }
 

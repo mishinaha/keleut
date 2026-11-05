@@ -44,6 +44,12 @@ impl From<crate::heap::OutOfMemory> for Stop {
     }
 }
 
+impl From<keleut_rtcore::OutOfMemory> for Stop {
+    fn from(_: keleut_rtcore::OutOfMemory) -> Stop {
+        Stop::OutOfMemory
+    }
+}
+
 impl Stop {
     /// 実行時エラーを作る。
     pub fn runtime(msg: impl Into<Vec<u8>>) -> Stop {

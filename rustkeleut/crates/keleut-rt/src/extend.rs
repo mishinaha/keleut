@@ -74,26 +74,12 @@ impl<'p> Rt<'p> {
 
     /// プログラムの各表の後ろに足した項目の分だけ、文脈の表を伸ばす([`Rt::new_with`] と同じ規則)。
     ///
-    /// 足した形を実行時の形の表に入れ、番号が LIR の番号と一致することを確かめる。
+    /// 足した形を [`Rt::grow_shapes`] で実行時の形の表に入れてから、ほかの表を伸ばす。
     /// 足した文字列の定数と、関数を値とする足した大域のクロージャを確保する。
     /// 大域の表は先に Unit で伸ばしてから値を置くので、その間の回収は前の大域の値を根として扱う。
     pub fn grow(&mut self) -> Result<(), Stop> {
+        self.grow_shapes()?;
         let prog = self.prog;
-        let mut pos = Vec::new();
-        let have = self.shapes.count() as usize;
-        for (i, s) in prog.shapes.iter().enumerate().skip(have) {
-            let labels: Vec<u32> = s.iter().map(|l| l.0).collect();
-            let id = {
-                let _site = crate::alloc::site(crate::alloc::Site::Shape);
-                self.shapes.intern(&labels, &mut pos)
-            };
-            if id.0 as usize != i {
-                return Err(Stop::Internal(format!(
-                    "形の表の番号が合いません(LIR の {i} 番が実行時の {} 番)",
-                    id.0
-                )));
-            }
-        }
         let nf = prog.funcs.len();
         let g0 = self.globals.len();
         self.func_prim_name.resize(nf, None);
@@ -142,6 +128,33 @@ impl<'p> Rt<'p> {
                 GlobalKind::Value(_) => Word::UNIT,
             };
             self.globals[i] = w;
+        }
+        Ok(())
+    }
+
+    /// プログラムの形の表の後ろに足した形を、実行時の形の表に入れる([`Rt::grow`] の最初の段)。
+    ///
+    /// 番号が LIR の番号と一致することを確かめる。
+    /// 形の表の確保は失敗を自分で扱う範囲で行い、広げられなければ [`Stop::OutOfMemory`] を返す。
+    /// 失敗しても、それまでに入れた形が残るだけで、ほかの表には触れていない。
+    /// 残った形は呼び直したときに数えて飛ばすので、REPL はこの失敗をその入力のメモリの不足として扱い、セッションを続けられる。
+    /// 呼び直すと、失敗した入力の残りの形から入れるので、形を足さない入力でも前の入力の形のためにメモリの不足になることがある。
+    pub fn grow_shapes(&mut self) -> Result<(), Stop> {
+        let prog = self.prog;
+        let mut pos = Vec::new();
+        let have = self.shapes.count() as usize;
+        for (i, s) in prog.shapes.iter().enumerate().skip(have) {
+            let labels: Vec<u32> = s.iter().map(|l| l.0).collect();
+            let id = {
+                let _site = crate::alloc::site(crate::alloc::Site::Shape);
+                crate::alloc::handled(|| self.shapes.intern(&labels, &mut pos))?
+            };
+            if id.0 as usize != i {
+                return Err(Stop::Internal(format!(
+                    "形の表の番号が合いません(LIR の {i} 番が実行時の {} 番)",
+                    id.0
+                )));
+            }
         }
         Ok(())
     }

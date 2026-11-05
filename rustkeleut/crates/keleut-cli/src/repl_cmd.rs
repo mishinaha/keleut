@@ -645,11 +645,24 @@ fn run_job(
     let base = parked
         .as_ref()
         .map(|it| (it.rt.globals.len(), it.rt.inst_values.len()));
+    // この単位の形を実行時の形の表に入れられなかった(メモリの不足)。
+    let mut shape_oom = false;
     let mut it = match parked.take() {
         Some(it) => {
             let mut it = it.rebind(lp);
-            if let Err(e) = it.rt.grow() {
-                // 表を伸ばす途中の内部の誤りか、メモリの不足である。入力の誤りではないので、セッションを終える。
+            // 形の表を広げられないときは、ほかの表にまだ触れていないので、この入力のメモリの不足として続ける。
+            // 入れられた形は表に残り、次の入力の `grow_shapes` が続きから入れる。
+            match it.rt.grow_shapes() {
+                Ok(()) => {}
+                Err(Stop::OutOfMemory) => shape_oom = true,
+                Err(e) => {
+                    eprint!("{}", String::from_utf8_lossy(&e.message()));
+                    return Exec::Exit(70);
+                }
+            }
+            if !shape_oom && let Err(e) = it.rt.grow() {
+                // 表を伸ばす途中の内部の誤りか、メモリの不足である。
+                // 大域の表を伸ばした後なので、入力の誤りとして続けず、セッションを終える。
                 eprint!("{}", String::from_utf8_lossy(&e.message()));
                 return Exec::Exit(70);
             }
@@ -662,12 +675,14 @@ fn run_job(
                 it
             }
             Err(e) => {
+                // 起動のときの形の登録がメモリの不足になれば、初期化を始めるときの実行時エラー(3)で終える。
+                // 内部の誤り(形の番号の食い違い)は 70 である。
                 eprint!("{}", String::from_utf8_lossy(&e.message()));
-                return Exec::Exit(70);
+                return Exec::Exit(e.exit_code());
             }
         },
     };
-    let r = if early_oom {
+    let r = if early_oom || shape_oom {
         Err(Stop::OutOfMemory)
     } else {
         exec(

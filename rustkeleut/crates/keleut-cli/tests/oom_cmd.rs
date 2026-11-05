@@ -421,3 +421,157 @@ fn repl_で予備を使った入力だけがメモリの不足になり次の入
         describe(&r)
     );
 }
+
+/// 関数 `name` の中で、ラベル `a` と `b0`〜`b6` を 2 つずつ重ねる拡張を 300 段続ける鎖。
+///
+/// 段 i のレコードは 2i + 1 個のフィールドを持ち、形はどれも新しい。
+/// 形の表のラベルの合計は段の数の 2 乗で増えるので、鎖の途中で表を何度も広げ直す。
+fn shape_chain(name: &str, a: &str, b: &str) -> String {
+    let mut s = format!("let {name}(): Int32 = {{\n  let s0 = {{{a} = 0}}\n");
+    for i in 1..=300 {
+        s.push_str(&format!(
+            "  let s{i} = {{{a} = {i}, {b}{} = 1 extends s{}}}\n",
+            i % 7,
+            i - 1
+        ));
+    }
+    s.push_str(&format!("  s300.{a}\n}}\n"));
+    s
+}
+
+/// 処理器の中で [`shape_chain`] の鎖を走らせるプログラム。
+///
+/// `cancel_builds` が真なら、`cancel` 節でもラベルの違う同じ長さの鎖を走らせ、形の表を広げ直させる。
+fn shape_prog(cancel_builds: bool) -> String {
+    let mut s = String::from("effect Res = { use: () => Unit }\n");
+    s.push_str(&shape_chain("f", "a", "b"));
+    let clause = if cancel_builds {
+        s.push_str(&shape_chain("g", "x", "y"));
+        r#"{ echoln("cancel"); echoln(show(g())) }"#
+    } else {
+        r#"echoln("cancel")"#
+    };
+    s.push_str(&format!(
+        "let main(): Int32 = run h {{ f() }} handle {{ case use() => resume(()) case cancel => {clause} }}\n"
+    ));
+    s.push_str("echoln(\"before\")\necholn(show(main()))\n");
+    s
+}
+
+/// 形の表の確保を `exec:shape:hard:SKIP` で失敗させ、起動の後の最初の広げ直しで失敗する実行を返す。
+///
+/// 起動のときの登録(プレリュードとプログラムの形)も場所 `shape` で表を取り広げるので、その確保の数を飛ばす。
+/// 数はプレリュードとプログラムの形の数で変わるので、`SKIP` を 0 から増やし、`before` を書く最初の値を選ぶ。
+/// それより小さい `SKIP` はどれも起動のときの登録で失敗する。
+/// `SKIP` 0 では、起動のときの登録の失敗が、初期化を始めるときの実行時エラー(メモリ不足、3)で終わることも確かめる。
+fn shape_first_runtime_failure(tag: &str, src: &str, backend: &[&str]) -> Output {
+    let start_err = format!("{}実行時エラー: メモリ不足です\n", test_line("shape"));
+    for skip in 0..200 {
+        let spec = format!("exec:shape:hard:{skip}");
+        let r = run(tag, src, &spec, backend, &[]);
+        if !r.stdout.is_empty() {
+            assert!(skip > 0, "{spec} {backend:?}: {}", describe(&r));
+            return r;
+        }
+        assert!(
+            r.status.code() == Some(3) && r.stderr == start_err.as_bytes(),
+            "{spec} {backend:?}: {}",
+            describe(&r)
+        );
+    }
+    panic!("{backend:?}: 起動のときの登録の後に形の表を広げる確保に当たらない");
+}
+
+/// 形の表を広げられなくても `cancel` 節が走り、メモリ不足の実行時エラーの 3 で終わる。
+fn expect_shape_light(tag: &str, backend: &[&str]) {
+    let r = shape_first_runtime_failure(tag, &shape_prog(false), backend);
+    let want_err = format!("{}実行時エラー: メモリ不足です\n", test_line("shape"));
+    assert!(
+        r.status.code() == Some(3)
+            && r.stdout == CANCELLED_LIGHT.as_bytes()
+            && r.stderr == want_err.as_bytes(),
+        "{backend:?}: {}",
+        describe(&r)
+    );
+}
+
+/// `cancel` 節の中の拡張も形の表を広げられないときは、`cancel` 節からの脱出として打ち切りの記録を書き、
+/// 巻き戻しを続けてメモリ不足の実行時エラーの 3 で終わる。
+fn expect_shape_in_cancel(tag: &str, backend: &[&str]) {
+    let r = shape_first_runtime_failure(tag, &shape_prog(true), backend);
+    let want_err = format!(
+        "{}cancel 節で例外が抑制されました: メモリ不足です\n実行時エラー: メモリ不足です\n",
+        test_line("shape")
+    );
+    assert!(
+        r.status.code() == Some(3)
+            && r.stdout == CANCELLED_LIGHT.as_bytes()
+            && r.stderr == want_err.as_bytes(),
+        "{backend:?}: {}",
+        describe(&r)
+    );
+}
+
+#[test]
+fn 形の表を広げられなくても_cancel_節が走る_interp() {
+    expect_shape_light("shape-i", INTERP);
+}
+
+#[cfg(feature = "llvm")]
+#[test]
+fn 形の表を広げられなくても_cancel_節が走る_jit() {
+    expect_shape_light("shape-j", JIT_ONLY);
+}
+
+#[test]
+fn cancel_節の中でも形の表を広げられなければ打ち切りを記録して巻き戻しを続ける_interp() {
+    expect_shape_in_cancel("shape-cancel-i", INTERP);
+}
+
+#[cfg(feature = "llvm")]
+#[test]
+fn cancel_節の中でも形の表を広げられなければ打ち切りを記録して巻き戻しを続ける_jit() {
+    expect_shape_in_cancel("shape-cancel-j", JIT_ONLY);
+}
+
+/// `keleut repl` の起動のときと `:reset` の後の形の登録がメモリの不足になれば、
+/// 初期化を始めるときの実行時エラー(メモリ不足、3)で終わる(`keleut run` と同じ)。
+#[test]
+fn repl_の起動と_reset_の形の登録の失敗はメモリ不足の_3_で終わる() {
+    let want_err = format!("{}実行時エラー: メモリ不足です\n", test_line("shape"));
+    // SKIP 0 は起動のときの最初の表、1 は `:reset` の後の最初の表で失敗する。
+    for (skip, want_out) in [(0, ""), (1, "_ : Int32 = 2\n")] {
+        let r = repl("1 + 1\n:reset\n2 + 2\n", &format!("exec:shape:hard:{skip}"));
+        assert!(
+            r.status.code() == Some(3)
+                && r.stdout == want_out.as_bytes()
+                && r.stderr == want_err.as_bytes(),
+            "SKIP {skip}: {}",
+            describe(&r)
+        );
+    }
+}
+
+/// `keleut repl` で入力の形を形の表に入れられなければ、その入力だけがメモリの不足になり、セッションは続く。
+/// 形の表はほかの表より先に伸ばすので、失敗した入力の大域は伸ばしていない。
+/// 起動のときに形の表が使う確保の数はプレリュードで変わるので、`SKIP` を 0 から増やし、
+/// 1 つ目の入力が失敗する最初の値を選ぶ。
+#[test]
+fn repl_で形の表を広げられない入力だけがメモリの不足になり次の入力は続く() {
+    let input = "let x = 3\nlet r = {qq = x, rr = x}\nx + 1\n{qq = 5, rr = 6}\n";
+    let want_out = "x : Int32 = 3\n実行時エラー: メモリ不足です\n_ : Int32 = 4\n_ : {qq: Int32, rr: Int32} = {qq = 5, rr = 6}\n";
+    for skip in 0..50 {
+        let r = repl(input, &format!("exec:shape:soft:{skip}"));
+        if r.stdout.starts_with(b"x : Int32 = 3\n") {
+            assert!(
+                r.status.code() == Some(0)
+                    && r.stdout == want_out.as_bytes()
+                    && r.stderr == test_line("shape").as_bytes(),
+                "SKIP {skip}: {}",
+                describe(&r)
+            );
+            return;
+        }
+    }
+    panic!("入力の形を入れる確保に当たらない");
+}

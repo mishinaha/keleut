@@ -109,6 +109,8 @@ impl<'p> Rt<'p> {
     /// プログラム `prog` の文脈を作る。
     ///
     /// 形の表にプログラムの形を順に入れ、番号が表の添字と一致することを確かめる(`doc/lir.md` の 1.5 節)。
+    /// 形の表を取れないか広げられなければ、評価のための領域を用意できないので [`Stop::OutOfMemory`] を返す。
+    /// `keleut run` の呼び手(`keleut-interp` の `run_mutator`)は、これを初期化を始めるときの実行時エラーとして書き、3 で終える(LangSpec §15.5)。
     /// 文字列の定数と、関数を値とする大域のクロージャを先に確保する。
     /// 作った箱はすぐに表(根)に入れるので、その間の回収で失われない。
     pub fn new(prog: &'p Program, limit: u64) -> Result<Rt<'p>, Stop> {
@@ -117,13 +119,16 @@ impl<'p> Rt<'p> {
 
     /// [`Rt::new`] と同じで、`stress` が真なら `--gc-stress` の規則で回収する([`crate::gc::STRESS_RATIO`])。
     pub fn new_with(prog: &'p Program, limit: u64, stress: bool) -> Result<Rt<'p>, Stop> {
-        let mut shapes = ShapeTable::new();
+        let mut shapes = {
+            let _site = alloc::site(Site::Shape);
+            alloc::handled(ShapeTable::new)?
+        };
         let mut pos = Vec::new();
         for (i, s) in prog.shapes.iter().enumerate() {
             let labels: Vec<u32> = s.iter().map(|l| l.0).collect();
             let id = {
                 let _site = alloc::site(Site::Shape);
-                shapes.intern(&labels, &mut pos)
+                alloc::handled(|| shapes.intern(&labels, &mut pos))?
             };
             if id.0 as usize != i {
                 return Err(Stop::Internal(format!(
@@ -446,11 +451,14 @@ impl<'p> Rt<'p> {
     }
 
     /// `rec_extend`。
+    ///
+    /// 形の表を広げられなければ [`Stop::OutOfMemory`] を返す。
+    /// 形の表の確保は失敗を自分で扱う範囲で行い(`crate::alloc`)、大域の確保器の予備を `cancel` 節のために残す。
     pub fn rec_extend(&mut self, v: Word, label: LabelId, x: Word) -> Result<Word, Stop> {
         let (shape, _) = self.rec_shape(v);
         let (ns, pos) = {
             let _site = alloc::site(Site::Shape);
-            self.shapes.extend(RtShape(shape), label.0)
+            alloc::handled(|| self.shapes.extend(RtShape(shape), label.0))?
         };
         let mut fs = self.rec_fields(v)?;
         fs.insert(pos as usize, x);
@@ -458,12 +466,14 @@ impl<'p> Rt<'p> {
     }
 
     /// `rec_restrict`(全域。ラベルが無ければ同じフィールドのレコード)。
+    ///
+    /// 形の表は [`Rt::rec_extend`] と同じく失敗を自分で扱う範囲で広げ、広げられなければ [`Stop::OutOfMemory`] を返す。
     pub fn rec_restrict(&mut self, v: Word, label: LabelId) -> Result<Word, Stop> {
         let (shape, _) = self.rec_shape(v);
         let mut fs = self.rec_fields(v)?;
         let restricted = {
             let _site = alloc::site(Site::Shape);
-            self.shapes.restrict(RtShape(shape), label.0)
+            alloc::handled(|| self.shapes.restrict(RtShape(shape), label.0))?
         };
         let ns = match restricted {
             Some((ns, pos)) => {
