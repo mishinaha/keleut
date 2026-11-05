@@ -575,3 +575,148 @@ fn repl_で形の表を広げられない入力だけがメモリの不足にな
     }
     panic!("入力の形を入れる確保に当たらない");
 }
+
+// ---- 値スタックの塊の回収と注入(計画 261104-3 の 4.5 節、M111) ----
+
+/// 3 段のハンドラ(`inner`、`mid`、`outer`)の中で、`mid` の G の節が継続を捕まえるプログラム。
+///
+/// `mid` の G の節は、長さ 1,000,000 のリストを作って回収を起こしてから、値を作らずに `resume` する。
+/// 回収は、捕まえた継続の分の値スタックの塊を返す。
+/// 継続は `deep` の `depth` 段のフレーム(1 段 12 語)と `inner` のハンドラからなり、`depth` が 300,000 なら約 360 万語、
+/// `CHUNK_WORDS`(131,072 語)の 27 塊ほどで、4 塊(524,288 語)を十分に超える。
+/// 塊の回収だけを入れた構築では、21,900 段ほどから(約 2 塊)ふつうの `resume` が塊を取れなくなる。
+///
+/// `inner` の `cancel` 節は 48 個の値を生かしたまま `echoln` を呼ぶ。
+/// 節のフレーム(55 語)は、継続の写しの塊の上端に空く `inner` の本体のフレームの分(8 語)に収まらず、次の塊に置かれる。
+fn inj(depth: u32) -> String {
+    let lets: Vec<String> = (1..=48).map(|i| format!("let x{i} = k({i})")).collect();
+    let sum: Vec<String> = (1..=48).map(|i| format!("x{i}")).collect();
+    format!(
+        r#"effect Op = {{ op: () => Int32 }}
+effect Res = {{ use: () => Unit }}
+let rec build(n: Int32, acc: List[Int32]): List[Int32] = if n == 0 then acc else build(n - 1, Cons(n, acc))
+let rec len(l: List[Int32], k: Int32): Int32 = l match {{ case Nil => k case Cons(_, t) => len(t, k + 1) }}
+let k(i: Int32): Int32 = i * 1
+let inner(): Int32 = run h {{ perform op() }} handle {{ case use() => resume(()) case cancel => {{ {}; echoln("inner cancel"); echoln(show({})) }} }}
+let rec deep(n: Int32): Int32 = if n == 0 then inner() else 1 + deep(n - 1)
+let mid(): Int32 = deep({depth}) handle {{ case op() => 1 + resume(0 * len(build(1000000, Nil), 0)) case cancel => echoln("own cancel") }}
+let outer(): Int32 = run h {{ mid() }} handle {{ case use() => resume(()) case cancel => echoln("outer cancel") }}
+echoln("before")
+echoln(show(outer()))
+"#,
+        lets.join("; "),
+        sum.join(" + ")
+    )
+}
+
+/// [`inj`] の 3 つの `cancel` 節がすべて走ったときの標準出力(1176 は 1 から 48 の和)。
+const INJ_CANCELLED: &str = "before\ninner cancel\n1176\nown cancel\nouter cancel\n";
+
+/// ふつうの `resume` が継続を置き直す塊(場所 `resume`)をすべて取れなくても、
+/// 注入は継続の写しを塊としてつなぐので新しい塊を取らず、継続の中の `cancel` 節から順に走る。
+/// 塊の回収だけを入れて注入を直す前の構築では、注入も塊を取れず、`inner cancel` と `own cancel` が失われる。
+fn expect_inj_resume(tag: &str, backend: &[&str]) {
+    expect_out(
+        tag,
+        &inj(300_000),
+        "exec:resume:hard:0",
+        "resume",
+        backend,
+        INJ_CANCELLED,
+    );
+}
+
+#[test]
+fn 継続を置き直す塊を取れなくても注入で継続の中の_cancel_節が走る_interp() {
+    expect_inj_resume("inj-i", INTERP);
+}
+
+#[cfg(feature = "llvm")]
+#[test]
+fn 継続を置き直す塊を取れなくても注入で継続の中の_cancel_節が走る_jit() {
+    expect_inj_resume("inj-j", JIT_ONLY);
+}
+
+#[test]
+fn 継続を置き直す塊を取れなくても注入で継続の中の_cancel_節が走る_gc_stress() {
+    expect_inj_resume("inj-g", &["--backend", "interp", "--gc-stress"]);
+}
+
+/// `cont_make` が継続の写しを取れなければ、取り出した区間の最上段からメモリの不足で巻き戻す。
+/// `--tier jit-only` では、JIT のフレームのエフェクトの命令が、区間の最下段の結果を見出しの再開点に返し直す道を通る。
+/// `soft` では予備の道でやり直しが通るので、`hard` で写しの確保をすべて失敗させる。
+#[cfg(feature = "llvm")]
+#[test]
+fn 継続の写しを取れなければ取り出した区間から巻き戻す_jit() {
+    expect_out(
+        "cont-j",
+        &inj(1000),
+        "exec:cont:hard:0",
+        "cont",
+        JIT_ONLY,
+        INJ_CANCELLED,
+    );
+}
+
+#[test]
+fn 継続の写しを取れなければ取り出した区間から巻き戻す_interp() {
+    expect_out(
+        "cont-i",
+        &inj(1000),
+        "exec:cont:hard:0",
+        "cont",
+        INTERP,
+        INJ_CANCELLED,
+    );
+}
+
+/// 深さ 3,000,000 の再帰から戻った後に、長さ 7,000,000 のリストを 2 回作り直すプログラム(`probe/alloc/chunks.kel` の MODE 3 の変種)。
+///
+/// 塊を返せば、最大の使用量は再帰の分とリストの分の大きいほうに近く、返さなければ和に近い。
+/// リストの長さは、2 つの分が同じ程度(どちらも約 300 MB)になるように選んだ。
+const CHUNKS: &str = r#"let rec deep(n: Int32): Int32 = if n == 0 then 0 else 1 + deep(n - 1)
+let rec build(n: Int32, acc: List[Int32]): List[Int32] = if n == 0 then acc else build(n - 1, Cons(n, acc))
+let rec len(l: List[Int32], k: Int32): Int32 = l match { case Nil => k case Cons(_, t) => len(t, k + 1) }
+let rec rounds(r: Int32, k: Int32): Int32 = if r == 0 then k else rounds(r - 1, k + len(build(7000000, Nil), 0))
+let a = deep(3000000)
+let b = rounds(2, 0)
+echoln(show(a + b))
+"#;
+
+/// 深い再帰で取った値スタックの塊を回収の後に返すので、その後にリストを作り直しても `ulimit -v` の上限に収まる。
+///
+/// 上限は、LLVM の後段を持つ構築で 720,000 KiB、持たない構築(`--no-default-features`)で 500,000 KiB である。
+/// LLVM の共有ライブラリを読み込む分だけ、持つ構築のほうが仮想メモリを多く使うからである。
+/// M111 で測った通る上限の最小は次のとおりで、どちらの上限も、直した構築と塊を返さない直す前の構築(M111 の前の 6aa7ba3)の境目の間にある。
+///
+/// | 構築 | 直した構築 | 直す前の構築 |
+/// | --- | --- | --- |
+/// | LLVM を持つ release | 約 583,000 KiB | 約 863,000 KiB |
+/// | LLVM を持つ debug(試験の構築) | 約 592,000 KiB | 測っていない |
+/// | LLVM を持たない release | 約 372,000 KiB | 約 653,000 KiB |
+/// | LLVM を持たない debug(試験の構築) | 約 379,000 KiB | 約 661,000 KiB |
+///
+/// 機械と確保器で揺れるので、cram にはしない。
+#[test]
+fn 深い再帰の後の回収で塊を返し仮想メモリの上限に収まる() {
+    let d = scratch("chunks-ulimit");
+    std::fs::write(d.join("p.kel"), CHUNKS).unwrap();
+    let r = Command::new("sh")
+        .arg("-c")
+        .arg("ulimit -v \"$1\"; exec \"$0\" run --backend interp --native-stack 64m --max-depth 20000000 p.kel")
+        .arg(env!("CARGO_BIN_EXE_keleut"))
+        .arg(if cfg!(feature = "llvm") { "720000" } else { "500000" })
+        .current_dir(&d)
+        .env_remove("KELEUT_JIT_STATS")
+        .env_remove("KELEUT_GC_STATS")
+        .env_remove("KELEUT_TEST_ALLOC_FAIL")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(&d).unwrap();
+    assert!(
+        r.status.code() == Some(0) && r.stdout == b"17000000\n" && r.stderr.is_empty(),
+        "{}",
+        describe(&r)
+    );
+}
