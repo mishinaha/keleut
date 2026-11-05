@@ -117,6 +117,7 @@ fn jit_thread(
     stop: Arc<AtomicBool>,
     busy: Arc<AtomicBool>,
 ) {
+    keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Jit);
     type Started = (Jit, Init, Box<[AtomicUsize]>, usize, String, String);
     let start = || -> Result<Started, String> {
         let jit = Jit::new()?;
@@ -155,13 +156,34 @@ fn jit_thread(
             return;
         }
     };
+    // 翻訳の役割が大域の確保器の予備を使ったら、翻訳をやめる(`keleut_rt::alloc`)。
+    let mut gave_up = false;
     while let Ok((f, wait)) = req.recv() {
         busy.store(true, Ordering::SeqCst);
         if stop.load(Ordering::SeqCst) {
             // 実行が終わった。残りの待たない頼みは翻訳しない。
             break;
         }
+        if gave_up {
+            busy.store(false, Ordering::SeqCst);
+            if wait && rep.send(Ok(0)).is_err() {
+                break;
+            }
+            continue;
+        }
+        if !keleut_rt::alloc::has_reserve() && !keleut_rt::alloc::reacquire() {
+            // 大域の予備が無く(実行の役割が使った)、取り直せない。
+            // 予備なしで翻訳すると、Rust の確保の失敗がプロセスを止める(134)ので、
+            // 印が立ったときと同じく、以後の翻訳をやめてインタプリタで続ける。
+            gave_up = true;
+            busy.store(false, Ordering::SeqCst);
+            if wait && rep.send(Ok(0)).is_err() {
+                break;
+            }
+            continue;
+        }
         let rtable = rentry.as_ptr() as usize;
+        let jit_site = keleut_rt::alloc::site(keleut_rt::alloc::Site::Jit);
         let src = codegen::module(prog, f, table, rtable, &triple, &layout);
         if stop.load(Ordering::SeqCst) {
             break;
@@ -170,12 +192,28 @@ fn jit_thread(
             let name = codegen::func_name(f);
             jit.add_ir(&name, &src, passes)?;
             let ra = jit.lookup(&format!("{name}.r"))?;
+            if keleut_rt::alloc::flagged(keleut_rt::alloc::Role::Jit) {
+                // 入口を書く前に印を見る。翻訳は捨てる(LLJIT に足したコードは使わない)。
+                return Ok(0);
+            }
             // レジスタの入口を先に書く(入口の表の項目を見て翻訳済みと知った呼び出しは、どちらの入口も使える)。
             rentry[f.index()].store(ra, Ordering::Release);
             jit.lookup(&name)
         });
+        drop(jit_site);
+        let r = if keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Jit) {
+            // 翻訳の失敗をプログラムのメモリの不足と取り違えない。
+            // この関数の翻訳を捨て、以後の翻訳をやめてインタプリタで続け、大域の予備を取り直す。
+            // 取れなければ予備なしで続ける。
+            gave_up = true;
+            keleut_rt::alloc::reacquire();
+            Ok(0)
+        } else {
+            r
+        };
         busy.store(false, Ordering::SeqCst);
         match &r {
+            Ok(0) => {}
             Ok(addr) => entry[f.index()].store(*addr, Ordering::Release),
             Err(e) if !wait => {
                 if let Ok(mut m) = failure.1.lock() {

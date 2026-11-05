@@ -26,9 +26,14 @@
 //! システムから取れたら予備の扱いをやめ、次の確保で新しい予備を取っておく。
 //! [`RESERVE_SWITCH_WORDS`] 語(2 MiB)より大きな箱の失敗は、ほかの確保の余地を減らさないので、予備に切り替えない。
 //! `cancel` 節の中のこの誤りは、ほかの脱出と同じく打ち切られる。
+//!
+//! 失敗を返す確保(表の `try_reserve` と大きな箱)は、大域の確保器の失敗を自分で扱う範囲で行う([`crate::alloc::handled`])。
+//! 失敗しても大域の予備を使わず、呼び手の後退の道かメモリの不足に任せる。
 
 use std::alloc::{Layout, alloc, dealloc};
 use std::ffi::c_void;
+
+use crate::alloc::handled;
 
 /// 確保の失敗。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -262,7 +267,7 @@ impl Heap {
 
     /// 新しいページ。手元から取り、無ければシステムから取る。
     fn new_page(&mut self, class: usize) -> Result<*mut u64, OutOfMemory> {
-        self.pages.try_reserve(1).map_err(|_| OutOfMemory)?;
+        handled(|| self.pages.try_reserve(1)).map_err(|_| OutOfMemory)?;
         let p = match self.pool.pop() {
             Some(p) => p,
             None => {
@@ -287,12 +292,8 @@ impl Heap {
         if self.in_reserve || !self.reserve.is_empty() {
             return Ok(());
         }
-        self.reserve
-            .try_reserve(RESERVE_PAGES)
-            .map_err(|_| OutOfMemory)?;
-        self.pool
-            .try_reserve(RESERVE_PAGES + POOL_PAGES)
-            .map_err(|_| OutOfMemory)?;
+        handled(|| self.reserve.try_reserve(RESERVE_PAGES)).map_err(|_| OutOfMemory)?;
+        handled(|| self.pool.try_reserve(RESERVE_PAGES + POOL_PAGES)).map_err(|_| OutOfMemory)?;
         for _ in 0..RESERVE_PAGES {
             match sys_page() {
                 Some(p) => self.reserve.push(p),
@@ -314,7 +315,7 @@ impl Heap {
         if words > RESERVE_SWITCH_WORDS || self.reserve.is_empty() {
             return OutOfMemory;
         }
-        if self.pool.try_reserve(self.reserve.len()).is_ok() {
+        if handled(|| self.pool.try_reserve(self.reserve.len())).is_ok() {
             self.pool.append(&mut self.reserve);
             self.in_reserve = true;
             if let Some(l) = &mut self.limit_words {
@@ -362,11 +363,12 @@ impl Heap {
         if self.over_limit(words as u64) {
             return Err(OutOfMemory);
         }
-        self.large.try_reserve(1).map_err(|_| OutOfMemory)?;
+        handled(|| self.large.try_reserve(1)).map_err(|_| OutOfMemory)?;
         let bytes = words.checked_mul(8).ok_or(OutOfMemory)?;
         let layout = Layout::from_size_align(bytes, 8).map_err(|_| OutOfMemory)?;
+        // 失敗は呼び手が回収とメモリの不足で扱うので、失敗を自分で扱う範囲で取る(大域の確保器の予備に触れない)。
         // SAFETY: layout の大きさは 0 でない。
-        let p = unsafe { alloc(layout) }.cast::<u64>();
+        let p = handled(|| unsafe { alloc(layout) }).cast::<u64>();
         if p.is_null() {
             return Err(OutOfMemory);
         }
@@ -390,7 +392,7 @@ impl Heap {
             k.free = std::ptr::null_mut();
         }
         let mut keep = Vec::new();
-        if keep.try_reserve(self.pages.len()).is_err() {
+        if handled(|| keep.try_reserve(self.pages.len())).is_err() {
             // 作り直す列を取れないときは、ページを返さずにその場で掃除する。
             for i in 0..self.pages.len() {
                 let (base, c) = (self.pages[i].base, self.pages[i].class as usize);
@@ -407,7 +409,8 @@ impl Heap {
                     // 空きリストに入れた区画を外す(このページの区画だけが先頭から続く)。
                     self.unlink_page(pg.base, c);
                     self.held_words -= PAGE_WORDS as u64;
-                    if self.pool.len() < POOL_PAGES && self.pool.try_reserve(1).is_ok() {
+                    if self.pool.len() < POOL_PAGES && handled(|| self.pool.try_reserve(1)).is_ok()
+                    {
                         self.pool.push(pg.base);
                     } else {
                         sys_unpage(pg.base);

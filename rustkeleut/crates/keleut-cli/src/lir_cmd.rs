@@ -95,6 +95,7 @@ fn run(o: &Options) -> u8 {
         }
     };
     let limits = kir::Limits::for_nest(o.max_nest);
+    let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
     let read = match o.input.extension().and_then(|e| e.to_str()) {
         Some("kir") => kir::read_kir_with,
         Some("kirt") => kir::read_kirt_with,
@@ -107,10 +108,12 @@ fn run(o: &Options) -> u8 {
             return e.exit_code() as u8;
         }
     };
+    keleut_rt::alloc::conv_checkpoint();
     if let Err(e) = kir::verify_with(&prog, &limits) {
         eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
         return e.exit_code() as u8;
     }
+    keleut_rt::alloc::conv_checkpoint();
     let lowered = if o.unassigned {
         keleut_lir::lower_unassigned(&prog, o.max_nest)
     } else {
@@ -123,6 +126,8 @@ fn run(o: &Options) -> u8 {
             return e.exit_code() as u8;
         }
     };
+    keleut_rt::alloc::conv_checkpoint();
+    drop(_site);
     if o.check {
         return 0;
     }
@@ -153,7 +158,10 @@ pub fn main(args: &[String]) -> u8 {
         return 0;
     }
     match parse(rest) {
-        Ok(o) => run(&o),
+        Ok(o) => {
+            keleut_rt::alloc::set_input(keleut_rt::alloc::Input::Kir);
+            run(&o)
+        }
         Err(msg) => {
             eprint!("keleut: {msg}\n{USAGE}");
             exit::USAGE

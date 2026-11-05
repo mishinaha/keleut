@@ -83,7 +83,10 @@ impl<'p> Rt<'p> {
         let have = self.shapes.count() as usize;
         for (i, s) in prog.shapes.iter().enumerate().skip(have) {
             let labels: Vec<u32> = s.iter().map(|l| l.0).collect();
-            let id = self.shapes.intern(&labels, &mut pos);
+            let id = {
+                let _site = crate::alloc::site(crate::alloc::Site::Shape);
+                self.shapes.intern(&labels, &mut pos)
+            };
             if id.0 as usize != i {
                 return Err(Stop::Internal(format!(
                     "形の表の番号が合いません(LIR の {i} 番が実行時の {} 番)",

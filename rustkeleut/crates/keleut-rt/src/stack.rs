@@ -26,6 +26,8 @@
 //! 最初の塊も最初のフレームを置くときに取るので、空の値スタックを作る操作は失敗しない。
 //! 最初の塊を取るときに予備の塊(1 MiB)も取っておく。
 //! 塊を取れなかったら、予備を次に使える塊にしてから [`OutOfMemory`] を返す。
+//! 塊は大域の確保器から取るので、確保器が予備を返してやり直したときも、塊を取った後に実行の役割の印を見てメモリの不足にする
+//! ([`crate::alloc`]、計画 261104-3 の D568)。
 //! メモリの不足の誤りを巻き戻す間に走る `cancel` 節は、予備にフレームを積める(計画 6.5 節)。
 
 use std::alloc::{Layout, alloc_zeroed};
@@ -82,7 +84,12 @@ impl Default for ValueStack {
 }
 
 /// `words` 語の、0 で埋めた塊の領域を取る。取れなければ [`OutOfMemory`] を返す。
+///
+/// 確保は大域の確保器を通り、失敗を自分で扱う範囲の外で行う(`crate::alloc`)。
+/// 失敗すれば大域の予備を返してやり直すので、その後は実行の役割の印が立ちうる。
+/// 印は呼び手([`ValueStack::take_mem`])が見る。
 fn new_mem(words: usize) -> Result<Box<[u64]>, OutOfMemory> {
+    let _site = crate::alloc::site_if_none(crate::alloc::Site::Chunk);
     let layout = Layout::array::<u64>(words).map_err(|_| OutOfMemory)?;
     // SAFETY: words ≧ CHUNK_WORDS なので layout の大きさは 0 でない。
     let p = unsafe { alloc_zeroed(layout) }.cast::<u64>();
@@ -124,6 +131,11 @@ impl ValueStack {
     }
 
     /// 新しい塊の領域。取れなければ予備を次に使える塊にして失敗を返し、予備があればそれを使う。
+    ///
+    /// 取った後に実行の役割の印を見て下ろす(`crate::alloc`)。
+    /// 印が立っていれば、大域の確保器が予備を返したか、ほかの確保が先に予備を使ったので、メモリの不足にする。
+    /// 取れた塊は次に使える塊にするので、予備の使われ方の順は、大域の予備、取れた塊、値スタックの予備の塊となる。
+    /// 取れなければ、印の有無によらず印を下ろし、値スタックの予備の塊を次に使える塊にする(1 回のメモリの不足に 1 回だけ応える)。
     fn take_mem(&mut self, words: usize) -> Result<Box<[u64]>, OutOfMemory> {
         if let Some(m) = self.armed.take() {
             if m.len() >= words {
@@ -131,8 +143,14 @@ impl ValueStack {
             }
             self.armed = Some(m);
         }
-        match new_mem(words.max(CHUNK_WORDS)) {
-            Ok(m) => Ok(m),
+        let r = new_mem(words.max(CHUNK_WORDS));
+        let flagged = crate::alloc::take_flag(crate::alloc::Role::Exec);
+        match r {
+            Ok(m) if !flagged => Ok(m),
+            Ok(m) => {
+                self.armed = Some(m);
+                Err(OutOfMemory)
+            }
             Err(e) => {
                 if let Some(sp) = self.spare.take() {
                     self.armed = Some(sp);
@@ -200,7 +218,12 @@ impl ValueStack {
         if self.chunks.is_empty() {
             debug_assert_eq!(top, 0);
             if self.spare.is_none() && self.armed.is_none() {
-                self.spare = Some(new_mem(CHUNK_WORDS)?);
+                let sp = new_mem(CHUNK_WORDS);
+                if crate::alloc::take_flag(crate::alloc::Role::Exec) {
+                    self.armed = sp.ok();
+                    return Err(OutOfMemory);
+                }
+                self.spare = Some(sp?);
             }
             let mem = self.take_mem(words)?;
             self.chunks.push(Chunk { mem, base: 0 });

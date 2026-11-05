@@ -342,8 +342,15 @@ fn run_jit(_: &Options) -> u8 {
 
 /// 入力を読み(`.kel` ならフロントエンドを通し)、KIR を検証して LIR に下ろす。
 /// 失敗すれば、診断を標準エラーに書いて終了状態を返す。
+///
+/// 入力の種類(`.kel` か KIR か)を、変換の役割の終え方のために先に書く(`keleut_rt::alloc`)。
 pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
     let direct = o.kir_input(&o.files[0]);
+    keleut_rt::alloc::set_input(if direct {
+        keleut_rt::alloc::Input::Kir
+    } else {
+        keleut_rt::alloc::Input::Kel
+    });
     let data = if direct {
         match std::fs::read(&o.files[0]) {
             Ok(d) => d,
@@ -368,7 +375,12 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
         Some("kirt") if direct => kir::read_kirt_with,
         _ => kir::read_any_with,
     };
-    let prog = match read(&data, &limits) {
+    let prog = {
+        let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
+        read(&data, &limits)
+    };
+    keleut_rt::alloc::conv_checkpoint();
+    let prog = match prog {
         Ok(p) => p,
         Err(e) => {
             eprintln!("keleut: KIR を読み込めません: {}", e.message());
@@ -395,16 +407,23 @@ fn kir_limits(o: &Options) -> kir::Limits {
 }
 
 /// KIR を検証して LIR に下ろす。失敗すれば、診断を標準エラーに書いて終了状態を返す。
+///
+/// 検証と下ろしの後に、変換の役割の印を見る(`keleut_rt::alloc`)。
 fn verify_and_lower(
     o: &Options,
     prog: &kir::Program,
     limits: &kir::Limits,
 ) -> Result<keleut_lir::Program, u8> {
-    if let Err(e) = kir::verify_with(prog, limits) {
+    let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
+    let v = kir::verify_with(prog, limits);
+    keleut_rt::alloc::conv_checkpoint();
+    if let Err(e) = v {
         eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
         return Err(e.exit_code() as u8);
     }
-    keleut_lir::lower_opts(prog, limits.max_nest, o.yield_prune).map_err(|e| {
+    let lp = keleut_lir::lower_opts(prog, limits.max_nest, o.yield_prune);
+    keleut_rt::alloc::conv_checkpoint();
+    lp.map_err(|e| {
         eprintln!("keleut: {e}");
         e.exit_code() as u8
     })

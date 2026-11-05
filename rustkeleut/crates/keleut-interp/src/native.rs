@@ -228,6 +228,12 @@ pub struct Translator {
     /// 関数の翻訳を頼む。第 2 引数が真なら済むまで待って入口の番地を返し、偽なら待たずに `None` を返す。
     ///
     /// 翻訳のスレッドは、翻訳を終えたら入口の表の項目を書き換える。
+    /// 次のときは、翻訳のスレッドはその関数を翻訳せず、待つ頼みに番地 0 を返し、待たない頼みでは入口の表を書き換えない。
+    /// どちらの頼みの関数もインタプリタで続ける。
+    ///
+    /// - 翻訳のスレッドが翻訳をやめた後。
+    ///   翻訳の役割が大域の確保器の予備を使ったときと、翻訳の前に予備が無く取り直せないときにやめる(`keleut_rt::alloc`)。
+    ///   やめる前に翻訳した関数は、JIT のコードのまま走る。
     pub request: Box<dyn FnMut(FuncId, bool) -> Result<Option<usize>, String>>,
     /// 待たない頼みの翻訳が失敗したときの印と文面。
     pub failure: Arc<(AtomicBool, Mutex<Option<String>>)>,
@@ -612,6 +618,11 @@ impl<'p> Interp<'p> {
                     self.prog.funcs[i].sym
                 ))
             })?;
+        if addr == 0 {
+            // 翻訳のスレッドが翻訳をやめた。この関数はインタプリタで続ける。
+            n.state[i] = State::Interp;
+            return Ok(None);
+        }
         n.state[i] = State::Compiled;
         n.compiled += 1;
         Ok(Some(addr))

@@ -45,6 +45,7 @@ use std::time::{Duration, Instant};
 use keleut_lir::{FuncId, FxOp, Inst, Program, Reg, Slot, Term};
 
 use crate::Rt;
+use crate::alloc::{self, Role, Site, handled};
 use crate::effect::{Cont, HandlerRec, Pending};
 use crate::error::Stop;
 use crate::heap::{MARK, Roots};
@@ -132,21 +133,31 @@ pub struct TableGc {
 impl TableGc {
     /// 次に使う添字を決める。使い回せる添字があればそれを、無ければ `len`(新しい項目)を返す。
     /// 新しい項目の分の記録の領域を、確保の失敗を返す形で先に取る。
-    pub fn next_index(&mut self, len: usize) -> Result<usize, Stop> {
+    ///
+    /// `ahead` は、新しい項目の後にさらに空けておく項目の数である([`TableGc::keep_spare`])。
+    pub fn next_index(&mut self, len: usize, ahead: usize) -> Result<usize, Stop> {
         if let Some(i) = self.free.pop() {
             self.state[i] = LIVE;
             return Ok(i);
         }
         debug_assert_eq!(self.state.len(), len);
-        self.state.try_reserve(1).map_err(|_| Stop::OutOfMemory)?;
-        let want = len + 1;
-        if self.free.capacity() < want {
-            self.free
-                .try_reserve(want - self.free.len())
-                .map_err(|_| Stop::OutOfMemory)?;
-        }
+        self.keep_spare(1 + ahead).map_err(|_| Stop::OutOfMemory)?;
         self.state.push(LIVE);
         Ok(len)
+    }
+
+    /// 項目を `n` 個足しても記録の領域を取り直さないように、容量を先に取る(失敗を自分で扱う範囲で)。
+    ///
+    /// 退避した状態語の表は、いつも 1 個分を空けておく。
+    /// メモリの不足を巻き戻す途中の退避が、表を広げずに済むようにするためである(`Rt::pending_box`)。
+    pub fn keep_spare(&mut self, n: usize) -> Result<(), std::collections::TryReserveError> {
+        let len = self.state.len();
+        handled(|| self.state.try_reserve(n))?;
+        let want = len + n;
+        if self.free.capacity() < want {
+            handled(|| self.free.try_reserve(want - self.free.len()))?;
+        }
+        Ok(())
     }
 
     /// 添字 `i` を空きにする。
@@ -311,7 +322,9 @@ impl Marker<'_> {
             *p = h | MARK;
         }
         self.work += 1;
-        if self.stack.len() == self.stack.capacity() && self.stack.try_reserve(1).is_err() {
+        if self.stack.len() == self.stack.capacity()
+            && handled(|| self.stack.try_reserve(1)).is_err()
+        {
             *self.overflow = true;
             return;
         }
@@ -615,17 +628,36 @@ impl Rt<'_> {
     /// 取れなければ回収してから試し直し、それでも取れなければメモリの不足にする。
     /// 呼ぶ前に、後段は [`GcState::top`] と最上段のフレームの点を正しくしておく(このモジュールの冒頭)。
     pub fn alloc(&mut self, words: usize) -> Result<*mut u64, Stop> {
+        if alloc::take_flag(Role::Exec) {
+            // ほかの確保が大域の確保器の予備を使った(`crate::alloc`)。
+            return Err(Stop::OutOfMemory);
+        }
+        self.alloc_after_flag(words)
+    }
+
+    /// [`Rt::alloc`] の、入口の印の検査の後の部分。
+    ///
+    /// メモリの不足を巻き戻す途中の退避(`Rt::pending_box`)は、入口の印を見ずにこちらを呼ぶ。
+    /// 印はいま報せているメモリの不足と同じ不足を表すからである。
+    #[inline(always)]
+    pub(crate) fn alloc_after_flag(&mut self, words: usize) -> Result<*mut u64, Stop> {
         let mut collected = false;
         let stress = self.gc.stress && self.stress_now();
         if stress || self.heap.should_collect() {
             self.collect();
             collected = true;
+            if alloc::take_flag(Role::Exec) {
+                return Err(Stop::OutOfMemory);
+            }
         }
         if let Ok(p) = self.heap.try_alloc(words) {
             return Ok(p);
         }
         if !collected {
             self.collect();
+            if alloc::take_flag(Role::Exec) {
+                return Err(Stop::OutOfMemory);
+            }
             if let Ok(p) = self.heap.try_alloc(words) {
                 return Ok(p);
             }
@@ -651,7 +683,7 @@ impl Rt<'_> {
         };
         if !g.tested.contains(&site) {
             // 覚える領域を取れなくても回収はする(覚えなければ次も回収する)。
-            if g.tested.try_reserve(1).is_ok() {
+            if handled(|| g.tested.try_reserve(1)).is_ok() {
                 g.tested.insert(site);
             }
             return true;
@@ -661,6 +693,7 @@ impl Rt<'_> {
 
     /// 回収する。
     pub fn collect(&mut self) {
+        let _site = alloc::site(Site::Collect);
         let t0 = Instant::now();
         let Rt {
             prog,
@@ -816,12 +849,12 @@ mod tests {
     #[test]
     fn 表の添字を使い回す() {
         let mut t = TableGc::default();
-        assert_eq!(t.next_index(0), Ok(0));
-        assert_eq!(t.next_index(1), Ok(1));
+        assert_eq!(t.next_index(0, 0), Ok(0));
+        assert_eq!(t.next_index(1, 0), Ok(1));
         t.release(0);
         assert_eq!(t.live(), 1);
-        assert_eq!(t.next_index(2), Ok(0));
-        assert_eq!(t.next_index(2), Ok(2));
+        assert_eq!(t.next_index(2, 0), Ok(0));
+        assert_eq!(t.next_index(2, 0), Ok(2));
         assert!(t.free.capacity() >= 3);
     }
 }

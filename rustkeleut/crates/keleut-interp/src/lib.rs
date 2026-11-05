@@ -51,6 +51,7 @@ impl Default for RunOptions {
 pub type Setup<'s> = &'s mut (dyn FnMut(&mut Interp<'_>) -> Result<(), Stop> + Send);
 
 fn run_on_thread(prog: &Program, opts: &RunOptions, setup: Option<Setup<'_>>) -> u8 {
+    keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
     let x = 0u8;
     let sp0 = std::hint::black_box(&x) as *const u8 as usize;
     let low = sp0

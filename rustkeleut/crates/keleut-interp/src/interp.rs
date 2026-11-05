@@ -60,6 +60,7 @@
 //! 回収はこれを、状態語の `YIELD` が持つ `perform` のフレームの位置からたどる。
 
 use keleut_lir::{ClassId, ConvOp, FuncId, InstanceId, LabelId, Program, RtError, ShapeId, TypeId};
+use keleut_rt::alloc::{self, Site};
 use keleut_rt::stack::{HEADER_WORDS, NATIVE_CALLER};
 use keleut_rt::value::Kind;
 use keleut_rt::{CalleeView, DictView, Rt, Stop, Word};
@@ -347,6 +348,7 @@ impl<'p> Interp<'p> {
                 .name("keleut-mutator".to_string())
                 .stack_size(size)
                 .spawn_scoped(s, move || {
+                    keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
                     let (me, f) = job.take();
                     // SAFETY: 元のスレッドは join で待っており、この間 self に触れない。
                     let it = unsafe { &mut *me };
@@ -766,7 +768,10 @@ impl<'p> Interp<'p> {
         let w = &st.code().words;
         let pc = e.call_pc as usize;
         let n = w[pc + 3] as usize - 2;
-        let xs: Vec<Word> = (0..n).map(|i| st.w(w[pc + 6 + i])).collect();
+        let xs: Vec<Word> = {
+            let _site = alloc::site(Site::CallArgs);
+            (0..n).map(|i| st.w(w[pc + 6 + i])).collect()
+        };
         // フレームは perform の再開点で止まっていて、引数はその被演算子として根にある。
         self.rt.gc.at_frame(st.fpos);
         let a = self.rt.array_new(Kind::Array, n, Word::UNIT)?;
@@ -1379,6 +1384,8 @@ impl<'p> Interp<'p> {
     /// 呼ぶ前の副作用(`perform` の連鎖と深さ、`call_clause` の深さ)はここで済ませる。
     /// 呼び出しそのものは呼ぶ側が行う(インタプリタは [`Interp::fx`]、JIT のフレームは [`Interp::native_fx`])。
     fn fx_call(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<FxCall, Stop> {
+        // 引数の列は失敗を自分で扱う範囲の外で取る(`keleut_rt::alloc`)。中の回収はその場所の印で上書きする。
+        let _site = alloc::site(Site::CallArgs);
         // SAFETY: Code は self.codes の Box の中にあり、動かない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
@@ -1447,6 +1454,7 @@ impl<'p> Interp<'p> {
         pc: usize,
         idx: u32,
     ) -> Result<(FuncId, Word, Vec<Word>), Stop> {
+        let _site = alloc::site(Site::CallArgs);
         // SAFETY: Code は self.codes の Box の中にあり、動かない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
@@ -1523,7 +1531,13 @@ impl<'p> Interp<'p> {
         }
         let mut frames: Vec<u64> = Vec::new();
         let mut sizes: Vec<u32> = Vec::new();
-        if frames.try_reserve_exact(total).is_err() || sizes.try_reserve_exact(count).is_err() {
+        let got = {
+            let _site = alloc::site(Site::Cont);
+            alloc::handled(|| {
+                frames.try_reserve_exact(total).is_ok() && sizes.try_reserve_exact(count).is_ok()
+            })
+        };
+        if !got {
             return self.fail_into_segment(st, top);
         }
         frames.resize(total, 0);
@@ -1599,10 +1613,10 @@ impl<'p> Interp<'p> {
         // フレームをすべて置けるまで継続は変えない。置けなければ継続をそのまま残してメモリの不足を返し、
         // 使われていない継続として注入の道(中の cancel 節を走らせる)に任せる。
         let mut placed: Vec<u64> = Vec::new();
-        placed
-            .try_reserve_exact(self.rt.conts[ki].sizes.len())
+        alloc::handled(|| placed.try_reserve_exact(self.rt.conts[ki].sizes.len()))
             .map_err(|_| Stop::OutOfMemory)?;
         {
+            let _site = alloc::site(Site::Resume);
             let rt = &mut self.rt;
             let c = &rt.conts[ki];
             let mut off = 0usize;

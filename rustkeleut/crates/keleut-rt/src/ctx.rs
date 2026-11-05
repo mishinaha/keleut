@@ -14,6 +14,7 @@ use keleut_lir::{
 };
 use keleut_rtcore::{ShapeId as RtShape, ShapeTable};
 
+use crate::alloc::{self, Site};
 use crate::effect::{Cont, HandlerRec, Pending};
 use crate::error::Stop;
 use crate::gc::{GcState, Table};
@@ -120,7 +121,10 @@ impl<'p> Rt<'p> {
         let mut pos = Vec::new();
         for (i, s) in prog.shapes.iter().enumerate() {
             let labels: Vec<u32> = s.iter().map(|l| l.0).collect();
-            let id = shapes.intern(&labels, &mut pos);
+            let id = {
+                let _site = alloc::site(Site::Shape);
+                shapes.intern(&labels, &mut pos)
+            };
             if id.0 as usize != i {
                 return Err(Stop::Internal(format!(
                     "形の表の番号が合いません(LIR の {i} 番が実行時の {} 番)",
@@ -172,6 +176,7 @@ impl<'p> Rt<'p> {
             gc: GcState::new(prog.funcs.len()),
         };
         rt.gc.stress = stress;
+        rt.keep_pending_spare()?;
         for s in &prog.strings {
             let w = rt.new_str(s)?;
             rt.strings.push(w);
@@ -428,16 +433,26 @@ impl<'p> Rt<'p> {
         self.rec_pos(v, label, nth).is_some()
     }
 
-    fn rec_fields(&self, v: Word) -> Vec<Word> {
+    /// レコードのフィールドの写し。1 つ足せる容量で取る。
+    ///
+    /// 写しの領域は失敗を自分で扱う範囲で取り(`crate::alloc`)、取れなければメモリの不足にする。
+    fn rec_fields(&self, v: Word) -> Result<Vec<Word>, Stop> {
         let (_, n) = self.rec_shape(v);
-        (0..n).map(|i| self.rec_get(v, i)).collect()
+        let _site = alloc::site(Site::RecFields);
+        let mut fs = Vec::new();
+        alloc::handled(|| fs.try_reserve_exact(n as usize + 1)).map_err(|_| Stop::OutOfMemory)?;
+        fs.extend((0..n).map(|i| self.rec_get(v, i)));
+        Ok(fs)
     }
 
     /// `rec_extend`。
     pub fn rec_extend(&mut self, v: Word, label: LabelId, x: Word) -> Result<Word, Stop> {
         let (shape, _) = self.rec_shape(v);
-        let (ns, pos) = self.shapes.extend(RtShape(shape), label.0);
-        let mut fs = self.rec_fields(v);
+        let (ns, pos) = {
+            let _site = alloc::site(Site::Shape);
+            self.shapes.extend(RtShape(shape), label.0)
+        };
+        let mut fs = self.rec_fields(v)?;
         fs.insert(pos as usize, x);
         self.rec_new(ShapeId(ns.0), &fs)
     }
@@ -445,8 +460,12 @@ impl<'p> Rt<'p> {
     /// `rec_restrict`(全域。ラベルが無ければ同じフィールドのレコード)。
     pub fn rec_restrict(&mut self, v: Word, label: LabelId) -> Result<Word, Stop> {
         let (shape, _) = self.rec_shape(v);
-        let mut fs = self.rec_fields(v);
-        let ns = match self.shapes.restrict(RtShape(shape), label.0) {
+        let mut fs = self.rec_fields(v)?;
+        let restricted = {
+            let _site = alloc::site(Site::Shape);
+            self.shapes.restrict(RtShape(shape), label.0)
+        };
+        let ns = match restricted {
             Some((ns, pos)) => {
                 fs.remove(pos as usize);
                 ns.0
@@ -459,7 +478,7 @@ impl<'p> Rt<'p> {
     /// `rec_update`(全域。ラベルが無ければ同じフィールドのレコード)。
     pub fn rec_update(&mut self, v: Word, label: LabelId, x: Word) -> Result<Word, Stop> {
         let (shape, _) = self.rec_shape(v);
-        let mut fs = self.rec_fields(v);
+        let mut fs = self.rec_fields(v)?;
         if let Some(p) = self.shapes.find(RtShape(shape), label.0) {
             fs[p as usize] = x;
         }
@@ -713,6 +732,9 @@ impl<'p> Rt<'p> {
     /// 回収で空いた添字があれば使い回す。
     /// 箱の確保(安全点)の間は、まだ箱の無い項目として根になる([`crate::gc`])。
     /// 表を広げられないときも、プロセスを止めずにメモリの不足を返す。
+    /// `ahead` は、新しい項目の後に空けておく項目の数である([`TableGc::keep_spare`](crate::gc::TableGc::keep_spare))。
+    /// `urgent` なら、箱の確保で実行の役割の印を見ずに下ろす([`Rt::pending_box`])。
+    #[allow(clippy::too_many_arguments)]
     fn table_push<T>(
         &mut self,
         table: fn(&mut Self) -> &mut Vec<T>,
@@ -720,19 +742,37 @@ impl<'p> Rt<'p> {
         kind: Kind,
         dead: fn() -> T,
         x: T,
+        ahead: usize,
+        urgent: bool,
     ) -> Result<Word, Stop> {
         let len = table(self).len();
-        if self.gc.tables[which as usize].state_len() == len {
-            table(self).try_reserve(1).map_err(|_| Stop::OutOfMemory)?;
-        }
-        let i = self.gc.tables[which as usize].next_index(len)?;
+        let i = {
+            let _site = (which == Table::Pending).then(|| alloc::site(Site::Pending));
+            if self.gc.tables[which as usize].state_len() == len {
+                alloc::handled(|| table(self).try_reserve(1 + ahead))
+                    .map_err(|_| Stop::OutOfMemory)?;
+            }
+            self.gc.tables[which as usize].next_index(len, ahead)?
+        };
         if i == len {
             table(self).push(x);
         } else {
             table(self)[i] = x;
         }
         self.gc.unboxed = Some((which, i));
-        let r = self.index_box(kind, i);
+        let r = if urgent {
+            let _ = alloc::take_flag(alloc::Role::Exec);
+            self.alloc_after_flag(2).map(|p| {
+                // SAFETY: p は 2 語の新しい領域である。
+                unsafe {
+                    *p = header(kind, 0);
+                    *p.add(1) = i as u64;
+                }
+                Word::from_ptr(p)
+            })
+        } else {
+            self.index_box(kind, i)
+        };
         self.gc.unboxed = None;
         match r {
             Ok(w) => Ok(w),
@@ -753,6 +793,8 @@ impl<'p> Rt<'p> {
             Kind::Handler,
             HandlerRec::dead,
             rec,
+            0,
+            false,
         )?;
         self.next_handler += 1;
         Ok(w)
@@ -784,7 +826,15 @@ impl<'p> Rt<'p> {
 
     /// 継続を作る。
     pub fn cont_new(&mut self, c: Cont) -> Result<Word, Stop> {
-        self.table_push(|r| &mut r.conts, Table::Cont, Kind::Cont, Cont::default, c)
+        self.table_push(
+            |r| &mut r.conts,
+            Table::Cont,
+            Kind::Cont,
+            Cont::default,
+            c,
+            0,
+            false,
+        )
     }
 
     /// 継続の箱の添字。継続でなければ内部の誤り。
@@ -797,14 +847,38 @@ impl<'p> Rt<'p> {
     }
 
     /// 状態語を退避した値にする。
+    ///
+    /// 表はいつも 1 個分の項目を空けておく(`Rt::new` で取り、退避のたびに取り直す)。
+    /// メモリの不足の状態語(`ERROR(OutOfMemory)`)は、空けておいた項目に置き、表を広げない。
+    /// 箱の確保でも実行の役割の印を見ずに下ろす。
+    /// 印はいま巻き戻しているメモリの不足と同じ不足を表し、ここで失敗すると状態語が失われて `cancel` 節が走らないからである。
+    /// 置いた後で空きを取り直せなくても、この退避は失敗にしない。
+    /// ほかの状態語は、置いた後の空きまで先に取り、取れなければメモリの不足を返す。
+    /// 表を広げる確保と空きを取り直す確保は、場所 `pending` で行う([`Site::Pending`]。`Rt::new` の最初の空きは除く)。
     pub fn pending_box(&mut self, p: Pending) -> Result<Word, Stop> {
-        self.table_push(
+        let urgent = matches!(p, Pending::Error(Stop::OutOfMemory));
+        let w = self.table_push(
             |r| &mut r.saved,
             Table::Pending,
             Kind::Pending,
             Pending::default,
             p,
-        )
+            usize::from(!urgent),
+            urgent,
+        )?;
+        if urgent {
+            let _site = alloc::site(Site::Pending);
+            let _ = self.keep_pending_spare();
+        }
+        Ok(w)
+    }
+
+    /// 退避した状態語の表に 1 個分の空きを取る(失敗を自分で扱う範囲で)。
+    fn keep_pending_spare(&mut self) -> Result<(), Stop> {
+        alloc::handled(|| self.saved.try_reserve(1)).map_err(|_| Stop::OutOfMemory)?;
+        self.gc.tables[Table::Pending as usize]
+            .keep_spare(1)
+            .map_err(|_| Stop::OutOfMemory)
     }
 
     /// 退避した値から状態語を取り出す(表の項目は空にする)。

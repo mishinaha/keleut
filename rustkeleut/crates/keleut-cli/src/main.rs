@@ -5,6 +5,10 @@
 
 use std::process::ExitCode;
 
+/// 大域の確保器の包み(予備と役割の印。`keleut_rt::alloc`)。
+#[global_allocator]
+static ALLOC: keleut_rt::alloc::Wrap = keleut_rt::alloc::Wrap;
+
 mod build_cmd;
 mod check_cmd;
 mod compat_cmd;
@@ -96,6 +100,11 @@ fn dispatch(args: &[String]) -> u8 {
 }
 
 fn main() -> ExitCode {
+    // 予備を取り、主のスレッドをそのほかの役割にし、試験用の失敗の指定を読む。
+    if let Err(msg) = keleut_rt::alloc::init() {
+        eprintln!("keleut: {msg}");
+        return ExitCode::from(exit::USAGE);
+    }
     // `std::env::args` は UTF-8 でない引数で落ちるので、`args_os` で受けて使い方の誤りにする。
     let mut args = Vec::new();
     for a in std::env::args_os().skip(1) {

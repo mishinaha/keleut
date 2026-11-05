@@ -173,6 +173,8 @@ fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
             return Err(3);
         }
     };
+    // 型検査の間に確保が大域の確保器の予備を使ったら、限度の行で終える(`keleut_rt::alloc`)。
+    keleut_rt::alloc::conv_checkpoint();
     let out = std::mem::take(&mut c.output);
     if let Some(p) = &out.panic {
         eprintln_now(p);
@@ -297,6 +299,7 @@ pub fn main(args: &[String]) -> u8 {
             return exit::USAGE;
         }
     };
+    keleut_rt::alloc::set_input(keleut_rt::alloc::Input::Kel);
     let mut o = o;
     let (strict, limits, shrink) = (o.strict, o.limits, !o.fixed_stack);
     let prog = match build_on_front_stack(&mut o.check, strict, limits, shrink) {
@@ -308,7 +311,7 @@ pub fn main(args: &[String]) -> u8 {
         }
     };
     // テキストだけを書くときも、先にバイナリに符号化して深さを確かめる(Diktor と同じ順)。
-    let bin = match kir::write_kir(&prog) {
+    let bin = match encode(&prog) {
         Ok(b) => b,
         Err(e) if e.kind() == kir::ErrorKind::WriteLimit => return write_limit(e.message()),
         Err(e) => {
@@ -351,7 +354,7 @@ fn build_on_front_stack(
         limits = l;
         check.max_nest = l.max_nest;
     }
-    let mut r = on_check_stack(limits, || build(check, strict));
+    let mut r = on_check_stack(limits, || front_thread(check, strict));
     let mut stack = limits.stack_bytes;
     while shrink
         && let Err(msg) = &r
@@ -363,8 +366,28 @@ fn build_on_front_stack(
             break;
         };
         check.max_nest = l.max_nest;
-        r = on_check_stack(l, || build(check, strict));
+        r = on_check_stack(l, || front_thread(check, strict));
     }
+    keleut_rt::alloc::conv_checkpoint();
+    r
+}
+
+/// フロントエンドのスレッドの本体。変換の役割と場所 `check` を書いてから [`build`] を呼ぶ(`keleut_rt::alloc`)。
+fn front_thread(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
+    keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Conv);
+    let _site = keleut_rt::alloc::site(keleut_rt::alloc::Site::Check);
+    build(check, strict)
+}
+
+/// KIR に符号化する。符号化は KIR の処理のスレッドで行い、場所を `kir` にする(`keleut_rt::alloc`)。
+///
+/// 符号化の後に変換の役割の印を見る。
+fn encode(prog: &kir::Program) -> Result<Vec<u8>, kir::Error> {
+    let r = {
+        let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
+        kir::write_kir(prog)
+    };
+    keleut_rt::alloc::conv_checkpoint();
     r
 }
 
@@ -474,7 +497,7 @@ pub(crate) fn program_for_run(
             return Err(70);
         }
     };
-    match kir::write_kir(&prog) {
+    match encode(&prog) {
         Ok(_) => Ok(prog),
         Err(e) if e.kind() == kir::ErrorKind::WriteLimit => Err(write_limit(e.message())),
         Err(e) => {

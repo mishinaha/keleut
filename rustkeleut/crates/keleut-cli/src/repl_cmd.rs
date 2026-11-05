@@ -255,7 +255,11 @@ pub fn main(args: &[String]) -> u8 {
             return exit::USAGE;
         }
     };
-    match on_check_stack(limits, || session_loop(&o)) {
+    // 入力の種類は書かない。変換の役割の確保の失敗で REPL を終えない(`keleut_rt::alloc`)。
+    match on_check_stack(limits, || {
+        keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Conv);
+        session_loop(&o)
+    }) {
         Ok(code) => code,
         Err(msg) => {
             eprintln!("keleut: {msg}");
@@ -299,6 +303,9 @@ fn session_loop(o: &Options) -> u8 {
     let mut start_line: u32 = 1;
     let mut line: Vec<u8> = Vec::new();
     loop {
+        // 前の入力が大域の確保器の予備を使っていれば(実行時エラーで止まった入力など)、次の入力の前に取り直す。
+        // 取れなければ予備なしで続ける(`keleut_rt::alloc`)。
+        keleut_rt::alloc::reacquire();
         if interactive {
             out.bytes(if buf.is_empty() { b"> " } else { b". " });
             if let Err(c) = out.flush() {
@@ -580,6 +587,7 @@ static PARKED: keleut_lir::Program = keleut_lir::Program::empty();
 /// 実行時の表を伸ばして、足した単位の初期化を実行する。
 /// 依頼の間は、インタプリタを空のプログラムに付け替えておく(LIR のプログラムに単位を足せるようにする)。
 fn mutator(o: &Options, native: u64, jobs: mpsc::Receiver<Job>, replies: mpsc::Sender<Reply>) {
+    keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
     let x = 0u8;
     let sp0 = std::hint::black_box(&x) as *const u8 as usize;
     let low = sp0
@@ -629,6 +637,10 @@ fn run_job(
         return Exec::Exit(70);
     }
     let lp: &keleut_lir::Program = lp;
+    // 前の入力の後や、この単位を下ろす途中で、ほかの確保が大域の確保器の予備を使っていれば、実行の役割の印が立っている。
+    // 印をここで下ろしてから表を伸ばす(残った印で表を伸ばす確保が止まり、セッションが終わらないように)。
+    // 下ろした印は、この入力のメモリの不足として報せる。
+    let early_oom = keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec);
     // この単位が足す大域とインスタンスの最初の添字(実行時エラーで止まったときに値を捨てる)。
     let base = parked
         .as_ref()
@@ -655,14 +667,22 @@ fn run_job(
             }
         },
     };
-    let r = exec(
-        &mut it,
-        lp,
-        &job.program,
-        &lp.init[init0..],
-        &job.shown,
-        &job.layouts,
-    );
+    let r = if early_oom {
+        Err(Stop::OutOfMemory)
+    } else {
+        exec(
+            &mut it,
+            lp,
+            &job.program,
+            &lp.init[init0..],
+            &job.shown,
+            &job.layouts,
+        )
+    };
+    if r.is_err() {
+        // 止まった入力の間に立った印は、この入力の停止とともに捨てる(印はメモリの不足 1 回に 1 度だけ答える)。
+        keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec);
+    }
     let exec = match r {
         Ok(()) => match it.rt.out.flush() {
             Ok(()) => Exec::Done,
@@ -842,6 +862,12 @@ fn exec(
     for &f in inits {
         call(it, f, Word(0), &[])?;
     }
+    // 初期化の途中で、ヒープの確保の入口を通らない確保(引数の退避など)が大域の確保器の予備を使っていれば、
+    // 印が残っている。
+    // その入力のメモリの不足として、束縛を表示する前に報せる。
+    if keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec) {
+        return Err(Stop::OutOfMemory);
+    }
     for s in shown {
         if s.unit_exp {
             continue;
@@ -853,6 +879,9 @@ fn exec(
         line.extend_from_slice(&text);
         line.push(b'\n');
         it.rt.out.write(&line).map_err(Stop::from)?;
+    }
+    if keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec) {
+        return Err(Stop::OutOfMemory);
     }
     Ok(())
 }

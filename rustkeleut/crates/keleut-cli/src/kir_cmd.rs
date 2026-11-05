@@ -254,15 +254,18 @@ fn run(o: &Options) -> u8 {
         Some("kirt") => kir::read_kirt_with,
         _ => kir::read_any_with,
     };
+    let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
     let prog = match read(&data, &o.limits) {
         Ok(p) => p,
         Err(e) => return report("KIR を読み込めません", &e),
     };
+    keleut_rt::alloc::conv_checkpoint();
     if o.verify
         && let Err(e) = kir::verify_with(&prog, &o.limits)
     {
         return report("KIR の検証に失敗しました", &e);
     }
+    keleut_rt::alloc::conv_checkpoint();
     match o.tool {
         Tool::Verify => 0,
         Tool::Dis => dis_out(o, &prog),
@@ -327,7 +330,10 @@ pub fn main(args: &[String]) -> u8 {
         _ => {}
     }
     match parse(rest) {
-        Ok(o) => run(&o),
+        Ok(o) => {
+            keleut_rt::alloc::set_input(keleut_rt::alloc::Input::Kir);
+            run(&o)
+        }
         Err(msg) => usage_error(&msg),
     }
 }
