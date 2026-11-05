@@ -561,6 +561,26 @@ reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
 ledger = "V215"
 against = "pair"
 
+# V240: 拡張の鎖を仮想メモリの上限 512 MiB の下で走らせると、keleut run は形の表を広げられずメモリの不足(3)になる。
+# Diktor は同じ上限の下で 0 で終わるので、conformance/oom/shape.t の記録(keleut run の結果)と違う。
+# keleut run を Diktor で走らせる組は記録との差(against = "record")、RustKeleut の組は組 dk との差(against = "pair")である。
+
+[[diff]]
+file = "conformance/oom/shape.t"
+line = 31
+pairs = ["dk", "dk-ir", "kf", "x-ir"]
+reason = "RustKeleut の形の表が 2 乗で大きくなり、Diktor より先にメモリの不足になる"
+ledger = "V240"
+against = "record"
+
+[[diff]]
+file = "conformance/oom/shape.t"
+line = 31
+pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
+reason = "RustKeleut の形の表が 2 乗で大きくなり、Diktor より先にメモリの不足になる"
+ledger = "V240"
+against = "pair"
+
 # 限度は I: 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックを絞ると、
 # Diktor の KIR の評価器は論理的な深さが限度に届く前にスタックオーバーフロー(3)で止まる(IRSpec 11.5 節)。
 # conformance/depth/limit.t の記録は keleut run の結果である。
