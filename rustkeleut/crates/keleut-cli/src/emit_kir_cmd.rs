@@ -208,8 +208,11 @@ fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
         }
     };
     let r = program_of_checked(&mut c, &keys, check);
-    // 型検査の文脈と木は捨てずにプロセスの終わりまで残す(`keleut check` と同じ理由)。
-    std::mem::forget(c);
+    // 型検査の文脈と木は、KIR を作り終えたらこのスレッドで捨てる。
+    // `keleut check` と違い、このあと KIR の処理と実行が続くので、残すと実行の間ずっと常駐し、
+    // 仮想メモリの上限の下で実行に使える領域を減らす。
+    // 木を捨てる再帰は、構文解析の限度に合わせたこのスレッドのスタックに収まる。
+    drop(c);
     match r {
         Ok(p) => Ok(p),
         Err(Fail::Limit) => Err(write_limit(kir::WRITE_LIMIT_MESSAGE)),
