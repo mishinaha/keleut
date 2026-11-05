@@ -221,7 +221,7 @@ pub mod gimp {
 /// import の表(モジュール、名前、型)。
 fn imports() -> Vec<(&'static str, &'static str, Vec<ValType>, Vec<ValType>)> {
     vec![
-        ("host", "write", vec![I32, I32], vec![I32]),
+        ("host", "write", vec![I32, I32, I32], vec![I32]),
         ("host", "buf", vec![I32], vec![I32]),
         ("host", "err", vec![I32, EQ, I64], vec![I32]),
         ("host", "fatal", vec![I32], vec![]),

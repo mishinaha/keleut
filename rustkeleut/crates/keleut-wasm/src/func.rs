@@ -1690,7 +1690,7 @@ impl<'a, 'p> Tr<'a, 'p> {
                 self.fb.i().i32_const(label.0 as i32);
                 self.get(*value);
                 self.fb.i().call(h);
-                self.set(*dst);
+                self.check_set(*dst);
             }
             RecField {
                 dst,
@@ -1722,7 +1722,7 @@ impl<'a, 'p> Tr<'a, 'p> {
                 let h = self.cg.func(FKey::H(H::RecRestrict));
                 self.get(*rec);
                 self.fb.i().i32_const(label.0 as i32).call(h);
-                self.set(*dst);
+                self.check_set(*dst);
             }
             RecUpdate {
                 dst,

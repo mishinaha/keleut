@@ -93,8 +93,10 @@ KIR は `keleut run --frontend rust` がプロセスの中で書き、ファイ�
 `kr-kj`、`kr-kt`、`kr-ka`、`kr-km` は `kj` と同じく feature `llvm` で組んだ `keleut` でだけ走り、`--no-default-features` で組んだ `keleut` での扱いも `kj` と同じである。
 `kw` で V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut run` は 3 でなく 70 で終わる。
 このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
-`ERROR(OutOfMemory)` と終了状態 3 になるのは `N_alloc_max` を超える確保だけで、`oom/` はそれを確かめる。
-これは §15.5 からの既知の逸脱(P252、台帳 V215。計画 6.5 節)で、既知の差には登録していない。
+`ERROR(OutOfMemory)` と終了状態 3 になるのは、`N_alloc_max` を超える確保と、ホストが線形メモリを広げられず形の表を作れないか広げられないとき(D569)だけである。
+`oom/oom.t` は前者を確かめ、後者は `crates/keleut-cli/tests/wasm_cmd.rs` が試験用の線形メモリの上限 `KELEUT_TEST_WASM_MEM_GROW` で確かめる。
+ホストが文字列を受け渡す 64 KiB の領域は起動のときに取って広げないので、形の表が線形メモリを使い切った後でも `cancel` 節は書き出せる。
+V8 のヒープが尽きて 70 で終わることは §15.5 からの既知の逸脱(P252、台帳 V215。計画 6.5 節)で、既知の差には登録していない。
 LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)でも、プロセスのメモリ(仮想メモリの上限、Rust と LLVM のヒープ)が尽きると、`keleut run` は 3 でなく SIGABRT(終了状態 134)で終わることがある。
 このときも `cancel` 節は走らず、バッファに残っていた標準出力は失われる。
 止まる場所は、LLVM の確保(ORC の `JIT session error: Cannot allocate memory` の後の確保の失敗)のことも、`Interp::fx_call` の `Vec` のような失敗を返さない小さな確保のことも、ある。

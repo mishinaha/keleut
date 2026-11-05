@@ -397,21 +397,36 @@ function runProgram(dir, META, exit) {
   }
   const mem = rt.memory;
   let top = (rt.__heap_base.value + 15) & ~15;
+  // 試験用: 環境変数 KELEUT_TEST_WASM_MEM_GROW(バイト数)があれば、線形メモリを起動を終えた時点の大きさから
+  // それ以上は広げず、メモリの不足として扱う。起動の途中では上限を置かない(起動を終えてから memCap を決める)。
+  let memCap = null;
 
   // 線形メモリの上に n バイトの領域を取る(解放はしない)。
+  // 線形メモリを広げられなければ 0 を返す(メモリの不足。0 番地は heap_base より下なので、取った領域とは紛れない)。
   function alloc(n) {
     const p = top;
     const end = p + ((n + 15) & ~15);
     const need = end - mem.buffer.byteLength;
     if (need > 0) {
+      if (memCap !== null && end > memCap) return 0;
       try {
         mem.grow(Math.ceil(need / 65536));
       } catch (e) {
-        out.eprint(enc.encode('keleut: 内部エラー: 線形メモリを広げられません\n'));
-        exit(70);
+        return 0;
       }
     }
     top = end;
+    return p;
+  }
+
+  // 起動の途中で線形メモリを広げられなければ、評価のための領域を用意できない場合として、
+  // 初期化を始めるときの実行時エラー(メモリの不足、3)で終える。
+  function startAlloc(n) {
+    const p = alloc(n);
+    if (p === 0) {
+      out.eprint(enc.encode('実行時エラー: メモリ不足です\n'));
+      exit(3);
+    }
     return p;
   }
 
@@ -419,9 +434,11 @@ function runProgram(dir, META, exit) {
   // 形の表。
   let capShapes = 1024;
   let capLabels = 16384;
+  // 形の表を取る。線形メモリを広げられなければ 0 を返す。
   function newTable(cs, cl) {
     const bytes = rt.krt_shapes_bytes(cs, cl);
     const p = alloc(bytes + 8);
+    if (p === 0) return 0;
     const at = (p + 7) & ~7;
     const t = rt.krt_shapes_init(at, cs, cl);
     if (t === 0) {
@@ -439,9 +456,13 @@ function runProgram(dir, META, exit) {
     }
   }
   const table = newTable(capShapes, capLabels);
+  if (table === 0) {
+    out.eprint(enc.encode('実行時エラー: メモリ不足です\n'));
+    exit(3);
+  }
   for (let i = 1; i < META.shapes.length; i++) {
     const s = META.shapes[i];
-    const p = alloc(4 * s.length + 4);
+    const p = startAlloc(4 * s.length + 4);
     new Uint32Array(mem.buffer, p, s.length).set(s);
     const id = rt.krt_shape_intern(table, p, s.length, 0);
     if (id !== i) {
@@ -451,15 +472,24 @@ function runProgram(dir, META, exit) {
   }
   const shapes = new WebAssembly.Global({ value: 'i32', mutable: true }, table);
 
-  let stage = 0;
-  let stageCap = 0;
+  // 文字列を受け渡す領域(rt.rs の STAGE と同じ大きさ)。
+  // 起動のときに 1 度だけ取り、広げない。
+  // 長い文字列は Wasm の側が一切れずつ写すので、形の表が線形メモリを使い切った後でも書き出せる。
+  const STAGE = 65536;
+  const stage = startAlloc(STAGE);
   function buf(n) {
-    if (n > stageCap) {
-      stageCap = Math.max(n, 2 * stageCap, 65536);
-      stage = alloc(stageCap);
+    if (n > STAGE) {
+      out.eprint(enc.encode('keleut: 内部エラー: 受け渡しの領域より大きい切れです\n'));
+      exit(70);
     }
     return stage;
   }
+  {
+    const grow = process.env.KELEUT_TEST_WASM_MEM_GROW;
+    if (grow !== undefined && grow !== '') memCap = mem.buffer.byteLength + Number(grow);
+  }
+  // host.write の、最後の切れの前までに渡された切れ。
+  let pending = [];
 
   // 診断の文面(番号から)。
   const msgs = new Map();
@@ -468,8 +498,12 @@ function runProgram(dir, META, exit) {
 
   function strBytes(v) {
     const n = X.v_n(v);
-    const p = X.s_out(v);
-    return new Uint8Array(mem.buffer, p, n).slice();
+    const r = new Uint8Array(n);
+    for (let off = 0; off < n; off += STAGE) {
+      const p = X.s_out(v, off);
+      r.set(new Uint8Array(mem.buffer, p, Math.min(STAGE, n - off)), off);
+    }
+    return r;
   }
 
   function f64show(bits) {
@@ -655,8 +689,26 @@ function runProgram(dir, META, exit) {
   }
 
   const host = {
-    write(ptr, len) {
-      const data = new Uint8Array(mem.buffer, ptr, len).slice();
+    // more が 0 でなければ、続きの切れがある。切れを溜め、最後の切れで 1 度に書く。
+    write(ptr, len, more) {
+      const part = new Uint8Array(mem.buffer, ptr, len).slice();
+      if (more !== 0) {
+        pending.push(part);
+        return 0;
+      }
+      let data = part;
+      if (pending.length > 0) {
+        pending.push(part);
+        let total = 0;
+        for (const q of pending) total += q.length;
+        data = new Uint8Array(total);
+        let at = 0;
+        for (const q of pending) {
+          data.set(q, at);
+          at += q.length;
+        }
+        pending = [];
+      }
       const e = out.write(data);
       if (e === null) return 0;
       const id = nextMsg++;
@@ -694,11 +746,17 @@ function runProgram(dir, META, exit) {
       }
       writeQuiet(2, bytesOf(['cancel 節で例外が抑制されました: ', text, '\n']));
     },
+    // 形の表を 2 倍に広げる。
+    // 線形メモリを広げられなければ、表も容量も元のまま 1 を返し、rt.wasm がメモリの不足の ERROR を立てる。
+    // cancel 節の中で再び表が満ちても、同じ大きさをもう一度求めて同じく失敗する。
     shapes_grow() {
+      const t2 = newTable(capShapes * 2, capLabels * 2);
+      if (t2 === 0) return 1;
+      if (rt.krt_shapes_copy(t2, shapes.value) !== 0) {
+        fatal(K_INTERNAL, '形の表を広げられません');
+      }
       capShapes *= 2;
       capLabels *= 2;
-      const t2 = newTable(capShapes, capLabels);
-      if (rt.krt_shapes_copy(t2, shapes.value) !== 0) return 1;
       shapes.value = t2;
       return 0;
     },

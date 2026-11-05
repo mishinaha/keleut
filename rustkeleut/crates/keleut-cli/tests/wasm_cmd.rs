@@ -1255,3 +1255,101 @@ fn cancel_節と_n_の節が交互に重なっても_interp_と同じ() {
         b"2\nbottom\n7\n",
     );
 }
+
+/// 関数 `nm` の中で、`{a = i, b{i % 7} = 1 extends s{i-1}}` の拡張を `n` 段重ねる(計画 261104-3 の探りの
+/// `gen_chain.py` の `fun` の形)。
+/// 長さ i の形を i 個作るので、形の表のラベルの合計は約 n² になる(V240)。
+fn shape_chain_fn(nm: &str, a: &str, b: &str, n: u32) -> String {
+    let mut s = format!("let {nm}(): Int32 = {{\n  let s0 = {{{a} = 0}}\n");
+    for i in 1..=n {
+        s.push_str(&format!(
+            "  let s{i} = {{{a} = {i}, {b}{} = 1 extends s{}}}\n",
+            i % 7,
+            i - 1
+        ));
+    }
+    s.push_str(&format!("  s{n}.{a}\n}}\n"));
+    s
+}
+
+/// `cancel` 節の中で何をするか(`shape_oom_src`)。
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum InCancel {
+    /// `cancel` を書くだけ。
+    Light,
+    /// 別のラベルの鎖を作り、もう一度形の表を広げようとする。
+    Again,
+    /// 2 MiB の文字列を書く(host の受け渡しの領域の 64 KiB より長い)。
+    Big,
+}
+
+/// 形の表の鎖を `cancel` 節を持つハンドラの中で呼ぶプログラム。
+/// その外側にも `cancel` 節を持つハンドラを置き、巻き戻しが続くことを見る。
+fn shape_oom_src(c: InCancel) -> String {
+    let mut s = String::from("effect Res = { use: () => Unit }\n");
+    s.push_str(&shape_chain_fn("f", "a", "b", 1000));
+    s.push_str(&shape_chain_fn("g", "c", "d", 1000));
+    s.push_str(
+        "let rec rep(s: String, n: Int32): String = if n == 0 then s else rep(s + s, n - 1)\n",
+    );
+    let inner = match c {
+        InCancel::Light => "echoln(\"cancel\")",
+        InCancel::Again => "{ echoln(\"cancel\"); echoln(show(g())) }",
+        InCancel::Big => "{ echoln(\"cancel\"); echoln(rep(\"a\", 21)) }",
+    };
+    s.push_str(&format!(
+        "let main(): Int32 = run h {{ f() }} handle {{ case use() => resume(()) case cancel => {inner} }}\n"
+    ));
+    s.push_str(
+        "let outer(): Int32 = run h2 { main() } handle { case use() => resume(()) case cancel => echoln(\"outer\") }\n",
+    );
+    s.push_str("echoln(\"before\")\necholn(show(outer()))\n");
+    s
+}
+
+#[test]
+fn 線形メモリを広げられず形の表が満ちたらメモリの不足になる() {
+    if !have_node() {
+        return;
+    }
+    // 試験用の KELEUT_TEST_WASM_MEM_GROW で、線形メモリを起動の後に 1 MiB までしか広げさせない。
+    // host の受け渡しの領域の 64 KiB は起動のときに取るので上限に数えず、形の表を 2 倍に広げるところで尽きる。
+    // 直す前は、host の alloc が「線形メモリを広げられません」の内部エラー(70)で終わっていた。
+    // cancel 節の中でもう一度表が満ちたときは、cancel 節からの脱出として抑制の行を書き、巻き戻しを続ける。
+    // 形の表が線形メモリを使い切った後でも、cancel 節は受け渡しの領域を広げずに 2 MiB の文字列を書ける。
+    // 前は受け渡しの領域を広げられず、「線形メモリを広げられません」の内部エラー(70)で cancel 節の出力が失われていた。
+    let d = scratch("shape-oom");
+    for c in [InCancel::Light, InCancel::Again, InCancel::Big] {
+        let kel = d.join(format!("s{c:?}.kel"));
+        std::fs::write(&kel, shape_oom_src(c)).unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_keleut"))
+            .args(["run", "--backend", "wasm", kel.to_str().unwrap()])
+            .current_dir(&d)
+            .env("KELEUT_TEST_WASM_MEM_GROW", "1048576")
+            .env_remove("KELEUT_WASM_STATS")
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        let want_stderr = if c == InCancel::Again {
+            "cancel 節で例外が抑制されました: メモリ不足です\n実行時エラー: メモリ不足です\n"
+        } else {
+            "実行時エラー: メモリ不足です\n"
+        };
+        let mut want_stdout = b"before\ncancel\n".to_vec();
+        if c == InCancel::Big {
+            want_stdout.extend(std::iter::repeat_n(b'a', 1 << 21));
+            want_stdout.push(b'\n');
+        }
+        want_stdout.extend(b"outer\n");
+        assert!(
+            o.stdout == want_stdout
+                && String::from_utf8_lossy(&o.stderr) == want_stderr
+                && o.status.code() == Some(3),
+            "{c:?}: stdout {} バイト、stderr {:?}、{:?}",
+            o.stdout.len(),
+            String::from_utf8_lossy(&o.stderr),
+            o.status.code()
+        );
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}

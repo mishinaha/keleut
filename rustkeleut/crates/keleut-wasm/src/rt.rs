@@ -31,6 +31,8 @@
 //! 名前が `safe.` で始まる関数の中にだけ置く([`crate::check`] の検査器が確かめる)。
 //! これらの関数は、先に添字や長さを確かめてから命令を使う。
 //! 長さを取る確保は `N_alloc_max` と比べ、超えればメモリの不足の `ERROR` にする。
+//! 形の表を広げる `host.shapes_grow` が失敗したとき(ホストが線形メモリを広げられないとき)も、メモリの不足の `ERROR` にする。
+//! 文字列を host に渡す `Write` と `SOut` は、起動のときに host が取った `STAGE` バイトの領域に一切れずつ写すので、起動の後に host が線形メモリを取るのは形の表だけである。
 
 use keleut_lir::{FuncId, N_ALLOC_MAX};
 use wasm_encoder::{BlockType, Function, HeapType, MemArg, RefType, ValType};
@@ -141,6 +143,8 @@ const MEM32: MemArg = MemArg {
 const SHAPE_NONE: i32 = -1;
 /// `krt_shape_*` の「表が満ちた」。
 const SHAPE_FULL: i32 = -2;
+/// 文字列を host に渡す受け渡しの領域のバイト数(host の `STAGE` と同じ)。
+pub const STAGE: i32 = 65536;
 
 /// 関数の型と、trap しうる命令を許すか。
 pub fn sig(cg: &mut Cg, h: H) -> (Vec<ValType>, Vec<ValType>, bool) {
@@ -166,7 +170,7 @@ pub fn sig(cg: &mut Cg, h: H) -> (Vec<ValType>, Vec<ValType>, bool) {
         MArrayNew => (vec![I32, EQ], vec![rv(true, t.mutarr)], true),
         Freeze => (vec![arr], vec![rv(false, t.immarr)], true),
         Write => (vec![s], vec![I32], true),
-        SOut => (vec![EQ], vec![I32], true),
+        SOut => (vec![EQ, I32], vec![I32], true),
         RecGet | CtorField => (vec![EQ, I32], vec![EQ], false),
         RecField => (vec![EQ, I32, I32], vec![EQ], true),
         RecHas => (vec![EQ, I32, I32], vec![I32], true),
@@ -251,8 +255,11 @@ fn shape_fields(cg: &mut Cg, fb: &mut Fb, v: u32, shape: u32, fs: u32) {
 }
 
 /// `krt_shape_extend` か `krt_shape_restrict` を、表が満ちたら広げてやり直す形で呼び、結果を `ns` に置く。
+///
+/// 表を広げられなければ(ホストが線形メモリを広げられなければ)、`N_alloc_max` を超える確保と同じく
+/// メモリの不足の `ERROR` を立て、null を返す。
 fn shape_op(cg: &mut Cg, fb: &mut Fb, f: u32, shape: u32, label: u32, ns: u32) {
-    let tfull = cg.tpl.internal("形の表を広げられません");
+    let oom = cg.func(FKey::H(H::RaiseOom));
     fb.i()
         .block(BlockType::Empty)
         .loop_(BlockType::Empty)
@@ -268,9 +275,9 @@ fn shape_op(cg: &mut Cg, fb: &mut Fb, f: u32, shape: u32, label: u32, ns: u32) {
         .call(imp::SHAPES_GROW)
         .i32_eqz()
         .br_if(0)
-        .i32_const(tfull as i32)
-        .call(imp::FATAL)
-        .unreachable()
+        .call(oom)
+        .ref_null(HEQ)
+        .return_()
         .end()
         .end();
 }
@@ -714,11 +721,17 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .ref_as_non_null();
         }
         Write | SOut => {
+            // 文字列は受け渡しの領域(`STAGE` バイト、起動のときに host が取る)に一切れずつ写す。
+            // 領域を広げないので、形の表が線形メモリを使い切った後でも書き出せる。
+            // `Write` は一切れごとに `host.write` を呼び、最後の一切れ(`more` が 0)で host がまとめて書き出す。
+            // `SOut` は第 2 引数の位置から 1 切れだけ写し、host が位置を進めて呼び直す。
             let s = fb.local(rv(true, t.str_));
             let n = fb.local(I32);
             let ptr = fb.local(I32);
             let i = fb.local(I32);
             let rr = fb.local(I32);
+            let off = fb.local(I32);
+            let c = fb.local(I32);
             let mut ins = fb.i();
             ins.local_get(0);
             if h == SOut {
@@ -727,16 +740,46 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
             ins.local_set(s)
                 .local_get(s)
                 .array_len()
-                .local_tee(n)
+                .local_set(n)
+                .i32_const(STAGE)
                 .call(imp::BUF)
                 .local_set(ptr);
-            for_range(&mut fb, i, n, |fb| {
+            if h == SOut {
+                // 長さを超える位置は長さに切り詰める(写す切れは空になる)。
+                fb.i()
+                    .local_get(1)
+                    .local_set(off)
+                    .local_get(off)
+                    .local_get(n)
+                    .i32_gt_u()
+                    .if_(BlockType::Empty)
+                    .local_get(n)
+                    .local_set(off)
+                    .end();
+            } else {
+                fb.i().i32_const(0).local_set(off).loop_(BlockType::Empty);
+            }
+            // c = min(n - off, STAGE)
+            fb.i()
+                .local_get(n)
+                .local_get(off)
+                .i32_sub()
+                .local_tee(c)
+                .i32_const(STAGE)
+                .local_get(c)
+                .i32_const(STAGE)
+                .i32_lt_u()
+                .select()
+                .local_set(c);
+            for_range(&mut fb, i, c, |fb| {
                 fb.i()
                     .local_get(ptr)
                     .local_get(i)
                     .i32_add()
                     .local_get(s)
+                    .local_get(off)
                     .local_get(i)
+                    .i32_add()
                     .array_get_u(t.str_)
                     .i32_store8(MEM8);
             });
@@ -744,8 +787,15 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 fb.i().local_get(ptr);
             } else {
                 fb.i()
+                    .local_get(off)
+                    .local_get(c)
+                    .i32_add()
+                    .local_set(off)
                     .local_get(ptr)
+                    .local_get(c)
+                    .local_get(off)
                     .local_get(n)
+                    .i32_lt_u()
                     .call(imp::WRITE)
                     .local_tee(rr)
                     .if_(BlockType::Empty)
@@ -755,6 +805,11 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                     .global_set(g.p_kind)
                     .i32_const(1)
                     .return_()
+                    .end()
+                    .local_get(off)
+                    .local_get(n)
+                    .i32_lt_u()
+                    .br_if(0)
                     .end()
                     .i32_const(0);
             }
