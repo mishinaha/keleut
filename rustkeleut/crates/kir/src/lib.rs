@@ -19,6 +19,9 @@
 //! その場で拒否する。
 //! 入口はこれらのパスを、大きさ [`Limits::stack_bytes`] のスタックを持つ専用のスレッドで走らせる。
 //! そのため、呼び出し側のスレッドのスタックの大きさに依らず、限度の内側でスタックを使い尽くさない。
+//! 仮想メモリの上限(`ulimit -v`)があれば、スタックを初めから上限の 4 分の 1 までにし、スレッドを作れなければ半分ずつ小さくして作り直す。
+//! 最も小さいスタックでも作れなければ、処理系の限度(終了状態 65)にする。
+//! どちらも、深さの上限をそのスタックに収まる深さまで下げる([`Limits::fit_address_space`])。
 //!
 //! 式、辞書、パターンのノードは [`Nodes`] の配列に置く。
 //! 深いプログラムを捨てても写しても、再帰は起きない。
@@ -99,9 +102,127 @@ impl Default for Limits {
     }
 }
 
+/// 仮想メモリの軟らかい上限(`RLIMIT_AS`。バイト)を返す。上限が無ければ `None` である。
+pub fn address_space_limit() -> Option<usize> {
+    #[repr(C)]
+    struct RLimit {
+        cur: u64,
+        max: u64,
+    }
+    unsafe extern "C" {
+        fn getrlimit(resource: i32, rlim: *mut RLimit) -> i32;
+    }
+    /// Linux の `RLIMIT_AS`。
+    const RLIMIT_AS: i32 = 9;
+    let mut r = RLimit { cur: 0, max: 0 };
+    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
+    if unsafe { getrlimit(RLIMIT_AS, &mut r) } != 0 || r.cur == u64::MAX {
+        return None;
+    }
+    usize::try_from(r.cur).ok()
+}
+
+/// 仮想メモリの上限の下で、KIR の処理のスレッドを作り直すときのスタックの下限(16 MiB)。
+pub const MIN_THREAD_STACK: usize = 16 << 20;
+
+/// 最も小さいスタックでも KIR の処理のスレッドを作れないときの診断の始まり(終了状態 65)。
+pub const SPAWN_LIMIT_MESSAGE: &str = "処理系の限度: KIR の処理のスレッドを作れません";
+
+impl Limits {
+    /// 仮想メモリの上限(`RLIMIT_AS`)に合わせた限度。
+    ///
+    /// 上限があり、スタックが上限の 4 分の 1 より大きければ、スタックを上限の 4 分の 1(下限は [`MIN_THREAD_STACK`])にし、
+    /// 深さの上限をそのスタックに収まる深さまで下げる([`Limits::with_stack`])。
+    /// 上限が無いか、スタックがすでに小さければ、そのまま返す。
+    pub fn fit_address_space(self) -> Limits {
+        match address_space_limit() {
+            Some(a) => {
+                let cap = (a / 4).max(MIN_THREAD_STACK);
+                if self.stack_bytes > cap {
+                    Limits::with_stack(self.max_nest, cap)
+                } else {
+                    self
+                }
+            }
+            None => self,
+        }
+    }
+}
+
+/// `f` を、限度 `lim` のスタックを持つ専用のスレッドで走らせる。`f` は深さの上限を受け取る。
+///
+/// 仮想メモリの上限があれば、初めに [`Limits::fit_address_space`] で限度を合わせる。
+/// 上限の下でスレッドを作れなければ、スタックを半分ずつ小さくし、深さの上限をそれに収まる深さまで下げて作り直す。
+/// 最後は [`MIN_THREAD_STACK`] で作り直し、それでも作れなければ、処理系の限度として [`ErrorKind::Limit`](終了状態 65)を返す。
+/// 初めのスタックがすでに [`MIN_THREAD_STACK`] 以下なら、作り直さない。
+/// 上限が無いときにスレッドを作れなければ、作り直さずに [`ErrorKind::Internal`] を返す。
+/// `f` が落ちたとき(この crate の不具合)は [`ErrorKind::Internal`] を返す。
+fn on_limits<T: Send>(
+    lim: &Limits,
+    f: impl FnOnce(usize) -> Result<T, Error> + Send,
+) -> Result<T, Error> {
+    on_limits_nest(lim, f).map(|(t, _)| t)
+}
+
+/// [`on_limits`] と同じく走らせ、結果と、`f` に渡した深さの上限を返す。
+fn on_limits_nest<T: Send>(
+    lim: &Limits,
+    f: impl FnOnce(usize) -> Result<T, Error> + Send,
+) -> Result<(T, usize), Error> {
+    let mut lim = lim.fit_address_space();
+    let job = std::sync::Mutex::new(Some(f));
+    loop {
+        let job = &job;
+        let n = lim.max_nest;
+        let r = std::thread::scope(|s| {
+            let h = std::thread::Builder::new()
+                .name("kir".to_string())
+                .stack_size(lim.stack_bytes)
+                .spawn_scoped(s, move || {
+                    let f = job.lock().ok().and_then(|mut g| g.take());
+                    f.map(|f| f(n))
+                });
+            match h {
+                Ok(h) => Ok(match h.join() {
+                    Ok(Some(r)) => r,
+                    _ => Err(Error::new(
+                        ErrorKind::Internal,
+                        "KIR の処理の中で内部の誤りが起きました",
+                    )),
+                }),
+                Err(e) => Err(e),
+            }
+        });
+        let limited = address_space_limit().is_some();
+        match r {
+            Ok(r) => return r.map(|t| (t, n)),
+            Err(e) if !limited => {
+                return Err(Error::new(
+                    ErrorKind::Internal,
+                    format!("KIR の処理のスレッドを作れません: {e}"),
+                ));
+            }
+            Err(_) if lim.stack_bytes > MIN_THREAD_STACK => {
+                let next = (lim.stack_bytes / 2).max(MIN_THREAD_STACK);
+                lim = Limits::with_stack(lim.max_nest, next);
+            }
+            Err(e) => {
+                return Err(Error::new(
+                    ErrorKind::Limit,
+                    format!(
+                        "{SPAWN_LIMIT_MESSAGE}({} バイトのスタック): {e}",
+                        lim.stack_bytes
+                    ),
+                ));
+            }
+        }
+    }
+}
+
 /// `f` を大きさ `stack_bytes` のスタックを持つ専用のスレッドで走らせる。
 ///
 /// スレッドを作れないときと、`f` が落ちたとき(この crate の不具合)は [`ErrorKind::Internal`] を返す。
+/// 仮想メモリの上限に合わせず、作り直しもしない(読み込みと検証と書き出しの入口は [`Limits`] に合わせて作り直す)。
 pub fn on_stack<T: Send>(
     stack_bytes: usize,
     f: impl FnOnce() -> Result<T, Error> + Send,
@@ -134,8 +255,7 @@ pub fn read_kir(bytes: &[u8]) -> Result<Program, Error> {
 
 /// 限度を与えてバイナリを読む。
 pub fn read_kir_with(bytes: &[u8], lim: &Limits) -> Result<Program, Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || binary::decode(bytes, n))
+    on_limits(lim, |n| binary::decode(bytes, n))
 }
 
 /// テキスト(`.kirt`)を読む。
@@ -145,8 +265,7 @@ pub fn read_kirt(text: &[u8]) -> Result<Program, Error> {
 
 /// 限度を与えてテキストを読む。
 pub fn read_kirt_with(text: &[u8], lim: &Limits) -> Result<Program, Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || text::parse(text, n))
+    on_limits(lim, |n| text::parse(text, n))
 }
 
 /// 先頭の 4 バイトがマジック `00 4B 49 52` ならバイナリとして、ほかはテキストとして読む。
@@ -175,21 +294,21 @@ pub fn verify(p: &Program) -> Result<(), Error> {
 
 /// 限度を与えて検証する。
 pub fn verify_with(p: &Program, lim: &Limits) -> Result<(), Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || verify::check(p, n))
+    on_limits(lim, |n| verify::check(p, n))
 }
 
 /// 単位を後ろに足していくプログラムの、足した項目を限度を与えて検証する([`verify::Extension`])。
 ///
 /// `keleut repl` が、受理した入力ごとに足した単位を確かめるのに使う。
 /// 誤りのときは `ext` を変えない。
+/// 確かめたときは、検証に使った深さの上限を返す。
+/// 仮想メモリの上限の下ではスレッドを作り直して `lim` より下げていることがあり、下ろしはこの深さに見合うスタックで行う。
 pub fn verify_extension(
     ext: &mut verify::Extension,
     p: &Program,
     lim: &Limits,
-) -> Result<(), Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || ext.check(p, n))
+) -> Result<usize, Error> {
+    on_limits_nest(lim, |n| ext.check(p, n)).map(|((), n)| n)
 }
 
 /// 正準のバイナリを書く。
@@ -199,8 +318,7 @@ pub fn write_kir(p: &Program) -> Result<Vec<u8>, Error> {
 
 /// 限度を与えて正準のバイナリを書く。
 pub fn write_kir_with(p: &Program, lim: &Limits) -> Result<Vec<u8>, Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || binary::encode(p, n))
+    on_limits(lim, |n| binary::encode(p, n))
 }
 
 /// 正準のテキストを書く。
@@ -210,8 +328,7 @@ pub fn write_kirt(p: &Program) -> Result<Vec<u8>, Error> {
 
 /// 限度を与えて正準のテキストを書く。
 pub fn write_kirt_with(p: &Program, lim: &Limits) -> Result<Vec<u8>, Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || text::print(p, n))
+    on_limits(lim, |n| text::print(p, n))
 }
 
 /// 限度を与えて、正準のテキストを `w` に書く。
@@ -222,8 +339,7 @@ pub fn write_kirt_to(
     lim: &Limits,
     w: &mut (dyn std::io::Write + Send),
 ) -> Result<(), Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || text::print_to(p, n, w))
+    on_limits(lim, |n| text::print_to(p, n, w))
 }
 
 /// 読んで検証する。KIR を実行する処理系の読み込みの入口である(失敗は終了状態 65)。
@@ -233,8 +349,7 @@ pub fn load(bytes: &[u8]) -> Result<Program, Error> {
 
 /// 限度を与えて [`load`] を行う。読み込みと検証を 1 つのスレッドで行う。
 pub fn load_with(bytes: &[u8], lim: &Limits) -> Result<Program, Error> {
-    let n = lim.max_nest;
-    on_stack(lim.stack_bytes, || {
+    on_limits(lim, |n| {
         let p = if is_binary(bytes) {
             binary::decode(bytes, n)?
         } else {

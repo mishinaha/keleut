@@ -328,9 +328,11 @@ fn run_with(
                     prog, entry2, passes, init_tx, req_rx, rep_tx, fail2, stop2, busy2,
                 )
             });
-        if let Err(e) = spawned {
-            eprintln!("keleut: 内部エラー: JIT のスレッドを作れません: {e}");
-            return 70;
+        if spawned.is_err() {
+            // 翻訳のスレッドを作れない(仮想メモリの上限の下など)。翻訳の失敗をプログラムの失敗にせず、
+            // 翻訳せずにインタプリタで走る(翻訳の役割の印が立ったときと同じ)。
+            let mut setup = |_: &mut Interp<'_>| Ok(());
+            return go(prog, &opts.base, &mut setup);
         }
         // `threshold=N` では、LLJIT の作成とスタブの翻訳(数ミリ秒)を待たずにインタプリタで走り始める。
         // 頼んだ関数の翻訳が済んで入口の表の項目が 0 でなくなったときに、起動の結果を受け取る。

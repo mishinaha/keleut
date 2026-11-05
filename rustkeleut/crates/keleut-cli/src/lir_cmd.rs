@@ -94,7 +94,8 @@ fn run(o: &Options) -> u8 {
             return exit::USAGE;
         }
     };
-    let limits = kir::Limits::for_nest(o.max_nest);
+    // 仮想メモリの上限があれば、スタックを上限の 4 分の 1 までにし、入れ子の限度を下げる(下ろしも同じ限度にする)。
+    let limits = kir::Limits::for_nest(o.max_nest).fit_address_space();
     let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
     let read = match o.input.extension().and_then(|e| e.to_str()) {
         Some("kir") => kir::read_kir_with,
@@ -108,25 +109,26 @@ fn run(o: &Options) -> u8 {
             return e.exit_code() as u8;
         }
     };
-    keleut_rt::alloc::conv_checkpoint();
-    if let Err(e) = kir::verify_with(&prog, &limits) {
-        eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
-        return e.exit_code() as u8;
-    }
-    keleut_rt::alloc::conv_checkpoint();
-    let lowered = if o.unassigned {
-        keleut_lir::lower_unassigned(&prog, o.max_nest)
-    } else {
-        keleut_lir::lower_with(&prog, o.max_nest)
-    };
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirRead);
+    // 下ろしのスレッドを作れなければ、`keleut run` と同じく限度を下げて検証からやり直す。
+    let lowered = crate::run_cmd::verify_then_lower(&prog, &limits, |n| {
+        if o.unassigned {
+            keleut_lir::lower_unassigned(&prog, n)
+        } else {
+            keleut_lir::lower_with(&prog, n)
+        }
+    });
     let lp = match lowered {
         Ok(p) => p,
-        Err(e) => {
+        Err(crate::run_cmd::VerifyLowerError::Verify(e)) => {
+            eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
+            return e.exit_code() as u8;
+        }
+        Err(crate::run_cmd::VerifyLowerError::Lower(e)) => {
             eprintln!("keleut: {e}");
             return e.exit_code() as u8;
         }
     };
-    keleut_rt::alloc::conv_checkpoint();
     drop(_site);
     if o.check {
         return 0;

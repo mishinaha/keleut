@@ -319,9 +319,12 @@ impl<'p> Interp<'p> {
 
     /// ネイティブのスタックが下限に近ければ、`f` を新しいスタックのスレッドで走らせる。そうでなければここで走らせる。
     ///
+    /// 仮想メモリの上限の下で新しいスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は [`HOP_STACK_MIN`])。
+    /// 下限でも作れなければ、メモリの不足([`Stop::OutOfMemory`])を返す(`cancel` 節を走らせて 3 で終わる)。
+    /// 上限が無いのに作れなければ、内部の誤り(70)である。
     /// 新しいスレッドが走る間、元のスレッドは待つだけで、インタプリタに触れない。
     /// スタックの下限と、JIT が読む文脈の下限の欄は、移る間だけ新しいスタックのものにし、戻ったら元に戻す。
-    fn maybe_hop<R>(&mut self, f: impl FnOnce(&mut Self) -> Result<R, Stop>) -> Result<R, Stop> {
+    fn maybe_hop<R, F: FnOnce(&mut Self) -> Result<R, Stop>>(&mut self, f: F) -> Result<R, Stop> {
         let Some((size, margin)) = self.stack_hop else {
             return f(self);
         };
@@ -342,36 +345,60 @@ impl<'p> Interp<'p> {
             .native
             .as_ref()
             .map(|n| (n.ctx.stack_low, n.ctx.stack_soft, n.sp0, n.min_sp));
-        let job = Pass((self as *mut Self, f));
-        let r = std::thread::scope(|s| {
-            let h = std::thread::Builder::new()
-                .name("keleut-mutator".to_string())
-                .stack_size(size)
-                .spawn_scoped(s, move || {
-                    keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
-                    let (me, f) = job.take();
-                    // SAFETY: 元のスレッドは join で待っており、この間 self に触れない。
-                    let it = unsafe { &mut *me };
-                    let sp0 = approx_sp();
-                    it.stack_low = sp0.saturating_sub(size).saturating_add(margin);
-                    if let Some(n) = it.native.as_mut() {
-                        // 実行の統計(`KELEUT_JIT_STATS`)のスタックの番地は、移った先では新しいスタックで測り、
-                        // 戻るときに元の値に戻す(移った先の使用量は数えない)。
-                        n.sp0 = sp0;
-                        n.min_sp = usize::MAX;
+        // 新しいスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は HOP_STACK_MIN)。
+        // 作れなかった試みでは閉包が走らないので、仕事は外に置き、走ったスレッドが取り出す。
+        let mut job = Some((self as *mut Self, f));
+        let mut size = size;
+        let r = loop {
+            let slot = Pass(&mut job as *mut Option<(*mut Self, F)>);
+            let r = std::thread::scope(|s| {
+                let h = std::thread::Builder::new()
+                    .name("keleut-mutator".to_string())
+                    .stack_size(size)
+                    .spawn_scoped(s, move || {
+                        keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
+                        // SAFETY: 元のスレッドは join で待っており、この間 job と self に触れない。
+                        let (me, f) =
+                            unsafe { (*slot.take()).take() }.expect("仕事は 1 回だけ取り出す");
+                        // SAFETY: 同じ。
+                        let it = unsafe { &mut *me };
+                        let sp0 = approx_sp();
+                        it.stack_low = sp0.saturating_sub(size).saturating_add(margin);
+                        if let Some(n) = it.native.as_mut() {
+                            // 実行の統計(`KELEUT_JIT_STATS`)のスタックの番地は、移った先では新しいスタックで測り、
+                            // 戻るときに元の値に戻す(移った先の使用量は数えない)。
+                            n.sp0 = sp0;
+                            n.min_sp = usize::MAX;
+                        }
+                        Pass(f(it))
+                    });
+                match h {
+                    Ok(h) => match h.join() {
+                        Ok(r) => Some(r.take()),
+                        Err(p) => std::panic::resume_unwind(p),
+                    },
+                    Err(e) => {
+                        if keleut_rt::alloc::address_space_limit().is_none() {
+                            // 上限が無いのに作れないのは、処理系の内部の誤りである。
+                            Some(Err(Stop::Internal(format!(
+                                "新しいスタックのスレッドを作れません({size} バイトのスタック): {e}"
+                            ))))
+                        } else {
+                            None
+                        }
                     }
-                    Pass(f(it))
-                });
-            match h {
-                Ok(h) => match h.join() {
-                    Ok(r) => r.take(),
-                    Err(p) => std::panic::resume_unwind(p),
-                },
-                Err(e) => Err(Stop::Internal(format!(
-                    "新しいスタックのスレッドを作れません({size} バイトのスタック): {e}"
-                ))),
+                }
+            });
+            if let Some(r) = r {
+                break r;
             }
-        });
+            if size <= HOP_STACK_MIN {
+                // 最も小さいスタックでも作れない。ネイティブのスタックの領域が尽きたので、メモリの不足にする
+                // (`cancel` 節を走らせて 3 で終わる)。
+                break Err(Stop::OutOfMemory);
+            }
+            size = (size / 2).max(HOP_STACK_MIN);
+        };
         self.stack_low = saved_low;
         if let (Some(n), Some((low, soft, sp0, min_sp))) = (self.native.as_mut(), saved_ctx) {
             n.ctx.stack_low = low;

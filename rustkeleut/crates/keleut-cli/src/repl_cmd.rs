@@ -431,6 +431,9 @@ struct Job {
     shown: Vec<Shown>,
     layouts: Layouts,
     mode: Mode,
+    /// 足した単位の検証に使った深さの上限(`kir::verify_extension` が返したもの)。
+    /// 下ろしのスタックは、この深さに見合う大きさにする。
+    max_nest: usize,
 }
 
 /// 実行のスレッドからの返事。
@@ -471,31 +474,50 @@ enum Ran {
 }
 
 impl Live {
-    /// 実行のスレッドを作る。作れなければ、診断を標準エラーに書いて 70 を返す(`keleut run` と同じ)。
+    /// 実行のスレッドを作る。
+    ///
+    /// `keleut run` と同じく、仮想メモリの上限があればスタックを初めから上限の 4 分の 1 までにし、
+    /// 作れなければ半分ずつ小さくして作り直す(`keleut_interp::exec_stack_sizes`)。
+    /// 最も小さいスタックでも作れなければ、`実行時エラー: メモリ不足です` を書いて 3 を返す
+    /// (プレリュードの初期化を始めるときの実行時エラーと同じ)。
+    /// 上限が無いのに作れなければ、内部の誤りとして 70 を返す。
     fn spawn(o: &Options) -> Result<Live, u8> {
-        let native = keleut_rt::native_stack_for(o.max_depth);
-        let size = usize::try_from(native).unwrap_or(usize::MAX);
-        let (jtx, jrx) = mpsc::channel::<Job>();
-        let (rtx, rrx) = mpsc::channel::<Reply>();
-        let oc = o.clone();
-        let h = std::thread::Builder::new()
-            .name("keleut-mutator".to_string())
-            .stack_size(size)
-            .spawn(move || mutator(&oc, native, jrx, rtx));
-        match h {
-            Ok(t) => Ok(Live {
-                jobs: Some(jtx),
-                replies: rrx,
-                thread: Some(t),
-                verified: kir::verify::Extension::new(),
-            }),
-            Err(e) => {
-                eprintln!(
-                    "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
-                );
-                Err(70)
+        let mut last = None;
+        for native in
+            keleut_interp::exec_stack_sizes(keleut_rt::native_stack_for(o.max_depth), true)
+        {
+            let size = usize::try_from(native).unwrap_or(usize::MAX);
+            let (jtx, jrx) = mpsc::channel::<Job>();
+            let (rtx, rrx) = mpsc::channel::<Reply>();
+            let oc = o.clone();
+            let h = std::thread::Builder::new()
+                .name("keleut-mutator".to_string())
+                .stack_size(size)
+                .spawn(move || mutator(&oc, native, jrx, rtx));
+            match h {
+                Ok(t) => {
+                    return Ok(Live {
+                        jobs: Some(jtx),
+                        replies: rrx,
+                        thread: Some(t),
+                        verified: kir::verify::Extension::new(),
+                    });
+                }
+                Err(e) => last = Some((size, e)),
             }
         }
+        if let Some((size, e)) = last
+            && keleut_rt::alloc::address_space_limit().is_none()
+        {
+            // 上限が無いのに作れないのは、処理系の内部の誤りである(`keleut run` と同じ)。
+            eprintln!(
+                "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
+            );
+            return Err(70);
+        }
+        let stop = keleut_rt::Stop::OutOfMemory;
+        keleut_rt::out::Out::default().eprint(&stop.message());
+        Err(stop.exit_code())
     }
 
     /// プログラムに足した単位を検証し、実行のスレッドで実行する。
@@ -513,8 +535,9 @@ impl Live {
     ) -> (Box<kir::Program>, Ran) {
         let limits = kir::Limits::default();
         let before = self.verified.done();
-        if let Err(e) = kir::verify_extension(&mut self.verified, &program, &limits) {
-            if e.kind() == kir::ErrorKind::Limit {
+        let max_nest = match kir::verify_extension(&mut self.verified, &program, &limits) {
+            Ok(n) => n,
+            Err(e) if e.kind() == kir::ErrorKind::Limit => {
                 // 書き手の診断を優先する(`keleut run` の `program_for_run` と同じ文面にする)。
                 let msg = match kir::write_kir_with(&program, &limits) {
                     Err(w) if w.kind() == kir::ErrorKind::WriteLimit => w.message().to_string(),
@@ -522,12 +545,14 @@ impl Live {
                 };
                 return (program, Ran::Limit(format!("<stdin>: {msg}")));
             }
-            eprintln!(
-                "keleut: 内部エラー: KIR の検証に失敗しました: {}",
-                e.message()
-            );
-            return (program, Ran::Ran(Exec::Exit(70)));
-        }
+            Err(e) => {
+                eprintln!(
+                    "keleut: 内部エラー: KIR の検証に失敗しました: {}",
+                    e.message()
+                );
+                return (program, Ran::Ran(Exec::Exit(70)));
+            }
+        };
         let Some(jobs) = &self.jobs else {
             return (program, Ran::Ran(Exec::Exit(70)));
         };
@@ -536,6 +561,7 @@ impl Live {
             shown,
             layouts,
             mode,
+            max_nest,
         };
         if let Err(mpsc::SendError(job)) = jobs.send(job) {
             eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
@@ -631,10 +657,18 @@ fn run_job(
         }
     }
     let init0 = lp.init.len();
-    if let Err(e) = ext.extend(&job.program, lp, kir::N_NEST, o.yield_prune) {
+    // 下ろしのスタックは、検証が使った深さの上限に見合う大きさにする(`Job::max_nest`)。
+    // 仮想メモリの上限の下でそのスレッドを作れなければ(`keleut_lir::ErrorKind::Limit`)、
+    // 検証を済ませた状態を戻せないので、処理系の限度の行を書いてセッションを 1 で終える。
+    // 下ろしの再帰は単位の深さだけ進むので、検証の深さより小さいスタックで作り直すことはしない。
+    if let Err(e) = ext.extend(&job.program, lp, job.max_nest, o.yield_prune) {
         eprintln!("keleut: {e}");
         *parked = None;
-        return Exec::Exit(70);
+        return Exec::Exit(if e.kind() == keleut_lir::ErrorKind::Limit {
+            1
+        } else {
+            70
+        });
     }
     let lp: &keleut_lir::Program = lp;
     // 前の入力の後や、この単位を下ろす途中で、ほかの確保が大域の確保器の予備を使っていれば、実行の役割の印が立っている。
@@ -773,6 +807,12 @@ fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<Live, 
         Ran::Ran(Exec::Io) => Err(exit::IO),
         Ran::Ran(Exec::Exit(c)) => Err(c),
         Ran::Ran(Exec::Failed) => Err(70),
+        // 仮想メモリの上限の下で KIR の処理のスレッドを作れないのは処理系の限度で、1 で終える
+        // (入力の下ろしのスレッドを作れないとき([`run_job`])と同じ)。
+        Ran::Limit(msg) if msg.contains(kir::SPAWN_LIMIT_MESSAGE) => {
+            eprintln!("keleut: プレリュードを初期化できません: {msg}");
+            Err(1)
+        }
         Ran::Limit(msg) => {
             eprintln!("keleut: 内部エラー: プレリュードを初期化できません: {msg}");
             Err(70)

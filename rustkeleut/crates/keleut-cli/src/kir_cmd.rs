@@ -259,13 +259,13 @@ fn run(o: &Options) -> u8 {
         Ok(p) => p,
         Err(e) => return report("KIR を読み込めません", &e),
     };
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirRead);
     if o.verify
         && let Err(e) = kir::verify_with(&prog, &o.limits)
     {
         return report("KIR の検証に失敗しました", &e);
     }
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirVerify);
     match o.tool {
         Tool::Verify => 0,
         Tool::Dis => dis_out(o, &prog),

@@ -52,11 +52,16 @@ pub enum ErrorKind {
     Lower,
     /// 下ろした LIR が検証に通らない(下ろしの不具合)。
     Verify,
-    /// 処理のスレッドを作れないか、処理の途中で落ちた。
+    /// 仮想メモリの上限が無いのに処理のスレッドを作れないか、処理の途中で落ちた。
     Internal,
+    /// 仮想メモリの上限の下で、処理のスレッドを作れない(処理系の限度。終了状態 65)。
+    Limit,
 }
 
-/// この crate の誤り。どれも処理系の内部の誤りで、終了状態は 70 である。
+/// この crate の誤り。
+///
+/// [`ErrorKind::Limit`] は処理系の限度で、終了状態は 65 である。
+/// ほかはどれも処理系の内部の誤りで、終了状態は 70 である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
     kind: ErrorKind,
@@ -81,9 +86,12 @@ impl Error {
         &self.message
     }
 
-    /// 終了状態(70)。
+    /// 終了状態([`ErrorKind::Limit`] は 65、ほかは 70)。
     pub fn exit_code(&self) -> i32 {
-        70
+        match self.kind {
+            ErrorKind::Limit => 65,
+            _ => 70,
+        }
     }
 }
 
@@ -93,6 +101,7 @@ impl fmt::Display for Error {
             ErrorKind::Lower => "LIR への下ろしに失敗しました",
             ErrorKind::Verify => "LIR の検証に失敗しました",
             ErrorKind::Internal => "LIR の処理の中で内部の誤りが起きました",
+            ErrorKind::Limit => "処理系の限度",
         };
         write!(f, "{what}: {}", self.message)
     }
@@ -113,6 +122,12 @@ pub fn stack_for(max_nest: usize) -> usize {
 }
 
 /// `f` を大きさ `stack` のスタックを持つ専用のスレッドで走らせる。
+///
+/// 仮想メモリの上限の下でスレッドを作れなければ、処理系の限度([`ErrorKind::Limit`])を返す。
+/// 上限が無いのに作れなければ、内部の誤り([`ErrorKind::Internal`])である。
+/// スタックを小さくして作り直すことはしない。
+/// 下ろしの再帰には入れ子の限度に見合うスタックが要るからで、呼び手は仮想メモリの上限に合わせた限度
+/// (`kir::Limits::fit_address_space`)の深さを渡す。
 fn on_stack<T: Send>(
     stack: usize,
     f: impl FnOnce() -> Result<T, Error> + Send,
@@ -122,7 +137,18 @@ fn on_stack<T: Send>(
             .name("lir".to_string())
             .stack_size(stack)
             .spawn_scoped(s, f)
-            .map_err(|e| Error::new(ErrorKind::Internal, format!("スレッドを作れません: {e}")))?;
+            .map_err(|e| {
+                // 仮想メモリの上限の下で作れないのは処理系の限度で、上限が無いのに作れないのは内部の誤りである。
+                let kind = if kir::address_space_limit().is_some() {
+                    ErrorKind::Limit
+                } else {
+                    ErrorKind::Internal
+                };
+                Error::new(
+                    kind,
+                    format!("LIR への下ろしのスレッドを作れません({stack} バイトのスタック): {e}"),
+                )
+            })?;
         match h.join() {
             Ok(r) => r,
             Err(_) => Err(Error::new(ErrorKind::Internal, "下ろしが落ちました")),
@@ -206,7 +232,8 @@ impl Extender {
     /// (`kir::verify_extension`)。
     /// `lp` は前の呼び出しが作ったプログラムで、`lp.shapes` の後ろには、実行時がその後に作った形を
     /// 実行時の番号の順に足しておく(実行時の形の表と番号を揃えるため。足した形の番号は、その後ろから振る)。
-    /// 誤りはどれも処理系の内部の誤りで、誤りの後の `self` と `lp` は使えない。
+    /// 誤りは、仮想メモリの上限の下で下ろしのスレッドを作れない処理系の限度([`ErrorKind::Limit`])と、処理系の内部の誤りである。
+    /// どちらの誤りの後も、`self` と `lp` は使えない。
     pub fn extend(
         &mut self,
         k: &kir::Program,

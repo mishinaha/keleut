@@ -22,7 +22,7 @@
 //! | 役割 | 印を見る場所 |
 //! | --- | --- |
 //! | 実行 | `Rt` のヒープの確保の入口とその中の回収の後、値スタックの塊を取る道(`Stop::OutOfMemory` にする) |
-//! | 変換 | 型検査の後、KIR の書き出しの後、KIR の読み込みと検証と下ろしの後([`conv_checkpoint`]) |
+//! | 変換 | 型検査の後、KIR の書き出しの後、KIR の読み込みと検証と下ろしの後([`conv_checkpoint`]。段の名前を付けた限度の行を書いて、変換の役割の終え方と同じ終了状態で終える) |
 //! | 翻訳 | 関数の翻訳の後(その翻訳を捨て、以後の翻訳をやめ、予備を取り直す) |
 //! | そのほか | 見ない |
 //!
@@ -66,9 +66,42 @@ pub const RESERVE_BYTES: usize = 8 << 20;
 /// 変換の役割で予備を使い切ったときに標準エラーに書く行。
 ///
 /// 確保をせずに書ける固定の文である。
-/// 文面は仮のもので、M110 で決める。
-pub const LIMIT_LINE: &str =
-    "keleut: 型検査か実行の前の変換に要する領域が処理系の限度を超えました\n";
+/// どの段の確保が尽きたかを包みは知らないので、段の名前の代わりに「型検査か実行の前の変換」と書く。
+pub const LIMIT_LINE: &str = "keleut: 処理系の限度: 型検査か実行の前の変換でメモリが足りません\n";
+
+/// 変換の役割の印を段ごとに見たときの行の、段の名前の前の部分([`conv_checkpoint`])。
+pub const STAGE_LIMIT_PREFIX: &str = "keleut: 処理系の限度: ";
+
+/// 変換の役割の印を段ごとに見たときの行の、段の名前の後の部分([`conv_checkpoint`])。
+pub const STAGE_LIMIT_SUFFIX: &str = "でメモリが足りません\n";
+
+/// 変換の役割の印を見る段。行には段の名前([`Stage::name`])を書く。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage {
+    /// 構文解析と型検査(フロントエンドのスレッド)。
+    Check,
+    /// KIR の書き出し。
+    KirWrite,
+    /// KIR の読み込み。
+    KirRead,
+    /// KIR の検証。
+    KirVerify,
+    /// LIR への下ろし。
+    Lower,
+}
+
+impl Stage {
+    /// 行に書く段の名前。
+    pub fn name(self) -> &'static str {
+        match self {
+            Stage::Check => "型検査",
+            Stage::KirWrite => "KIR の書き出し",
+            Stage::KirRead => "KIR の読み込み",
+            Stage::KirVerify => "KIR の検証",
+            Stage::Lower => "LIR への下ろし",
+        }
+    }
+}
 
 /// スレッドの役割。
 #[repr(u8)]
@@ -353,8 +386,11 @@ pub fn has_reserve() -> bool {
 
 /// 起動の処理。今のスレッドをそのほかの役割にし、予備を取り、`KELEUT_TEST_ALLOC_FAIL` を読む。
 ///
+/// 仮想メモリの上限があれば、先に [`limit_arenas`] で glibc の確保の領域の数を抑える。
 /// 変数を読めなければ、誤りの文面を返す(呼び手が使い方の誤りにする)。
+/// ほかのスレッドを作る前に呼ぶ。
 pub fn init() -> Result<(), String> {
+    limit_arenas();
     set_role(Role::Other);
     reacquire();
     match std::env::var("KELEUT_TEST_ALLOC_FAIL") {
@@ -464,16 +500,75 @@ fn write_err(s: &str) {
 /// 確保をせず、終了の処理も走らせない。
 pub fn conv_exit() -> ! {
     write_err(LIMIT_LINE);
+    exit_conv()
+}
+
+/// 変換の役割の印を見る。立っていれば(入力の種類があれば)、限度の行を書いて変換の役割の終え方で終える。
+///
+/// 行は `keleut: 処理系の限度: 段でメモリが足りません` で、段は `stage` の名前である。
+/// 終了状態は、入力が `.kel` なら 1、`.kir` なら 65 である。
+/// 行は確保をせずに書く。
+pub fn conv_checkpoint(stage: Stage) {
+    if take_flag(Role::Conv) && input() != Input::None {
+        write_err(STAGE_LIMIT_PREFIX);
+        write_err(stage.name());
+        write_err(STAGE_LIMIT_SUFFIX);
+        exit_conv();
+    }
+}
+
+/// 入力が `.kel` なら 1、`.kir` なら 65 でプロセスを終える。確保をせず、終了の処理も走らせない。
+fn exit_conv() -> ! {
     let code = if input() == Input::Kir { 65 } else { 1 };
     // SAFETY: _exit は libc の関数で、どのスレッドから呼んでもよい。
     unsafe { _exit(code) }
 }
 
-/// 変換の役割の印を見る。立っていれば(入力の種類があれば)変換の役割の終え方で終える。
-pub fn conv_checkpoint() {
-    if take_flag(Role::Conv) && input() != Input::None {
-        conv_exit();
+/// 仮想メモリの上限の下で、glibc の確保の領域(arena)の数の上限。
+pub const ARENA_MAX_UNDER_LIMIT: i32 = 2;
+
+/// 仮想メモリの上限(`RLIMIT_AS`)があれば、glibc の確保の領域の数を [`ARENA_MAX_UNDER_LIMIT`] までにする。
+///
+/// glibc は、確保するスレッドごとに領域を作り、1 つの領域につき 64 MiB の仮想メモリを予約する(上限は既定でコアの数の 8 倍)。
+/// 構造的な `Eq` が移るスレッドや翻訳のスレッドが同時にいくつも生きると、この予約が上限の多くを占め、
+/// スタックとヒープに残る分が足りなくなる。
+/// 上限が無ければ何もしない。
+/// 確保の領域を作る前、ほかのスレッドを作る前に呼ぶ([`init`])。
+pub fn limit_arenas() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    {
+        unsafe extern "C" {
+            fn mallopt(param: i32, value: i32) -> i32;
+        }
+        /// glibc の `M_ARENA_MAX`。
+        const M_ARENA_MAX: i32 = -8;
+        if address_space_limit().is_some() {
+            // SAFETY: mallopt は glibc の関数で、ほかのスレッドがまだ無いときに呼ぶ。失敗しても振る舞いは変わらない。
+            unsafe {
+                mallopt(M_ARENA_MAX, ARENA_MAX_UNDER_LIMIT);
+            }
+        }
     }
+}
+
+/// 仮想メモリの軟らかい上限(`RLIMIT_AS`。バイト)を返す。上限が無ければ `None` である。
+pub fn address_space_limit() -> Option<usize> {
+    #[repr(C)]
+    struct RLimit {
+        cur: u64,
+        max: u64,
+    }
+    unsafe extern "C" {
+        fn getrlimit(resource: i32, rlim: *mut RLimit) -> i32;
+    }
+    /// Linux の `RLIMIT_AS`。
+    const RLIMIT_AS: i32 = 9;
+    let mut r = RLimit { cur: 0, max: 0 };
+    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
+    if unsafe { getrlimit(RLIMIT_AS, &mut r) } != 0 || r.cur == u64::MAX {
+        return None;
+    }
+    usize::try_from(r.cur).ok()
 }
 
 /// 今のスレッドの役割を書く。

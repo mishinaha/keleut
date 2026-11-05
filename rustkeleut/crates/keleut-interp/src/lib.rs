@@ -35,6 +35,10 @@ pub struct RunOptions {
     pub native_stack: u64,
     /// `--gc-stress` の規則で回収するか(`keleut_rt::gc::STRESS_RATIO`)。
     pub gc_stress: bool,
+    /// 仮想メモリの上限(`ulimit -v`)があれば、スタックを初めから上限の 4 分の 1 までにするか([`exec_stack_sizes`])。
+    ///
+    /// `--native-stack` を与えなかったとき(既定の大きさのとき)に真にする。
+    pub fit_stack: bool,
 }
 
 impl Default for RunOptions {
@@ -43,8 +47,54 @@ impl Default for RunOptions {
             max_depth: keleut_rt::DEFAULT_MAX_DEPTH,
             native_stack: keleut_rt::native_stack_for(keleut_rt::DEFAULT_MAX_DEPTH),
             gc_stress: false,
+            fit_stack: true,
         }
     }
+}
+
+/// 実行のスレッドを作り直すときのスタックの下限(16 MiB)。
+///
+/// 512 KiB から 1.1 GB までのどの大きさでも、深さ 100 万の末尾でない再帰と深さ 20 万の構造的な `Eq` は同じ結果になる。
+/// 実行の深さは値スタックに置き、ネイティブのスタックが足りなければ JIT の関数はインタプリタに移り、構造的な `Eq` は新しいスタックのスレッドに移るからである。
+/// 下限は、KIR の処理とフロントエンドのスレッドの下限と同じ値にした。
+pub const MIN_EXEC_STACK: u64 = 16 << 20;
+
+/// 構造的な `Eq` の入れ子が移る新しいスタックの大きさ(バイト)を、実行のスレッドのスタック `native_stack` から決める。
+///
+/// `native_stack` と [`interp::HOP_STACK_MIN`] の大きいほうにする。
+/// 仮想メモリの上限があれば、さらに上限の 16 分の 1(下限は [`interp::HOP_STACK_MIN`])までにする。
+/// 移った先のスレッドは、スタックを使い切るまで入れ子を進めてから次のスレッドに移るので、
+/// 予約したまま使わない領域は最後のスレッドの残りだけで、小さいほどその無駄が減るからである。
+pub fn hop_stack_size(native_stack: u64) -> usize {
+    let mut size = usize::try_from(native_stack)
+        .unwrap_or(usize::MAX)
+        .max(interp::HOP_STACK_MIN);
+    if let Some(a) = keleut_rt::alloc::address_space_limit() {
+        size = size.min((a / 16).max(interp::HOP_STACK_MIN));
+    }
+    size
+}
+
+/// 実行のスレッドのスタックの大きさの候補を、試す順に返す。
+///
+/// 仮想メモリの上限が無ければ、`native_stack` だけである。
+/// 上限があれば、初めは `native_stack` で、`fit` が真なら上限の 4 分の 1(下限は [`MIN_EXEC_STACK`])までにする。
+/// 続けて、半分ずつ小さくした大きさを並べ、最後は [`MIN_EXEC_STACK`] にする。
+/// 初めの大きさが [`MIN_EXEC_STACK`] 以下なら、それだけである。
+pub fn exec_stack_sizes(native_stack: u64, fit: bool) -> Vec<u64> {
+    let mut size = native_stack;
+    let Some(a) = keleut_rt::alloc::address_space_limit() else {
+        return vec![size];
+    };
+    if fit {
+        size = size.min((a as u64 / 4).max(MIN_EXEC_STACK));
+    }
+    let mut v = vec![size];
+    while size > MIN_EXEC_STACK {
+        size = (size / 2).max(MIN_EXEC_STACK);
+        v.push(size);
+    }
+    v
 }
 
 /// インタプリタを作った後、初期化を走らせる前に呼ぶ準備(ネイティブの後段を付ける)。
@@ -83,12 +133,7 @@ fn run_mutator(
         }
     };
     let mut it = Interp::new(rt, low);
-    it.set_stack_hop(
-        usize::try_from(opts.native_stack)
-            .unwrap_or(usize::MAX)
-            .max(interp::HOP_STACK_MIN),
-        margin,
-    );
+    it.set_stack_hop(hop_stack_size(opts.native_stack), margin);
     if let Some(setup) = setup
         && let Err(e) = setup(&mut it)
     {
@@ -142,6 +187,11 @@ fn run_init(prog: &Program, it: &mut Interp<'_>) -> u8 {
 /// LIR のプログラム(パス 12 を済ませたもの)を実行し、終了状態を返す。
 ///
 /// ミューテータは、ネイティブのスタックを `opts.native_stack` バイト予約した専用のスレッドで走らせる(計画 6.11 節)。
+/// 仮想メモリの上限があり `opts.fit_stack` が真なら、スタックを初めから上限の 4 分の 1 までにする。
+/// 上限の下でスレッドを作れなければ、スタックを半分ずつ小さくして作り直す([`exec_stack_sizes`])。
+/// スタックが小さくなっても、論理的な深さの限度は変わらない([`MIN_EXEC_STACK`])。
+/// 最も小さいスタックでも作れなければ、`実行時エラー: メモリ不足です` を書いて 3 を返す。
+/// 上限が無いのにスレッドを作れなければ、内部の誤り(70)である。
 /// 標準出力は終わる前に flush し、止まった理由の診断を標準エラーに書く。
 pub fn run_program(prog: &Program, opts: &RunOptions) -> u8 {
     run_program_inner(prog, opts, None)
@@ -175,26 +225,45 @@ pub fn run_program_here(
 }
 
 fn run_program_inner(prog: &Program, opts: &RunOptions, mut setup: Option<Setup<'_>>) -> u8 {
-    let size = usize::try_from(opts.native_stack).unwrap_or(usize::MAX);
-    std::thread::scope(|s| {
-        let h = std::thread::Builder::new()
-            .name("keleut-mutator".to_string())
-            .stack_size(size)
-            .spawn_scoped(s, || run_on_thread(prog, opts, setup.take()));
-        match h {
-            Ok(h) => match h.join() {
-                Ok(code) => code,
-                Err(_) => {
-                    eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
-                    70
-                }
-            },
-            Err(e) => {
-                eprintln!(
-                    "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
-                );
-                70
+    let mut last = None;
+    for native_stack in exec_stack_sizes(opts.native_stack, opts.fit_stack) {
+        let size = usize::try_from(native_stack).unwrap_or(usize::MAX);
+        let o = RunOptions {
+            native_stack,
+            ..opts.clone()
+        };
+        let setup = &mut setup;
+        let r = std::thread::scope(|s| {
+            let h = std::thread::Builder::new()
+                .name("keleut-mutator".to_string())
+                .stack_size(size)
+                .spawn_scoped(s, move || run_on_thread(prog, &o, setup.take()));
+            match h {
+                Ok(h) => Ok(match h.join() {
+                    Ok(code) => code,
+                    Err(_) => {
+                        eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+                        70
+                    }
+                }),
+                Err(e) => Err(e),
             }
+        });
+        match r {
+            Ok(code) => return code,
+            Err(e) => last = Some((size, e)),
         }
-    })
+    }
+    if let Some((size, e)) = last
+        && keleut_rt::alloc::address_space_limit().is_none()
+    {
+        // 上限が無いのに作れないのは、処理系の内部の誤りとする(`--max-depth` が大きすぎて予約できない場合など)。
+        eprintln!("keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}");
+        return 70;
+    }
+    // 仮想メモリの上限の下で、最も小さいスタックでも作れなかった。評価のための領域を用意できないので、
+    // 初期化を始めるときのメモリの不足にする(LangSpec §15.5 の表の 3 の行)。
+    let stop = Stop::OutOfMemory;
+    keleut_rt::out::Out::default().eprint(&stop.message());
+    stop.exit_code()
 }

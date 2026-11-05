@@ -136,7 +136,7 @@ fn run_check(o: &Options) -> u8 {
         out
     });
     // 型検査の間に確保が大域の確保器の予備を使ったら、型の行を書く前に限度の行で終える(`keleut_rt::alloc`)。
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Check);
     let out = match r {
         Ok(out) => out,
         Err(Stop::Input(m)) => {
@@ -220,7 +220,7 @@ pub fn main(args: &[String]) -> u8 {
         let _site = keleut_rt::alloc::site(keleut_rt::alloc::Site::Check);
         run_check(&o)
     });
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Check);
     match r {
         Ok(c) => c,
         Err(msg) => {

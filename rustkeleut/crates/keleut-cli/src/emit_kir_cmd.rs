@@ -153,6 +153,28 @@ fn write_limit(msg: &str) -> u8 {
     1
 }
 
+/// 書き出しの誤りが処理系の限度か(入れ子の限度か、最も小さいスタックでも KIR の処理のスレッドを作れない)。
+///
+/// どちらも、`.kel` の入力を実行の前に変換する段の限度なので、1 で終える(LangSpec §15.5)。
+fn is_write_limit(e: &kir::Error) -> bool {
+    matches!(e.kind(), kir::ErrorKind::WriteLimit | kir::ErrorKind::Limit)
+}
+
+/// フロントエンドのスレッドを作れなかったときの診断を書き、終了状態を返す。
+///
+/// 仮想メモリの上限の下でスレッドを作れないのは、型検査に要する領域が処理系の限度を超えた場合なので、
+/// 限度の行を書いて 1 で終える(LangSpec §15.5)。
+/// 上限が無いのに作れないときと、ほかの誤り(スレッドが落ちた)は内部の誤りで 70 である。
+fn front_failure(msg: &str) -> u8 {
+    if msg.starts_with(SPAWN_FAILED) && kir::address_space_limit().is_some() {
+        eprintln_now(&format!("keleut: 処理系の限度: {msg}"));
+        1
+    } else {
+        eprintln_now(&format!("keleut: {msg}"));
+        70
+    }
+}
+
 /// 型検査して KIR を作る。終わるときは終了状態を `Err` で返す。
 ///
 /// 型検査のスレッドの中で呼ぶ。
@@ -174,7 +196,7 @@ fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
         }
     };
     // 型検査の間に確保が大域の確保器の予備を使ったら、限度の行で終える(`keleut_rt::alloc`)。
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Check);
     let out = std::mem::take(&mut c.output);
     if let Some(p) = &out.panic {
         eprintln_now(p);
@@ -285,7 +307,7 @@ fn write_text(o: &Options, prog: &kir::Program) -> u8 {
         Err(e) if e.kind() == kir::ErrorKind::Output => {
             output_error(WHAT, strip_os_error(e.message()))
         }
-        Err(e) if e.kind() == kir::ErrorKind::WriteLimit => write_limit(e.message()),
+        Err(e) if is_write_limit(&e) => write_limit(e.message()),
         Err(e) => {
             eprintln_now(&format!("keleut: KIR を符号化できません: {}", e.message()));
             70
@@ -308,15 +330,12 @@ pub fn main(args: &[String]) -> u8 {
     let prog = match build_on_front_stack(&mut o.check, strict, limits, shrink) {
         Ok(Ok(p)) => p,
         Ok(Err(code)) => return code,
-        Err(msg) => {
-            eprintln_now(&format!("keleut: {msg}"));
-            return 70;
-        }
+        Err(msg) => return front_failure(&msg),
     };
     // テキストだけを書くときも、先にバイナリに符号化して深さを確かめる(Diktor と同じ順)。
     let bin = match encode(&prog) {
         Ok(b) => b,
-        Err(e) if e.kind() == kir::ErrorKind::WriteLimit => return write_limit(e.message()),
+        Err(e) if is_write_limit(&e) => return write_limit(e.message()),
         Err(e) => {
             eprintln_now(&format!("keleut: KIR を符号化できません: {}", e.message()));
             return 70;
@@ -350,7 +369,7 @@ fn build_on_front_stack(
     let max_nest = check.max_nest;
     let mut limits = limits;
     if shrink
-        && let Some(cap) = address_space_limit().map(|b| b / 4)
+        && let Some(cap) = kir::address_space_limit().map(|b| b / 4)
         && cap < limits.stack_bytes
         && let Ok(l) = check_limits(max_nest, Some(cap.max(MIN_RUN_FRONT_STACK)))
     {
@@ -362,16 +381,16 @@ fn build_on_front_stack(
     while shrink
         && let Err(msg) = &r
         && msg.starts_with(SPAWN_FAILED)
-        && stack / 2 >= MIN_RUN_FRONT_STACK
+        && stack > MIN_RUN_FRONT_STACK
     {
-        stack /= 2;
+        stack = (stack / 2).max(MIN_RUN_FRONT_STACK);
         let Ok(l) = check_limits(max_nest, Some(stack)) else {
             break;
         };
         check.max_nest = l.max_nest;
         r = on_check_stack(l, || front_thread(check, strict));
     }
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Check);
     r
 }
 
@@ -390,28 +409,8 @@ fn encode(prog: &kir::Program) -> Result<Vec<u8>, kir::Error> {
         let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
         kir::write_kir(prog)
     };
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirWrite);
     r
-}
-
-/// 仮想メモリの軟らかい上限(`RLIMIT_AS`。バイト)を返す。上限が無ければ `None` である。
-fn address_space_limit() -> Option<usize> {
-    #[repr(C)]
-    struct RLimit {
-        cur: u64,
-        max: u64,
-    }
-    unsafe extern "C" {
-        fn getrlimit(resource: i32, rlim: *mut RLimit) -> i32;
-    }
-    /// Linux の `RLIMIT_AS`。
-    const RLIMIT_AS: i32 = 9;
-    let mut r = RLimit { cur: 0, max: 0 };
-    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
-    if unsafe { getrlimit(RLIMIT_AS, &mut r) } != 0 || r.cur == u64::MAX {
-        return None;
-    }
-    usize::try_from(r.cur).ok()
 }
 
 /// フロントエンドのスレッドを作れなかったときの、[`on_check_stack`] の誤りの文面の始まりである。
@@ -495,14 +494,11 @@ pub(crate) fn program_for_run(
     let r = build_on_front_stack(&mut check, strict, limits, front_stack.is_none());
     let prog = match r {
         Ok(r) => r?,
-        Err(msg) => {
-            eprintln_now(&format!("keleut: {msg}"));
-            return Err(70);
-        }
+        Err(msg) => return Err(front_failure(&msg)),
     };
     match encode(&prog) {
         Ok(_) => Ok(prog),
-        Err(e) if e.kind() == kir::ErrorKind::WriteLimit => Err(write_limit(e.message())),
+        Err(e) if is_write_limit(&e) => Err(write_limit(e.message())),
         Err(e) => {
             eprintln_now(&format!("keleut: KIR を符号化できません: {}", e.message()));
             Err(70)

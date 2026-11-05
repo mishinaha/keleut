@@ -41,6 +41,9 @@
 //!
 //! 終了状態は、プログラムの結果(0、3、4、74)、KIR の読み込みと検証の失敗が 65、
 //! 下ろしと内部の誤りが 70、使い方の誤りと入力を読めないときが 64 である。
+//! ただし `.kel` の入力では、KIR の読み込み、検証、下ろしの処理系の限度(スタックに合わせて下げた入れ子の限度と、
+//! 処理のスレッドを作れないこと)と、変換の役割の確保の失敗(`keleut_rt::alloc`)は 1 である(LangSpec §15.5)。
+//! `.kir` の入力では、どちらも 65 である(IRSpec 13.9 節)。
 
 use crate::exit;
 use std::io::Write;
@@ -306,6 +309,7 @@ fn interp_options(o: &Options) -> keleut_interp::RunOptions {
             .native_stack
             .unwrap_or_else(|| keleut_rt::native_stack_for(o.max_depth)),
         gc_stress: o.gc_stress,
+        fit_stack: o.native_stack.is_none(),
     }
 }
 
@@ -379,12 +383,16 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
         let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
         read(&data, &limits)
     };
-    keleut_rt::alloc::conv_checkpoint();
+    keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirRead);
     let prog = match prog {
         Ok(p) => p,
         Err(e) => {
             eprintln!("keleut: KIR を読み込めません: {}", e.message());
-            return Err(e.exit_code() as u8);
+            return Err(kir_exit(
+                o,
+                e.exit_code(),
+                e.kind() == kir::ErrorKind::Limit,
+            ));
         }
     };
     drop(data);
@@ -397,6 +405,8 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
 /// スタックで読み込みと検証を走らせ、入れ子の限度をそのスタックに収まる深さまで下げる。
 /// 下ろしの入れ子の限度も同じ値にする(下ろしのスタックは、その限度から決まる)。
 /// 与えなければ、限度は `N_nest` で、スタックはそれに足りる大きさである。
+/// 仮想メモリの上限(`ulimit -v`)があれば、どちらもスタックを上限の 4 分の 1 までにし、収まる深さまで限度を下げる
+/// ([`kir::Limits::fit_address_space`])。
 fn kir_limits(o: &Options) -> kir::Limits {
     match o.native_stack {
         Some(s) => {
@@ -404,29 +414,104 @@ fn kir_limits(o: &Options) -> kir::Limits {
         }
         None => kir::Limits::default(),
     }
+    .fit_address_space()
+}
+
+/// KIR の読み込み、検証、下ろしの誤りの終了状態を返す。
+///
+/// 処理系の限度(下げた入れ子の限度と、処理のスレッドを作れないこと)は、`.kir` の入力では 65(IRSpec 13.9 節)、
+/// `.kel` の入力では、同じプロセスか Diktor が書いた KIR を実行の前に変換する段の限度なので 1(LangSpec §15.5)にする。
+/// ほかの誤りは `code` のままである。
+fn kir_exit(o: &Options, code: i32, limit: bool) -> u8 {
+    if limit && !o.kir_input(&o.files[0]) {
+        1
+    } else {
+        code as u8
+    }
 }
 
 /// KIR を検証して LIR に下ろす。失敗すれば、診断を標準エラーに書いて終了状態を返す。
 ///
 /// 検証と下ろしの後に、変換の役割の印を見る(`keleut_rt::alloc`)。
+/// 下ろしのスレッドを作れなければ、スタックを半分ずつ小さくし、収まる深さの限度で検証から作り直す
+/// ([`verify_then_lower`])。
 fn verify_and_lower(
     o: &Options,
     prog: &kir::Program,
     limits: &kir::Limits,
 ) -> Result<keleut_lir::Program, u8> {
     let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
-    let v = kir::verify_with(prog, limits);
-    keleut_rt::alloc::conv_checkpoint();
-    if let Err(e) = v {
-        eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
-        return Err(e.exit_code() as u8);
+    let r = verify_then_lower(prog, limits, |n| {
+        keleut_lir::lower_opts(prog, n, o.yield_prune)
+    });
+    match r {
+        Ok(lp) => Ok(lp),
+        Err(VerifyLowerError::Verify(e)) => {
+            eprintln!("keleut: KIR の検証に失敗しました: {}", e.message());
+            Err(kir_exit(
+                o,
+                e.exit_code(),
+                e.kind() == kir::ErrorKind::Limit,
+            ))
+        }
+        Err(VerifyLowerError::Lower(e)) => {
+            eprintln!("keleut: {e}");
+            Err(kir_exit(
+                o,
+                e.exit_code(),
+                e.kind() == keleut_lir::ErrorKind::Limit,
+            ))
+        }
     }
-    let lp = keleut_lir::lower_opts(prog, limits.max_nest, o.yield_prune);
-    keleut_rt::alloc::conv_checkpoint();
-    lp.map_err(|e| {
-        eprintln!("keleut: {e}");
-        e.exit_code() as u8
-    })
+}
+
+/// 仮想メモリの上限の下で、下ろしのスレッドを作り直すときのスタックの下限(1 MiB)。
+///
+/// 下ろしのスタックは、検証した深さの上限から [`keleut_lir::stack_for`] で決まり、固定の 16 MiB を含む。
+/// KIR の処理のスレッドの下限 [`kir::MIN_THREAD_STACK`] で止めると、下ろしのスタックは約 28 MiB(リリースの構築)より小さくならない。
+/// KIR の限度のスタックを 1 MiB まで下げれば、下ろしのスタックは約 17 MiB まで下がる。
+const MIN_LOWER_RETRY_STACK: usize = 1 << 20;
+
+/// [`verify_then_lower`] の誤り。
+pub(crate) enum VerifyLowerError {
+    /// KIR の検証の誤り(KIR の処理のスレッドを作れない処理系の限度を含む)。
+    Verify(kir::Error),
+    /// LIR への下ろしの誤り(下ろしのスレッドを作れない処理系の限度を含む)。
+    Lower(keleut_lir::Error),
+}
+
+/// KIR を限度 `limits` で検証し、検証した深さの上限を `lower` に渡して下ろす。
+///
+/// 仮想メモリの上限の下で下ろしのスレッドを作れなければ(`keleut_lir::ErrorKind::Limit`)、
+/// KIR の限度のスタックを半分にし(下限は [`MIN_LOWER_RETRY_STACK`])、その深さで検証し直してから下ろし直す。
+/// 下ろしには、検証が確かめた深さに見合うスタックが要るからである。
+/// 検証と下ろしの後に、変換の役割の印を見る(`keleut_rt::alloc::conv_checkpoint`)。
+pub(crate) fn verify_then_lower<T>(
+    prog: &kir::Program,
+    limits: &kir::Limits,
+    lower: impl Fn(usize) -> Result<T, keleut_lir::Error>,
+) -> Result<T, VerifyLowerError> {
+    let mut limits = *limits;
+    loop {
+        let v = kir::verify_with(prog, &limits);
+        keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirVerify);
+        if let Err(e) = v {
+            return Err(VerifyLowerError::Verify(e));
+        }
+        let lp = lower(limits.max_nest);
+        keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Lower);
+        match lp {
+            Err(e)
+                if e.kind() == keleut_lir::ErrorKind::Limit
+                    && limits.stack_bytes > MIN_LOWER_RETRY_STACK =>
+            {
+                let next = (limits.stack_bytes / 2).max(MIN_LOWER_RETRY_STACK);
+                limits = kir::Limits::with_stack(limits.max_nest, next);
+            }
+            Err(e) => return Err(VerifyLowerError::Lower(e)),
+            Ok(lp) => return Ok(lp),
+        }
+    }
 }
 
 /// `keleut dump bytecode` の使い方である。
