@@ -154,6 +154,15 @@ pub struct Interp<'p> {
     builtin_methods: HashMap<(u32, u32, u32), FuncId>,
     pub(crate) stack_low: usize,
     words: Vec<Word>,
+    /// エフェクトの呼び出しの一種と末尾で呼ぶ終わりの引数の列に使い回す領域([`Interp::fx_call`]、[`Interp::fx_term_call`])。
+    ///
+    /// 使う間は `std::mem::take` で取り出し、呼び出しの後で [`Interp::give_args`] で戻す。
+    /// 取り出している間に入れ子で使われても、空の列から作り直すだけで、引数の列は混ざらない。
+    fx_args: Vec<Word>,
+    /// `cont_resume` が置いたフレームの位置の列に使い回す領域。
+    placed: Vec<u64>,
+    /// 再開した継続から外した写しの領域(フレームの語の列と語の数の列)。`cont_make` が使い回す。
+    cont_bufs: Vec<(Vec<u64>, Vec<u32>)>,
     rt_handle: Option<FuncId>,
     /// ネイティブの後段(M91 の JIT)の入口の表と文脈。無ければインタプリタだけで走る([`crate::native`])。
     pub native: Option<Box<crate::native::Native>>,
@@ -175,6 +184,20 @@ pub struct Interp<'p> {
 /// JIT の関数を入口でインタプリタに移す下限([`crate::native::SOFT_MARGIN`])より上に置き、
 /// 項目の比べ方の 1 段(インタプリタで約 1.5 KiB)と、その中で JIT の関数が下限に届くまでに使う分を残す。
 pub const HOP_MARGIN: usize = 2 * crate::native::SOFT_MARGIN as usize;
+
+/// 再開した継続から外して使い回す写しの領域の組の数の上限([`Interp::keep_cont_bufs`])。
+const CONT_BUFS: usize = 4;
+
+/// 使い回す写しの領域の語の数の上限。これより大きな領域は使い回さずに返す。
+const CONT_BUF_WORDS: usize = 1 << 16;
+
+/// `cont_make` が使い回す領域を選ぶときの、フレームの語の列の大きさの上限の下限。
+///
+/// 上限は要る語の数の 2 倍とこの値の大きい方である。
+const CONT_FIT_WORDS: usize = 64;
+
+/// `cont_make` が使い回す領域を選ぶときの、語の数の列の大きさの上限の下限。
+const CONT_FIT_FRAMES: usize = 16;
 
 /// JIT のフレームのエフェクトの命令の結果([`Interp::native_fx`])。
 pub(crate) enum NativeFx {
@@ -255,6 +278,9 @@ impl<'p> Interp<'p> {
             builtin_methods,
             stack_low,
             words: Vec::new(),
+            fx_args: Vec::new(),
+            placed: Vec::new(),
+            cont_bufs: Vec::new(),
             rt_handle: prog.rt_handle,
             native: None,
             bottom: NATIVE_CALLER,
@@ -282,6 +308,9 @@ impl<'p> Interp<'p> {
             mut builtin_methods,
             stack_low,
             words,
+            fx_args,
+            placed,
+            cont_bufs,
             rt_handle: _,
             native,
             bottom,
@@ -300,6 +329,9 @@ impl<'p> Interp<'p> {
             builtin_methods,
             stack_low,
             words,
+            fx_args,
+            placed,
+            cont_bufs,
             rt_handle: prog.rt_handle,
             native,
             bottom,
@@ -795,17 +827,20 @@ impl<'p> Interp<'p> {
         let w = &st.code().words;
         let pc = e.call_pc as usize;
         let n = w[pc + 3] as usize - 2;
-        let xs: Vec<Word> = {
+        let mut xs = std::mem::take(&mut self.fx_args);
+        xs.clear();
+        {
             let _site = alloc::site(Site::CallArgs);
-            (0..n).map(|i| st.w(w[pc + 6 + i])).collect()
-        };
+            xs.extend((0..n).map(|i| st.w(w[pc + 6 + i])));
+        }
         // フレームは perform の再開点で止まっていて、引数はその被演算子として根にある。
         self.rt.gc.at_frame(st.fpos);
         let a = self.rt.array_new(Kind::Array, n, Word::UNIT)?;
-        for (i, x) in xs.into_iter().enumerate() {
+        for (i, x) in xs.iter().enumerate() {
             // SAFETY: a は n 個の要素を持つ配列の箱である。
             unsafe { keleut_rt::value::set(a, 1 + i, x.0) };
         }
+        self.give_args(xs);
         Ok(a)
     }
 
@@ -1197,10 +1232,24 @@ impl<'p> Interp<'p> {
         Ok(Stop::Runtime(m))
     }
 
-    /// 配列の箱の要素。
-    fn array_words(&self, a: Word) -> Vec<Word> {
+    /// 配列の箱の要素を、使い回す引数の領域([`Interp::fx_args`])に入れて返す。`extra` は後で足す語の数である。
+    fn array_words_buf(&mut self, a: Word, extra: usize) -> Vec<Word> {
+        let mut v = std::mem::take(&mut self.fx_args);
+        v.clear();
         let n = self.rt.array_len(a);
-        (0..n).map(|i| self.rt.array_get(a, i)).collect()
+        v.reserve(n as usize + extra);
+        v.extend((0..n).map(|i| self.rt.array_get(a, i)));
+        v
+    }
+
+    /// 使い終えた引数の列を、使い回す領域に戻す。
+    ///
+    /// 取り出している間に入れ子の呼び出しが別の領域を戻していたら、大きいほうを残す。
+    pub(crate) fn give_args(&mut self, mut v: Vec<Word>) {
+        if v.capacity() > self.fx_args.capacity() {
+            v.clear();
+            self.fx_args = v;
+        }
     }
 
     /// 継続の表の項目。
@@ -1226,10 +1275,15 @@ impl<'p> Interp<'p> {
                 FxCall::Done => Ok(None),
                 FxCall::Enter(func, env, args) => {
                     st.set_resume(rp);
-                    self.enter(st, func, env, Args::Words(args.as_ptr(), args.len()))
+                    let r = self.enter(st, func, env, Args::Words(args.as_ptr(), args.len()));
+                    self.give_args(args);
+                    r
                 }
                 FxCall::Value(f, args) => {
-                    self.call_value(st, rp, f, Args::Words(args.as_ptr(), args.len()), false)
+                    let r =
+                        self.call_value(st, rp, f, Args::Words(args.as_ptr(), args.len()), false);
+                    self.give_args(args);
+                    r
                 }
                 FxCall::Resume(k, v) => self.cont_resume(st, rp, k, v),
             };
@@ -1422,24 +1476,30 @@ impl<'p> Interp<'p> {
         match &code.fx[idx as usize] {
             FxOp::Perform { op, .. } => {
                 let hr = arg(0);
-                let user: Vec<Word> = (2..n).map(arg).collect();
+                let mut args = std::mem::take(&mut self.fx_args);
+                args.clear();
+                args.reserve(n);
+                args.extend((2..n).map(arg));
                 let p = self.rt.depth;
                 if p + 1 > self.rt.limit {
                     return Err(self.rt.depth_error());
                 }
                 let Some((j, clause)) = self.next_clause(hr, *op, 0)? else {
-                    return Err(self.no_clause(hr, *op, &user)?);
+                    return Err(self.no_clause(hr, *op, &args)?);
                 };
                 self.rt.chain = self.rt.hr(hr)?.parent;
                 self.rt.depth = p + 1;
-                let mut args = user;
                 args.push(hr);
                 args.push(Word::i32(j as i32));
                 Ok(FxCall::Enter(self.rt.closure_func(clause), clause, args))
             }
             FxOp::CallBody => {
                 let r = self.rt.hr(arg(0))?;
-                Ok(FxCall::Value(r.body, vec![r.res]))
+                let (body, res) = (r.body, r.res);
+                let mut args = std::mem::take(&mut self.fx_args);
+                args.clear();
+                args.push(res);
+                Ok(FxCall::Value(body, args))
             }
             FxOp::ContResume => Ok(FxCall::Resume(arg(0), arg(1))),
             FxOp::CallClause => {
@@ -1454,13 +1514,17 @@ impl<'p> Interp<'p> {
                 let c = self.cont(k)?;
                 let (hr, j, args) = (c.hr, c.clause as usize, c.args);
                 let clause = self.rt.hr(hr)?.ops[j].2;
-                let mut a = self.array_words(args);
+                let mut a = self.array_words_buf(args, 2);
                 a.push(k);
                 a.push(Word::i32(-1));
                 self.rt.depth = d + 1;
                 Ok(FxCall::Enter(self.rt.closure_func(clause), clause, a))
             }
-            FxOp::CallCancel => Ok(FxCall::Value(arg(0), Vec::new())),
+            FxOp::CallCancel => {
+                let mut args = std::mem::take(&mut self.fx_args);
+                args.clear();
+                Ok(FxCall::Value(arg(0), args))
+            }
             _ => Err(bug("呼び出しでないエフェクトの命令")),
         }
     }
@@ -1468,7 +1532,9 @@ impl<'p> Interp<'p> {
     /// エフェクトのブロックの終わり。
     fn fx_term(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
         let (func, env, a) = self.fx_term_call(st, pc, idx)?;
-        self.tail_enter(st, func, env, Args::Words(a.as_ptr(), a.len()))
+        let r = self.tail_enter(st, func, env, Args::Words(a.as_ptr(), a.len()));
+        self.give_args(a);
+        r
     }
 
     /// エフェクトのブロックの終わりを、末尾で呼ぶ相手まで進める。
@@ -1507,23 +1573,25 @@ impl<'p> Interp<'p> {
                     return Err(bug("NeverBody でない状態語"));
                 };
                 let c = self.rt.hr(hr)?.ops[clause as usize].2;
-                let mut a = self.array_words(args);
+                let mut a = self.array_words_buf(args, 2);
                 a.push(Word::UNIT);
                 a.push(Word::i32(-1));
                 Ok((self.rt.closure_func(c), c, a))
             }
             FxTermOp::TailCallClause { op } => {
                 let (hr, sel) = (arg(0), arg(1));
-                let user: Vec<Word> = (2..n).map(arg).collect();
+                let mut a = std::mem::take(&mut self.fx_args);
+                a.clear();
+                a.reserve(n);
+                a.extend((2..n).map(arg));
                 let start = (sel.as_i32() + 1).max(0) as usize;
                 match self.next_clause(hr, *op, start)? {
                     Some((j, c)) => {
-                        let mut a = user;
                         a.push(hr);
                         a.push(Word::i32(j as i32));
                         Ok((self.rt.closure_func(c), c, a))
                     }
-                    None => Err(self.no_clause(hr, *op, &user)?),
+                    None => Err(self.no_clause(hr, *op, &a)?),
                 }
             }
         }
@@ -1557,8 +1625,9 @@ impl<'p> Interp<'p> {
             total += words;
             pos = caller;
         }
-        let mut frames: Vec<u64> = Vec::new();
-        let mut sizes: Vec<u32> = Vec::new();
+        let (mut frames, mut sizes) = self.take_cont_buf(total, count);
+        frames.clear();
+        sizes.clear();
         let got = {
             let _site = alloc::site(Site::Cont);
             alloc::handled(|| {
@@ -1621,6 +1690,40 @@ impl<'p> Interp<'p> {
         }
     }
 
+    /// 再開した継続から外した写しの領域のうち、`total` 語と `count` 個のフレームに大きさの近い組を取り出す。
+    ///
+    /// 要る量の 2 倍(小さな継続では下限の [`CONT_FIT_WORDS`] 語と [`CONT_FIT_FRAMES`] 個)を超える領域は選ばない。
+    /// 大きな領域を小さな継続が持ったまま生き続けると、生きている継続ごとに余分なメモリが残るからである。
+    /// 合う組が無ければ空の組を返す。
+    /// 振り分けのループの機械語の形を変えないように、展開させない。
+    #[inline(never)]
+    fn take_cont_buf(&mut self, total: usize, count: usize) -> (Vec<u64>, Vec<u32>) {
+        let fits = |(f, s): &(Vec<u64>, Vec<u32>)| {
+            (total..=(2 * total).max(CONT_FIT_WORDS)).contains(&f.capacity())
+                && (count..=(2 * count).max(CONT_FIT_FRAMES)).contains(&s.capacity())
+        };
+        match self.cont_bufs.iter().position(fits) {
+            Some(i) => self.cont_bufs.swap_remove(i),
+            None => Default::default(),
+        }
+    }
+
+    /// 再開した継続から外した写しの領域を、次の `cont_make` のために残す。
+    ///
+    /// 残すのは [`CONT_BUFS`] 組までで、大きな領域([`CONT_BUF_WORDS`] 語を超えるもの)は返す。
+    /// 組が上限に達していれば、いちばん古い組を返して入れ替える。
+    /// 大きさの合わない組が残り続けて、使い回せる組が入れなくなることはない。
+    #[inline(never)]
+    fn keep_cont_bufs(&mut self, frames: Vec<u64>, sizes: Vec<u32>) {
+        if frames.capacity() > CONT_BUF_WORDS {
+            return;
+        }
+        if self.cont_bufs.len() >= CONT_BUFS {
+            self.cont_bufs.remove(0);
+        }
+        self.cont_bufs.push((frames, sizes));
+    }
+
     /// 継続を作れなかった。区間の最上段のフレーム `top`(まだ値スタックにある)にメモリの不足を注入して巻き戻す。
     ///
     /// 区間の中のハンドラの cancel 節は、深さの限度の誤りを継続に注入するときと同じく内側から走る。
@@ -1650,7 +1753,8 @@ impl<'p> Interp<'p> {
         let mut top = st.fpos + st.code().frame_words as u64;
         // フレームをすべて置けるまで継続は変えない。置けなければ継続をそのまま残してメモリの不足を返し、
         // 使われていない継続として注入の道(中の cancel 節を走らせる)に任せる。
-        let mut placed: Vec<u64> = Vec::new();
+        let mut placed = std::mem::take(&mut self.placed);
+        placed.clear();
         alloc::handled(|| placed.try_reserve_exact(self.rt.conts[ki].sizes.len()))
             .map_err(|_| Stop::OutOfMemory)?;
         {
@@ -1676,9 +1780,10 @@ impl<'p> Interp<'p> {
         }
         let c = &mut self.rt.conts[ki];
         c.used = true;
-        c.frames = Vec::new();
-        c.sizes = Vec::new();
+        let frames = std::mem::take(&mut c.frames);
+        let sizes = std::mem::take(&mut c.sizes);
         let (hr, cut) = (c.hr, c.cut);
+        self.keep_cont_bufs(frames, sizes);
         // 写し戻したハンドラのフレームのハンドラ記録の深さを、新しい深さにする。
         if let Some(rh) = self.rt_handle {
             for &pos in &placed {
@@ -1697,7 +1802,9 @@ impl<'p> Interp<'p> {
         r.h = base;
         self.rt.chain = cut;
         st.set_resume(rp);
-        if placed.is_empty() {
+        let empty = placed.is_empty();
+        self.placed = placed;
+        if empty {
             return Err(bug("フレームの無い継続"));
         }
         self.move_to(st, below)?;

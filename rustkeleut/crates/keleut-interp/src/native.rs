@@ -1685,11 +1685,9 @@ pub unsafe extern "C" fn krt_fx(
         match it.native_fx(fpos, fp, idx as u32) {
             Ok(NativeFx::Next) => fx::NEXT,
             Ok(NativeFx::Enter(func, env, args)) => {
-                if place_with_args(it, ctx, fpos, fp, func, env, &args, false) {
-                    fx::CALL
-                } else {
-                    fx::ERR
-                }
+                let placed = place_with_args(it, ctx, fpos, fp, func, env, &args, false);
+                it.give_args(args);
+                if placed { fx::CALL } else { fx::ERR }
             }
             Ok(NativeFx::Value(v)) => {
                 // SAFETY: ctx は生きている文脈である。
@@ -1730,11 +1728,9 @@ pub unsafe extern "C" fn krt_fx_term(
         match it.native_fx_term(fpos, fp, idx as u32) {
             Ok(None) => fx::ERR,
             Ok(Some((func, env, args))) => {
-                if place_with_args(it, ctx, fpos, fp, func, env, &args, true) {
-                    fx::CALL
-                } else {
-                    fx::ERR
-                }
+                let placed = place_with_args(it, ctx, fpos, fp, func, env, &args, true);
+                it.give_args(args);
+                if placed { fx::CALL } else { fx::ERR }
             }
             Err(e) => {
                 fail(it, e);
