@@ -94,3 +94,23 @@ List の Eq は前提を持つ利用者のインスタンスなので、実装�
   $ keleut run fullpage.kel
   0
   1905818509
+
+使い回す継続の写しの領域は、要る大きさに近いものだけを選ぶ。
+各段で、本体が 3,000 段の末尾でない再帰の底で big を呼び、big の節は深い継続を作って再開する。
+再開した継続の領域は使い回しの組に入る。
+続いて small の節が浅い継続を作り、再帰で 2,000 段まで生きたまま残す。
+浅い継続が深い継続の領域(約 3,000 フレーム分)を持てば、生きている継続ごとに余分なメモリが残り、上限 1 GiB を超える。
+
+  $ cat > contbuf.kel <<'EOF'
+  > effect Two = { big: (Int32) => Unit, small: (Int32) => Unit }
+  > let rec deep(d: Int32): Int32 @ {Two} = if d == 0 then { perform big(0); 0 } else { let r = deep(d - 1); r + 1 }
+  > let rec f(i: Int32, n: Int32): Int32 = if i == n then 0 else {
+  >   { let u = deep(3000); perform small(u); 0 } handle {
+  >     case big(x) => { let u = resume(()); u + 1 }
+  >     case small(x) => { let a = f(i + 1, n); let u = resume(()); u + a + 1 }
+  >   }
+  > }
+  > echoln(show(f(0, 2000)))
+  > EOF
+  $ (ulimit -v 1048576; keleut run --backend interp contbuf.kel)
+  4000
