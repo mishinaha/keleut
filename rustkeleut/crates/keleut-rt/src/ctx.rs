@@ -811,24 +811,39 @@ impl<'p> Rt<'p> {
     }
 
     /// ハンドラ記録の箱の添字。ハンドラ記録でなければ内部の誤り。
+    ///
+    /// エフェクトの命令が何度も引くので、ほかのクレートの呼び手にも展開できるようにする。
+    /// 種類の検査は [`Rt::is_kind`] を呼ばずに書く(`is_kind` を展開できるようにすると、インタプリタの振り分けのループの形が変わる)。
+    #[inline]
     pub fn hr_index(&self, w: Word) -> Result<usize, Stop> {
-        if self.is_kind(w, Kind::Handler) {
-            Ok(Self::index_of(w))
+        // SAFETY: ポインタの語は生きている箱を指す。
+        if w.is_ptr() && unsafe { value::kind_of(w) } == Some(Kind::Handler) {
+            // SAFETY: 種類を上で確かめた。ハンドラ記録の箱の 1 番の語は表の添字である。
+            Ok(unsafe { value::get(w, 1) as usize })
         } else {
-            Err(Stop::Internal(format!(
-                "ハンドラ記録でない値: {}",
-                String::from_utf8_lossy(&self.show(w))
-            )))
+            Err(self.not_handler(w))
         }
     }
 
+    /// ハンドラ記録でない値の内部の誤り([`Rt::hr_index`])。
+    #[cold]
+    #[inline(never)]
+    fn not_handler(&self, w: Word) -> Stop {
+        Stop::Internal(format!(
+            "ハンドラ記録でない値: {}",
+            String::from_utf8_lossy(&self.show(w))
+        ))
+    }
+
     /// ハンドラ記録。
+    #[inline]
     pub fn hr(&self, w: Word) -> Result<&HandlerRec, Stop> {
         let i = self.hr_index(w)?;
         Ok(&self.handlers[i])
     }
 
     /// 書き換えるハンドラ記録。
+    #[inline]
     pub fn hr_mut(&mut self, w: Word) -> Result<&mut HandlerRec, Stop> {
         let i = self.hr_index(w)?;
         Ok(&mut self.handlers[i])

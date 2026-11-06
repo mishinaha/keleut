@@ -1259,6 +1259,8 @@ impl<'p> Interp<'p> {
     }
 
     /// エフェクトの命令。`pc` は命令の位置、`idx` は [`Code::fx`] の添字。
+    // 振り分けのループに展開させない。展開されると、ループの形が変わり、エフェクトを使わないプログラムまで遅くなることがある。
+    #[inline(never)]
     fn fx(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
         // SAFETY: Code は self.codes の Box の中にあり、動かない。
         let code: &Code = unsafe { &*st.code };
@@ -1530,6 +1532,8 @@ impl<'p> Interp<'p> {
     }
 
     /// エフェクトのブロックの終わり。
+    // [`Interp::fx`] と同じ理由で、振り分けのループに展開させない。
+    #[inline(never)]
     fn fx_term(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
         let (func, env, a) = self.fx_term_call(st, pc, idx)?;
         let r = self.tail_enter(st, func, env, Args::Words(a.as_ptr(), a.len()));
