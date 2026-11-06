@@ -601,6 +601,14 @@ pub fn take_flag(r: Role) -> bool {
     f.load(Ordering::Relaxed) && f.swap(false, Ordering::AcqRel)
 }
 
+/// 役割 `r` の印の番地(1 バイト。0 でなければ立っている)。
+///
+/// JIT のコードの確保の速い道は、実行の役割の印をこの番地から読み、立っていれば実行時の関数に任せる。
+/// 印を下ろすのは実行時の関数([`take_flag`])だけである。
+pub fn flag_addr(r: Role) -> usize {
+    FLAGS[r as usize].as_ptr() as usize
+}
+
 /// 役割 `r` の印が立っているか(下ろさない。試験用)。
 pub fn flagged(r: Role) -> bool {
     FLAGS[r as usize].load(Ordering::Acquire)

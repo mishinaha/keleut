@@ -29,6 +29,13 @@
 //!
 //! 失敗を返す確保(表の `try_reserve` と大きな箱)は、大域の確保器の失敗を自分で扱う範囲で行う([`crate::alloc::handled`])。
 //! 失敗しても大域の予備を使わず、呼び手の後退の道かメモリの不足に任せる。
+//!
+//! JIT のコードは、小さな箱を [`Heap::try_alloc`] の最初の 2 つの道(空きリストの先頭を外すか、切り出しの位置を進める)と同じ手順で、
+//! 実行時の関数を呼ばずにその場で取る(確保の速い道、`keleut_interp::native` の冒頭)。
+//! JIT のコードは [`fast`] の位置で、ヒープの欄 `since_gc`、`trigger` と大きさの種類の状態を直に読み書きする。
+//! 速い道は、`since_gc >= trigger` なら取らずに実行時の関数に任せ、取ったら区画の語の数を `since_gc` に足す。
+//! そのため、回収の時機は実行時の関数を通る確保と変わらない。
+//! この手順と欄の配置を変えるときは、`keleut_llvm` の確保の速い道も合わせて変える。
 
 use std::alloc::{Layout, alloc, dealloc};
 use std::ffi::c_void;
@@ -173,6 +180,9 @@ pub struct SweepStats {
 }
 
 /// マークスイープのヒープ。
+///
+/// JIT のコードは欄を [`fast`] の位置で読み書きする。
+/// 位置は `offset_of!` で構築ごとに決まるので、配置は Rust の既定のままでよい。
 pub struct Heap {
     classes: [Class; NCLASS],
     pages: Vec<Page>,
@@ -198,6 +208,38 @@ pub struct Heap {
 // SAFETY: Heap はページと大きな箱を所有し、それらはほかのスレッドから参照されない。
 // ミューテータは 1 本で、Heap はそのスレッドへ移すだけである。
 unsafe impl Send for Heap {}
+
+/// JIT のコードの確保の速い道が読み書きする、[`Heap`] の欄のバイトの位置と大きさの種類の表。
+pub mod fast {
+    use super::{CLASS_OF, CLASSES, Class, Heap, MAX_SMALL_WORDS};
+    use std::mem::{offset_of, size_of};
+
+    /// `since_gc`(前の回収の後に確保した語の数)。
+    pub const SINCE_GC: u64 = offset_of!(Heap, since_gc) as u64;
+    /// `trigger`(次の回収までに確保してよい語の数)。
+    pub const TRIGGER: u64 = offset_of!(Heap, trigger) as u64;
+    /// 大きさの種類ごとの状態の列の先頭。
+    pub const CLASSES_AT: u64 = offset_of!(Heap, classes) as u64;
+    /// 大きさの種類ごとの状態の大きさ。
+    pub const CLASS_BYTES: u64 = size_of::<Class>() as u64;
+    /// 大きさの種類の状態の中の、空きリストの先頭(区画の 1 番の語が次を指す)。
+    pub const FREE: u64 = offset_of!(Class, free) as u64;
+    /// 大きさの種類の状態の中の、切り出し中のページの次の区画。
+    pub const CUR: u64 = offset_of!(Class, cur) as u64;
+    /// 大きさの種類の状態の中の、切り出し中のページの終わり。
+    pub const END: u64 = offset_of!(Class, end) as u64;
+
+    /// `words` 語(見出しを含む。1 以上)の箱の大きさの種類の番号と、区画の語の数。
+    ///
+    /// 大きな箱([`MAX_SMALL_WORDS`] 語を超える)なら `None` である。
+    pub fn class_of(words: usize) -> Option<(usize, usize)> {
+        if words == 0 || words > MAX_SMALL_WORDS {
+            return None;
+        }
+        let c = CLASS_OF[words] as usize;
+        Some((c, CLASSES[c] as usize))
+    }
+}
 
 impl Default for Heap {
     fn default() -> Self {
@@ -226,6 +268,13 @@ impl Heap {
             reserve: Vec::new(),
             in_reserve: false,
         }
+    }
+
+    /// ヒープの番地(JIT のコードの確保の速い道が [`fast`] の位置で欄を読み書きする)。
+    ///
+    /// ヒープが動かない間だけ使える。
+    pub fn fast_ptr(&mut self) -> *mut Heap {
+        self
     }
 
     /// 予備を使い始めたか(試験用)。

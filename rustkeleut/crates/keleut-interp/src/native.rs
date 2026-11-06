@@ -27,6 +27,14 @@
 //! 自分のフレームも同じ塊にあることを確かめるので、置く位置は [`krt_prep`] と同じになる。
 //! 呼ぶ相手を実行時に知るクロージャの呼び出しは、フレームの語の数を文脈の `frames` の列から読む。
 //! 末尾の呼び出しは、自分のフレームの位置に置き直して `musttail` で呼ぶ。
+//!
+//! 箱(`box`)、`ctor_new`、`rec_new` の小さな箱は、JIT のコードが実行時の関数を呼ばずに、
+//! 文脈の `heap` のヒープの空きリストか切り出しの位置から 1 区画を取る(確保の速い道。`keleut_rt::heap` の冒頭)。
+//! 実行の役割の印(`keleut_rt::alloc`)が立っているとき、前の回収の後に確保した量が回収の時機に届いたとき、
+//! 区画が空きリストにも切り出し中のページにも無いときは、取らずに実行時の関数を呼ぶ。
+//! 速い道は回収を起こさないので、安全点を記録せず(フレームを置く速い道が `krt_prep` を呼ばないのと同じ)、
+//! 実行時の関数を呼ぶ道だけが安全点を記録する。
+//! `--gc-stress` のときは速い道を作らない。
 //! フレームの見出しの 3 番の語には、どの境目でも本当の呼び出し元のフレームの位置を書く。
 //! そのため、回収と継続は、インタプリタと JIT がネイティブのスタックの上で入れ子になっていても、
 //! 値スタックの呼び出し元の鎖だけをたどればよい。
@@ -137,6 +145,10 @@ pub struct NativeCtx {
     ///
     /// 呼ぶ相手を実行時に知る呼び出し(クロージャ)も、JIT のコードがその場でフレームを置くために読む。
     pub frames: *const u64,
+    /// GC のヒープ(`keleut_rt::heap::Heap`)。
+    ///
+    /// JIT のコードの確保の速い道が、`keleut_rt::heap::fast` の位置で欄を読み書きする。
+    pub heap: *mut keleut_rt::heap::Heap,
 }
 
 /// [`NativeCtx`] の欄のバイトの位置。
@@ -160,6 +172,7 @@ pub mod off {
     pub const ALT: u64 = 128;
     pub const WIN: u64 = 136;
     pub const FRAMES: u64 = 144;
+    pub const HEAP: u64 = 152;
 }
 
 /// ネイティブのスタックの残りがこの量(バイト)を予備の検査の余裕に足したものより少なくなったら、
@@ -507,6 +520,7 @@ impl Native {
                 alt,
                 win: std::ptr::null_mut(),
                 frames: frame_tab.as_ptr(),
+                heap: std::ptr::null_mut(),
             },
             entry,
             enter,
@@ -652,6 +666,7 @@ impl<'p> Interp<'p> {
         n.ctx.global_init = rt.global_init.as_mut_ptr().cast::<u8>();
         n.ctx.strings = rt.strings.as_ptr().cast::<u64>();
         n.ctx.win = rt.stack.window_ptr();
+        n.ctx.heap = rt.heap.fast_ptr();
         &mut n.ctx
     }
 
@@ -1858,6 +1873,7 @@ mod tests {
         assert_eq!(offset_of!(NativeCtx, alt) as u64, off::ALT);
         assert_eq!(offset_of!(NativeCtx, win) as u64, off::WIN);
         assert_eq!(offset_of!(NativeCtx, frames) as u64, off::FRAMES);
+        assert_eq!(offset_of!(NativeCtx, heap) as u64, off::HEAP);
         assert_eq!(TAILREQ.0 & 7, 4);
     }
 }

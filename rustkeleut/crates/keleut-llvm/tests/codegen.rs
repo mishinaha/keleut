@@ -35,22 +35,26 @@ fn fixture_の関数をすべて翻訳できる() {
                 continue;
             }
             let fid = FuncId(i as u32);
-            let src = codegen::module(&lp, fid, 0x1000, 0x2000, &triple, &layout).unwrap();
-            // 同じ LLJIT に足すので、名前を試験の入力ごとに変える。
-            let name = format!("{}_{k}", codegen::func_name(fid));
-            let src = src
-                .replace(
-                    &format!("@{}(", codegen::func_name(fid)),
-                    &format!("@{name}("),
-                )
-                .replace(
-                    &format!("@{}.r(", codegen::func_name(fid)),
-                    &format!("@{name}.r("),
-                );
-            jit.add_ir(&name, &src, "default<O2>")
-                .unwrap_or_else(|e| panic!("{}: {}: {e}", p.display(), f.sym));
-            jit.lookup(&name)
-                .unwrap_or_else(|e| panic!("{}: {}: {e}", p.display(), f.sym));
+            // 確保の速い道を作る形(既定)と作らない形(`--gc-stress`)の両方を翻訳する。
+            for fast in [true, false] {
+                let src =
+                    codegen::module(&lp, fid, 0x1000, 0x2000, fast, &triple, &layout).unwrap();
+                // 同じ LLJIT に足すので、名前を試験の入力ごとと形ごとに変える。
+                let name = format!("{}_{k}_{}", codegen::func_name(fid), u8::from(fast));
+                let src = src
+                    .replace(
+                        &format!("@{}(", codegen::func_name(fid)),
+                        &format!("@{name}("),
+                    )
+                    .replace(
+                        &format!("@{}.r(", codegen::func_name(fid)),
+                        &format!("@{name}.r("),
+                    );
+                jit.add_ir(&name, &src, "default<O2>")
+                    .unwrap_or_else(|e| panic!("{}: {}: {e}", p.display(), f.sym));
+                jit.lookup(&name)
+                    .unwrap_or_else(|e| panic!("{}: {}: {e}", p.display(), f.sym));
+            }
             n += 1;
         }
     }
@@ -91,4 +95,62 @@ fn 最適化の列の_nul_は誤りになる() {
         jit.add_ir("c", "define void @h() {\n  ret void\n}\n", "a\0b")
             .is_err()
     );
+}
+
+/// 確保の速い道は、どれも実行の役割の印を読んでからヒープに触れ、`fast_alloc` が偽なら作らない。
+///
+/// 今ある `KELEUT_TEST_ALLOC_FAIL` の場所では、印を立てた確保と同じ操作の中で実行時の確保が印を下ろすので、
+/// `tests/oom_cmd.rs` は印の検査の抜けを見分けない。
+/// そのため、速い道の文面に印の読み込みがあることをここで確かめる。
+#[test]
+fn 確保の速い道は実行の役割の印を読む() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keleut-cli/tests/fixtures/run");
+    let flag = format!(
+        "inttoptr i64 {} to ptr",
+        keleut_rt::alloc::flag_addr(keleut_rt::alloc::Role::Exec)
+    );
+    let mut fast_paths = 0;
+    for e in std::fs::read_dir(&dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.extension().and_then(|x| x.to_str()) != Some("kir") {
+            continue;
+        }
+        let data = std::fs::read(&p).unwrap();
+        let limits = kir::Limits::default();
+        let prog = kir::read_any_with(&data, &limits).unwrap();
+        let lp = keleut_lir::lower_opts(&prog, kir::N_NEST, true).unwrap();
+        for (i, f) in lp.funcs.iter().enumerate() {
+            if !keleut_interp::native::jit_eligible(f) {
+                continue;
+            }
+            let fid = FuncId(i as u32);
+            let on = codegen::function(&lp, fid, 0x1000, 0x2000, true).unwrap();
+            let off = codegen::function(&lp, fid, 0x1000, 0x2000, false).unwrap();
+            let lines: Vec<&str> = on.lines().collect();
+            for (k, l) in lines.iter().enumerate() {
+                if l.starts_with("ahave") {
+                    fast_paths += 1;
+                    // 印の番地、印の読み込み、比べ、枝の 4 行がこのブロックの直前にある。
+                    assert!(k >= 4, "{}: {}", p.display(), f.sym);
+                    assert!(lines[k - 4].contains(&flag), "{}: {}", p.display(), f.sym);
+                    assert!(
+                        lines[k - 3].contains("load atomic i8"),
+                        "{}: {}",
+                        p.display(),
+                        f.sym
+                    );
+                    // 印が 0 でなければ遅い道へ移る。
+                    assert!(
+                        lines[k - 2].contains("icmp ne i8") && lines[k - 2].ends_with(", 0"),
+                        "{}: {}",
+                        p.display(),
+                        f.sym
+                    );
+                }
+            }
+            assert!(!off.contains("ahave"), "{}: {}", p.display(), f.sym);
+            assert!(!off.contains("ptr %heapp,"), "{}: {}", p.display(), f.sym);
+        }
+    }
+    assert!(fast_paths > 10, "速い道 {fast_paths}");
 }

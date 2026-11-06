@@ -97,6 +97,8 @@ type Failure = Arc<(AtomicBool, Mutex<Option<String>>)>;
 
 /// 翻訳のスレッドの本体。起動の結果を `init` に送り、関数の番号を受け取るたびに翻訳する。
 ///
+/// `fast_alloc` は確保の速い道を作るか(`--gc-stress` では偽。`codegen::function`)。
+///
 /// 実行が終わったら(`stop`)、残りの頼みを捨てて終わる。
 /// 頼みを受け取ってから翻訳を終えるまで `busy` を真にする。
 /// `busy` を真にしてから `stop` を読むので(どちらも SeqCst)、実行の終わりに `busy` が偽なら、このスレッドは新しい翻訳を始めない。
@@ -110,6 +112,7 @@ fn jit_thread(
     prog: &Program,
     entry: Arc<[AtomicUsize]>,
     passes: &str,
+    fast_alloc: bool,
     init: mpsc::Sender<Result<Init, String>>,
     req: mpsc::Receiver<(FuncId, bool)>,
     rep: mpsc::Sender<Result<usize, String>>,
@@ -197,7 +200,7 @@ fn jit_thread(
         }
         let rtable = rentry.as_ptr() as usize;
         let jit_site = keleut_rt::alloc::site(keleut_rt::alloc::Site::Jit);
-        let src = codegen::module(prog, f, table, rtable, &triple, &layout);
+        let src = codegen::module(prog, f, table, rtable, fast_alloc, &triple, &layout);
         if stop.load(Ordering::SeqCst) {
             break;
         }
@@ -311,6 +314,7 @@ fn run_with(
         let (rep_tx, rep_rx) = mpsc::channel::<Result<usize, String>>();
         let failure: Failure = Arc::new((AtomicBool::new(false), Mutex::new(None)));
         let passes = opts.passes.as_str();
+        let fast_alloc = !opts.base.gc_stress;
         let fail2 = failure.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let stop2 = stop.clone();
@@ -325,7 +329,7 @@ fn run_with(
             .stack_size(JIT_STACK)
             .spawn_scoped(s, move || {
                 jit_thread(
-                    prog, entry2, passes, init_tx, req_rx, rep_tx, fail2, stop2, busy2,
+                    prog, entry2, passes, fast_alloc, init_tx, req_rx, rep_tx, fail2, stop2, busy2,
                 )
             });
         if spawned.is_err() {
@@ -406,7 +410,7 @@ pub fn dump_ir(prog: &Program) -> Result<String, String> {
     for (i, f) in prog.funcs.iter().enumerate() {
         s.push('\n');
         if keleut_interp::native::jit_eligible(f) {
-            s.push_str(&codegen::function(prog, FuncId(i as u32), 0, 0)?);
+            s.push_str(&codegen::function(prog, FuncId(i as u32), 0, 0, true)?);
         } else {
             s.push_str(&format!(
                 "; {} ({}): インタプリタに残す\n",

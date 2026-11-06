@@ -15,6 +15,9 @@
 //!   呼ばれた側が番兵で戻ったら `krt_sentinel` を呼んで自分も番兵で戻る。
 //! - 確保する命令の前には、安全点で生きている `any` の区画のレジスタをスロットに書き、
 //!   実行時の関数に今のフレームの位置と安全点の番号を渡す(実行時の関数が `GcState::at_safepoint` を行う)。
+//! - 箱(`box`)、`ctor_new`、`rec_new` の小さな箱は、実行時の関数を呼ばずにヒープから 1 区画を取る(確保の速い道。[`Gen::alloc_small`])。
+//!   取れないときだけ、安全点のレジスタを書いて実行時の関数を呼ぶ。
+//!   `--gc-stress` のときは速い道を作らない([`function`] の `fast_alloc`)。
 //! - 末尾の呼び出しは、自分のフレームの位置に呼ばれた側のフレームを置き直してから `musttail` で呼ぶ。
 //! - 相手を実行時に決める呼び出しは `krt_dispatch` に任せる。
 //!   値の呼び出しは、相手がクロージャなら実行時の関数を通さずに呼ぶ。
@@ -39,6 +42,7 @@ use keleut_lir::{
 };
 use keleut_rt::Word;
 use keleut_rt::stack::HEADER_WORDS;
+use keleut_rt::value::{Kind, header};
 
 /// レジスタで渡す引数の数。
 const NREG: usize = keleut_interp::native::REG_ARGS;
@@ -201,6 +205,8 @@ struct Gen<'a> {
     catch_rps: Vec<u32>,
     /// 今のブロックの名前(phi の入り口に使う)。
     cur: String,
+    /// 小さな箱の確保の速い道を作るか(`--gc-stress` では作らない)。
+    fast_alloc: bool,
 }
 
 impl Gen<'_> {
@@ -386,6 +392,155 @@ impl Gen<'_> {
         let live = fr.safepoints.live(sp as usize);
         self.spill_set(&live, false);
         Ok(sp)
+    }
+
+    /// 見出しを含めて `words` 語の箱を確保し、見出し `header` と、`fill` の(語の番号、値)を書いて、箱の語を返す。
+    ///
+    /// 速い道は `keleut_rt::heap::Heap::try_alloc` の最初の 2 つの道と同じ手順で、文脈の `heap` のヒープから 1 区画を取る。
+    /// 実行の役割の印が立っているとき、前の回収の後に確保した量(`since_gc`)が回収の時機(`trigger`)に届いたとき、
+    /// 空きリストにも切り出し中のページにも区画が無いときは、`slow` で実行時の関数を呼ぶ。
+    /// 実行時の関数は印を下ろし、回収し、ページを足すので、速い道は印を読むだけで、回収の数えを区画の語の数だけ足す。
+    /// 速い道は回収を起こさないので、安全点のレジスタを書くのは遅い道だけである。
+    /// `slow` は安全点の番号を受け取り、実行時の関数を呼んでその結果を返す(0 の検査はここで行う)。
+    fn alloc_small(
+        &mut self,
+        bi: usize,
+        ii: usize,
+        words: usize,
+        header: u64,
+        fill: &[(u64, String)],
+        slow: impl FnOnce(&mut Self, u32) -> String,
+    ) -> Result<String, String> {
+        use keleut_rt::heap::fast;
+        let class = if self.fast_alloc {
+            fast::class_of(words)
+        } else {
+            None
+        };
+        let Some((c, cw)) = class else {
+            let sp = self.safepoint(bi, ii)?;
+            let r = slow(self, sp);
+            self.check_zero(&r);
+            return Ok(r);
+        };
+        let slow_l = self.label("aslow");
+        let a1 = self.label("ahave");
+        let a2 = self.label("aclass");
+        let pop = self.label("apop");
+        let bump = self.label("abump");
+        let take = self.label("atake");
+        let got = self.label("agot");
+        let join = self.label("ajoin");
+        // 実行の役割の印。立っていれば実行時の関数が下ろしてメモリの不足にする。
+        let fa = self.t();
+        self.line(format!(
+            "{fa} = inttoptr i64 {} to ptr",
+            keleut_rt::alloc::flag_addr(keleut_rt::alloc::Role::Exec)
+        ));
+        let fl = self.t();
+        self.line(format!(
+            "{fl} = load atomic i8, ptr {fa} monotonic, align 1"
+        ));
+        let c0 = self.t();
+        self.line(format!("{c0} = icmp ne i8 {fl}, 0"));
+        self.line(format!("br i1 {c0}, label %{slow_l}, label %{a1}"));
+        self.start_block(&a1);
+        let sgp = self.t();
+        self.line(format!(
+            "{sgp} = getelementptr i8, ptr %heapp, i64 {}",
+            fast::SINCE_GC
+        ));
+        let sg = self.t();
+        self.line(format!("{sg} = load i64, ptr {sgp}"));
+        let tgp = self.t();
+        self.line(format!(
+            "{tgp} = getelementptr i8, ptr %heapp, i64 {}",
+            fast::TRIGGER
+        ));
+        let tg = self.t();
+        self.line(format!("{tg} = load i64, ptr {tgp}"));
+        let c1 = self.t();
+        self.line(format!("{c1} = icmp uge i64 {sg}, {tg}"));
+        self.line(format!("br i1 {c1}, label %{slow_l}, label %{a2}"));
+        self.start_block(&a2);
+        let kp = fast::CLASSES_AT + c as u64 * fast::CLASS_BYTES;
+        let field = |g: &mut Self, o: u64| {
+            let q = g.t();
+            g.line(format!(
+                "{q} = getelementptr i8, ptr %heapp, i64 {}",
+                kp + o
+            ));
+            q
+        };
+        let freep = field(self, fast::FREE);
+        let curp = field(self, fast::CUR);
+        let endp = field(self, fast::END);
+        let fr = self.t();
+        self.line(format!("{fr} = load ptr, ptr {freep}"));
+        let c2 = self.t();
+        self.line(format!("{c2} = icmp eq ptr {fr}, null"));
+        self.line(format!("br i1 {c2}, label %{bump}, label %{pop}"));
+        self.start_block(&pop);
+        // 空きリストの区画の 1 番の語は次の空きの区画を指す。
+        let np = self.t();
+        self.line(format!("{np} = getelementptr i64, ptr {fr}, i64 1"));
+        let nx = self.t();
+        self.line(format!("{nx} = load ptr, ptr {np}"));
+        self.line(format!("store ptr {nx}, ptr {freep}"));
+        self.line(format!("br label %{got}"));
+        self.start_block(&bump);
+        let cur = self.t();
+        self.line(format!("{cur} = load ptr, ptr {curp}"));
+        let end = self.t();
+        self.line(format!("{end} = load ptr, ptr {endp}"));
+        let ci = self.t();
+        self.line(format!("{ci} = ptrtoint ptr {cur} to i64"));
+        let ei = self.t();
+        self.line(format!("{ei} = ptrtoint ptr {end} to i64"));
+        let d = self.t();
+        self.line(format!("{d} = sub i64 {ei}, {ci}"));
+        let c3 = self.t();
+        self.line(format!("{c3} = icmp uge i64 {d}, {}", cw * 8));
+        let c4 = self.t();
+        self.line(format!("{c4} = icmp ne ptr {cur}, null"));
+        let c5 = self.t();
+        self.line(format!("{c5} = and i1 {c3}, {c4}"));
+        self.line(format!("br i1 {c5}, label %{take}, label %{slow_l}"));
+        self.start_block(&take);
+        let nc = self.t();
+        self.line(format!("{nc} = getelementptr i64, ptr {cur}, i64 {cw}"));
+        self.line(format!("store ptr {nc}, ptr {curp}"));
+        self.line(format!("br label %{got}"));
+        self.start_block(&got);
+        let p = self.t();
+        self.line(format!(
+            "{p} = phi ptr [ {fr}, %{pop} ], [ {cur}, %{take} ]"
+        ));
+        let ns = self.t();
+        self.line(format!("{ns} = add i64 {sg}, {cw}"));
+        self.line(format!("store i64 {ns}, ptr {sgp}"));
+        // 取った区画には、次の回収の前に種類の入った見出しを書く(`keleut_rt::heap` の冒頭)。
+        self.line(format!("store i64 {header}, ptr {p}"));
+        for (i, v) in fill {
+            let q = self.t();
+            self.line(format!("{q} = getelementptr i64, ptr {p}, i64 {i}"));
+            self.line(format!("store i64 {v}, ptr {q}"));
+        }
+        let w = self.t();
+        self.line(format!("{w} = ptrtoint ptr {p} to i64"));
+        self.line(format!("br label %{join}"));
+        self.start_block(&slow_l);
+        let sp = self.safepoint(bi, ii)?;
+        let r = slow(self, sp);
+        self.check_zero(&r);
+        let slow_end = self.cur.clone();
+        self.line(format!("br label %{join}"));
+        self.start_block(&join);
+        let v = self.t();
+        self.line(format!(
+            "{v} = phi i64 [ {w}, %{got} ], [ {r}, %{slow_end} ]"
+        ));
+        Ok(v)
     }
 
     /// 呼び出しの後に番兵を調べる。番兵なら深さを書き戻して番兵で戻り、そうでなければ値を返す。
@@ -832,7 +987,6 @@ impl Gen<'_> {
                         c
                     }
                     Rep::I64 | Rep::F64 => {
-                        let sp = self.safepoint(bi, ii)?;
                         let (kind, bits) = if self.rep(*src) == Rep::I64 {
                             (0, v.clone())
                         } else {
@@ -840,12 +994,15 @@ impl Gen<'_> {
                             self.line(format!("{b} = bitcast double {v} to i64"));
                             (1, b)
                         };
-                        let t = self.t();
-                        self.line(format!(
-                            "{t} = call i64 @krt_box(ptr %ctx, i64 %fpos, i64 {sp}, i64 {kind}, i64 {bits})"
-                        ));
-                        self.check_zero(&t);
-                        t
+                        let k = if kind == 0 { Kind::I64 } else { Kind::F64 };
+                        let fill = [(1, bits.clone())];
+                        self.alloc_small(bi, ii, 2, header(k, 0), &fill, |g, sp| {
+                            let t = g.t();
+                            g.line(format!(
+                                "{t} = call i64 @krt_box(ptr %ctx, i64 %fpos, i64 {sp}, i64 {kind}, i64 {bits})"
+                            ));
+                            t
+                        })?
                     }
                     Rep::Str | Rep::Any => v,
                 };
@@ -1065,15 +1222,31 @@ impl Gen<'_> {
                 ctor,
                 fields,
             } => {
-                let sp = self.safepoint(bi, ii)?;
-                self.put_args(0, fields);
-                let r = self.t();
-                self.line(format!(
-                    "{r} = call i64 @krt_ctor_new(ptr %ctx, i64 %fpos, i64 {sp}, i64 {}, i64 {ctor}, i64 {})",
-                    ty.0,
-                    fields.len()
-                ));
-                self.check_zero(&r);
+                let n = fields.len();
+                let slow = |g: &mut Self, sp: u32| {
+                    g.put_args(0, fields);
+                    let r = g.t();
+                    g.line(format!(
+                        "{r} = call i64 @krt_ctor_new(ptr %ctx, i64 %fpos, i64 {sp}, i64 {}, i64 {ctor}, i64 {n})",
+                        ty.0
+                    ));
+                    r
+                };
+                let r = if n == 0 {
+                    // フィールドの無いコンストラクタは即値で、確保しない(`Rt::ctor_new`)。
+                    let sp = self.safepoint(bi, ii)?;
+                    let r = slow(self, sp);
+                    self.check_zero(&r);
+                    r
+                } else {
+                    let mut fill =
+                        vec![(1, ((u64::from(ty.0) << 32) | u64::from(*ctor)).to_string())];
+                    for (i, &f) in fields.iter().enumerate() {
+                        let v = self.get64(f);
+                        fill.push((2 + i as u64, v));
+                    }
+                    self.alloc_small(bi, ii, 2 + n, header(Kind::Data, n as u32), &fill, slow)?
+                };
                 self.set(*dst, &r);
             }
             Inst::CtorTag { dst, v } => {
@@ -1151,15 +1324,30 @@ impl Gen<'_> {
                 self.set(*dst, &x);
             }
             Inst::RecNew { dst, shape, fields } => {
-                let sp = self.safepoint(bi, ii)?;
-                self.put_args(0, fields);
-                let r = self.t();
-                self.line(format!(
-                    "{r} = call i64 @krt_rec_new(ptr %ctx, i64 %fpos, i64 {sp}, i64 {}, i64 {})",
-                    shape.0,
-                    fields.len()
-                ));
-                self.check_zero(&r);
+                let n = fields.len();
+                let slow = |g: &mut Self, sp: u32| {
+                    g.put_args(0, fields);
+                    let r = g.t();
+                    g.line(format!(
+                        "{r} = call i64 @krt_rec_new(ptr %ctx, i64 %fpos, i64 {sp}, i64 {}, i64 {n})",
+                        shape.0
+                    ));
+                    r
+                };
+                let r = if n == 0 {
+                    // フィールドの無いレコードは Unit で、確保しない(`Rt::rec_new`)。
+                    let sp = self.safepoint(bi, ii)?;
+                    let r = slow(self, sp);
+                    self.check_zero(&r);
+                    r
+                } else {
+                    let mut fill = vec![(1, shape.0.to_string())];
+                    for (i, &f) in fields.iter().enumerate() {
+                        let v = self.get64(f);
+                        fill.push((2 + i as u64, v));
+                    }
+                    self.alloc_small(bi, ii, 2 + n, header(Kind::Record, n as u32), &fill, slow)?
+                };
                 self.set(*dst, &r);
             }
             Inst::RecExtend {
@@ -1839,12 +2027,14 @@ impl Gen<'_> {
 
 /// 関数 `fid` の LLVM IR の関数の定義を作る。`entry` と `rentry` は入口の表とレジスタの入口の表の番地。
 ///
+/// `fast_alloc` が偽なら、小さな箱の確保の速い道を作らず、どの確保も実行時の関数を呼ぶ(`--gc-stress`)。
 /// 関数は `keleut_interp::native::jit_eligible` を満たし、パス 12 を済ませていなければならない。
 pub fn function(
     prog: &Program,
     fid: FuncId,
     entry: usize,
     rentry: usize,
+    fast_alloc: bool,
 ) -> Result<String, String> {
     let f = &prog.funcs[fid.index()];
     if !keleut_interp::native::jit_eligible(f) {
@@ -1917,6 +2107,7 @@ pub fn function(
         fxt_idx,
         catch_rps,
         cur: String::new(),
+        fast_alloc,
     };
     let _ = writeln!(
         g.out,
@@ -2008,6 +2199,7 @@ pub fn function(
         ("strs", off::STRINGS, "ptr"),
         ("winp", off::WIN, "ptr"),
         ("frtab", off::FRAMES, "ptr"),
+        ("heapp", off::HEAP, "ptr"),
     ] {
         g.line(format!("%{name}.p = getelementptr i8, ptr %ctx, i64 {o}"));
         g.line(format!("%{name} = load {t}, ptr %{name}.p"));
@@ -2085,16 +2277,17 @@ pub fn function(
     Ok(g.out)
 }
 
-/// 関数 `fid` の 1 つのモジュールの文面(宣言を含む)。
+/// 関数 `fid` の 1 つのモジュールの文面(宣言を含む)。`fast_alloc` は [`function`] と同じ。
 pub fn module(
     prog: &Program,
     fid: FuncId,
     entry: usize,
     rentry: usize,
+    fast_alloc: bool,
     triple: &str,
     layout: &str,
 ) -> Result<String, String> {
-    let body = function(prog, fid, entry, rentry)?;
+    let body = function(prog, fid, entry, rentry, fast_alloc)?;
     let mut s = String::new();
     if !layout.is_empty() {
         let _ = writeln!(s, "target datalayout = \"{layout}\"");
