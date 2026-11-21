@@ -317,7 +317,7 @@ impl<'p> Interp<'p> {
     pub fn rebind<'q>(self, prog: &'q Program) -> Interp<'q> {
         assert!(
             self.native.is_none(),
-            "Interp::rebind: ネイティブの後段を付けたインタプリタは付け替えられません"
+            "Interp::rebind: ネイティブのバックエンドを付けたインタプリタのプログラムは差し替えられません"
         );
         let Interp {
             rt,
@@ -412,7 +412,7 @@ impl<'p> Interp<'p> {
                         keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
                         // SAFETY: 元のスレッドは join で待っていて、その間 job と self に触れない。
                         let (me, f) =
-                            unsafe { (*slot.take()).take() }.expect("仕事は 1 回だけ取り出す");
+                            unsafe { (*slot.take()).take() }.expect("ジョブは 1 回だけ取り出す");
                         // SAFETY: 上と同じ。
                         let it = unsafe { &mut *me };
                         let sp0 = approx_sp();
@@ -485,7 +485,7 @@ impl<'p> Interp<'p> {
     pub(crate) fn check_native_stack(&self) -> Result<(), Stop> {
         if self.stack_low != 0 && approx_sp() < self.stack_low {
             return Err(Stop::Internal(
-                "ネイティブのスタックの予備を使い切りました".to_string(),
+                "ネイティブスタックの余裕を使い切りました".to_string(),
             ));
         }
         Ok(())
@@ -833,10 +833,10 @@ impl<'p> Interp<'p> {
             }
             _ => match &self.rt.pending {
                 Pending::Yield { .. } if !e.yields => Err(bug(
-                    "yield が noyield の再開点に届きました(may_yield の印の誤り)",
+                    "yield が noyield の再開点に達しました(may_yield の印の誤り)",
                 )),
                 Pending::Matched(_) | Pending::ClauseValue(_) | Pending::TailResume(_) => {
-                    Err(bug("節の印がふつうの呼び出しに届きました"))
+                    Err(bug("節の通知が通常の呼び出しに達しました"))
                 }
                 _ => Ok(false),
             },
@@ -885,7 +885,7 @@ impl<'p> Interp<'p> {
                     .ops
                     .get(j as usize)
                     .map(|o| o.1)
-                    .ok_or_else(|| bug("範囲の外の節"))?;
+                    .ok_or_else(|| bug("範囲外の節"))?;
                 let args = match self.perform_args(st, e) {
                     Ok(a) => a,
                     Err(s) => {
@@ -916,9 +916,9 @@ impl<'p> Interp<'p> {
                 self.rt.chain = saved;
                 self.rt.pending = Pending::DiscardValue { hr, v };
             }
-            Pending::TailResume(_) => return Err(bug("末尾の resume の印が perform に届きました")),
+            Pending::TailResume(_) => return Err(bug("末尾 resume の通知が perform に届きました")),
             p @ Pending::Yield { .. } => self.rt.pending = p,
-            Pending::None => return Err(bug("状態語の立っていない巻き戻し")),
+            Pending::None => return Err(bug("状態ワードが設定されていない巻き戻し")),
             p => {
                 self.rt.chain = saved;
                 self.rt.pending = p;
@@ -973,7 +973,7 @@ impl<'p> Interp<'p> {
                 self.select(st, rp, c, m, d, &own, args, tail)
             }
             CalleeView::Other => Err(Stop::Internal(format!(
-                "呼べない値を呼びました: {}",
+                "呼び出せない値を呼びました: {}",
                 String::from_utf8_lossy(&self.rt.show(f))
             ))),
         }
@@ -1093,7 +1093,7 @@ impl<'p> Interp<'p> {
         }
         if self.rt.pending.is_yield() {
             return Err(bug(
-                "継続をネイティブの境目(構造的な Eq の比べ方)の外へ取り出そうとしました",
+                "継続をネイティブの境界(構造的な Eq の比較)の外へキャプチャしようとしました",
             ));
         }
         Err(Stop::Pending)
@@ -1108,7 +1108,7 @@ impl<'p> Interp<'p> {
                 let (c, m, d, own) = self.rt.method_parts(f);
                 self.call_method_nested(c, m, d, &own, args, base)
             }
-            CalleeView::Other => Err(Stop::Internal("呼べない値を呼びました".into())),
+            CalleeView::Other => Err(Stop::Internal("呼び出せない値を呼びました".into())),
         }
     }
 
@@ -1420,7 +1420,7 @@ impl<'p> Interp<'p> {
                     | Pending::DiscardValue { .. }
                     | Pending::DiscardNever { .. } => OTHER_UNWIND,
                     Pending::None | Pending::Matched(_) | Pending::ClauseValue(_) => {
-                        return Err(bug("ハンドラのフレームに届いた状態語が不正です"));
+                        return Err(bug("ハンドラのフレームに届いた状態ワードが不正です"));
                     }
                 };
                 out = Some(c as i64 as u64);
@@ -1432,7 +1432,7 @@ impl<'p> Interp<'p> {
             FxOp::PendingRestore => self.rt.pending = self.rt.pending_unbox(arg(0))?,
             FxOp::PendingValue => match self.rt.pending_unbox(arg(0))? {
                 Pending::DiscardValue { v, .. } | Pending::TailResume(v) => out = Some(v.0),
-                _ => return Err(bug("値を持たない状態語")),
+                _ => return Err(bug("値を持たない状態ワード")),
             },
             FxOp::PendingDiscard => {
                 let p = Pending::DiscardValue {
@@ -1478,7 +1478,7 @@ impl<'p> Interp<'p> {
                     HandlerPart::Ret => r.ret,
                     HandlerPart::Cancel => r.cancel,
                 };
-                out = Some(x.ok_or_else(|| bug("無い節を読みました"))?.0);
+                out = Some(x.ok_or_else(|| bug("ない節を読みました"))?.0);
             }
             FxOp::LimitGet => out = Some(self.rt.limit),
             FxOp::LimitSet => self.rt.limit = st.get(w[pc + 4]),
@@ -1609,7 +1609,7 @@ impl<'p> Interp<'p> {
             FxTermOp::TailCallNever => {
                 let Pending::DiscardNever { hr, clause, args } = self.rt.pending_unbox(arg(0))?
                 else {
-                    return Err(bug("NeverBody でない状態語"));
+                    return Err(bug("NeverBody でない状態ワード"));
                 };
                 let c = self.rt.hr(hr)?.ops[clause as usize].2;
                 let mut a = self.array_words_buf(args, 2);
@@ -1644,10 +1644,10 @@ impl<'p> Interp<'p> {
     fn cont_make(&mut self, st: &mut St, hr: Word) -> Result<Word, Stop> {
         let (t, top) = match &self.rt.pending {
             Pending::Yield { hr: t, top, .. } => (*t, *top),
-            _ => return Err(bug("YIELD でない状態語から継続を作ろうとしました")),
+            _ => return Err(bug("YIELD でない状態ワードから継続を作ろうとしました")),
         };
         if t != hr {
-            return Err(bug("ほかの宛ての YIELD から継続を作ろうとしました"));
+            return Err(bug("ほかのハンドラ宛ての YIELD から継続を作ろうとしました"));
         }
         let h = st.depth();
         // 1 回目の走査: フレームの個数と、ワード数の合計を数える。
@@ -1655,7 +1655,7 @@ impl<'p> Interp<'p> {
         let mut pos = top;
         while pos != st.fpos {
             if pos == NATIVE_CALLER {
-                return Err(bug("継続のフレームがハンドラのフレームに届きません"));
+                return Err(bug("継続のフレームがハンドラのフレームに達しません"));
             }
             let p = self.rt.stack.ptr_at(pos);
             // SAFETY: p はフレームヘッダを指し、フレームのワード数はヘッダの 2 番のワードから求まる。
@@ -1845,13 +1845,13 @@ impl<'p> Interp<'p> {
         let empty = placed.is_empty();
         self.placed = placed;
         if empty {
-            return Err(bug("フレームの無い継続"));
+            return Err(bug("フレームのない継続"));
         }
         self.move_to(st, below)?;
         // SAFETY: fp は最上段のフレーム(分類 G の操作節がキャプチャした perform のフレーム)のヘッダを指す。
         let trp = (unsafe { *st.fp } >> 32) as u32;
         if trp & YIELDED == 0 {
-            return Err(bug("継続の最上段が取り出された perform でない"));
+            return Err(bug("継続の最上段がキャプチャされた perform でない"));
         }
         let e = st.code().resume[(trp & !YIELDED) as usize];
         st.set(e.dst, v.0);
@@ -1877,7 +1877,7 @@ impl<'p> Interp<'p> {
         let base = st.depth();
         let top = st.fpos + st.code().frame_words as u64;
         if self.rt.conts[ki].sizes.is_empty() {
-            return Err(bug("フレームの無い継続"));
+            return Err(bug("フレームのない継続"));
         }
         let frames = std::mem::take(&mut self.rt.conts[ki].frames);
         let at = match self.rt.stack.link_copy(top, frames) {
@@ -1979,7 +1979,7 @@ impl<'p> Interp<'p> {
             FxCall::Value(f, args) => match self.rt.callee_view(f) {
                 CalleeView::Closure(func) => Ok(NativeFx::Enter(func, f, args)),
                 _ => Err(Stop::Internal(format!(
-                    "エフェクトの呼び出しの相手がクロージャでありません: {}",
+                    "エフェクトの呼び出し先がクロージャでありません: {}",
                     String::from_utf8_lossy(&self.rt.show(f))
                 ))),
             },
@@ -2662,9 +2662,7 @@ impl<'p> Interp<'p> {
                     st.pc += 1;
                 }
                 _ => {
-                    return Err(Stop::Internal(format!(
-                        "知らない命令の番号 {opc}(位置 {pc})"
-                    )));
+                    return Err(Stop::Internal(format!("未知のオペコード {opc}(位置 {pc})")));
                 }
             }
         }

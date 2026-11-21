@@ -64,7 +64,7 @@ fn 構文エラーの文面() {
     );
     assert_eq!(
         ast("let x = 0b102\n").unwrap_err(),
-        "t.kel:1:9: 構文エラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの綴りを確認してください)"
+        "t.kel:1:9: 構文エラー: 数値リテラル 0b10 の直後に 2 が続いています(数値リテラルの表記を確認してください)"
     );
     assert_eq!(
         ast("let x = \"abc").unwrap_err(),
@@ -124,9 +124,9 @@ fn 文脈は限度の失敗の後も使えて番号を続けて振る() {
     match keleut_front::parse_with(&mut cx, deep.as_bytes(), a, &files) {
         Err(ParseError::Syntax(m)) => assert_eq!(
             m,
-            "a.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 10 を超えました)"
+            "a.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 10 を超えました)"
         ),
-        r => panic!("限度で失敗するはずです: {r:?}"),
+        r => panic!("上限で失敗するはずです: {r:?}"),
     }
     let p = keleut_front::parse_with(&mut cx, b"let y = 1", b, &files).unwrap();
     let q = keleut_front::parse_with(&mut cx, b"let z = 2", c, &files).unwrap();

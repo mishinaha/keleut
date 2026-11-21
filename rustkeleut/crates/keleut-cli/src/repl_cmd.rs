@@ -539,9 +539,7 @@ impl Live {
             && keleut_rt::alloc::address_space_limit().is_none()
         {
             // 仮想メモリを制限していないのに作れないのは、処理系の内部エラーである(`keleut run` と同じ)。
-            eprintln!(
-                "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
-            );
+            eprintln!("keleut: 内部エラー: 実行スレッドを作れません({size} バイトのスタック): {e}");
             return Err(70);
         }
         let stop = keleut_rt::Stop::OutOfMemory;
@@ -596,7 +594,7 @@ impl Live {
             max_nest,
         };
         if let Err(mpsc::SendError(job)) = jobs.send(job) {
-            eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+            eprintln!("keleut: 内部エラー: 実行スレッドが異常終了しました");
             return (job.program, Ran::Ran(Exec::Exit(70)));
         }
         match self.replies.recv() {
@@ -617,7 +615,7 @@ impl Live {
             }
             Err(_) => {
                 // スレッドが異常終了して、プログラムも失われた。セッションを終了するので、空のプログラムを返す。
-                eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+                eprintln!("keleut: 内部エラー: 実行スレッドが異常終了しました");
                 self.jobs = None;
                 let empty = kir::Program {
                     version: kir::VERSION,
@@ -923,7 +921,7 @@ fn call(
         Ok(v) if v == Word::SENTINEL => {
             let e = match std::mem::take(&mut it.rt.pending) {
                 Pending::Error(s) => s,
-                p => Stop::Internal(format!("最上位に届いた状態語: {p:?}")),
+                p => Stop::Internal(format!("最上位に届いた状態ワード: {p:?}")),
             };
             reset(it);
             Err(e)
@@ -1053,7 +1051,11 @@ fn show_call(
             let cf = it.rt.closure_func(c);
             call(it, cf, c, &[v])?
         }
-        _ => return Err(Stop::Internal("表示の関数の大域の種類が違います".into())),
+        _ => {
+            return Err(Stop::Internal(
+                "表示の関数のグローバルの種類が違います".into(),
+            ));
+        }
     };
     Ok(it.rt.str_bytes(s).to_vec())
 }

@@ -40,7 +40,7 @@ impl Low<'_, '_> {
     pub(crate) fn pattern(&mut self, p: PatId, v: V, fail: BlockId, t: &Target) {
         let k = self.p.k;
         let Some(x) = k.nodes.pat(p) else {
-            self.p.note_bug(format!("範囲の外のパターン {}", p.0));
+            self.p.note_bug(format!("範囲外のパターン {}", p.0));
             return;
         };
         match x {
@@ -52,7 +52,7 @@ impl Low<'_, '_> {
                         let src = self.boxed(v);
                         self.b.emit(Inst::GlobalSet { global, src });
                     }
-                    None => self.p.note_bug(format!("範囲の外の大域の束縛 {n}")),
+                    None => self.p.note_bug(format!("範囲外のグローバルの束縛 {n}")),
                 },
             },
             Pat::Lit(l) => self.pat_lit(l, v, fail),

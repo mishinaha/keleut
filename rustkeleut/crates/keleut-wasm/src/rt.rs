@@ -1153,7 +1153,11 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
             case(&mut fb, pk::YIELD, OWN_YIELD, OTHER_YIELD);
             case(&mut fb, pk::TAIL_RESUME, TAIL_RESUME, TAIL_RESUME);
             case(&mut fb, pk::ERROR, OTHER_UNWIND, OTHER_UNWIND);
-            fatal(cg, &mut fb, "ハンドラのフレームに届いた状態語が不正です");
+            fatal(
+                cg,
+                &mut fb,
+                "ハンドラのフレームに届いた状態ワードが不正です",
+            );
         }
         PendingTake => {
             fb.i()
@@ -1207,8 +1211,8 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
         PerformUnwound => {
             // 結果は、この perform の G の節が選ばれて YIELD を設定したときは 1、それ以外は 0 である。
             let i32get = cg.func(FKey::H(I32Get));
-            let ttr = cg.tpl.internal("末尾の resume の印が perform に届きました");
-            let tnone = cg.tpl.internal("状態語の立っていない巻き戻し");
+            let ttr = cg.tpl.internal("末尾 resume の通知が perform に届きました");
+            let tnone = cg.tpl.internal("状態ワードが設定されていない巻き戻し");
             fb.i()
                 .global_get(g.p_kind)
                 .i32_const(pk::MATCHED)
@@ -1745,7 +1749,11 @@ fn gen_callv(cg: &mut Cg, n: u32) -> Function {
         }
         fb.i().return_call(callm).end();
     }
-    bail(cg, &mut fb, "メソッドの値の種類が翻訳の表にありません");
+    bail(
+        cg,
+        &mut fb,
+        "メソッドの値の種類がコード生成の表にありません",
+    );
     fb.i().end();
     // 実装のない extern の場合。
     let raise = cg.func(FKey::H(H::Raise));
@@ -1770,9 +1778,13 @@ fn gen_callv(cg: &mut Cg, n: u32) -> Function {
             .return_()
             .end();
     }
-    bail(cg, &mut fb, "実装の無い extern の大域が表にありません");
+    bail(
+        cg,
+        &mut fb,
+        "実装のない extern のグローバルが表にありません",
+    );
     fb.i().end();
-    bail(cg, &mut fb, "呼べない値を呼びました");
+    bail(cg, &mut fb, "呼び出せない値を呼びました");
     fb.finish()
 }
 
@@ -1901,7 +1913,7 @@ fn gen_callm(cg: &mut Cg, c: u32, m: u32, no: u32, n: u32) -> Function {
         }
         fb.i().end();
     }
-    bail(cg, &mut fb, "インスタンスが翻訳の表にありません");
+    bail(cg, &mut fb, "インスタンスがコード生成の表にありません");
     fb.i().end();
     // 構造的な Eq の場合。
     fb.i()
@@ -2053,7 +2065,7 @@ fn gen_clause_body(cg: &mut Cg, with_k: bool) -> Function {
             .return_call_ref(fty)
             .end();
     }
-    bail(cg, &mut fb, "節の引数の数が翻訳の表にありません");
+    bail(cg, &mut fb, "節の引数の数がコード生成の表にありません");
     fb.finish()
 }
 
@@ -2070,7 +2082,7 @@ fn gen_rt_resume(cg: &mut Cg, fb: &mut Fb) {
     let t = cg.m.t;
     let g = cg.g;
     let restore = cg.func(FKey::H(H::PendingRestore));
-    let tnone = cg.tpl.internal("フレームの無い継続");
+    let tnone = cg.tpl.internal("フレームのない継続");
     let kc = fb.local(rv(true, t.cont));
     let hr = fb.local(rv(true, t.hr));
     let f = fb.local(rv(true, t.frame));
@@ -2171,7 +2183,7 @@ fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
     // Eq のメソッドはエフェクトを持たないので、この境界の外へ YIELD は届かない。届いたら、内部エラーとして終了する(`doc/lir.md` の 16.1 節)。
     let ty_eq = cg
         .tpl
-        .internal("yield が構造的な Eq の比べ方の外へ届きました");
+        .internal("yield が構造的な Eq の比較の外へ届きました");
     // オペランドスタックに積んである項目の辞書で、xa と xb を比較する。
     // 結果が偽なら 0 を、番兵なら -1 を、この関数の結果として返す。
     let eq_item = |fb: &mut Fb| {

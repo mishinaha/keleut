@@ -47,7 +47,7 @@ pub const NAMES: &[&str] = &[
 ///
 /// [`NAMES`] のうち、実行に必要な実装がそろったペアを並べる。
 /// 現在は [`NAMES`] のすべてが入っている。
-/// [`NAMES`] にあってここにない名前を `--pairs` に書くと、kconform は `組 {n} はまだ使えません` と書いて終了コード 64 で終了する。
+/// [`NAMES`] にあってここにない名前を `--pairs` に書くと、kconform は `kconform: ペア {n} はまだ使えません(使えるペア: …)` と書いて終了コード 64 で終了する。
 pub const AVAILABLE: &[&str] = &[
     "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt",
     "kr-ka", "kr-km", "kr-kw",

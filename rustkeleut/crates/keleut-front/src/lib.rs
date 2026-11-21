@@ -98,7 +98,7 @@ pub fn on_stack<T: Send>(stack_bytes: usize, f: impl FnOnce() -> T + Send) -> Re
             .spawn_scoped(s, f)
             .map_err(|e| format!("フロントエンドのスレッドを作れません: {e}"))?;
         h.join()
-            .map_err(|_| "フロントエンドの中で内部の誤りが起きました".to_string())
+            .map_err(|_| "フロントエンドの中で内部エラーが起きました".to_string())
     })
 }
 

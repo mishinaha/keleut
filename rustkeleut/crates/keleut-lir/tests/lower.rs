@@ -580,7 +580,7 @@ fn 検証器は表と辞書と捕獲の食い違いを拒否する() {
         }
     }
     assert!(hit);
-    rejects(&p, "範囲の外の捕獲 7");
+    rejects(&p, "範囲外のキャプチャ 7");
 
     let ok = sample();
     let f = fid(&ok, "main/f");
@@ -589,7 +589,7 @@ fn 検証器は表と辞書と捕獲の食い違いを拒否する() {
     // 種類 fn のグローバルの関数が初期化関数である。
     let mut p = ok.clone();
     p.globals[g].kind = keleut_lir::GlobalKind::Fn(p.init[0]);
-    rejects(&p, "捕獲を持たない種類");
+    rejects(&p, "キャプチャを持たない種類");
 
     // 初期化関数が引数を持つ。
     let mut p = ok.clone();
@@ -598,7 +598,7 @@ fn 検証器は表と辞書と捕獲の食い違いを拒否する() {
     p.funcs[i0].regs.push(keleut_lir::Rep::Any);
     p.funcs[i0].params.push(r);
     p.funcs[i0].frame = None;
-    rejects(&p, "初期化の関数");
+    rejects(&p, "初期化関数");
 
     // 初期化関数を直接呼び出しで呼ぶ。
     let mut p = ok.clone();
@@ -610,7 +610,7 @@ fn 検証器は表と辞書と捕獲の食い違いを拒否する() {
             }
         }
     }
-    rejects(&p, "初期化の関数");
+    rejects(&p, "初期化関数");
 
     // error の実行時エラーが 19 番(メモリ不足)である。
     let mut p = ok.clone();
@@ -641,7 +641,7 @@ fn 検証器は表と辞書と捕獲の食い違いを拒否する() {
         },
     );
     p.funcs[f].frame = None;
-    rejects(&p, "組み込みのメソッドの表に無い組");
+    rejects(&p, "組み込みのメソッドの表にない組");
 
     // インスタンスの実装の個数がクラスのメソッドの個数と合わない。
     let ok = fixture("ex_dict.kir");

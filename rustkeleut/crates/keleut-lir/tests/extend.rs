@@ -93,7 +93,7 @@ fn 単位を_1_つずつ足す() {
         }
         let mut seen = std::collections::HashSet::new();
         for s in &lp.shapes {
-            assert!(seen.insert(s.clone()), "{name}: 形が重なる");
+            assert!(seen.insert(s.clone()), "{name}: シェイプが重なる");
         }
     }
 }

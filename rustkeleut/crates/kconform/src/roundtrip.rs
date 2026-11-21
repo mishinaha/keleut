@@ -106,8 +106,8 @@ fn describe(r: &Run) -> String {
     let msg = String::from_utf8_lossy(&r.stderr);
     let first = msg.lines().next().unwrap_or("");
     match r.code {
-        None => "時間切れ".to_string(),
-        Some(c) => format!("終了状態 {c}: {first}"),
+        None => "タイムアウト".to_string(),
+        Some(c) => format!("終了コード {c}: {first}"),
     }
 }
 
@@ -141,7 +141,7 @@ fn check_inner(e: &Entry, cfg: &Config) -> std::io::Result<Verdict> {
                 break;
             }
             Some(c) => last_code = c,
-            None => return Ok(Verdict::Fail("emit", "時間切れ".to_string())),
+            None => return Ok(Verdict::Fail("emit", "タイムアウト".to_string())),
         }
     }
     let Some(flags) = chosen else {
@@ -381,7 +381,7 @@ pub fn main(cfg: &Config) -> u8 {
     );
     let (nfx, fx_fails) = check_fixtures(cfg);
     println!(
-        "kir-roundtrip: 見本 {nfx} 個({})のうち、通った {} 個、失敗 {fx_fails} 個",
+        "kir-roundtrip: フィクスチャ {nfx} 個({})のうち、通った {} 個、失敗 {fx_fails} 個",
         cfg.fixtures.display(),
         nfx - fx_fails
     );

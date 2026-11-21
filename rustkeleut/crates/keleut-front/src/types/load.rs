@@ -201,7 +201,7 @@ pub fn split_import_path(span: Span, src: &str) -> Result<(Option<usize>, Vec<St
         return import_error(
             span,
             format!(
-                "import のパスにコロンは書けません(\"kel:\" などの前置は予約されています): {src}"
+                "import のパスにコロンは書けません(\"kel:\" などの接頭辞は予約されています): {src}"
             ),
         );
     }
@@ -239,7 +239,7 @@ pub fn split_import_path(span: Span, src: &str) -> Result<(Option<usize>, Vec<St
         );
     }
     if rest.iter().any(|c| c.is_empty() || *c == "." || *c == "..") {
-        return import_error(span, format!("import のパスの成分が不正です: {src}"));
+        return import_error(span, format!("import のパスの要素が不正です: {src}"));
     }
     Ok((rel, rest.iter().map(|s| s.to_string()).collect()))
 }
@@ -443,7 +443,7 @@ impl LoadState<'_> {
                 let i = path_stack
                     .iter()
                     .position(|(x, _)| *x == id)
-                    .expect("訪問中の列にある");
+                    .expect("訪問中のスタックにある");
                 let mut cycle: Vec<&str> =
                     path_stack[i..].iter().map(|(_, d)| d.as_str()).collect();
                 cycle.push(&display);
@@ -564,7 +564,7 @@ pub fn unit_keys(
                     Some(cs) => cs,
                     None => {
                         return Err(UnitKeyError::Bug(format!(
-                            "KIR の単位の鍵: 起点のディレクトリの相対パスを決められません: {f}"
+                            "KIR の単位のキー: 起点のディレクトリの相対パスを決められません: {f}"
                         )));
                     }
                 }
@@ -598,11 +598,11 @@ pub fn unit_keys(
                     }
                 }
                 Err(UnitKeyError::Bug(format!(
-                    "KIR の単位の鍵: 検索パスに見つかりません: {src}"
+                    "KIR の単位のキー: 検索パスに見つかりません: {src}"
                 )))
             }
             Err(_) => Err(UnitKeyError::Bug(format!(
-                "KIR の単位の鍵: import のパスが不正です: {src}"
+                "KIR の単位のキー: import のパスが不正です: {src}"
             ))),
         }
     }
@@ -620,9 +620,9 @@ pub fn unit_keys(
             if !keys.contains_key(id) {
                 let key = key_of(fs, import_path, dir.as_str(), &u.imports[*k], id)?;
                 keys.insert(id.clone(), key.clone());
-                let dep = by_id
-                    .get(id.as_str())
-                    .ok_or_else(|| UnitKeyError::Bug("KIR の単位の鍵: 単位がありません".into()))?;
+                let dep = by_id.get(id.as_str()).ok_or_else(|| {
+                    UnitKeyError::Bug("KIR の単位のキー: 単位がありません".into())
+                })?;
                 frames.push((dep, key_dir(&key), 0));
             }
         }
@@ -633,10 +633,10 @@ pub fn unit_keys(
         let k = keys
             .get(&u.id)
             .cloned()
-            .ok_or_else(|| UnitKeyError::Bug("KIR の単位の鍵: 鍵がありません".into()))?;
+            .ok_or_else(|| UnitKeyError::Bug("KIR の単位のキー: キーがありません".into()))?;
         if let Some(d0) = owner.get(&k) {
             return Err(UnitKeyError::Clash(format!(
-                "KIR の単位の鍵が重なります: {k}({d0} と {})",
+                "KIR の単位のキーが重なります: {k}({d0} と {})",
                 u.display
             )));
         }

@@ -88,7 +88,7 @@ fn fixture_の_kir_を記録どおりに走らせる() {
             .unwrap();
         if r.stdout != want_out || r.stderr != want_err || r.status.code() != Some(want_code) {
             fails.push(format!(
-                "{n}: 終了状態 {:?}(記録 {want_code})\n標準出力:\n{}\n標準エラー:\n{}",
+                "{n}: 終了コード {:?}(期待値 {want_code})\n標準出力:\n{}\n標準エラー:\n{}",
                 r.status.code(),
                 String::from_utf8_lossy(&r.stdout),
                 String::from_utf8_lossy(&r.stderr)
@@ -373,7 +373,7 @@ fn コーパスの全件を_diktor_と比べる() {
         })
         .collect();
     eprintln!(
-        "コーパス {} 本: 一致 {same}、未実装(4)で止まったもの {unimpl}、差 {}",
+        "コーパス {} 本: 一致 {same}、未実装(4)で終了したもの {unimpl}、差分 {}",
         rows.len(),
         diffs.len()
     );
@@ -589,7 +589,7 @@ fn keleut_ulimit(dir: &Path, kib: u64, args: &[&str]) -> Output {
 
 fn describe(r: &Output) -> String {
     format!(
-        "終了状態 {:?}\n標準出力:\n{}\n標準エラー:\n{}",
+        "終了コード {:?}\n標準出力:\n{}\n標準エラー:\n{}",
         r.status.code(),
         String::from_utf8_lossy(&r.stdout),
         String::from_utf8_lossy(&r.stderr)
@@ -776,7 +776,7 @@ fn stage_limit_line(stage: &str) -> String {
 const CONV_LIMIT_LINE: &str = "keleut: 処理系の限度: 型検査か実行の前の変換でメモリが足りません\n";
 
 fn alloc_test_line(site: &str) -> String {
-    format!("keleut: 試験: {site} の確保を失敗させました\n")
+    format!("keleut: テスト: {site} の確保を失敗させました\n")
 }
 
 #[test]
@@ -1032,7 +1032,7 @@ fn 受け付ける最大の深さの木を捨てても落ちない() {
                     while !probe(hi).0 {
                         lo = hi;
                         hi *= 2;
-                        assert!(hi <= 1 << 20, "{shape} {stack}: 限度に当たらない");
+                        assert!(hi <= 1 << 20, "{shape} {stack}: 上限に当たらない");
                     }
                     while hi - lo > 1 {
                         let m = (lo + hi) / 2;

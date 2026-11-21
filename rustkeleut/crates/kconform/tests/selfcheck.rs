@@ -106,7 +106,7 @@ fn 記録どおりなら差は無く_shim_を通る() {
         &["--pairs", "dk", "--check-shim", t.to_str().unwrap()],
     );
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("差 0 件"), "{out}");
+    assert!(out.contains("差分 0 件"), "{out}");
     assert!(out.contains("shim の呼び出し 4 回"), "{out}");
     assert!(
         out.contains("diktor を含むコマンド 4 個のうち shim を通らないもの 0 個"),
@@ -126,7 +126,7 @@ fn 出力の_cr_を_dune_と同じに扱う() {
     std::fs::write(&t, CR).unwrap();
     let (code, out) = kconform(&d.0, &fake, &["expect", t.to_str().unwrap()]);
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("差 0 件"), "{out}");
+    assert!(out.contains("差分 0 件"), "{out}");
 }
 
 /// dune 3.21.1 の cram が promote した内容である。
@@ -156,7 +156,7 @@ fn シェルの誤りの位置と色の指定を_dune_と同じに除く() {
     std::fs::write(&t, SHELL_MESSAGES).unwrap();
     let (code, out) = kconform(&d.0, &fake, &["expect", t.to_str().unwrap()]);
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("差 0 件"), "{out}");
+    assert!(out.contains("差分 0 件"), "{out}");
 }
 
 #[test]
@@ -171,9 +171,9 @@ fn 診断の本文の違いは正規化で消え_終了状態の違いは差に�
     .unwrap();
     let (code, out) = kconform(&d.0, &fake, &["--pairs", "dk", t.to_str().unwrap()]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("差 1 件"), "{out}");
-    assert!(out.contains("正規化の前の記録との不一致 2 件"), "{out}");
-    assert!(out.contains("diff.t:5 [dk]: 記録との差"), "{out}");
+    assert!(out.contains("差分 1 件"), "{out}");
+    assert!(out.contains("正規化の前の期待出力との不一致 2 件"), "{out}");
+    assert!(out.contains("diff.t:5 [dk]: 期待出力との差分"), "{out}");
 }
 
 #[test]
@@ -189,14 +189,14 @@ fn 既知の差に載せた差は失敗にしない() {
     .unwrap();
     let (code, out) = kconform(&d.0, &fake, &["--pairs", "dk", t.to_str().unwrap()]);
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("既知の差 1 件"), "{out}");
+    assert!(out.contains("既知の差分 1 件"), "{out}");
     std::fs::write(
         d.0.join("known-diffs.toml"),
         "[[diff]]\nfile = \"k.t\"\nline = 2\npairs = [\"dk\"]\nreason = \"試験\"\nledger = \"V0\"\n",
     )
     .unwrap();
     let (code, _) = kconform(&d.0, &fake, &["--pairs", "dk", t.to_str().unwrap()]);
-    assert_eq!(code, 64, "コマンドの行を指さない項目は使い方の誤り");
+    assert_eq!(code, 64, "コマンドの行を指さない項目は使い方のエラー");
 }
 
 #[test]
@@ -305,12 +305,15 @@ fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
     let (code, out, err) = kconform_with_keleut(&d.0, &fake, &nojit, &["--pairs", "ki,kj", t]);
     assert_eq!(code, 64, "{out}{err}");
     assert!(err.contains("kj"), "{err}");
-    assert!(err.contains("feature llvm を外して組まれています"), "{err}");
+    assert!(
+        err.contains("feature llvm を外してビルドされています"),
+        "{err}"
+    );
 
     // --pairs を省けば、LLVM ペアを除いたことを標準エラーに書いて、残りのペアを実行する。
     let (_, out, err) = kconform_with_keleut(&d.0, &fake, &nojit, &[t]);
     assert!(
-        err.contains(&format!("LLVM の後段の組 {JIT_PAIRS} を走らせません")),
+        err.contains(&format!("LLVM ペア {JIT_PAIRS} を実行しません")),
         "{err}"
     );
     let ran = ran_pairs(&out);
@@ -327,7 +330,7 @@ fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
     ] {
         let k = fake_keleut(&d.0, name, version);
         let (_, out, err) = kconform_with_keleut(&d.0, &fake, &k, &[t]);
-        assert!(!err.contains("を走らせません"), "{name}: {err}");
+        assert!(!err.contains("を実行しません"), "{name}: {err}");
         assert!(!err.contains("feature llvm"), "{name}: {out}{err}");
         let ran = ran_pairs(&out);
         for p in [
@@ -338,14 +341,14 @@ fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
     }
 }
 
-/// 要約の行(`kconform: 組 ` で始まる行。出力ではペアを「組」と書く)から、実行したペアの名前を取り出す。
+/// 要約の行(`kconform: ペア ` で始まる行)から、実行したペアの名前を取り出す。
 /// シードのあるペアは、`ka=1` のようにシードごとの名前になる。
 fn ran_pairs(out: &str) -> Vec<String> {
     let line = out
         .lines()
-        .find(|l| l.starts_with("kconform: 組 "))
-        .unwrap_or_else(|| panic!("要約の行が無い: {out}"));
-    let rest = &line["kconform: 組 ".len()..];
+        .find(|l| l.starts_with("kconform: ペア "))
+        .unwrap_or_else(|| panic!("要約の行がない: {out}"));
+    let rest = &line["kconform: ペア ".len()..];
     let list = &rest[..rest.find('(').unwrap()];
     list.split(',').map(str::to_string).collect()
 }

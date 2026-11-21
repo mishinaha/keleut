@@ -79,7 +79,7 @@ impl Builder {
 
     /// 現在のブロックに命令を追加する。
     pub(crate) fn emit(&mut self, i: Inst) {
-        let b = self.cur.expect("終わったブロックに命令を足そうとした");
+        let b = self.cur.expect("終わったブロックに命令を追加しようとした");
         self.blocks[b.index()].insts.push(i);
     }
 

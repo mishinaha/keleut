@@ -10,7 +10,6 @@
 //! PATH の先頭に置く shim は、`kconform __shim diktor|keleut ARGS…` を呼ぶ(`shim` モジュール)。
 //!
 //! 終了コードは、差分がなければ 0、未登録の差分か失敗があれば 1、使い方のエラーなら 64、内部エラーなら 70 である。
-//! kconform は、出力ではペアを「組」、バックエンドを「後段」、テストを「試験」、既知の差分を「既知の差」、期待出力を主に「記録」と書く(「期待の出力」と書く行もある)。
 
 mod corpus;
 mod cram;
@@ -340,7 +339,7 @@ struct Difference {
     command: usize,
     /// 差分のあるペアの、個々の構成の名前(`ka=3` など)。
     pair: String,
-    /// 比較対象の表示。`記録`(期待出力)か、基準のペアの名前を含む文字列である。
+    /// 比較対象の表示。`期待出力` か、基準のペアの名前を含む文字列である。
     against: String,
     /// 比較の種類。既知の差分の `against` との照合に使う。
     cmp: known_diffs::Comparison,
@@ -425,7 +424,7 @@ fn backend_group_diffs(
                     case,
                     command: k,
                     pair: run_pairs[pi].label.clone(),
-                    against: format!("後段の組 {} ", run_pairs[r0].label),
+                    against: format!("バックエンドのペア {} ", run_pairs[r0].label),
                     cmp: known_diffs::Comparison::Backend,
                     want,
                     got,
@@ -467,7 +466,7 @@ fn report(
         for (line, text) in cram::dropped(&case.items) {
             dropped += 1;
             println!(
-                "差: {}:{line}: どのコマンドの期待の出力にも付かない行(dune はこの行を捨てる)",
+                "差分: {}:{line}: どのコマンドの期待出力にも属さない行(dune はこの行を捨てる)",
                 case.name
             );
             println!("-{}", String::from_utf8_lossy(text));
@@ -483,7 +482,7 @@ fn report(
                 continue;
             }
             if r.timed_out {
-                failures.push(format!("{} [{}]: 時間切れ", case.name, pair.label));
+                failures.push(format!("{} [{}]: タイムアウト", case.name, pair.label));
             }
             for (k, c) in cmds.iter().enumerate() {
                 let inv = &r.invocations[k];
@@ -508,10 +507,10 @@ fn report(
                     );
                 }
                 // 深さのテストでは、終了コード 70 を失敗として扱う。
-                // スタック残量の検査(出力では「予備の検査」)で終了したときの終了コードだからである(原因は調べないので、ほかの内部エラーの 70 も失敗になる)。
+                // スタック残量の検査で終了したときの終了コードだからである(原因は調べないので、ほかの内部エラーの 70 も失敗になる)。
                 if depth && matches!(r.outcomes[k], cram::Outcome::Ran { code: 70, .. }) {
                     failures.push(format!(
-                        "{}:{} [{}]: 終了状態 70(深さの試験では予備の検査を失敗にする)",
+                        "{}:{} [{}]: 終了コード 70(深さのテストではスタック残量の検査を失敗にする)",
                         case.name, c.line, pair.label
                     ));
                 }
@@ -542,7 +541,7 @@ fn report(
                         case: ci,
                         command: k,
                         pair: pair.label.clone(),
-                        against: "記録".to_string(),
+                        against: "期待出力".to_string(),
                         cmp: known_diffs::Comparison::Record,
                         want: c.expected.clone(),
                         got: got.clone(),
@@ -553,7 +552,7 @@ fn report(
                         case: ci,
                         command: k,
                         pair: pair.label.clone(),
-                        against: "記録".to_string(),
+                        against: "期待出力".to_string(),
                         cmp: known_diffs::Comparison::Record,
                         want: c.expected.clone(),
                         got,
@@ -580,7 +579,7 @@ fn report(
                             case: ci,
                             command: k,
                             pair: pair.label.clone(),
-                            against: format!("組 {} ", run_pairs[base_i].label),
+                            against: format!("ペア {} ", run_pairs[base_i].label),
                             cmp: known_diffs::Comparison::Pair,
                             want: want.clone(),
                             got: got.clone(),
@@ -591,7 +590,7 @@ fn report(
                             case: ci,
                             command: k,
                             pair: pair.label.clone(),
-                            against: format!("組 {} ", run_pairs[base_i].label),
+                            against: format!("ペア {} ", run_pairs[base_i].label),
                             cmp: known_diffs::Comparison::Pair,
                             want,
                             got,
@@ -622,13 +621,13 @@ fn report(
                 continue;
             }
             println!(
-                "既知の差: {}:{} [{}]({} {})",
+                "既知の差分: {}:{} [{}]({} {})",
                 case.name, c.line, d.pair, known[h].ledger, known[h].reason
             );
         } else {
             unknown += 1;
             println!(
-                "差: {}:{} [{}]: {}との差",
+                "差分: {}:{} [{}]: {}との差分",
                 case.name, c.line, d.pair, d.against
             );
         }
@@ -643,7 +642,7 @@ fn report(
         let c = cram::commands(&case.items)[d.command];
         backend_unknown += 1;
         println!(
-            "差: {}:{} [{}]: {}との差(後段の間は既知の差に関係なく一致しなければならない)",
+            "差分: {}:{} [{}]: {}との差分(バックエンドの間は既知の差分に関係なく一致しなければならない)",
             case.name, c.line, d.pair, d.against
         );
         println!("  $ {}", c.display());
@@ -671,7 +670,7 @@ fn report(
     }
     // ペアのバックエンドで実行されなかったコマンドは、そのペアの比較から漏れているので、`--verbose` でなくても表示する。
     for b in &overridden {
-        println!("組の後段の上書き: {b}");
+        println!("ペアのバックエンドの上書き: {b}");
     }
     let run_names: Vec<&str> = run_pairs.iter().map(|p| p.name).collect();
     let unused: Vec<&known_diffs::Entry> = known
@@ -689,7 +688,7 @@ fn report(
     if o.verbose {
         for e in &unused {
             println!(
-                "使われなかった既知の差: {}:{}({})",
+                "使われなかった既知の差分: {}:{}({})",
                 e.file, e.line, e.ledger
             );
         }
@@ -703,14 +702,14 @@ fn report(
         String::new()
     };
     println!(
-        "kconform: 組 {}{base_note}、{} 個の試験、{} 個のコマンド(記録と比べた {compared} 個)、差 {unknown} 件、既知の差 {diffs_known} 件、失敗 {} 件",
+        "kconform: ペア {}{base_note}、{} 個のテスト、{} 個のコマンド(期待出力と比較した {compared} 個)、差分 {unknown} 件、既知の差分 {diffs_known} 件、失敗 {} 件",
         labels.join(","),
         cases.len(),
         commands_total,
         failures.len()
     );
     println!(
-        "kconform: 正規化の前の記録との不一致 {exact_mismatch} 件、shim の呼び出し {invocations} 回、diktor を含むコマンド {diktor_commands} 個のうち shim を通らないもの {} 個、使われなかった既知の差 {} 件",
+        "kconform: 正規化の前の期待出力との不一致 {exact_mismatch} 件、shim の呼び出し {invocations} 回、diktor を含むコマンド {diktor_commands} 個のうち shim を通らないもの {} 個、使われなかった既知の差分 {} 件",
         bypass.len(),
         unused.len()
     );
@@ -799,7 +798,7 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
     };
     // テストが 1 つもなければ、何も確かめていないので失敗として終了する(`conformance/depth/` がないときなど)。
     if cases.is_empty() {
-        eprintln!("kconform: 走らせる試験がありません");
+        eprintln!("kconform: 実行するテストがありません");
         return 1;
     }
     let mut known = Vec::new();
@@ -828,7 +827,7 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
         for e in &known {
             if !universe.iter().any(|k| k.ends_with(Path::new(&e.file))) {
                 eprintln!(
-                    "kconform: {} の {} 行の項目 {}:{} は、どの試験のファイルにも当たりません",
+                    "kconform: {} の {} 行の項目 {}:{} は、どのテストのファイルにも該当しません",
                     e.origin, e.source_line, e.file, e.line
                 );
                 orphan += 1;
@@ -872,7 +871,7 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
     let (path_tail, removed) = runner::filter_path(&std::env::var_os("PATH").unwrap_or_default());
     if o.verbose {
         for r in &removed {
-            println!("PATH から除いた: {}", r.display());
+            println!("PATH から取り除いた: {}", r.display());
         }
     }
     let real_diktor = absolute(&o.diktor_path());
@@ -935,7 +934,7 @@ fn main_default(o: &Options) -> u8 {
     for n in &names {
         if depth && NOT_IN_DEPTH.contains(&n.as_str()) {
             eprintln!(
-                "kconform: 組 {n} は深さの試験では走らせません(深さの試験は dk-ir と RustKeleut の組で比べる)"
+                "kconform: ペア {n} は深さのテストでは実行しません(深さのテストは dk-ir と RustKeleut のペアで比較する)"
             );
             return 64;
         }
@@ -948,7 +947,7 @@ fn main_default(o: &Options) -> u8 {
         };
         if !pairs::AVAILABLE.contains(&n.as_str()) {
             eprintln!(
-                "kconform: 組 {n} はまだ使えません(使える組: {})",
+                "kconform: ペア {n} はまだ使えません(使えるペア: {})",
                 pairs::AVAILABLE.join(",")
             );
             return 64;
@@ -963,14 +962,14 @@ fn main_default(o: &Options) -> u8 {
     if !jit_names.is_empty() && !keleut_has_jit(o) {
         if o.pairs.is_some() {
             eprintln!(
-                "kconform: 組 {} は LLVM の後段を使いますが、{} は feature llvm を外して組まれています(cargo build --release で組み直してください)",
+                "kconform: ペア {} は LLVM バックエンドを使いますが、{} は feature llvm を外してビルドされています(cargo build --release でビルドし直してください)",
                 jit_names.join(","),
                 o.keleut_path().display()
             );
             return 64;
         }
         eprintln!(
-            "kconform: {} は feature llvm を外して組まれているので、LLVM の後段の組 {} を走らせません",
+            "kconform: {} は feature llvm を外してビルドされているので、LLVM ペア {} を実行しません",
             o.keleut_path().display(),
             jit_names.join(",")
         );
@@ -1029,7 +1028,7 @@ fn main_extract(o: &Options) -> u8 {
     let want = corpus::desired(&ex);
     let unknown_flags = ex.files.iter().filter(|(e, _)| e.flags.is_none()).count();
     let summary = format!(
-        "extract-corpus: {} 本の .kel(旗の分からないもの {unknown_flags} 本)、展開を含むので除いたもの {}、終わりの語の無いもの {}",
+        "extract-corpus: {} 本の .kel(オプションの分からないもの {unknown_flags} 本)、展開を含むので除いたもの {}、終端の語のないもの {}",
         ex.files.len(),
         ex.expanding,
         ex.unterminated
@@ -1044,7 +1043,7 @@ fn main_extract(o: &Options) -> u8 {
                 for l in &d {
                     println!("{l}");
                 }
-                println!("{summary}。コーパスとの差 {} 件", d.len());
+                println!("{summary}。コーパスとの差分 {} 件", d.len());
                 1
             }
             Err(e) => {

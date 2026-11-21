@@ -251,7 +251,7 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
             .fold((0, 0), |(n, s), k| (n + 1, s + k));
         assert!(
             fields <= 2 * size + KNOWN_RECORD_FIELDS * news,
-            "{kind}: {} の rec_new の {news} 個の被演算子が {fields} 個(関数の大きさ {size})",
+            "{kind}: {} の rec_new の {news} 個のオペランドが {fields} 個(関数の大きさ {size})",
             f.sym
         );
         // 再開点と安全点の集合は差分で持つので、保持するレジスタの個数は関数のサイズに比例する。
@@ -274,7 +274,7 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
             };
         assert!(
             live <= bound && defs <= bound,
-            "{kind}: {} の手間が生存解析で {live}、定義の検査で {defs}(関数の大きさ {size})",
+            "{kind}: {} の処理量が生存解析で {live}、定義の検査で {defs}(関数の大きさ {size})",
             f.sym
         );
         if n <= 1000 {
@@ -297,7 +297,7 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
     let shapes: usize = lp.shapes.iter().map(Vec::len).sum();
     assert!(
         shapes <= 2 * total + KNOWN_RECORD_FIELDS * lp.shapes.len(),
-        "{kind}: 形の表のラベルが {shapes} 個(関数の大きさの和 {total})"
+        "{kind}: シェイプ表のラベルが {shapes} 個(関数の大きさの和 {total})"
     );
 }
 

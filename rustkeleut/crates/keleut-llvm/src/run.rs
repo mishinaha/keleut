@@ -370,7 +370,7 @@ fn run_with(
             let init = match init_rx.recv() {
                 Ok(Ok(i)) => i,
                 Ok(Err(e)) => return Err(e),
-                Err(_) => return Err("JIT のスレッドが落ちました".to_string()),
+                Err(_) => return Err("JIT のスレッドが異常終了しました".to_string()),
             };
             // SAFETY: enter はコンパイルした enter_tailcc のアドレスで、その関数の型は EnterFn と同じである。
             let enter: EnterFn = unsafe { std::mem::transmute::<usize, EnterFn>(init.enter) };
@@ -389,9 +389,10 @@ fn run_with(
         };
         let mut parts = Some((eager, pending, entry, req_tx, rep_rx, failure));
         let mut setup = move |it: &mut Interp<'_>| -> Result<(), Stop> {
-            let (eager, pending, entry, req_tx, rep_rx, failure) = parts
-                .take()
-                .ok_or_else(|| Stop::Internal("ネイティブの後段を 2 度付けました".into()))?;
+            let (eager, pending, entry, req_tx, rep_rx, failure) =
+                parts.take().ok_or_else(|| {
+                    Stop::Internal("ネイティブのバックエンドを 2 度付けました".into())
+                })?;
             let enter = eager.unwrap_or(no_enter);
             let request = Box::new(
                 move |f: FuncId, wait: bool| -> Result<Option<usize>, String> {

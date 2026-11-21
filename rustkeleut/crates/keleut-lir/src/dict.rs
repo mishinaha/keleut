@@ -41,7 +41,7 @@ impl Low<'_, '_> {
     pub(crate) fn dict(&mut self, d: DictId) -> DictV {
         let k = self.p.k;
         let Some(x) = k.nodes.dict(d) else {
-            self.p.note_bug(format!("範囲の外の辞書 {}", d.0));
+            self.p.note_bug(format!("範囲外の辞書 {}", d.0));
             let r = self.b.konst(Const::Unit);
             return DictV::Dyn(r);
         };
@@ -56,7 +56,7 @@ impl Low<'_, '_> {
             Dict::DParam(i) => match self.dparams.get(*i as usize) {
                 Some(&r) => DictV::Dyn(r),
                 None => {
-                    self.p.note_bug(format!("範囲の外の辞書の引数 {i}"));
+                    self.p.note_bug(format!("範囲外の辞書の引数 {i}"));
                     DictV::Dyn(self.b.konst(Const::Unit))
                 }
             },
@@ -186,7 +186,7 @@ impl Low<'_, '_> {
                     .get(inst.index())
                     .and_then(|i| i.methods.iter().find(|m| m.method == method))
                 else {
-                    return self.bug("インスタンスにメソッドの実装が無い");
+                    return self.bug("インスタンスにメソッドの実装がない");
                 };
                 let ndicts = k.instances[inst.index()].premises + im.dicts;
                 let func = self.p.func(im.func);

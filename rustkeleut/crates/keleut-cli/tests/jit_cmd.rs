@@ -59,7 +59,7 @@ fn check_with(mode: &[&str], extra: &[&str]) {
             .unwrap();
         if r.stdout != want_out || r.stderr != want_err || r.status.code() != Some(want_code) {
             fails.push(format!(
-                "{n}: 終了状態 {:?}(記録 {want_code})\n標準エラー:\n{}",
+                "{n}: 終了コード {:?}(期待値 {want_code})\n標準エラー:\n{}",
                 r.status.code(),
                 String::from_utf8_lossy(&r.stderr)
             ));
@@ -104,7 +104,7 @@ fn 段の設定のどれでも記録どおりに走らせる() {
 #[test]
 #[cfg_attr(
     debug_assertions,
-    ignore = "最適化なしの組みでは KIR の処理のスレッドが上限に収まらない"
+    ignore = "デバッグビルドでは KIR の処理のスレッドが上限に収まらない"
 )]
 fn 仮想メモリの上限の下で既定と段の設定のどれでも完走する() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ulimit");
@@ -128,7 +128,7 @@ fn 仮想メモリの上限の下で既定と段の設定のどれでも完走�
             .unwrap();
         if r.stdout != b"200000\nG\n" || r.status.code() != Some(0) {
             fails.push(format!(
-                "{t:?}: 終了状態 {:?}\n標準出力:\n{}\n標準エラー:\n{}",
+                "{t:?}: 終了コード {:?}\n標準出力:\n{}\n標準エラー:\n{}",
                 r.status.code(),
                 String::from_utf8_lossy(&r.stdout),
                 String::from_utf8_lossy(&r.stderr)
@@ -164,7 +164,7 @@ fn run_heavy(name: &str, args: &[&str]) -> (String, Duration) {
 fn 翻訳の重い関数はインタプリタに残す() {
     for t in ["jit-only", "threshold=1", "alternating=1"] {
         let (err, el) = run_heavy("cons1000", &["--tier", t]);
-        assert!(err.contains("インタプリタで走らせた関数 1、"), "{t}: {err}");
+        assert!(err.contains("インタプリタで実行した関数 1、"), "{t}: {err}");
         assert!(el < Duration::from_secs(20), "{t}: {el:?}");
     }
 }
@@ -176,7 +176,7 @@ fn 翻訳の重い関数はインタプリタに残す() {
 #[test]
 #[cfg_attr(
     debug_assertions,
-    ignore = "最適化なしの組みでは実行の時間が翻訳の時間に近い"
+    ignore = "デバッグビルドでは実行の時間がコンパイルの時間に近い"
 )]
 fn 翻訳の途中で実行が終われば翻訳を待たない() {
     let (_, jit) = run_heavy("cons200", &["--tier", "jit-only"]);

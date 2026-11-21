@@ -307,7 +307,7 @@ impl Sv {
 
 #[cold]
 fn bad(want: &str, got: &Sv) -> ! {
-    panic!("keleut-front: 意味の値の型が合いません({want} を期待したが {got:?})")
+    panic!("keleut-front: 意味値の型が合いません({want} を期待したが {got:?})")
 }
 
 /// 意味値から内容を取り出す関数を作る。
@@ -744,7 +744,7 @@ fn with_splice(
 fn trailing_record<T>(pos: Pos) -> Result<T, ActErr> {
     syntax_error(
         pos,
-        "末尾ブロックの中身にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)",
+        "末尾ブロックの内容にレコードの形は書けません(空の {} もレコードです。何もしない関数は { () } と書きます)",
     )
 }
 
@@ -757,7 +757,7 @@ fn trailing_other_err<T>(pos: Pos, t: TrailingOther) -> Result<T, ActErr> {
         ),
         TrailingOther::Annot(p) => syntax_error(
             p,
-            "末尾ブロックの引数に型注釈は書けません(型注釈の要る関数は fn(x: T) => 式 と書いて括弧の中に渡します)",
+            "末尾ブロックの引数に型注釈は書けません(型注釈の必要な関数は fn(x: T) => 式 と書いて括弧の中に渡します)",
         ),
     }
 }
@@ -915,7 +915,7 @@ fn start_action(_: &mut Ctx, a: &mut Args) -> Res {
 }
 
 fn missing(_: &mut Ctx, _: &mut Args) -> Res {
-    panic!("keleut-front: 動作の無い規則を還元しました(tables.rs と actions.rs が合っていません)")
+    panic!("keleut-front: 動作のない規則を還元しました(tables.rs と actions.rs が合っていません)")
 }
 
 /// 意味動作を登録していない規則のキーを返す(テスト用)。
@@ -1736,7 +1736,7 @@ fn lookup(key: &str) -> Option<ActFn> {
             let base = a.t(2).exp();
             match &base.kind {
                 ExpKind::Ident(LongId(v)) if v.len() == 1 && !is_upper(&v[0]) => {}
-                _ => return syntax_error(p2, "レコード更新の基底は小文字始まりの識別子 1 個です"),
+                _ => return syntax_error(p2, "更新元のレコードは小文字始まりの識別子 1 個です"),
             }
             let mut acc = base;
             for (l, v) in fs {

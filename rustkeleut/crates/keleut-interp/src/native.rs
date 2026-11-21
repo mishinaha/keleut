@@ -491,9 +491,9 @@ impl Drop for Native {
         if std::env::var_os("KELEUT_JIT_STATS").is_some() {
             let interp = self.state.iter().filter(|s| **s == State::Interp).count();
             eprintln!(
-                "keleut: jit: 翻訳した関数 {}、インタプリタで走らせた関数 {interp}、スタックの下限で移った入口 {}、\
-                 alternating で移った入口 {}、interp_stub からの起動 {}、末尾呼び出しの依頼 {}、\
-                 ネイティブのスタック {used} バイト(文脈の深さ {})",
+                "keleut: jit: コンパイルした関数 {}、インタプリタで実行した関数 {interp}、スタックの下限で切り替えたエントリ {}、\
+                 alternating で切り替えたエントリ {}、interp_stub からの起動 {}、末尾呼び出しの依頼 {}、\
+                 ネイティブスタック {used} バイト(コンテキストの深さ {})",
                 self.compiled,
                 self.low_stack_entries,
                 self.alt_entries,
@@ -637,7 +637,7 @@ impl<'p> Interp<'p> {
                         .lock()
                         .map(|m| m.clone().unwrap_or_default())
                         .unwrap_or_default();
-                    return Err(Stop::Internal(format!("関数を翻訳できません: {m}")));
+                    return Err(Stop::Internal(format!("関数をコンパイルできません: {m}")));
                 }
                 return Ok(None);
             }
@@ -655,7 +655,7 @@ impl<'p> Interp<'p> {
                 }
                 (n.translator.request)(f, false).map_err(|e| {
                     Stop::Internal(format!(
-                        "関数 {} の翻訳を頼めません: {e}",
+                        "関数 {} のコンパイルを依頼できません: {e}",
                         self.prog.funcs[i].sym
                     ))
                 })?;
@@ -669,10 +669,10 @@ impl<'p> Interp<'p> {
             _ => {}
         }
         let addr = (n.translator.request)(f, true)
-            .and_then(|a| a.ok_or_else(|| "番地が返りませんでした".to_string()))
+            .and_then(|a| a.ok_or_else(|| "アドレスが返りませんでした".to_string()))
             .map_err(|e| {
                 Stop::Internal(format!(
-                    "関数 {} を翻訳できません: {e}",
+                    "関数 {} をコンパイルできません: {e}",
                     self.prog.funcs[i].sym
                 ))
             })?;
@@ -695,7 +695,10 @@ impl<'p> Interp<'p> {
         let low = self.stack_low as u64;
         let soft = if low == 0 { 0 } else { low + SOFT_MARGIN };
         let rt = &mut self.rt;
-        let n = self.native.as_mut().expect("ネイティブの後段がある");
+        let n = self
+            .native
+            .as_mut()
+            .expect("ネイティブのバックエンドがある");
         if n.sp0 == 0 {
             n.sp0 = crate::interp::approx_sp();
         }
@@ -732,10 +735,17 @@ impl<'p> Interp<'p> {
             (*ctx).cur_pos = pos;
             (*ctx).cur_fp = fp;
             (*ctx).env = env.0;
-            let enter = self.native.as_ref().expect("ネイティブの後段がある").enter;
+            let enter = self
+                .native
+                .as_ref()
+                .expect("ネイティブのバックエンドがある")
+                .enter;
             enter(ctx, addr)
         };
-        let n = self.native.as_mut().expect("ネイティブの後段がある");
+        let n = self
+            .native
+            .as_mut()
+            .expect("ネイティブのバックエンドがある");
         if let Some(f) = n.fatal.take() {
             return Err(f);
         }
@@ -746,7 +756,10 @@ impl<'p> Interp<'p> {
     ///
     /// 関数 `func` のフレームは、位置 `pos` に置いてある。
     pub(crate) fn native_request(&mut self, func: FuncId, env: Word, pos: u64, fp: *mut u64) {
-        let n = self.native.as_mut().expect("ネイティブの後段がある");
+        let n = self
+            .native
+            .as_mut()
+            .expect("ネイティブのバックエンドがある");
         n.ctx.callee = u64::from(func.0);
         n.ctx.cur_pos = pos;
         n.ctx.cur_fp = fp;
@@ -757,7 +770,10 @@ impl<'p> Interp<'p> {
     ///
     /// 依頼された JIT の関数を呼び、その結果を返す。
     pub(crate) fn call_native_request(&mut self) -> Result<Word, Stop> {
-        let n = self.native.as_mut().expect("ネイティブの後段がある");
+        let n = self
+            .native
+            .as_mut()
+            .expect("ネイティブのバックエンドがある");
         n.tail_requests += 1;
         let func = FuncId(n.ctx.callee as u32);
         let (env, pos, fp) = (Word(n.ctx.env), n.ctx.cur_pos, n.ctx.cur_fp);
@@ -782,7 +798,7 @@ fn guarded<R>(ctx: *mut NativeCtx, f: impl FnOnce() -> R) -> R {
                 let it = unsafe { interp(ctx) };
                 let _ = it.rt.out.flush();
             }));
-            eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+            eprintln!("keleut: 内部エラー: 実行スレッドが異常終了しました");
             std::process::exit(70)
         }
     }
@@ -799,7 +815,7 @@ unsafe fn interp<'a>(ctx: *mut NativeCtx) -> &'a mut Interp<'static> {
 }
 
 fn native<'a>(it: &'a mut Interp<'_>) -> &'a mut Native {
-    it.native.as_mut().expect("ネイティブの後段がある")
+    it.native.as_mut().expect("ネイティブのバックエンドがある")
 }
 
 /// ネイティブスタックのアドレスとコンテキストの深さを記録する(計測用。`KELEUT_JIT_STATS`)。
@@ -953,12 +969,12 @@ pub unsafe extern "C" fn krt_sentinel(ctx: *mut NativeCtx, fp: *mut u64, yields:
         it.rt.depth = unsafe { *fp.add(1) };
         let e = match &it.rt.pending {
             keleut_rt::effect::Pending::Yield { .. } if yields == 0 => Some(bug(
-                "yield が noyield の再開点に届きました(may_yield の印の誤り)",
+                "yield が noyield の再開点に達しました(may_yield の印の誤り)",
             )),
             keleut_rt::effect::Pending::Matched(_)
             | keleut_rt::effect::Pending::ClauseValue(_)
             | keleut_rt::effect::Pending::TailResume(_) => {
-                Some(bug("節の印がふつうの呼び出しに届きました"))
+                Some(bug("節の通知が通常の呼び出しに達しました"))
             }
             _ => None,
         };
@@ -1102,7 +1118,7 @@ impl Disp<'_, '_> {
             }
             CalleeView::Other => {
                 let s = Stop::Internal(format!(
-                    "呼べない値を呼びました: {}",
+                    "呼び出せない値を呼びました: {}",
                     String::from_utf8_lossy(&self.it.rt.show(f))
                 ));
                 set_fatal(self.it, s);
@@ -1272,7 +1288,7 @@ pub unsafe extern "C" fn krt_error(ctx: *mut NativeCtx, fid: u64, blk: u64, opnd
         let prog = it.prog;
         let s = match &prog.funcs[fid as usize].blocks[blk as usize].term {
             Term::Error { kind, .. } => runtime_error(prog, &it.rt, kind, opnd),
-            _ => bug("error でないブロックの終わり"),
+            _ => bug("error でない終端命令"),
         };
         fail(it, s);
     })
@@ -1881,7 +1897,7 @@ pub unsafe extern "C" fn krt_bug(ctx: *mut NativeCtx, fid: u64, what: u64) {
         set_fatal(
             it,
             Stop::Internal(format!(
-                "JIT のコードが起きないはずの道に入りました({sym}、{what})"
+                "JIT のコードが起きないはずの経路に入りました({sym}、{what})"
             )),
         );
     })

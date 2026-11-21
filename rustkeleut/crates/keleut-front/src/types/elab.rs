@@ -876,7 +876,7 @@ impl Tc {
                         }
                     }
                 }
-                _ => terr("型適用の頭は型名でなければなりません"),
+                _ => terr("型適用の先頭は型名でなければなりません"),
             },
             TypeExpKind::Arrow(params, ret, eff_opt) => {
                 let mut param_tys = Vec::new();
@@ -954,7 +954,7 @@ impl Tc {
                         env,
                         level,
                         expanding,
-                        &format!("ヴァリアント #{s} の積載の型"),
+                        &format!("ヴァリアント #{s} のペイロードの型"),
                         p,
                     )?,
                 };
@@ -976,7 +976,7 @@ impl Tc {
                                     env,
                                     level,
                                     expanding,
-                                    &format!("ヴァリアント #{s} の積載の型"),
+                                    &format!("ヴァリアント #{s} のペイロードの型"),
                                     p,
                                 )?,
                             };
@@ -992,13 +992,13 @@ impl Tc {
                                     let (_, tail) = self.row_fields(row);
                                     if !is_last && !self.repr_is_empty(tail) {
                                         return terr(
-                                            "ヴァリアント和の途中の要素は閉じていなければなりません",
+                                            "ヴァリアント型の途中の要素は閉じていなければなりません",
                                         );
                                     }
                                     row
                                 }
                                 TyNode::App(..) if self.unresolved_kind(r)? => {
-                                    return self.kind_error("ヴァリアント和の末尾の型", "Row", r);
+                                    return self.kind_error("ヴァリアント型の末尾の型", "Row", r);
                                 }
                                 _ => {
                                     let k = self.kind_of(r)?;
@@ -1008,13 +1008,13 @@ impl Tc {
                                             r
                                         } else {
                                             return terr(
-                                                "ヴァリアント和の途中に行変数は置けません",
+                                                "ヴァリアント型の途中に行変数は置けません",
                                             );
                                         }
                                     } else {
                                         let s = self.show(r)?;
                                         return terr(format!(
-                                            "ヴァリアント和の要素になれない型です: {s}"
+                                            "ヴァリアント型の要素になれない型です: {s}"
                                         ));
                                     }
                                 }
@@ -1033,7 +1033,9 @@ impl Tc {
                 let row = acc.unwrap_or(self.row_empty);
                 Ok(self.variant(row))
             }
-            TypeExpKind::Hole => terr("_ はこの位置では使えません(インスタンス頭の List[_] 専用)"),
+            TypeExpKind::Hole => {
+                terr("_ はこの位置では使えません(インスタンスの対象の型の List[_] 専用)")
+            }
         }
     }
 
@@ -1170,7 +1172,7 @@ impl Tc {
         let o = self.intern(n);
         let rc = self.resolve_con(o);
         if self.d.con_kinds.contains_key(&rc) {
-            return format!("型 {n} はエフェクトではありません(ここにはエフェクト行が要ります)");
+            return format!("型 {n} はエフェクトではありません(ここにはエフェクト行が必要です)");
         }
         let o2 = self.intern(n);
         let cands: Vec<Oid> = self
@@ -1877,14 +1879,14 @@ impl Tc {
                         let found = scoped.and_then(|q| env.values.get(&*self.name_of(q)).copied());
                         match found {
                             Some(sch) => {
-                                let q = scoped.expect("同義語");
+                                let q = scoped.expect("別名");
                                 match env.tops.get(&*self.name_of(q)) {
                                     Some(g) => {
                                         self.set_resolved(node.meta.id, Resolved::Var(g.clone()))
                                     }
                                     None => {
                                         return bug(format!(
-                                            "同義語の先が実体を持ちません: {name}"
+                                            "別名の参照先の宣言がありません: {name}"
                                         ));
                                     }
                                 }
@@ -1942,7 +1944,7 @@ impl Tc {
                         ));
                     } else if callee_arrow && row_failure(&msg) && self.repr_is_empty(eff) {
                         return terr(format!(
-                            "{msg}(この位置の行は空 = 純粋です — 注釈の @ {{}} か、高階の引数の行が @ {{}} だからです(入れ子の矢印の @ 省略も @ {{}} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)"
+                            "{msg}(この位置の行は空 = 純粋です — 注釈の @ {{}} か、高階の引数の行が @ {{}} だからです(入れ子の矢印の @ 省略も @ {{}} と読みます)。行を伝えるなら行変数を型パラメータに取ってください。§9)"
                         ));
                     } else {
                         return terr(msg);
@@ -2080,7 +2082,7 @@ impl Tc {
                 let inst = self.repr(inst);
                 let (args_row, op_ret) = match self.node(inst) {
                     TyNode::Arrow(a, r, _) => (a, r),
-                    _ => return bug("操作スキーマが矢印型ではありません"),
+                    _ => return bug("操作の型スキームが矢印型ではありません"),
                 };
                 let dop = self.display_of(op);
                 self.check_call_arity(&format!("操作 {dop} は"), arg, args_row)?;
@@ -2099,7 +2101,7 @@ impl Tc {
                         );
                     } else if self.repr_is_empty(eff) {
                         return terr(format!(
-                            "エフェクト {de} をここでは実行できません({msg})(この位置の行は空 = 純粋です — 注釈の @ {{}} か、高階の引数の行が @ {{}} だからです(入れ子の矢印の @ 省略も @ {{}} と読みます)。行を通すなら行変数を型パラメータに取ってください。§9)"
+                            "エフェクト {de} をここでは実行できません({msg})(この位置の行は空 = 純粋です — 注釈の @ {{}} か、高階の引数の行が @ {{}} だからです(入れ子の矢印の @ 省略も @ {{}} と読みます)。行を伝えるなら行変数を型パラメータに取ってください。§9)"
                         ));
                     } else {
                         return terr(format!("エフェクト {de} をここでは実行できません({msg})"));
@@ -2240,7 +2242,7 @@ impl Tc {
                 && self.has_closed_arrow(f.fi_ty)?
             {
                 return terr(format!(
-                    "{msg}(コンストラクタ {cname} のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {{}} — 純粋 — です。行を通すなら行変数を型パラメータに取ってください。§9)"
+                    "{msg}(コンストラクタ {cname} のフィールドの行です。newtype のフィールドの矢印は書いたとおりに読み、@ の省略は @ {{}} — 純粋 — です。行を伝えるなら行変数を型パラメータに取ってください。§9)"
                 ));
             }
             r?;
@@ -2617,7 +2619,7 @@ impl Tc {
         };
         let runtime_msg = |tc: &Tc, e: Oid| {
             match &*tc.name_of(e) {
-            "Console" => "エフェクト Console はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:466, :538)。出力先を変えたいときは Print をハンドルしてください(プレリュードの with_stdout が Print を Console へ翻訳します)".to_string(),
+            "Console" => "エフェクト Console はランタイムが提供するため、ユーザはハンドルできません(仕様 sample.kel:466, :538)。出力先を変えたいときは Print をハンドルしてください(プレリュードの with_stdout が Print を Console へ置き換えます)".to_string(),
             n => format!("エフェクト {n} はランタイムが提供するため、ユーザはハンドルできません"),
         }
         };
@@ -2746,7 +2748,7 @@ impl Tc {
             let inst = self.repr(inst);
             let (args_row, op_ret) = match self.node(inst) {
                 TyNode::Arrow(a, r, _) => (a, r),
-                _ => return bug("操作スキーマが矢印型ではありません"),
+                _ => return bug("操作の型スキームが矢印型ではありません"),
             };
             let full = format!("{}.{}", self.name_of(target), self.name_of(*op));
             let fo = self.intern(&full);
@@ -2800,7 +2802,7 @@ impl Tc {
                 let arity = mine.first().map_or(0, |oc| oc.args.len());
                 let dop = self.display_of(*op);
                 return terr(format!(
-                    "操作 {dop} には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードの無い case {dop}({}) を最後に置いてください",
+                    "操作 {dop} には、ガードがなく、どんな引数にも一致する節がありません(どの節にも一致しなかった操作を外側のハンドラへ回す規則はありません)。ガードのない case {dop}({}) を最後に置いてください",
                     vec!["_"; arity].join(", ")
                 ));
             }
@@ -2809,7 +2811,7 @@ impl Tc {
         for oc in &op_clauses {
             if seen_total.contains(&oc.op) {
                 let m = format!(
-                    "操作 {} の節は到達しません(前の節が既に取りこぼしません)",
+                    "操作 {} の節は到達できません(前の節が既に何も漏らしません)",
                     self.display_of(oc.op)
                 );
                 self.warn(m);
@@ -2968,7 +2970,9 @@ impl Tc {
 
 fn check_no_hole(t: &TypeExp) -> R<()> {
     match t.kind {
-        TypeExpKind::Hole => terr("_ はこの位置では使えません(インスタンス頭の List[_] 専用)"),
+        TypeExpKind::Hole => {
+            terr("_ はこの位置では使えません(インスタンスの対象の型の List[_] 専用)")
+        }
         _ => Ok(()),
     }
 }

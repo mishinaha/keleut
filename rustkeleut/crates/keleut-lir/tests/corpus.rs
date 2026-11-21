@@ -25,11 +25,11 @@ fn check(path: &Path, bytes: &[u8]) -> Result<(), String> {
     }
     for (i, f) in k.functions.iter().enumerate() {
         if p.funcs[i].sym != f.sym {
-            return Err(format!("{}: 関数 {i} の記号が合わない", path.display()));
+            return Err(format!("{}: 関数 {i} のシンボルが合わない", path.display()));
         }
     }
     if keleut_lir::print(&p).is_empty() {
-        return Err(format!("{}: 印字が空", path.display()));
+        return Err(format!("{}: 文字列化した結果が空", path.display()));
     }
     Ok(())
 }
@@ -123,7 +123,7 @@ fn コーパスの全件を_diktor_で書き出して下ろす() {
     }
     let _ = std::fs::remove_dir_all(&tmp);
     eprintln!(
-        "コーパス: {} 本のうち、下ろした {pass} 本、対象外 {skip} 本、失敗 {} 本",
+        "コーパス: {} 本のうち、LIR に変換した {pass} 本、対象外 {skip} 本、失敗 {} 本",
         rows.len(),
         fails.len()
     );

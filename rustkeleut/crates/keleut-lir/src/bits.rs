@@ -307,7 +307,7 @@ impl Timeline {
     fn diff(&mut self, i: usize, off: bool) -> Vec<(u32, bool)> {
         let e = self.next_epoch();
         let mut out = Vec::new();
-        let slot = self.slots[i].as_ref().expect("取っておいた集合");
+        let slot = self.slots[i].as_ref().expect("保存した集合");
         match &slot.snap {
             Snap::Log(t) => {
                 for &r in &slot.rem {
@@ -328,7 +328,7 @@ impl Timeline {
                 }
                 let c = self.log.len() - t + slot.rem.len();
                 self.work += c as u64;
-                self.slots[i].as_mut().expect("取っておいた集合").spent += c;
+                self.slots[i].as_mut().expect("保存した集合").spent += c;
             }
             Snap::Sparse(v) => {
                 for &r in v {
@@ -450,7 +450,7 @@ impl Timeline {
             return;
         }
         let live = &self.live;
-        let slot = self.slots[i].as_mut().expect("取っておいた集合");
+        let slot = self.slots[i].as_mut().expect("保存した集合");
         match &mut slot.snap {
             Snap::Sparse(v) => {
                 self.work += v.len() as u64;

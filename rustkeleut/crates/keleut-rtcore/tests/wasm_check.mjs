@@ -30,7 +30,7 @@ const need = ["rt.wasm", "fltcmp-inputs.bin", "fltcmp-expected.txt", "fltcmp-met
 console.log(`stage: ${stage}`);
 for (const f of need) {
   if (!existsSync(join(stage, f))) {
-    console.error(`${join(stage, f)} が無い。先に rustkeleut/ で cargo test -p keleut-rtcore を走らせる。`);
+    console.error(`${join(stage, f)} がない。先に rustkeleut/ で cargo test -p keleut-rtcore を実行する。`);
     process.exit(2);
   }
 }
@@ -52,7 +52,7 @@ const fnv1a64 = (b) => {
     const meta = JSON.parse(read(f).toString());
     console.log(`${f}: ${JSON.stringify(meta)}`);
     if (meta.rt_wasm_fnv1a64 !== hash) {
-      fail(`${f} は別の rt.wasm(FNV-1a ${meta.rt_wasm_fnv1a64})の組み方で書かれた。置き場の rt.wasm は ${hash} である。cargo test -p keleut-rtcore を同じ組み方で走らせ直す`);
+      fail(`${f} は別の rt.wasm(FNV-1a ${meta.rt_wasm_fnv1a64})のビルド方法で書かれた。置き場の rt.wasm は ${hash} である。cargo test -p keleut-rtcore を同じビルド方法で実行し直す`);
     }
   }
 }
@@ -118,7 +118,7 @@ const scratch = ex.krt_scratch();
   const inputs = new Float64Array(ab(read("libm-inputs.bin")));
   const native = new BigUint64Array(ab(read("libm-x86_64.bin")));
   const n = inputs.length;
-  if (native.length !== 4 * n) fail("libm-x86_64.bin の大きさが違う");
+  if (native.length !== 4 * n) fail("libm-x86_64.bin のサイズが違う");
   const tmp = new Float64Array(1);
   const tmpBits = new BigUint64Array(tmp.buffer);
   const isNaNBits = (b) => (b & 0x7fffffffffffffffn) > 0x7ff0000000000000n;

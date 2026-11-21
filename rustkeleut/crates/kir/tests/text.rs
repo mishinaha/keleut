@@ -64,7 +64,7 @@ fn names_must_resolve() {
     let t = base();
     assert!(
         syntax(&t.replace(r#"(global "main/loop")"#, r#"(global "main/nope")"#))
-            .contains("大域が表にありません")
+            .contains("グローバルが表にありません")
     );
     assert!(
         syntax(&t.replace(

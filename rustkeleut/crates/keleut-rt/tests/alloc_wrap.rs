@@ -58,7 +58,7 @@ fn 範囲の外の_soft_の失敗は予備を返して印を立て確保をや�
     assert_eq!(alloc::injected_count(), 1);
     assert!(!alloc::has_reserve());
     assert!(alloc::take_flag(Role::Exec));
-    assert!(!alloc::take_flag(Role::Exec), "印は 1 回だけ応える");
+    assert!(!alloc::take_flag(Role::Exec), "フラグは 1 回だけ応じる");
     // `soft` の指定は 1 回だけ失敗させるので、次の確保は失敗しない。
     let _s = alloc::site(Site::RecFields);
     let c: Vec<u64> = Vec::with_capacity(32);
@@ -80,7 +80,7 @@ fn 予備が無いときの翻訳の役割の失敗は予備を取り直して�
         let a: Vec<u64> = Vec::with_capacity(8);
         assert_eq!(a.capacity(), 8);
     }
-    assert!(!alloc::has_reserve(), "実行の役割が予備を使った");
+    assert!(!alloc::has_reserve(), "実行スレッドが予備領域を使った");
     assert!(alloc::take_flag(Role::Exec));
     alloc::set_role(Role::Jit);
     let b = {
@@ -91,8 +91,11 @@ fn 予備が無いときの翻訳の役割の失敗は予備を取り直して�
     alloc::set_role(Role::Exec);
     assert_eq!(b.capacity(), 16);
     assert_eq!(alloc::injected_count(), 2);
-    assert!(alloc::take_flag(Role::Jit), "翻訳の役割の印が立つ");
-    assert!(alloc::has_reserve(), "やり直しの後に予備を取り直す");
+    assert!(
+        alloc::take_flag(Role::Jit),
+        "コンパイルスレッドのフラグが立つ"
+    );
+    assert!(alloc::has_reserve(), "やり直しの後に予備領域を確保し直す");
     assert!(!alloc::flagged(Role::Exec));
     alloc::configure("").unwrap();
 }
@@ -144,7 +147,7 @@ fn 回収の_keep_の確保が失敗しても掃除は続く() {
         // SAFETY: 残したオブジェクトはスイープの後もオブジェクトのままで、マークだけが消える。
         let hd = unsafe { **p };
         if i % 2 == 0 {
-            assert_eq!(hd, 1, "生かした箱の印が消える");
+            assert_eq!(hd, 1, "生かしたオブジェクトのマークが消える");
         }
     }
     // スイープの後も確保できる。

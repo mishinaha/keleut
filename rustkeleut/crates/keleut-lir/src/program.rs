@@ -380,7 +380,7 @@ pub(crate) fn extend_program(
                     None => {
                         // 検証済みの KIR では、インスタンスはクラスのメソッドをすべて実装している。
                         prog.note_bug(format!(
-                            "インスタンス {} にメソッド {mi} の実装が無い",
+                            "インスタンス {} にメソッド {mi} の実装がない",
                             x.sym
                         ));
                         InstMethod {

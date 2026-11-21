@@ -27,9 +27,12 @@ fn no_libc_and_krt_prefix() {
     let missing: Vec<&String> = undefined.difference(&defined).collect();
     assert!(
         missing.is_empty(),
-        "rtcore の外の記号を参照している: {missing:?}"
+        "rtcore の外のシンボルを参照している: {missing:?}"
     );
     let bad: Vec<&String> = defined.iter().filter(|s| !s.starts_with("krt_")).collect();
-    assert!(bad.is_empty(), "krt_ で始まらない大域の記号: {bad:?}");
+    assert!(
+        bad.is_empty(),
+        "krt_ で始まらないグローバルシンボル: {bad:?}"
+    );
     assert!(defined.contains("krt_f64_show") && defined.contains("krt_sin"));
 }

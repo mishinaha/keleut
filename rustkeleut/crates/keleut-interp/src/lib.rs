@@ -115,7 +115,7 @@ fn run_on_thread(prog: &Program, opts: &RunOptions, setup: Option<Setup<'_>>) ->
         .saturating_add(interp::NATIVE_MARGIN);
     if low >= sp0 {
         eprintln!(
-            "keleut: 内部エラー: ネイティブのスタック({} バイト)が予備の余裕より小さいです",
+            "keleut: 内部エラー: ネイティブスタック({} バイト)がスタックの余裕より小さいです",
             opts.native_stack
         );
         return 70;
@@ -162,7 +162,7 @@ fn run_init(prog: &Program, it: &mut Interp<'_>) -> u8 {
                 // 状態ワードが最上位まで伝播した。実行時エラーなら、そのメッセージを書いて終了する。
                 r = Err(match std::mem::take(&mut it.rt.pending) {
                     keleut_rt::effect::Pending::Error(s) => s,
-                    p => Stop::Internal(format!("最上位に届いた状態語: {p:?}")),
+                    p => Stop::Internal(format!("最上位に届いた状態ワード: {p:?}")),
                 });
                 it.rt.limit = it.rt.max_depth;
                 break;
@@ -251,7 +251,7 @@ fn run_program_inner(prog: &Program, opts: &RunOptions, mut setup: Option<Setup<
                 Ok(h) => Ok(match h.join() {
                     Ok(code) => code,
                     Err(_) => {
-                        eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
+                        eprintln!("keleut: 内部エラー: 実行スレッドが異常終了しました");
                         70
                     }
                 }),
@@ -267,7 +267,7 @@ fn run_program_inner(prog: &Program, opts: &RunOptions, mut setup: Option<Setup<
         && keleut_rt::alloc::address_space_limit().is_none()
     {
         // 仮想メモリの上限がないのに作れないときは、処理系の内部エラーとして扱う(`--max-depth` が大きすぎてスタックを予約できない場合など)。
-        eprintln!("keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}");
+        eprintln!("keleut: 内部エラー: 実行スレッドを作れません({size} バイトのスタック): {e}");
         return 70;
     }
     // 仮想メモリを制限しているときに、最も小さいスタックでもスレッドを作れなかった。

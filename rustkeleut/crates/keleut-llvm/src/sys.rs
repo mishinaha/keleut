@@ -72,7 +72,7 @@ impl Jit {
             }
         });
         if failed {
-            return Err("LLVM のこの機械の対象を登録できません".into());
+            return Err("LLVM のネイティブターゲットを登録できません".into());
         }
         let mut j = null_mut();
         // SAFETY: 設定のビルダには null を渡す。

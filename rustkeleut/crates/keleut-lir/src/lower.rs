@@ -287,7 +287,7 @@ impl<'p, 'k> Low<'p, 'k> {
         self.p.note_bug(msg.clone());
         if self.b.current().is_some() {
             self.b.terminate(Term::Unimplemented {
-                what: format!("内部の誤り: {msg}"),
+                what: format!("内部エラー: {msg}"),
             });
         }
         None
@@ -415,7 +415,7 @@ impl<'p, 'k> Low<'p, 'k> {
         match self.envs.get(i as usize) {
             Some(&r) => r,
             None => {
-                self.p.note_bug(format!("範囲の外の捕獲 {i}"));
+                self.p.note_bug(format!("範囲外のキャプチャ {i}"));
                 self.b.konst(Const::Unit)
             }
         }
@@ -446,7 +446,7 @@ impl<'p, 'k> Low<'p, 'k> {
     /// `i` 番のスロットに値を置く。
     pub(crate) fn bind_slot(&mut self, i: u32, v: V) {
         let Some(&rep) = self.slot_rep.get(i as usize) else {
-            self.bug(format!("範囲の外のスロット {i}"));
+            self.bug(format!("範囲外のスロット {i}"));
             return;
         };
         let r = self.coerce(v, rep);
@@ -464,7 +464,7 @@ impl<'p, 'k> Low<'p, 'k> {
             Cap::DParam(i) => match self.dparams.get(i as usize) {
                 Some(&r) => r,
                 None => {
-                    self.bug(format!("範囲の外の辞書の引数 {i}"));
+                    self.bug(format!("範囲外の辞書の引数 {i}"));
                     return None;
                 }
             },
@@ -525,7 +525,7 @@ impl<'p, 'k> Low<'p, 'k> {
     pub(crate) fn exp(&mut self, e: ExpId, tail: bool) -> Option<V> {
         let k = self.k();
         let Some(x) = k.nodes.exp(e) else {
-            return self.bug(format!("範囲の外の式 {}", e.0));
+            return self.bug(format!("範囲外の式 {}", e.0));
         };
         match x {
             Exp::Lit(l) => {
@@ -704,7 +704,7 @@ impl<'p, 'k> Low<'p, 'k> {
             .and_then(|t| t.ctors.get(ctor as usize))
             .map(|c| c.arity as usize);
         let Some(arity) = arity else {
-            return self.bug("範囲の外のコンストラクタ");
+            return self.bug("範囲外のコンストラクタ");
         };
         let mut vals: Vec<Option<Reg>> = vec![None; arity];
         for &(pos, e) in fields {
@@ -712,7 +712,7 @@ impl<'p, 'k> Low<'p, 'k> {
             let r = self.boxed(v);
             match vals.get_mut(pos as usize) {
                 Some(slot) => *slot = Some(r),
-                None => return self.bug("範囲の外のフィールド"),
+                None => return self.bug("範囲外のフィールド"),
             }
         }
         if arity == 0 {

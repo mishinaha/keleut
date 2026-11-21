@@ -57,7 +57,7 @@ fn fixture_の関数をすべて翻訳できる() {
             n += 1;
         }
     }
-    assert!(n > 100, "翻訳した関数 {n}");
+    assert!(n > 100, "コンパイルした関数 {n}");
 }
 
 #[test]
@@ -152,5 +152,5 @@ fn 確保の速い道は実行の役割の印を読む() {
             assert!(!off.contains("ptr %heapp,"), "{}: {}", p.display(), f.sym);
         }
     }
-    assert!(fast_paths > 10, "速い道 {fast_paths}");
+    assert!(fast_paths > 10, "高速経路 {fast_paths}");
 }

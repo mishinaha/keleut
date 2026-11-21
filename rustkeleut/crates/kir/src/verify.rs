@@ -136,7 +136,7 @@ impl<'a> Ctx<'a> {
     fn glob(&self, g: GlobalId) -> V<&'a Global> {
         match self.p.globals.get(g.index()) {
             Some(x) => Ok(x),
-            None => fail!("大域の添字 {} が範囲外です", g.0),
+            None => fail!("グローバルの添字 {} が範囲外です", g.0),
         }
     }
 
@@ -184,7 +184,7 @@ fn unique_syms<'x>(what: &str, syms: impl Iterator<Item = &'x str>) -> V<()> {
     let mut seen = HashSet::new();
     for s in syms {
         if !seen.insert(s) {
-            fail!("{what}の記号が重なります: {s}");
+            fail!("{what}のシンボルが重なります: {s}");
         }
     }
     Ok(())
@@ -202,14 +202,14 @@ fn unique_names<'x>(what: &str, owner: &str, names: impl Iterator<Item = &'x str
 
 fn symbol_form(units: &HashSet<&str>, what: &str, sym: &str) -> V<()> {
     match sym.rfind('/') {
-        None => fail!("{what}の記号 {sym} が 単位の鍵/名前 の形ではありません"),
+        None => fail!("{what}のシンボル {sym} が 単位の鍵/名前 の形式ではありません"),
         Some(i) => {
             if i == sym.len() - 1 {
-                fail!("{what}の記号 {sym} の名前の部分が空です");
+                fail!("{what}のシンボル {sym} の名前の部分が空です");
             }
             if !units.contains(&sym[..i]) {
                 fail!(
-                    "{what}の記号 {sym} の単位の鍵 {} が単位の表にありません",
+                    "{what}のシンボル {sym} の単位のキー {} が単位の表にありません",
                     &sym[..i]
                 );
             }
@@ -222,14 +222,14 @@ fn symbol_form(units: &HashSet<&str>, what: &str, sym: &str) -> V<()> {
 /// 単位のキーは、検証済みのキー `old` と追加したキー `new` の両方から探す([`Extension`])。
 fn symbol_form_in(old: &HashSet<String>, new: &HashSet<&str>, what: &str, sym: &str) -> V<()> {
     match sym.rfind('/') {
-        None => fail!("{what}の記号 {sym} が 単位の鍵/名前 の形ではありません"),
+        None => fail!("{what}のシンボル {sym} が 単位の鍵/名前 の形式ではありません"),
         Some(i) => {
             if i == sym.len() - 1 {
-                fail!("{what}の記号 {sym} の名前の部分が空です");
+                fail!("{what}のシンボル {sym} の名前の部分が空です");
             }
             let k = &sym[..i];
             if !old.contains(k) && !new.contains(k) {
-                fail!("{what}の記号 {sym} の単位の鍵 {k} が単位の表にありません");
+                fail!("{what}のシンボル {sym} の単位のキー {k} が単位の表にありません");
             }
         }
     }
@@ -374,11 +374,11 @@ impl Ctx<'_> {
         let mut add = |ctx: &Ctx<'_>, f: FnId, kind: FnKind, o: Origin| -> V<()> {
             let func = ctx.func(f)?;
             if origins[f.index()].is_some() {
-                fail!("関数 {} を作る場所が 2 つ以上あります", func.sym);
+                fail!("関数 {} の生成箇所が 2 つ以上あります", func.sym);
             }
             if func.kind != kind {
                 fail!(
-                    "関数 {} の種類 {} が、作る場所の求める {} と違います",
+                    "関数 {} の種類 {} が、生成箇所の求める {} と違います",
                     func.sym,
                     func.kind.name(),
                     kind.name()
@@ -422,7 +422,7 @@ impl Ctx<'_> {
         }
         for (i, f) in p.functions.iter().enumerate().skip(m.functions) {
             if origins[i].is_none() {
-                fail!("関数 {} を作る場所がありません", f.sym);
+                fail!("関数 {} の生成箇所がありません", f.sym);
             }
         }
         Ok(())
@@ -460,14 +460,14 @@ impl FState<'_> {
                 }
                 if !self.scope[i] {
                     fail!(
-                        "関数 {}: スロット {i} を束縛の有効範囲の外で読みます",
+                        "関数 {}: スロット {i} を束縛のスコープの外で読みます",
                         self.sym()
                     );
                 }
             }
             Cap::Env(i) => {
                 if i as usize >= self.f.caps.len() {
-                    fail!("関数 {}: 捕獲 {i} が範囲外です", self.sym());
+                    fail!("関数 {}: キャプチャ {i} が範囲外です", self.sym());
                 }
             }
             Cap::DParam(i) => {
@@ -549,7 +549,7 @@ impl Ctx<'_> {
             Ok(())
         };
         if let Origin::Root = origin {
-            need("捕獲の数", f.caps.is_empty())?;
+            need("キャプチャの数", f.caps.is_empty())?;
         }
         if f.kind != FnKind::Dictabs {
             need("辞書の引数の数", f.dicts == 0)?;
@@ -570,7 +570,7 @@ impl Ctx<'_> {
                         h_op: Some((e, o, _)),
                         ..
                     } => need("引数の数", np == self.op(e, o)?.arity as usize),
-                    _ => need("作る場所", false),
+                    _ => need("生成箇所", false),
                 }
             }
         }
@@ -697,12 +697,12 @@ impl Ctx<'_> {
             fail!("関数 {}: {} の種類が違います", st.sym(), g.sym);
         }
         if pt.caps.len() != g.caps.len() {
-            fail!("関数 {}: {} の捕獲の数が違います", st.sym(), g.sym);
+            fail!("関数 {}: {} のキャプチャの数が違います", st.sym(), g.sym);
         }
         for (&v, &r) in pt.caps.iter().zip(&g.caps) {
             st.var_ok(v)?;
             if st.var_rep(v) != r {
-                fail!("関数 {}: {} の捕獲の Rep が違います", st.sym(), g.sym);
+                fail!("関数 {}: {} のキャプチャの Rep が違います", st.sym(), g.sym);
             }
         }
         Ok(())
@@ -917,7 +917,7 @@ impl Ctx<'_> {
                     GlobalKind::Extern { dicts, .. } => {
                         if *dicts == 0 {
                             fail!(
-                                "関数 {}: 辞書を受け取らない extern の大域 {} に辞書を渡します",
+                                "関数 {}: 辞書を受け取らない extern のグローバル {} に辞書を渡します",
                                 st.sym(),
                                 gl.sym
                             );
@@ -926,7 +926,7 @@ impl Ctx<'_> {
                     }
                     GlobalKind::Dictabs(f) => count(&gl.sym, self.func(*f)?.dicts as usize)?,
                     _ => fail!(
-                        "関数 {}: 辞書を受け取らない大域 {} に辞書を渡します",
+                        "関数 {}: 辞書を受け取らないグローバル {} に辞書を渡します",
                         st.sym(),
                         gl.sym
                     ),
@@ -1280,7 +1280,7 @@ impl Ctx<'_> {
             Pat::Wild | Pat::Lit(_) => {}
             Pat::Bind(i) => {
                 if *i != *next {
-                    fail!("def_pattern のパターンの bind {i} が大域の列の順と合いません");
+                    fail!("def_pattern のパターンの bind {i} がグローバルの並びの順と合いません");
                 }
                 *next += 1;
             }
@@ -1320,7 +1320,7 @@ impl Ctx<'_> {
             && let Some(u) = p.units.first()
             && !u.init.is_empty()
         {
-            fail!("builtin の単位が初期化の手順を持ちます");
+            fail!("builtin の単位が初期化手順を持ちます");
         }
         let mut defined: HashSet<GlobalId> = HashSet::new();
         let mut inst_defined: HashSet<InstanceId> = HashSet::new();
@@ -1332,13 +1332,20 @@ impl Ctx<'_> {
          -> V<()> {
             let gl = self.glob(g)?;
             if !ok(&gl.kind) {
-                fail!("大域 {} の種類が {what} の手順と合いません", gl.sym);
+                fail!(
+                    "グローバル {} の種類が {what} の初期化手順と合いません",
+                    gl.sym
+                );
             }
             if unit_of_symbol(&gl.sym) != u.key {
-                fail!("大域 {} を単位 {} の手順が定義します", gl.sym, u.key);
+                fail!(
+                    "グローバル {} を単位 {} の初期化手順が定義します",
+                    gl.sym,
+                    u.key
+                );
             }
             if !defined.insert(g) {
-                fail!("大域 {} を 2 回定義します", gl.sym);
+                fail!("グローバル {} を 2 回定義します", gl.sym);
             }
             Ok(())
         };
@@ -1352,7 +1359,7 @@ impl Ctx<'_> {
                             && self.func(*func)?.result != r
                         {
                             fail!(
-                                "大域 {} の Rep が初期化の関数の結果の Rep と違います",
+                                "グローバル {} の Rep が初期化関数の結果の Rep と違います",
                                 self.glob(*global)?.sym
                             );
                         }
@@ -1364,12 +1371,12 @@ impl Ctx<'_> {
                         let mut next = 0u32;
                         self.def_pattern_binds(*pat, 1, &mut next)?;
                         if next as usize != globals.len() {
-                            fail!("def_pattern のパターンが大域の列のすべてを束縛しません");
+                            fail!("def_pattern のパターンがグローバルの並びのすべてを束縛しません");
                         }
                     }
                     Step::DefFns(gs) => {
                         if gs.is_empty() {
-                            fail!("def_fns の大域がありません");
+                            fail!("def_fns のグローバルがありません");
                         }
                         for &g in gs {
                             define(
@@ -1399,7 +1406,7 @@ impl Ctx<'_> {
                         let inst = self.inst(*i)?;
                         if unit_of_symbol(&inst.sym) != u.key {
                             fail!(
-                                "インスタンス {} を単位 {} の手順が定義します",
+                                "インスタンス {} を単位 {} の初期化手順が定義します",
                                 inst.sym,
                                 u.key
                             );
@@ -1419,19 +1426,19 @@ impl Ctx<'_> {
             match g.kind {
                 GlobalKind::Builtin => {
                     if defined.contains(&gid) {
-                        fail!("組み込みの大域 {} を手順が定義します", g.sym);
+                        fail!("組み込みのグローバル {} を初期化手順が定義します", g.sym);
                     }
                 }
                 _ => {
                     if !defined.contains(&gid) {
-                        fail!("大域 {} を定義する手順がありません", g.sym);
+                        fail!("グローバル {} を定義する初期化手順がありません", g.sym);
                     }
                 }
             }
         }
         for (i, inst) in p.instances.iter().enumerate().skip(m.instances) {
             if !inst_defined.contains(&InstanceId(i as u32)) {
-                fail!("インスタンス {} を定義する手順がありません", inst.sym);
+                fail!("インスタンス {} を定義する初期化手順がありません", inst.sym);
             }
         }
         Ok(())
@@ -1538,7 +1545,7 @@ impl Ctx<'_> {
                     builtin_name(&g.sym) == Some(*w) && g.kind == GlobalKind::Builtin
                 }))
         {
-            fail!("大域の表の先頭が、付録 A の組み込みの値の並びと合いません");
+            fail!("グローバルの表の先頭が、付録 A の組み込みの値の並びと合いません");
         }
         for g in p.globals.iter().skip(builtins::VALUES.len().max(m.globals)) {
             if is_builtin(&g.sym) || g.kind == GlobalKind::Builtin {
@@ -1580,7 +1587,7 @@ pub fn check(p: &Program, max_nest: usize) -> Result<(), Error> {
     unique_syms("エフェクト", p.effects.iter().map(|e| e.sym.as_str()))?;
     unique_syms("クラス", p.classes.iter().map(|c| c.sym.as_str()))?;
     unique_syms("インスタンス", p.instances.iter().map(|i| i.sym.as_str()))?;
-    unique_syms("大域", p.globals.iter().map(|g| g.sym.as_str()))?;
+    unique_syms("グローバル", p.globals.iter().map(|g| g.sym.as_str()))?;
     unique_syms("関数", p.functions.iter().map(|f| f.sym.as_str()))?;
     unique_syms("単位", p.units.iter().map(|u| u.key.as_str()))?;
     let keys: Vec<&str> = p.units.iter().map(|u| u.key.as_str()).collect();
@@ -1589,7 +1596,7 @@ pub fn check(p: &Program, max_nest: usize) -> Result<(), Error> {
         && keys[1] == "prelude"
         && keys[keys.len() - 1] == "main")
     {
-        fail!("単位の列が builtin、prelude で始まり main で終わる形になっていません");
+        fail!("単位の並びが builtin、prelude で始まり main で終わる形になっていません");
     }
     let units: HashSet<&str> = keys.into_iter().collect();
     for t in &p.types {
@@ -1605,7 +1612,7 @@ pub fn check(p: &Program, max_nest: usize) -> Result<(), Error> {
         symbol_form(&units, "インスタンス", &i.sym)?;
     }
     for g in &p.globals {
-        symbol_form(&units, "大域", &g.sym)?;
+        symbol_form(&units, "グローバル", &g.sym)?;
     }
     for f in &p.functions {
         symbol_form(&units, "関数", &f.sym)?;
@@ -1721,23 +1728,23 @@ impl Extension {
             || now.functions < m.functions
             || now.units < m.units
         {
-            fail!("確かめた範囲より表が短くなっています");
+            fail!("検証した範囲より表が短くなっています");
         }
         if !(p.units.len() >= 2 && p.units[0].key == "builtin" && p.units[1].key == "prelude") {
-            fail!("単位の列が builtin、prelude で始まる形になっていません");
+            fail!("単位の並びが builtin、prelude で始まる形になっていません");
         }
         let keys: Vec<&str> = p.units[m.units..].iter().map(|u| u.key.as_str()).collect();
         let mut new_keys: HashSet<&str> = HashSet::new();
         for k in &keys {
             if self.keys.contains(*k) || !new_keys.insert(k) {
-                fail!("単位の記号が重なります: {k}");
+                fail!("単位のキーが重なります: {k}");
             }
         }
         let fresh = |what: &str, old: &HashSet<String>, syms: Vec<&str>| -> V<()> {
             let mut seen = HashSet::new();
             for s in syms {
                 if old.contains(s) || !seen.insert(s) {
-                    fail!("{what}の記号が重なります: {s}");
+                    fail!("{what}のシンボルが重なります: {s}");
                 }
             }
             Ok(())
@@ -1764,7 +1771,14 @@ impl Extension {
             .map(|f| f.sym.as_str())
             .collect();
         let all = [&tsyms, &esyms, &csyms, &isyms, &gsyms, &fsyms];
-        let whats = ["型", "エフェクト", "クラス", "インスタンス", "大域", "関数"];
+        let whats = [
+            "型",
+            "エフェクト",
+            "クラス",
+            "インスタンス",
+            "グローバル",
+            "関数",
+        ];
         for ((what, old), syms) in whats.iter().zip(&self.syms).zip(all) {
             fresh(what, old, syms.clone())?;
         }

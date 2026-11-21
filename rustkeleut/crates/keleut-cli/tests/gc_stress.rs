@@ -41,7 +41,7 @@ fn fixture_の_kir_を_gc_stress_でも記録どおりに走らせる() {
             .unwrap();
         if r.stdout != want_out || r.stderr != want_err || r.status.code() != Some(want_code) {
             fails.push(format!(
-                "{n}: 終了状態 {:?}(記録 {want_code})\n標準エラー:\n{}",
+                "{n}: 終了コード {:?}(期待値 {want_code})\n標準エラー:\n{}",
                 r.status.code(),
                 String::from_utf8_lossy(&r.stderr)
             ));

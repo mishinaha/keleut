@@ -302,7 +302,7 @@ impl ShapeTable {
         // SAFETY: 初期化済みの表を読むだけである。返すスライスが指す領域は、self を借用している間は移動しない。
         unsafe {
             let n = sys::krt_shape_len(self.raw(), id.0);
-            assert_ne!(n, SHAPE_NONE, "形の番号が不正");
+            assert_ne!(n, SHAPE_NONE, "シェイプの番号が不正");
             if n == 0 {
                 return &[];
             }
@@ -324,7 +324,7 @@ impl ShapeTable {
         let p = &mut pos as *mut u32;
         // SAFETY: p は有効な u32 を指す。
         let r = self.retry(|t| unsafe { sys::krt_shape_extend(t, id.0, label, p) })?;
-        assert_ne!(r, SHAPE_NONE, "形の番号が不正");
+        assert_ne!(r, SHAPE_NONE, "シェイプの番号が不正");
         Ok((ShapeId(r), pos))
     }
 

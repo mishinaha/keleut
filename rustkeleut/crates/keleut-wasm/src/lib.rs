@@ -1139,7 +1139,7 @@ mod tests {
         ] {
             assert!(
                 launch::HOST_JS.contains(&line),
-                "host/keleut-host.mjs に {line} が無い"
+                "host/keleut-host.mjs に {line} がない"
             );
         }
     }

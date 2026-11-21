@@ -55,7 +55,7 @@ fn emit(dir: std::path::PathBuf, files: Vec<String>, no_prelude: bool) -> Option
             return None;
         }
         let keys = c.unit_keys(&mut fs, &opts).ok()?;
-        Some(program_of_checked(&mut c, &keys, &opts).expect("書き出しの内部の誤り"))
+        Some(program_of_checked(&mut c, &keys, &opts).expect("書き出しの内部エラー"))
     })
     .unwrap()
 }
@@ -145,6 +145,6 @@ fn コーパスで_diktor_と同じ_kir_を書く() {
         }
     }
     std::fs::remove_dir_all(&out).unwrap();
-    assert!(compared > 500, "比べた数が少ない: {compared}");
+    assert!(compared > 500, "比較した数が少ない: {compared}");
     assert!(diffs.is_empty(), "Diktor と違う: {diffs:?}");
 }

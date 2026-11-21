@@ -101,9 +101,9 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let what = match self.kind {
-            ErrorKind::Lower => "LIR への下ろしに失敗しました",
+            ErrorKind::Lower => "LIR への変換に失敗しました",
             ErrorKind::Verify => "LIR の検証に失敗しました",
-            ErrorKind::Internal => "LIR の処理の中で内部の誤りが起きました",
+            ErrorKind::Internal => "LIR の処理の中で内部エラーが起きました",
             ErrorKind::Limit => "処理系の限度",
         };
         write!(f, "{what}: {}", self.message)
@@ -152,12 +152,15 @@ fn on_stack<T: Send>(
                 };
                 Error::new(
                     kind,
-                    format!("LIR への下ろしのスレッドを作れません({stack} バイトのスタック): {e}"),
+                    format!("LIR への変換のスレッドを作れません({stack} バイトのスタック): {e}"),
                 )
             })?;
         match h.join() {
             Ok(r) => r,
-            Err(_) => Err(Error::new(ErrorKind::Internal, "下ろしが落ちました")),
+            Err(_) => Err(Error::new(
+                ErrorKind::Internal,
+                "LIR への変換が異常終了しました",
+            )),
         }
     })
 }

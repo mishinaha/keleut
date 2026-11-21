@@ -49,11 +49,11 @@ fn run_small(prog: keleut_lir::Program) -> (u8, u64, u64) {
 fn 小さなスタックで_1e7_段の相互の末尾再帰が完走する() {
     let (code, compiled, low) = run_small(load("evenodd.kir"));
     assert_eq!(code, 0);
-    assert!(compiled >= 3, "翻訳した関数 {compiled}");
-    assert_eq!(low, 0, "スタックの下限でインタプリタに移った入口");
+    assert!(compiled >= 3, "コンパイルした関数 {compiled}");
+    assert_eq!(low, 0, "スタックの下限でインタプリタに切り替えたエントリ");
 
     let (code, compiled, low) = run_small(load("nontail.kir"));
     assert_eq!(code, 0);
-    assert!(compiled >= 2, "翻訳した関数 {compiled}");
-    assert!(low > 0, "末尾でない再帰はスタックの下限に届くはずである");
+    assert!(compiled >= 2, "コンパイルした関数 {compiled}");
+    assert!(low > 0, "非末尾の再帰はスタックの下限に達するはずである");
 }

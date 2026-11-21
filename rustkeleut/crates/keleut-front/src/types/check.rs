@@ -196,7 +196,7 @@ pub fn on_check_stack<T: Send>(limits: Limits, f: impl FnOnce() -> T + Send) -> 
             match h {
                 Ok(h) => Some(
                     h.join()
-                        .map_err(|_| "フロントエンドの中で内部の誤りが起きました".to_string()),
+                        .map_err(|_| "フロントエンドの中で内部エラーが起きました".to_string()),
                 ),
                 Err(e) => {
                     last = format!("フロントエンドのスレッドを作れません: {e}");
@@ -553,7 +553,7 @@ mod tests {
         if let Ok(s) = std::fs::read_to_string(p) {
             assert_eq!(
                 s, PRELUDE,
-                "diktor/lib/prelude.kel が変わりました。src/types/prelude.kel に写してください"
+                "diktor/lib/prelude.kel が変わりました。src/types/prelude.kel にコピーしてください"
             );
         }
     }

@@ -128,7 +128,7 @@ pub fn script(who: &str, kconform: &str) -> String {
     };
     format!(
         "#!/bin/sh\n\
-         # kconform の shim({who})。kconform が走るたびに作り、終わったら消す。\n\
+         # kconform の shim({who})。kconform が実行されるたびに作り、終わったら消す。\n\
          if [ -n \"${{KCONFORM_LOG-}}\" ]; then\n\
          \x20 kc_us=$(printf '\\037'); kc_l=\"${{KCONFORM_CMD-}}\t{who}\t\"; kc_s=\n\
          \x20 for kc_a in \"$@\"; do kc_l=\"$kc_l$kc_s$kc_a\"; kc_s=$kc_us; done\n\
@@ -395,7 +395,7 @@ pub fn diktor(args: &[OsString]) -> u8 {
         (p, Route::Run | Route::TypeCheck) if is_rust_pair(p) => rust_backend(&real, args),
         (_, Route::TypeCheck) => exec(&real, "diktor", args),
         (p, Route::Run) => {
-            eprintln!("kconform shim: 組 {p} の diktor の実行の振り分けはありません");
+            eprintln!("kconform shim: ペア {p} の diktor の実行の振り分けはありません");
             4
         }
     }
@@ -786,7 +786,7 @@ pub fn keleut(args: &[OsString]) -> u8 {
         // バイナリに変換して渡すと、基準のペアの結果が RustKeleut のアセンブラに依存するので、変換せずに拒否する。
         if dargs.iter().any(|a| a.as_bytes().ends_with(b".kirt")) {
             eprintln!(
-                "kconform shim: 組 {pair} は keleut run のテキストの KIR(.kirt)を Diktor で走らせられません"
+                "kconform shim: ペア {pair} は keleut run のテキストの KIR(.kirt)を Diktor で実行できません"
             );
             return 4;
         }
@@ -834,7 +834,7 @@ pub fn keleut(args: &[OsString]) -> u8 {
 ///
 /// 返すのは、ペアのオプションの後に並べる引数と、食い違いがあったときにログに書くメッセージである。
 /// メッセージは呼び出しのログに `backend-override` の行として追記する。
-/// kconform はそのコマンドを、バックエンドを上書きしたコマンドとして `組の後段の上書き` の行で報告する(出力では、ペアを「組」、バックエンドを「後段」と書く)。
+/// kconform はそのコマンドを、バックエンドを上書きしたコマンドとして `ペアのバックエンドの上書き` の行で報告する。
 fn own_backend(pair_args: &[OsString], own: &[OsString]) -> (Vec<OsString>, Option<String>) {
     let jit = crate::pairs::is_jit_args(&pair_args_str(pair_args));
     let pair_backend = pair_args
@@ -852,11 +852,11 @@ fn own_backend(pair_args: &[OsString], own: &[OsString]) -> (Vec<OsString>, Opti
             match &pair_backend {
                 Some(pb) if jit => {
                     if *pb != v {
-                        notes.push(format!("--backend {v} を除いて {pb} で走らせた"));
+                        notes.push(format!("--backend {v} を取り除いて {pb} で実行した"));
                     }
                 }
                 Some(pb) if *pb != v => {
-                    notes.push(format!("--backend {v} が組の {pb} に勝った"));
+                    notes.push(format!("--backend {v} がペアの {pb} より優先された"));
                     out.extend_from_slice(&own[i..i + 2]);
                 }
                 _ => out.extend_from_slice(&own[i..i + 2]),
@@ -891,14 +891,17 @@ mod tests {
         assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
         assert_eq!(
             n.as_deref(),
-            Some("--backend interp を除いて jit で走らせた")
+            Some("--backend interp を取り除いて jit で実行した")
         );
         let (v, n) = own_backend(&a(&["--backend", "jit", "--tier", "jit-only"]), &own);
         assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
         assert!(n.is_some());
         let (v, n) = own_backend(&a(&["--backend", "wasm"]), &own);
         assert_eq!(v, own);
-        assert_eq!(n.as_deref(), Some("--backend interp が組の wasm に勝った"));
+        assert_eq!(
+            n.as_deref(),
+            Some("--backend interp がペアの wasm より優先された")
+        );
         let (v, n) = own_backend(&a(&["--backend", "interp", "--tier", "interp-only"]), &own);
         assert_eq!((v, n), (own.clone(), None));
         // ペア `kr-kj`、`kr-kt`、`kr-ka`、`kr-km` も、フロントエンドのオプションに関係なく LLVM ペアとして扱う。

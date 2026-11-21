@@ -54,14 +54,14 @@ impl Cx<'_> {
             .regs
             .get(r.index())
             .copied()
-            .ok_or_else(|| format!("範囲の外のレジスタ r{}", r.0))
+            .ok_or_else(|| format!("範囲外のレジスタ r{}", r.0))
     }
 
     fn is(&self, r: Reg, want: Rep) -> VResult {
         let got = self.rep(r)?;
         ensure!(
             got == want,
-            "r{} の Rep は {} だが {} が要る",
+            "r{} の Rep は {} だが {} が必要である",
             r.0,
             got.name(),
             want.name()
@@ -77,25 +77,25 @@ impl Cx<'_> {
         self.p
             .funcs
             .get(f.index())
-            .ok_or_else(|| format!("範囲の外の関数 {}", f.0))
+            .ok_or_else(|| format!("範囲外の関数 {}", f.0))
     }
 
     fn global(&self, g: GlobalId) -> Result<&Global, String> {
         self.p
             .globals
             .get(g.index())
-            .ok_or_else(|| format!("範囲の外の大域 {}", g.0))
+            .ok_or_else(|| format!("範囲外のグローバル {}", g.0))
     }
 
     fn inst(&self, i: InstanceId) -> Result<&Instance, String> {
         self.p
             .instances
             .get(i.index())
-            .ok_or_else(|| format!("範囲の外のインスタンス {}", i.0))
+            .ok_or_else(|| format!("範囲外のインスタンス {}", i.0))
     }
 
     fn label(&self, l: LabelId) -> VResult {
-        ensure!(l.index() < self.p.labels.len(), "範囲の外のラベル {}", l.0);
+        ensure!(l.index() < self.p.labels.len(), "範囲外のラベル {}", l.0);
         Ok(())
     }
 
@@ -104,10 +104,10 @@ impl Cx<'_> {
             .p
             .classes
             .get(c.index())
-            .ok_or_else(|| format!("範囲の外のクラス {}", c.0))?;
+            .ok_or_else(|| format!("範囲外のクラス {}", c.0))?;
         ensure!(
             (m as usize) < cl.methods.len(),
-            "クラス {} に範囲の外のメソッド {}",
+            "クラス {} に範囲外のメソッド {}",
             cl.sym,
             m
         );
@@ -116,10 +116,10 @@ impl Cx<'_> {
 
     fn direct(&self, func: FuncId, args: &[Reg]) -> VResult {
         let t = self.func(func)?;
-        ensure!(t.ncaps == 0, "捕獲を持つ関数 {} を直に呼んだ", t.sym);
+        ensure!(t.ncaps == 0, "キャプチャを持つ関数 {} を直接呼んだ", t.sym);
         ensure!(
             t.kind != FuncKind::Init,
-            "初期化の関数 {} を直に呼んだ",
+            "初期化関数 {} を直接呼んだ",
             t.sym
         );
         ensure!(
@@ -135,25 +135,25 @@ impl Cx<'_> {
     fn konst(&self, dst: Reg, c: &Const) -> VResult {
         self.is(dst, c.rep())?;
         match c {
-            Const::Str(s) => ensure!(s.index() < self.p.strings.len(), "範囲の外の文字列 {}", s.0),
+            Const::Str(s) => ensure!(s.index() < self.p.strings.len(), "範囲外の文字列 {}", s.0),
             Const::Ctor0 { ty, ctor } => {
                 let t = self
                     .p
                     .types
                     .get(ty.index())
-                    .ok_or_else(|| format!("範囲の外の型 {}", ty.0))?;
+                    .ok_or_else(|| format!("範囲外の型 {}", ty.0))?;
                 let c = t
                     .ctors
                     .get(*ctor as usize)
-                    .ok_or_else(|| format!("範囲の外のコンストラクタ {ctor}"))?;
+                    .ok_or_else(|| format!("範囲外のコンストラクタ {ctor}"))?;
                 ensure!(c.arity == 0, "引数を持つコンストラクタ {} の ctor0", c.name);
             }
             Const::DictBuiltin { class, ty } => {
-                ensure!(class.index() < self.p.classes.len(), "範囲の外のクラス");
-                ensure!(ty.index() < self.p.types.len(), "範囲の外の型");
+                ensure!(class.index() < self.p.classes.len(), "範囲外のクラス");
+                ensure!(ty.index() < self.p.types.len(), "範囲外の型");
                 ensure!(
                     self.builtin_pairs.contains(&(*class, *ty)),
-                    "組み込みのメソッドの表に無い組 {}[{}] の辞書",
+                    "組み込みのメソッドの表にない組 {}[{}] の辞書",
                     self.p.classes[class.index()].sym,
                     self.p.types[ty.index()].sym
                 );
@@ -162,7 +162,7 @@ impl Cx<'_> {
                 let x = self.inst(*i)?;
                 ensure!(
                     x.premises == 0,
-                    "前提を持つインスタンス {} の定数の辞書",
+                    "前提付きインスタンス {} の定数の辞書",
                     x.sym
                 );
             }
@@ -195,7 +195,7 @@ impl Cx<'_> {
             }
             EnvGet { dst, index } => {
                 self.is(*dst, Any)?;
-                ensure!(*index < self.f.ncaps, "範囲の外の捕獲 {index}");
+                ensure!(*index < self.f.ncaps, "範囲外のキャプチャ {index}");
                 ensure!(
                     entry
                         && !before.is_empty()
@@ -261,11 +261,11 @@ impl Cx<'_> {
                     .p
                     .types
                     .get(ty.index())
-                    .ok_or_else(|| format!("範囲の外の型 {}", ty.0))?;
+                    .ok_or_else(|| format!("範囲外の型 {}", ty.0))?;
                 let c = t
                     .ctors
                     .get(*ctor as usize)
-                    .ok_or_else(|| format!("範囲の外のコンストラクタ {ctor}"))?;
+                    .ok_or_else(|| format!("範囲外のコンストラクタ {ctor}"))?;
                 ensure!(
                     c.arity as usize == fields.len() && !fields.is_empty(),
                     "コンストラクタ {} のフィールドの数が合わない",
@@ -292,10 +292,10 @@ impl Cx<'_> {
                     .p
                     .shapes
                     .get(shape.index())
-                    .ok_or_else(|| format!("範囲の外の形 {}", shape.0))?;
+                    .ok_or_else(|| format!("範囲外のシェイプ {}", shape.0))?;
                 ensure!(
                     s.len() == fields.len() && !s.is_empty(),
-                    "形 {} のフィールドの数が合わない",
+                    "シェイプ {} のフィールドの数が合わない",
                     shape.0
                 );
             }
@@ -350,7 +350,7 @@ impl Cx<'_> {
                 );
                 ensure!(
                     t.ncaps as usize == caps.len(),
-                    "関数 {} の捕獲の数が合わない",
+                    "関数 {} のキャプチャの数が合わない",
                     t.sym
                 );
             }
@@ -367,7 +367,7 @@ impl Cx<'_> {
                 let t = self.func(*func)?;
                 ensure!(
                     *index < t.ncaps,
-                    "関数 {} のクロージャに範囲の外の捕獲 {index} を書く",
+                    "関数 {} のクロージャに範囲外のキャプチャ {index} を書く",
                     t.sym
                 );
             }
@@ -503,11 +503,11 @@ impl Cx<'_> {
             .p
             .effects
             .get(e as usize)
-            .ok_or_else(|| format!("範囲の外のエフェクト {e}"))?;
+            .ok_or_else(|| format!("範囲外のエフェクト {e}"))?;
         if let Some(op) = op {
             ensure!(
                 (op as usize) < x.ops.len(),
-                "エフェクト {} に範囲の外の操作 {op}",
+                "エフェクト {} に範囲外の操作 {op}",
                 x.sym
             );
         }
@@ -521,7 +521,7 @@ impl Cx<'_> {
             FxArgs::Fixed(reps) => {
                 ensure!(
                     reps.len() == args.len(),
-                    "{} の被演算子は {} 個だが {} 個ある",
+                    "{} のオペランドは {} 個だが {} 個ある",
                     op.name(),
                     reps.len(),
                     args.len()
@@ -533,7 +533,7 @@ impl Cx<'_> {
             FxArgs::AtLeast(n) => {
                 ensure!(
                     args.len() >= n,
-                    "{} の被演算子が {} 個より少ない",
+                    "{} のオペランドが {} 個より少ない",
                     op.name(),
                     n
                 );
@@ -559,7 +559,7 @@ impl Cx<'_> {
                 }
                 ensure!(
                     args.len() == 2 + ops.len() + usize::from(*has_ret) + usize::from(*has_cancel),
-                    "handler_new の被演算子の数が節の数と合わない"
+                    "handler_new のオペランドの数が節の数と合わない"
                 );
             }
             FxOp::HandlerFind { effect, op } => self.effect_op(*effect, Some(*op))?,
@@ -584,7 +584,7 @@ impl Cx<'_> {
         let m = x
             .methods
             .get(method as usize)
-            .ok_or_else(|| format!("インスタンス {} に範囲の外のメソッド {method}", x.sym))?;
+            .ok_or_else(|| format!("インスタンス {} に範囲外のメソッド {method}", x.sym))?;
         ensure!(
             m.dicts == 0,
             "インスタンス {} のメソッド {method} は辞書を受け取るので値を持たない",
@@ -598,7 +598,7 @@ impl Cx<'_> {
         for s in t.succs() {
             ensure!(
                 s.index() > bi && s.index() < nb,
-                "b{bi} から前向きでない枝 b{}",
+                "b{bi} から前向きでない分岐 b{}",
                 s.0
             );
         }
@@ -632,7 +632,7 @@ impl Cx<'_> {
                     } else {
                         args.len() >= n
                     },
-                    "{} の被演算子の数が合わない",
+                    "{} のオペランドの数が合わない",
                     op.name()
                 );
                 self.all(args, Rep::Any)?;
@@ -643,7 +643,7 @@ impl Cx<'_> {
                     (Some(want), Some(r)) => self.is(*r, want)?,
                     _ => {
                         return Err(format!(
-                            "実行時エラー {} の被演算子が合わない",
+                            "実行時エラー {} のオペランドが合わない",
                             self.p.error_number(kind)
                         ));
                     }
@@ -651,7 +651,7 @@ impl Cx<'_> {
                 match kind {
                     RtError::OutOfMemory => {
                         return Err(
-                            "メモリの不足(19 番)は確保する命令が起こすもので、error には使わない"
+                            "メモリ不足(19 番)は確保する命令が起こすもので、error には使わない"
                                 .to_string(),
                         );
                     }
@@ -662,7 +662,7 @@ impl Cx<'_> {
                         let gl = self.global(*g)?;
                         ensure!(
                             matches!(gl.kind, GlobalKind::Extern { .. }),
-                            "extern でない大域 {} の未実装のプリミティブ",
+                            "extern でないグローバル {} の未実装のプリミティブ",
                             gl.sym
                         );
                     }
@@ -700,12 +700,21 @@ impl Cx<'_> {
             let s = fr.slot[r];
             match s {
                 Slot::Any(x) => {
-                    ensure!(frame::is_any_class(rep), "生の r{r} が any の区画にある");
-                    ensure!(x < fr.any_slots, "範囲の外の any のスロット {x}");
+                    ensure!(
+                        frame::is_any_class(rep),
+                        "ボックス化していない r{r} が any の領域にある"
+                    );
+                    ensure!(x < fr.any_slots, "範囲外の any のスロット {x}");
                 }
                 Slot::Raw(x) => {
-                    ensure!(!frame::is_any_class(rep), "r{r} が生の区画にある");
-                    ensure!(x < fr.raw_slots, "範囲の外の生のスロット {x}");
+                    ensure!(
+                        !frame::is_any_class(rep),
+                        "r{r} がボックス化していない値の領域にある"
+                    );
+                    ensure!(
+                        x < fr.raw_slots,
+                        "範囲外のボックス化していない値のスロット {x}"
+                    );
                 }
             }
             if let Some(v) = iv[r] {
@@ -795,7 +804,7 @@ fn defs_in(f: &Func, d: &mut Timeline) -> VResult {
         for u in b.term.uses() {
             ensure!(
                 d.contains(u.0),
-                "b{bi} の終わりが、書かれていないかもしれない r{} を読む",
+                "b{bi} の終端命令が、書かれていないかもしれない r{} を読む",
                 u.0
             );
         }
@@ -815,7 +824,7 @@ fn verify_func_with(p: &Program, f: &Func, builtin_pairs: &HashSet<(ClassId, Typ
         f,
         builtin_pairs,
     };
-    ensure!(!f.blocks.is_empty(), "ブロックが無い");
+    ensure!(!f.blocks.is_empty(), "ブロックがない");
     let mut seen = Bits::new(f.regs.len());
     for &r in &f.params {
         cx.is(r, Rep::Any)?;
@@ -827,14 +836,14 @@ fn verify_func_with(p: &Program, f: &Func, builtin_pairs: &HashSet<(ClassId, Typ
         seen.insert(r.index());
     }
     let entry_ok = matches!(f.blocks[0].insts.first(), Some(Inst::DepthEnter));
-    ensure!(entry_ok, "入口の先頭に depth_enter が無い");
+    ensure!(entry_ok, "入口の先頭に depth_enter がない");
     for (bi, b) in f.blocks.iter().enumerate() {
         for (ii, i) in b.insts.iter().enumerate() {
             cx.check_inst(i, &b.insts[..ii], bi == 0)
                 .map_err(|m| format!("b{bi} の {ii} 番目の命令: {m}"))?;
         }
         cx.check_term(bi, &b.term)
-            .map_err(|m| format!("b{bi} の終わり: {m}"))?;
+            .map_err(|m| format!("b{bi} の終端命令: {m}"))?;
     }
     cx.check_defs()?;
     if let Some(fr) = &f.frame {
@@ -890,26 +899,26 @@ impl Marks {
 pub fn verify_from(p: &Program, m: &Marks) -> VResult {
     ensure!(
         p.shapes.first().map(|s| s.is_empty()) == Some(true),
-        "形の表の先頭が空の形でない"
+        "シェイプ表の先頭が空のシェイプでない"
     );
     for (i, s) in p.shapes.iter().enumerate().skip(m.shapes) {
         ensure!(
             s.windows(2).all(|w| w[0] <= w[1]),
-            "形 {i} がラベルの番号の順に並んでいない"
+            "シェイプ {i} がラベルの番号の順に並んでいない"
         );
         for l in s {
-            ensure!(l.index() < p.labels.len(), "形 {i} の範囲の外のラベル");
+            ensure!(l.index() < p.labels.len(), "シェイプ {i} の範囲外のラベル");
         }
     }
     let nf = p.funcs.len();
     let fid_ok = |f: FuncId| f.index() < nf;
     // グローバルの値になる関数は、キャプチャを持たず、種類がグローバルの種類に合う(`doc/lir.md` の 1.6 節)。
     let global_fn = |g: &Global, f: FuncId, want: FuncKind| -> VResult {
-        ensure!(fid_ok(f), "大域 {} の関数が範囲の外", g.sym);
+        ensure!(fid_ok(f), "グローバル {} の関数が範囲外", g.sym);
         let t = &p.funcs[f.index()];
         ensure!(
             t.ncaps == 0 && t.kind == want,
-            "大域 {} の関数 {} は捕獲を持たない種類 {} の関数でない",
+            "グローバル {} の関数 {} はキャプチャを持たない種類 {} の関数でない",
             g.sym,
             t.sym,
             want.name()
@@ -933,7 +942,7 @@ pub fn verify_from(p: &Program, m: &Marks) -> VResult {
         let cl = p
             .classes
             .get(x.class.index())
-            .ok_or_else(|| format!("インスタンス {} のクラスが範囲の外", x.sym))?;
+            .ok_or_else(|| format!("インスタンス {} のクラスが範囲外", x.sym))?;
         ensure!(
             x.methods.len() == cl.methods.len(),
             "インスタンス {} の実装の数がクラス {} のメソッドの数と合わない",
@@ -941,13 +950,13 @@ pub fn verify_from(p: &Program, m: &Marks) -> VResult {
             cl.sym
         );
         for m in &x.methods {
-            ensure!(fid_ok(m.func), "インスタンス {} の関数が範囲の外", x.sym);
+            ensure!(fid_ok(m.func), "インスタンス {} の関数が範囲外", x.sym);
             let t = &p.funcs[m.func.index()];
             ensure!(
                 matches!(t.kind, FuncKind::Kir(_))
                     && t.ncaps == 0
                     && t.params.len() == m.dicts as usize,
-                "インスタンス {} の実装の関数 {} は、辞書を {} 個受け取る捕獲の無い KIR の関数でない",
+                "インスタンス {} の実装の関数 {} は、辞書を {} 個受け取るキャプチャのない KIR の関数でない",
                 x.sym,
                 t.sym,
                 m.dicts
@@ -955,7 +964,7 @@ pub fn verify_from(p: &Program, m: &Marks) -> VResult {
         }
     }
     for b in p.builtin_methods.iter().skip(m.builtin_methods) {
-        ensure!(fid_ok(b.func), "組み込みのメソッドの関数が範囲の外");
+        ensure!(fid_ok(b.func), "組み込みのメソッドの関数が範囲外");
         let t = &p.funcs[b.func.index()];
         ensure!(
             t.kind == FuncKind::BuiltinMethod && t.ncaps == 0,
@@ -966,16 +975,16 @@ pub fn verify_from(p: &Program, m: &Marks) -> VResult {
     for &f in p.init.iter().skip(m.init) {
         ensure!(
             fid_ok(f) && p.funcs[f.index()].kind == FuncKind::Init,
-            "初期化の関数 {} が不正",
+            "初期化関数 {} が不正",
             f.0
         );
     }
     if let Some(h) = p.rt_handle {
-        ensure!(fid_ok(h), "$rt_handle の関数が範囲の外");
+        ensure!(fid_ok(h), "$rt_handle の関数が範囲外");
         let t = &p.funcs[h.index()];
         ensure!(
             t.kind == FuncKind::Handler && t.ncaps == 0 && t.params.len() == 3,
-            "$rt_handle の関数 {} は引数を 3 つ取る捕獲の無い種類 handler の関数でない",
+            "$rt_handle の関数 {} は引数を 3 つ取るキャプチャのない種類 handler の関数でない",
             t.sym
         );
     }
@@ -983,7 +992,7 @@ pub fn verify_from(p: &Program, m: &Marks) -> VResult {
         if f.kind == FuncKind::Init {
             ensure!(
                 f.params.is_empty() && f.ncaps == 0,
-                "初期化の関数 {} が引数か捕獲を持つ",
+                "初期化関数 {} が引数かキャプチャを持つ",
                 f.sym
             );
         }

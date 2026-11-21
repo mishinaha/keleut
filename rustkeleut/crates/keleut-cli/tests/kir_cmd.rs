@@ -80,7 +80,7 @@ fn kir_bad_はどれも_65_で拒否される() {
         );
         n += 1;
     }
-    assert!(n >= 40, "試料が {n} 本しかありません");
+    assert!(n >= 40, "入力ファイルが {n} 本しかありません");
     let r = keleut(&["kir", "verify", "deep-base.kirt"], &dir);
     assert!(r.status.success(), "{r:?}");
 }

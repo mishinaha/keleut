@@ -414,7 +414,7 @@ pub fn encode(prog: &Program, rt: &Rt<'_>, fid: FuncId) -> Result<Code, String> 
                 e.resume[rp as usize] = ResumeEntry {
                     call_pc: start,
                     pc_after: e.words.len() as u32,
-                    dst: e.s(inst.def().expect("呼び出しは書き先を持つ")),
+                    dst: e.s(inst.def().expect("呼び出しは書き込み先を持つ")),
                     kind,
                     yields: frame.yield_points.get(rp as usize).copied().unwrap_or(true),
                 };

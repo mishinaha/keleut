@@ -1,7 +1,7 @@
 //! `KELEUT_TEST_ALLOC_FAIL` で確保を失敗させ、`keleut run` がどう終了するかを確かめるテスト。
 //!
 //! 多くのテストは、`cancel` 節を持つハンドラの中で確保を失敗させる。
-//! まず、標準エラーの `keleut: 試験: SITE の確保を失敗させました` の行で、狙った確保箇所で失敗したことを確かめる。
+//! まず、標準エラーの `keleut: テスト: SITE の確保を失敗させました` の行で、狙った確保箇所で失敗したことを確かめる。
 //! 続いて、`before` の行、`cancel` 節の出力(節の中で作ったリストの表示を含む)、
 //! `実行時エラー: メモリ不足です` の行、終了コード 3 を確かめる。
 //! これと違う結果を確かめるテスト(コンパイル中の確保の失敗、`keleut repl`、起動時のシェイプの登録、値スタックのチャンクの解放など)は、
@@ -135,12 +135,12 @@ fn run(tag: &str, src: &str, spec: &str, backend: &[&str], envs: &[(&str, &str)]
 }
 
 fn test_line(site: &str) -> String {
-    format!("keleut: 試験: {site} の確保を失敗させました\n")
+    format!("keleut: テスト: {site} の確保を失敗させました\n")
 }
 
 fn describe(r: &Output) -> String {
     format!(
-        "終了状態 {:?}\n標準出力:\n{}\n標準エラー:\n{}",
+        "終了コード {:?}\n標準出力:\n{}\n標準エラー:\n{}",
         r.status.code(),
         String::from_utf8_lossy(&r.stdout),
         String::from_utf8_lossy(&r.stderr)
@@ -330,7 +330,7 @@ fn 翻訳の確保の失敗のあとはインタプリタで走り続ける() {
         r.status.code() == Some(0)
             && r.stdout == b"before\n1020000\n"
             && err.starts_with(&test_line("jit"))
-            && err.contains("翻訳した関数 0、"),
+            && err.contains("コンパイルした関数 0、"),
         "{}",
         describe(&r)
     );
@@ -485,7 +485,7 @@ fn shape_first_runtime_failure(tag: &str, src: &str, backend: &[&str]) -> Output
             describe(&r)
         );
     }
-    panic!("{backend:?}: 起動のときの登録の後に形の表を広げる確保に当たらない");
+    panic!("{backend:?}: 起動時の登録の後にシェイプ表を拡張する確保に当たらない");
 }
 
 /// シェイプ表を拡張できなくても `cancel` 節が実行され、メモリ不足の実行時エラーとして終了コード 3 で終了することを確かめる。
@@ -580,7 +580,7 @@ fn repl_で形の表を広げられない入力だけがメモリの不足にな
             return;
         }
     }
-    panic!("入力の形を入れる確保に当たらない");
+    panic!("入力のシェイプを入れる確保に当たらない");
 }
 
 // ---- 値スタックのチャンクの解放と注入 ----

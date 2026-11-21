@@ -805,7 +805,7 @@ impl Mb {
             names.append(i as u32, &format!("{module}.{name}"));
         }
         for (i, f) in self.funcs.iter().enumerate() {
-            let body = f.body.as_ref().expect("本体の無い関数");
+            let body = f.body.as_ref().expect("本体のない関数");
             code.function(body);
             let prefix = if f.safe { "safe." } else { "" };
             names.append(imp::COUNT + i as u32, &format!("{prefix}{}", f.name));

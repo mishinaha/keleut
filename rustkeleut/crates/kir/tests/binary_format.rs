@@ -1,7 +1,6 @@
 //! バイナリの読み込みの検査(IRSpec 13.1 節、13.3 節、13.7 節)のテスト。
 //!
 //! 診断メッセージは Diktor のリーダ(`ir_bin.ml`)と同じである。
-//! 診断は、ヘッダを `見出し`、セクションを `節`、バージョンを `版`、メジャーバージョンを `主版`、必須機能ビットを `必要な機能のビット` と書く。
 
 mod common;
 
@@ -21,23 +20,26 @@ fn err(b: &[u8]) -> String {
 #[test]
 fn header() {
     let b = base();
-    assert_eq!(err(&b[..10]), "位置 0: 見出しの 16 バイトがありません");
+    assert_eq!(err(&b[..10]), "位置 0: ヘッダの 16 バイトがありません");
     let mut x = b.clone();
     x[1] = 1;
-    assert_eq!(err(&x), "位置 0: マジックが KIR のものではありません");
+    assert_eq!(
+        err(&x),
+        "位置 0: マジックナンバーが KIR のものではありません"
+    );
     // メジャーバージョンが違えば、マイナーバージョンによらず拒否する(IRSpec 14 節)。
     let mut x = b.clone();
     x[4] = 0;
     x[6] = 3;
     assert_eq!(
         err(&x),
-        "位置 8: 版 0.3 は読めません(読めるのは主版 1 の版だけです)"
+        "位置 8: バージョン 0.3 は読めません(読めるのはメジャーバージョン 1 のバージョンだけです)"
     );
     let mut x = b.clone();
     x[4] = 2;
     assert_eq!(
         err(&x),
-        "位置 8: 版 2.0 は読めません(読めるのは主版 1 の版だけです)"
+        "位置 8: バージョン 2.0 は読めません(読めるのはメジャーバージョン 1 のバージョンだけです)"
     );
     // メジャーバージョンが同じなら、マイナーバージョンが新しいファイルも読み、書き出すときもそのマイナーバージョンを書く。
     let mut x = b.clone();
@@ -52,13 +54,13 @@ fn header() {
     x[11] = 0x80;
     assert_eq!(
         err(&x),
-        "位置 12: 必要な機能のビット 0x80000000 を処理できません"
+        "位置 12: 必須機能ビット 0x80000000 を処理できません"
     );
     let mut x = b.clone();
     x[8] = 1;
     assert_eq!(
         err(&x),
-        "位置 12: 必要な機能のビット 0x00000001 を処理できません"
+        "位置 12: 必須機能ビット 0x00000001 を処理できません"
     );
 }
 
@@ -72,24 +74,24 @@ fn sections() {
     x.push(0);
     assert_eq!(
         err(&x),
-        format!("位置 {}: 節 0x00 は定義されていません", b.len() + 1)
+        format!("位置 {}: セクション 0x00 は定義されていません", b.len() + 1)
     );
     // 定義されていない id 0x0C のセクションを追加する。
     let mut s = secs.clone();
     s.push((0x0C, vec![]));
     let mut x = common::assemble(&b, &s);
     x[12] = 12;
-    assert!(err(&x).contains("節 0x0c は定義されていません"));
+    assert!(err(&x).contains("セクション 0x0c は定義されていません"));
     // セクション数がヘッダの値と違う。
     let mut x = b.clone();
     x[12] = 12;
-    assert!(err(&x).contains("節の数が見出し(12)と違います(11)"));
+    assert!(err(&x).contains("セクションの数がヘッダ(12)と違います(11)"));
     // 必須のセクションがない。
     let mut s = secs.clone();
     s.remove(3);
     let mut x = common::assemble(&b, &s);
     x[12] = 10;
-    assert!(err(&x).contains("必須の節 0x04 がありません"));
+    assert!(err(&x).contains("必須のセクション 0x04 がありません"));
     // セクションが id の昇順に並んでいない。
     let mut s = secs.clone();
     s.swap(3, 4);
@@ -98,7 +100,7 @@ fn sections() {
     // セクションのサイズがファイルの残りを超える。
     let mut x = b.clone();
     x.truncate(x.len() - 1);
-    assert!(err(&x).contains("の大きさがファイルの残りを超えます"));
+    assert!(err(&x).contains("のサイズがファイルの残りを超えます"));
 }
 
 #[test]
@@ -115,7 +117,7 @@ fn skippable_section_and_padded_leb() {
     assert_eq!(kir::write_kir(&p).unwrap(), b);
     // ヘッダのセクション数に含めていない id 0x80 のセクションは拒否する。
     let x = common::assemble(&b, &s);
-    assert!(err(&x).contains("節の数が見出し(11)と違います(12)"));
+    assert!(err(&x).contains("セクションの数がヘッダ(11)と違います(12)"));
     // セクションのサイズを最短でない 5 バイトの LEB128 で書いても受理する。
     let s = common::sections(&b);
     let mut x = b[..16].to_vec();

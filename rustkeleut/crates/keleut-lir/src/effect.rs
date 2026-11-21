@@ -92,7 +92,7 @@ pub(crate) fn handle(
     tail: bool,
 ) -> Option<V> {
     let Some(f) = lw.p.rt_handle else {
-        return lw.bug("$rt_handle が無い");
+        return lw.bug("$rt_handle がない");
     };
     let mut args = vec![body, res];
     args.extend(clauses);
@@ -133,7 +133,7 @@ pub(crate) fn handle(
 /// `k` は再開する継続、`v` は評価した値である。
 pub(crate) fn resume(lw: &mut Low, k: Reg, v: Reg) -> Option<V> {
     let Some(f) = lw.p.rt_handle else {
-        return lw.bug("$rt_handle が無い");
+        return lw.bug("$rt_handle がない");
     };
     fx(&mut lw.b, FxOp::ContCheck { nontail: true }, vec![k]);
     let hr = fx_val(&mut lw.b, FxOp::ContHr, vec![k]);

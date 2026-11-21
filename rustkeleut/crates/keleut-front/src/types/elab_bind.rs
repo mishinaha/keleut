@@ -701,7 +701,7 @@ impl Tc {
             for (tp, _, r) in &tps[j] {
                 if *pre_y != pre && clashed.contains(r) && self.mentions(*r, pre)? {
                     flowed.push(format!(
-                        "{y} の型パラメータ {tp} が {x} の型に入り込んでいます"
+                        "{y} の型パラメータ {tp} が {x} の型に現れるようになっています"
                     ));
                 }
             }
@@ -788,7 +788,7 @@ impl Tc {
                     return Err(Fail::TypeAt(
                         hd.h_loc.unwrap_or_default(),
                         format!(
-                            "曖昧な制約: {} の辞書を、この式を含む再帰群の束縛の型から決められません(群のほかの束縛の型にだけ現れる型変数に制約が付いています。注釈で型を決めてください)",
+                            "曖昧な制約: {} の辞書を、この式を含む再帰群の束縛の型から決められません(再帰群のほかの束縛の型にだけ現れる型変数に制約が付いています。注釈で型を決めてください)",
                             self.display_of(hd.h_cls)
                         ),
                     ));
@@ -813,7 +813,7 @@ impl Tc {
                         if !have.contains(k) {
                             return Err(Fail::TypeAt(
                                 *span,
-                                "曖昧な制約: 再帰群の中のこの参照が要る辞書を、呼ぶ側の束縛の型から決められません(注釈で型を決めてください)".into(),
+                                "曖昧な制約: 再帰群の中のこの参照が必要とする辞書を、呼び出し元の束縛の型から決められません(注釈で型を決めてください)".into(),
                             ));
                         }
                         let h_id = self.new_oid();

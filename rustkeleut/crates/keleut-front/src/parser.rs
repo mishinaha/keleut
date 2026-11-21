@@ -194,7 +194,7 @@ impl Machine {
 
 /// 入れ子が構文解析の上限を超えたときに出す、`処理系の限度` の行を作る。
 pub fn limit_message(file: &str, limit: usize) -> String {
-    format!("{file}: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 {limit} を超えました)")
+    format!("{file}: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 {limit} を超えました)")
 }
 
 /// 意味動作のエラー(`ActErr`)を、構文解析のエラー([`ParseError`])に変換する。
@@ -206,7 +206,7 @@ fn act_err(files: &Files, e: ActErr) -> ParseError {
             ParseError::Syntax(format!("{}: 構文エラー: {msg}", files.show(pos)))
         }
         ActErr::Internal(msg) => ParseError::Internal(msg),
-        ActErr::Limit => unreachable!("限度は Driver::merr が受ける"),
+        ActErr::Limit => unreachable!("上限は Driver::merr が受ける"),
     }
 }
 
@@ -340,7 +340,7 @@ impl Driver<'_> {
         let f = self.files;
         if let Some((n, sp, next)) = self.lexer.glued_number() {
             return format!(
-                "{}: 構文エラー: 数値リテラル {} の直後に {next} が続いています(数値リテラルの綴りを確認してください)",
+                "{}: 構文エラー: 数値リテラル {} の直後に {next} が続いています(数値リテラルの表記を確認してください)",
                 f.show(sp),
                 n.show()
             );

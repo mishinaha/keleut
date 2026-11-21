@@ -93,7 +93,7 @@ impl Tc {
         Ok(match self.rigid_tparams.get(&i.vid).cloned() {
             None => base,
             Some(n) => format!(
-                "{base}({name} は型パラメータ {n} です。{n} のスコープの外の型と共有された、型の決まっていない変数(注釈の無い引数の型や、一般化されない束縛の型など)に {n} を入れようとしています)"
+                "{base}({name} は型パラメータ {n} です。{n} のスコープの外の型と共有された、型の決まっていない変数(注釈のない引数の型や、一般化されない束縛の型など)に {n} を入れようとしています)"
             ),
         })
     }
@@ -336,7 +336,7 @@ impl Tc {
                 let dc = self.display_of(c);
                 self.class_fail(via, Some(t), None, |s| {
                     format!(
-                        "制約 {dc} を {s} に付けられません(頭が型変数の適用には制約を貼れません)"
+                        "制約 {dc} を {s} に付けられません(先頭が型変数の適用には制約を貼れません)"
                     )
                 })
             }
@@ -456,7 +456,7 @@ impl Tc {
                         let s = self.show(tv)?;
                         let dl = self.display_of(label);
                         return terr(format!(
-                            "行 {s} は注釈で固定された行変数なので、ラベル {dl} を足せません(注釈側に {dl} を(必要なら引数つきで)書き足してください)"
+                            "行 {s} は注釈で固定された行変数なので、ラベル {dl} を追加できません(注釈側に {dl} を(必要なら引数つきで)書き足してください)"
                         ));
                     }
                     _ => {
@@ -1186,7 +1186,7 @@ impl Tc {
                 let structural = self.find_class(c).is_some_and(|ci| ci.ci_derive_structural);
                 if !structural {
                     return bug(format!(
-                        "証拠: 構造的導出の無いクラスの構造的な型です: {}",
+                        "証拠: 構造的導出のないクラスの構造的な型です: {}",
                         self.display_of(c)
                     ));
                 }

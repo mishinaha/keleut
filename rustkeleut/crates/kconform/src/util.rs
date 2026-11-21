@@ -43,7 +43,7 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         if self.keep {
             eprintln!(
-                "kconform: 一時のディレクトリを残しました: {}",
+                "kconform: 一時ディレクトリを残しました: {}",
                 self.path.display()
             );
         } else {

@@ -133,7 +133,7 @@ impl<'p> Rt<'p> {
             };
             if id.0 as usize != i {
                 return Err(Stop::Internal(format!(
-                    "形の表の番号が合いません(LIR の {i} 番が実行時の {} 番)",
+                    "シェイプ表の番号が合いません(LIR の {i} 番がランタイムの {} 番)",
                     id.0
                 )));
             }
@@ -926,7 +926,7 @@ impl<'p> Rt<'p> {
     /// 退避した値 `w` から状態ワードを取り出し、表の項目を空にする。退避した状態ワードでなければ内部エラーを返す。
     pub fn pending_unbox(&mut self, w: Word) -> Result<Pending, Stop> {
         if !self.is_kind(w, Kind::Pending) {
-            return Err(Stop::Internal("退避した状態語でない値".into()));
+            return Err(Stop::Internal("退避した状態ワードでない値".into()));
         }
         Ok(std::mem::take(&mut self.saved[Self::index_of(w)]))
     }

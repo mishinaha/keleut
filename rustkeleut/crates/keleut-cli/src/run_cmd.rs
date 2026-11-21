@@ -265,7 +265,7 @@ fn emit_with_diktor(o: &Options) -> Result<Vec<u8>, u8> {
         Some(0) => {}
         Some(c) => return Err(u8::try_from(c).unwrap_or(70)),
         None => {
-            eprintln!("keleut: フロントエンドがシグナルで終わりました: {status}");
+            eprintln!("keleut: フロントエンドがシグナルで終了しました: {status}");
             return Err(70);
         }
     }
@@ -339,7 +339,7 @@ fn run_jit(o: &Options) -> u8 {
         Some(t) => match keleut_llvm::Tier::parse(t) {
             Some(t) => t,
             None => {
-                eprintln!("keleut: 内部エラー: 段の設定 {t} を読めません");
+                eprintln!("keleut: 内部エラー: ティアの設定 {t} を読めません");
                 return 70;
             }
         },
@@ -358,7 +358,7 @@ fn run_jit(o: &Options) -> u8 {
 
 #[cfg(not(feature = "llvm"))]
 fn run_jit(_: &Options) -> u8 {
-    eprintln!("keleut: 未実装: 後段 jit(feature llvm を外して組みました)");
+    eprintln!("keleut: 未実装: バックエンド jit(feature llvm を外してビルドしました)");
     exit::UNIMPLEMENTED
 }
 
@@ -652,7 +652,7 @@ fn dump_llvm_of(o: &Options) -> u8 {
 
 #[cfg(not(feature = "llvm"))]
 fn dump_llvm_of(_: &Options) -> u8 {
-    eprintln!("keleut: 未実装: dump llvm(feature llvm を外して組みました)");
+    eprintln!("keleut: 未実装: dump llvm(feature llvm を外してビルドしました)");
     exit::UNIMPLEMENTED
 }
 

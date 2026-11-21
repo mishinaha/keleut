@@ -224,7 +224,7 @@ pub fn read_index(corpus: &Path) -> Result<Vec<Entry>, String> {
         let parts: Vec<&str> = l.split('\t').collect();
         if parts.len() != 3 {
             return Err(format!(
-                "{}:{}: 欄が 3 つではありません",
+                "{}:{}: 列が 3 つではありません",
                 p.display(),
                 i + 1
             ));
@@ -285,14 +285,14 @@ pub fn desired(ex: &Extracted) -> BTreeMap<String, Vec<u8>> {
 }
 
 /// コーパスのディレクトリと、あるべき内容 `want` との違いを返す。
-/// 各要素は、`足りない: `、`中身が違う: `、`余る: ` のどれかに相対パスを続けた文字列である。
+/// 各要素は、`足りない: `、`内容が違う: `、`余る: ` のどれかに相対パスを続けた文字列である。
 pub fn diff(corpus: &Path, want: &BTreeMap<String, Vec<u8>>) -> std::io::Result<Vec<String>> {
     let have = existing(corpus)?;
     let mut v = Vec::new();
     for (k, c) in want {
         match have.get(k) {
             None => v.push(format!("足りない: {k}")),
-            Some(h) if h != c => v.push(format!("中身が違う: {k}")),
+            Some(h) if h != c => v.push(format!("内容が違う: {k}")),
             _ => {}
         }
     }

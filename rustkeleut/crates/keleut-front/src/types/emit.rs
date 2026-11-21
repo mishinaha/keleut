@@ -97,7 +97,7 @@ pub fn program_of_checked(
         tc, prelude, units, ..
     } = checked;
     if units.len() != keys.len() + 1 {
-        return bug("KIR の書き出し: 単位の数が鍵の数と合いません");
+        return bug("KIR の書き出し: 単位の数がキーの数と合いません");
     }
     let prelude_paths: Vec<Vec<u8>> = if opts.no_prelude {
         Vec::new()
@@ -646,7 +646,7 @@ impl<'t> W<'t> {
         match self.tb.type_ids.get(&c) {
             Some(i) => Ok(*i),
             None => bug(format!(
-                "KIR の書き出し: 記号がありません: 型 {}",
+                "KIR の書き出し: シンボルがありません: 型 {}",
                 self.tc.name_of(c)
             )),
         }
@@ -656,7 +656,7 @@ impl<'t> W<'t> {
         match self.tb.effect_ids.get(&e) {
             Some(i) => Ok(*i),
             None => bug(format!(
-                "KIR の書き出し: 記号がありません: エフェクト {}",
+                "KIR の書き出し: シンボルがありません: エフェクト {}",
                 self.tc.name_of(e)
             )),
         }
@@ -666,7 +666,7 @@ impl<'t> W<'t> {
         match self.tb.class_ids.get(&c) {
             Some(i) => Ok(*i),
             None => bug(format!(
-                "KIR の書き出し: 記号がありません: クラス {}",
+                "KIR の書き出し: シンボルがありません: クラス {}",
                 self.tc.name_of(c)
             )),
         }
@@ -820,7 +820,7 @@ impl<'t> W<'t> {
         }
         let Some(p) = self.root.frames[fr].parent else {
             return bug(format!(
-                "KIR の書き出し: 根の関数の外の変数を読もうとしました: {}",
+                "KIR の書き出し: ルート関数の外の変数を読もうとしました: {}",
                 self.root.frames[fr].sym
             ));
         };
@@ -955,7 +955,7 @@ impl<'t> W<'t> {
                     for (fi, a) in f2a.iter().enumerate() {
                         if let Some(ai) = a {
                             let Some(arg) = args.get(*ai) else {
-                                return bug("KIR の書き出し: PCtor の引数の位置が範囲の外です");
+                                return bug("KIR の書き出し: PCtor の引数の位置が範囲外です");
                             };
                             fields.push((fi as u32, self.pat(&arg.pat, bind)?));
                         }
@@ -1146,7 +1146,9 @@ impl<'t> W<'t> {
                 match self.tc.resolved.get(&id).cloned() {
                     Some(Resolved::Var(GRef::Decl(oid, x))) => {
                         let Some(g) = self.tb.globals.get(&(oid, x.clone())).copied() else {
-                            return bug(format!("KIR の書き出し: 記号がありません: 大域 {x}"));
+                            return bug(format!(
+                                "KIR の書き出し: シンボルがありません: グローバル {x}"
+                            ));
                         };
                         let v = self.push(kir::Exp::Global(g));
                         return self.with_dicts(env, id, v);
@@ -1154,7 +1156,7 @@ impl<'t> W<'t> {
                     Some(Resolved::Var(GRef::Builtin(x))) => {
                         let Some(g) = self.tb.builtin_globals.get(&x).copied() else {
                             return bug(format!(
-                                "KIR の書き出し: 大域が表にありません: builtin/{x}"
+                                "KIR の書き出し: グローバルが表にありません: builtin/{x}"
                             ));
                         };
                         let v = self.push(kir::Exp::Global(g));
@@ -1193,7 +1195,7 @@ impl<'t> W<'t> {
                     let mut fields = Vec::with_capacity(args.len());
                     for (ai, a) in args.iter().enumerate() {
                         let Some(fi) = a2f.get(ai) else {
-                            return bug("KIR の書き出し: Construct の引数の位置が範囲の外です");
+                            return bug("KIR の書き出し: Construct の引数の位置が範囲外です");
                         };
                         fields.push((*fi as u32, self.exp(&env.nt(), &a.exp)?));
                     }
@@ -1696,7 +1698,7 @@ impl<'t> W<'t> {
             }
         }
         let Some((_, op0, _)) = ops.first() else {
-            return bug("KIR の書き出し: 操作節の無い handle です");
+            return bug("KIR の書き出し: 操作節のない handle です");
         };
         let (eff_name, _) = split_last_dot(&self.tc.name_of(*op0))?;
         let eo = self.tc.intern(&eff_name);
@@ -1910,7 +1912,7 @@ impl<'t> W<'t> {
     fn fix_caps(&mut self, fr: usize) -> R<()> {
         let Some(p) = self.root.frames[fr].parent else {
             if !self.root.frames[fr].caps.is_empty() {
-                return bug("KIR の書き出し: 根の関数が捕獲を持っています");
+                return bug("KIR の書き出し: ルート関数がキャプチャを持っています");
             }
             return Ok(());
         };
@@ -1919,7 +1921,7 @@ impl<'t> W<'t> {
             let v = match v {
                 Cap::Env(t) => match self.final_cap.get(t) {
                     Some(i) => Cap::Env(*i),
-                    None => return bug("KIR の書き出し: 捕獲の仮の番号がありません"),
+                    None => return bug("KIR の書き出し: キャプチャの仮の番号がありません"),
                 },
                 v => *v,
             };
@@ -1938,14 +1940,14 @@ impl<'t> W<'t> {
                     } else {
                         match pf.locals.get(i - pf.params.len()) {
                             Some(r) => *r,
-                            None => return bug("KIR の書き出し: スロットの番号が範囲の外です"),
+                            None => return bug("KIR の書き出し: スロットの番号が範囲外です"),
                         }
                     }
                 }
                 Cap::DParam(_) => Rep::Any,
                 Cap::Env(j) => match pf.cap_reps.get(*j as usize) {
                     Some(r) => *r,
-                    None => return bug("KIR の書き出し: 捕獲の番号が範囲の外です"),
+                    None => return bug("KIR の書き出し: キャプチャの番号が範囲外です"),
                 },
             });
         }
@@ -2043,7 +2045,10 @@ impl<'t> W<'t> {
             match fn_first.get(&f.sym) {
                 Some(id) => p.func = *id,
                 None => {
-                    return bug(format!("KIR の書き出し: 場所の関数がありません: {}", f.sym));
+                    return bug(format!(
+                        "KIR の書き出し: 生成箇所の関数がありません: {}",
+                        f.sym
+                    ));
                 }
             }
             p.caps = f.final_caps.clone();
@@ -2064,7 +2069,7 @@ impl<'t> W<'t> {
                         fix(p)?;
                     }
                 }
-                _ => return bug("KIR の書き出し: 場所の式ではありません"),
+                _ => return bug("KIR の書き出し: 生成箇所の式ではありません"),
             }
         }
         Ok(())
@@ -2083,11 +2088,11 @@ impl<'t> W<'t> {
                     TypeExpKind::Ident(li) => li.0.clone(),
                     TypeExpKind::Apply(h, _) => match &h.kind {
                         TypeExpKind::Ident(li) => li.0.clone(),
-                        _ => return bug("KIR の書き出し: インスタンスの頭を解決できません"),
+                        _ => return bug("KIR の書き出し: インスタンスの対象の型を解決できません"),
                     },
-                    _ => return bug("KIR の書き出し: インスタンスの頭を解決できません"),
+                    _ => return bug("KIR の書き出し: インスタンスの対象の型を解決できません"),
                 },
-                _ => return bug("KIR の書き出し: インスタンスの頭を解決できません"),
+                _ => return bug("KIR の書き出し: インスタンスの対象の型を解決できません"),
             };
             let o = tc.intern(&comps.join("."));
             Ok((cls, tc.resolve_con(o)))

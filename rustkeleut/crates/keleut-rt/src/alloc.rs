@@ -56,7 +56,7 @@
 //! - `hard` は、その確保箇所での `SKIP + 1` 回目以降の確保をすべて失敗させ、予備領域を使わない。
 //!   変換スレッドが自己処理の範囲の外で失敗したときは、入力の種類が設定されていれば、ラッパはすぐに [`conv_exit`] でプロセスを終了する。
 //!
-//! 指定ごとに、最初に確保を失敗させたときに 1 回だけ、標準エラーに `keleut: 試験: SITE の確保を失敗させました` の行を書く。
+//! 指定ごとに、最初に確保を失敗させたときに 1 回だけ、標準エラーに `keleut: テスト: SITE の確保を失敗させました` の行を書く。
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -89,7 +89,7 @@ pub enum Stage {
     KirRead,
     /// KIR の検証。
     KirVerify,
-    /// LIR への変換(行に書く名前は `LIR への下ろし`)。
+    /// LIR への変換。
     Lower,
 }
 
@@ -101,7 +101,7 @@ impl Stage {
             Stage::KirWrite => "KIR の書き出し",
             Stage::KirRead => "KIR の読み込み",
             Stage::KirVerify => "KIR の検証",
-            Stage::Lower => "LIR への下ろし",
+            Stage::Lower => "LIR への変換",
         }
     }
 }
@@ -488,7 +488,7 @@ fn injected() -> Option<bool> {
         if (hard && k >= skip) || (!hard && k == skip) {
             INJECTED.fetch_add(1, Ordering::Relaxed);
             if !e.told.swap(true, Ordering::Relaxed) {
-                write_err("keleut: 試験: ");
+                write_err("keleut: テスト: ");
                 write_err(SITE_NAMES[site as usize]);
                 write_err(" の確保を失敗させました\n");
             }

@@ -135,7 +135,7 @@ type P<T> = Result<T, Error>;
 fn bad<T>(msg: impl Into<String>) -> P<T> {
     Err(Error::new(
         ErrorKind::Internal,
-        format!("KIR を印字できません: {}", msg.into()),
+        format!("KIR を出力できません: {}", msg.into()),
     ))
 }
 
@@ -155,7 +155,7 @@ impl<'a> Printer<'a, '_> {
     fn ty(&self, t: TypeId) -> P<&'a Type> {
         match self.p.types.get(t.index()) {
             Some(x) => Ok(x),
-            None => bad(format!("型の添字 {} が範囲の外です", t.0)),
+            None => bad(format!("型の添字 {} が範囲外です", t.0)),
         }
     }
 
@@ -166,56 +166,56 @@ impl<'a> Printer<'a, '_> {
     fn ctor_name(&self, t: TypeId, c: u32) -> P<Atom<'a>> {
         match self.ty(t)?.ctors.get(c as usize) {
             Some(k) => Ok(short(&k.name)),
-            None => bad(format!("コンストラクタの添字 {c} が範囲の外です")),
+            None => bad(format!("コンストラクタの添字 {c} が範囲外です")),
         }
     }
 
     fn eff(&self, e: EffectId) -> P<&'a Effect> {
         match self.p.effects.get(e.index()) {
             Some(x) => Ok(x),
-            None => bad(format!("エフェクトの添字 {} が範囲の外です", e.0)),
+            None => bad(format!("エフェクトの添字 {} が範囲外です", e.0)),
         }
     }
 
     fn op_name(&self, e: EffectId, o: u32) -> P<Atom<'a>> {
         match self.eff(e)?.ops.get(o as usize) {
             Some(k) => Ok(short(&k.name)),
-            None => bad(format!("操作の添字 {o} が範囲の外です")),
+            None => bad(format!("操作の添字 {o} が範囲外です")),
         }
     }
 
     fn cls(&self, c: ClassId) -> P<&'a Class> {
         match self.p.classes.get(c.index()) {
             Some(x) => Ok(x),
-            None => bad(format!("クラスの添字 {} が範囲の外です", c.0)),
+            None => bad(format!("クラスの添字 {} が範囲外です", c.0)),
         }
     }
 
     fn meth_name(&self, c: ClassId, m: u32) -> P<Atom<'a>> {
         match self.cls(c)?.methods.get(m as usize) {
             Some(k) => Ok(short(&k.name)),
-            None => bad(format!("メソッドの添字 {m} が範囲の外です")),
+            None => bad(format!("メソッドの添字 {m} が範囲外です")),
         }
     }
 
     fn inst_sym(&self, i: InstanceId) -> P<Atom<'a>> {
         match self.p.instances.get(i.index()) {
             Some(x) => Ok(Atom::Str(x.sym.as_bytes())),
-            None => bad(format!("インスタンスの添字 {} が範囲の外です", i.0)),
+            None => bad(format!("インスタンスの添字 {} が範囲外です", i.0)),
         }
     }
 
     fn glob_sym(&self, g: GlobalId) -> P<Atom<'a>> {
         match self.p.globals.get(g.index()) {
             Some(x) => Ok(Atom::Str(x.sym.as_bytes())),
-            None => bad(format!("大域の添字 {} が範囲の外です", g.0)),
+            None => bad(format!("グローバルの添字 {} が範囲外です", g.0)),
         }
     }
 
     fn fn_sym(&self, f: FnId) -> P<Atom<'a>> {
         match self.p.functions.get(f.index()) {
             Some(x) => Ok(Atom::Str(x.sym.as_bytes())),
-            None => bad(format!("関数の添字 {} が範囲の外です", f.0)),
+            None => bad(format!("関数の添字 {} が範囲外です", f.0)),
         }
     }
 
@@ -920,7 +920,7 @@ impl Lexer<'_> {
                                 let v = h * 16 + l;
                                 if (0x20..=0x7e).contains(&v) {
                                     return self.fail(
-                                        "文字列のエスケープが正準の形ではありません(0x20 から 0x7E のバイトはそのまま書きます)",
+                                        "文字列のエスケープが正準形ではありません(0x20 から 0x7E のバイトはそのまま書きます)",
                                     );
                                 }
                                 out.push(v);
@@ -977,11 +977,11 @@ impl Lexer<'_> {
                     || s.get(end)
                         .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
                 {
-                    return self.fail("整数の綴りが正しくありません");
+                    return self.fail("整数の表記が正しくありません");
                 }
                 let text = std::str::from_utf8(&s[start..end]).unwrap_or("");
                 let Ok(v) = text.parse::<i128>() else {
-                    return self.fail("整数の綴りが正しくありません");
+                    return self.fail("整数の表記が正しくありません");
                 };
                 self.pos = end;
                 Ok(Tok::Int(v))
@@ -996,7 +996,7 @@ impl Lexer<'_> {
                 }
                 let word = &s[start..end];
                 if !is_name(word) {
-                    return self.fail("名前の綴りが正しくありません");
+                    return self.fail("名前の表記が正しくありません");
                 }
                 self.pos = end;
                 Ok(Tok::Name(String::from_utf8_lossy(word).into_owned()))
@@ -1126,7 +1126,7 @@ impl Parser<'_> {
         let w = self.word()?;
         match words.iter().position(|x| *x == w) {
             Some(i) => Ok(i),
-            None => self.fail(format!("{what}の綴り {w} は定義されていません")),
+            None => self.fail(format!("{what}の表記 {w} は定義されていません")),
         }
     }
 
@@ -1162,7 +1162,7 @@ impl Parser<'_> {
             Tok::Name(n) => Ok(n),
             Tok::Str(s) => {
                 if is_name(&s) {
-                    return self.fail("名前の字句に合う短い名前を文字列で書いています");
+                    return self.fail("名前のトークンに合う修飾しない名前を文字列で書いています");
                 }
                 match String::from_utf8(s) {
                     Ok(s) => Ok(s),
@@ -1215,7 +1215,7 @@ impl Parser<'_> {
 
     fn glob_ref(&mut self) -> T<GlobalId> {
         let s = self.sym()?;
-        Ok(GlobalId(self.lookup("大域", &self.glob_ix, &s)?))
+        Ok(GlobalId(self.lookup("グローバル", &self.glob_ix, &s)?))
     }
 
     fn fn_ref(&mut self) -> T<FnId> {
@@ -1284,7 +1284,7 @@ impl Parser<'_> {
             "local" => Ok(Cap::Local(i)),
             "env" => Ok(Cap::Env(i)),
             "dparam" => Ok(Cap::DParam(i)),
-            _ => self.fail(format!("捕獲のキーワード {k} は定義されていません")),
+            _ => self.fail(format!("キャプチャのキーワード {k} は定義されていません")),
         }
     }
 
@@ -1355,7 +1355,7 @@ impl Parser<'_> {
                 return Ok(self.nodes.push_pat(Pat::Lit(l)));
             }
             "record" => {
-                let tk = self.word_of("レコードのパターンの尾部", &["closed", "open", "rest"])?;
+                let tk = self.word_of("レコードのパターンの末尾", &["closed", "open", "rest"])?;
                 let mut fields = Vec::new();
                 while self.at("field")? {
                     self.open_kw("field")?;
@@ -1793,14 +1793,14 @@ impl Parser<'_> {
             "def_fns" => {
                 let gs = self.globs_until_close()?;
                 if gs.is_empty() {
-                    return self.fail("def_fns の大域がありません");
+                    return self.fail("def_fns のグローバルがありません");
                 }
                 Step::DefFns(gs)
             }
             "def_dictabs" => Step::DefDictabs(self.glob_ref()?),
             "def_instance" => Step::DefInstance(self.inst_ref()?),
             "run_exp" => Step::RunExp(self.fn_ref()?),
-            _ => return self.fail(format!("初期化の手順のキーワード {k} は定義されていません")),
+            _ => return self.fail(format!("初期化手順のキーワード {k} は定義されていません")),
         };
         self.close()?;
         Ok(s)
@@ -1821,18 +1821,18 @@ impl Parser<'_> {
         self.close()?;
         if major != u32::from(VERSION.0) {
             return self.fail(format!(
-                "版 {major}.{minor} は読めません(読めるのは主版 {} の版だけです)",
+                "バージョン {major}.{minor} は読めません(読めるのはメジャーバージョン {} のバージョンだけです)",
                 VERSION.0
             ));
         }
         // マイナーバージョンはどの値も受理する規則だが、バイナリのヘッダの u16 に収まらない値は書き出せないので、ここで拒否する。
         if minor > u32::from(u16::MAX) {
-            return self.fail(format!("副版 {minor} が u16 の範囲にありません"));
+            return self.fail(format!(
+                "マイナーバージョン {minor} が u16 の範囲にありません"
+            ));
         }
         if features != 0 {
-            return self.fail(format!(
-                "必要な機能のビット 0x{features:08x} を処理できません"
-            ));
+            return self.fail(format!("必須機能ビット 0x{features:08x} を処理できません"));
         }
         self.fn_ix = self.index("関数", fn_syms.iter().map(|s| s.as_str()))?;
         let mut units: Vec<Unit> = Vec::new();
@@ -1957,7 +1957,7 @@ impl Parser<'_> {
             self.open_kw("global")?;
             let sym = self.sym()?;
             let k = self.word_of(
-                "大域の種類",
+                "グローバルの種類",
                 &["builtin", "extern", "fn", "dictabs", "value"],
             )?;
             let kind = match k {
@@ -1975,17 +1975,17 @@ impl Parser<'_> {
             self.close()?;
             self.globals.push(Global { sym, kind });
         }
-        self.glob_ix = self.index("大域", self.globals.iter().map(|g| g.sym.as_str()))?;
+        self.glob_ix = self.index("グローバル", self.globals.iter().map(|g| g.sym.as_str()))?;
         let mut functions = Vec::new();
         while self.at("fn")? {
             let f = self.function()?;
             if functions.len() >= fn_syms.len() || fn_syms[functions.len()] != f.sym {
-                return self.fail("関数の記号の下読みと本読みが合いません");
+                return self.fail("関数のシンボルの下読みと本読みが合いません");
             }
             functions.push(f);
         }
         if functions.len() != fn_syms.len() {
-            return self.fail("関数の記号の下読みと本読みが合いません");
+            return self.fail("関数のシンボルの下読みと本読みが合いません");
         }
         let mut i = 0;
         while self.at("init")? {

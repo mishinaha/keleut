@@ -108,12 +108,12 @@ fn コーパスの全件を_diktor_で書き出して翻訳する() {
     }
     let _ = std::fs::remove_dir_all(&tmp);
     eprintln!(
-        "コーパス: {} 本のうち、翻訳した {pass} 本、対象外 {skip} 本、失敗 {} 本",
+        "コーパス: {} 本のうち、コード生成した {pass} 本、対象外 {skip} 本、失敗 {} 本",
         rows.len(),
         fails.len()
     );
     eprintln!(
-        "統計: 関数 {} 個、大きなフレームの形 {} 個、分けた関数 {} 個、推定の最大 {} バイト、引数の最大 {} 個、ブロックの最大 {} 個、program.wasm の最大 {} バイト、平均 {} バイト",
+        "統計: 関数 {} 個、大きなフレーム方式 {} 個、分けた関数 {} 個、見積もりの最大 {} バイト、引数の最大 {} 個、ブロックの最大 {} 個、program.wasm の最大 {} バイト、平均 {} バイト",
         total.funcs,
         total.big_frames,
         total.split_funcs,

@@ -16,7 +16,7 @@ pub fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec
             .collect();
         handles
             .into_iter()
-            .flat_map(|h| h.join().expect("試験のスレッドが落ちた"))
+            .flat_map(|h| h.join().expect("テストのスレッドが異常終了した"))
             .collect()
     })
 }

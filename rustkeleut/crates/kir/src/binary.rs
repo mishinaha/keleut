@@ -7,9 +7,6 @@
 //! 読み込みは、どの入力に対してもエラーを値で返し、異常終了しない。
 //! 再帰の深さは式、辞書、パターンのノードの深さで数え、深さが上限を超えたらそこで拒否する。
 //! 個数と長さは、使う前にセクションの残りのバイト数と比べる。
-//!
-//! エラーメッセージは Diktor と同じ語で書くので、セクションを `節`、ヘッダを `見出し`、バージョンを `版`、
-//! グローバルを `大域`、キャプチャを `捕獲` と呼ぶ。
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -64,7 +61,7 @@ impl Rd<'_> {
 
     fn u8(&mut self) -> R<u8> {
         if self.pos >= self.stop {
-            return self.fail("節の終わりを越えて読もうとしました");
+            return self.fail("セクションの終わりを越えて読もうとしました");
         }
         let c = self.src[self.pos];
         self.pos += 1;
@@ -150,7 +147,7 @@ impl Rd<'_> {
     fn bytes(&mut self) -> R<Vec<u8>> {
         let n = self.uleb()? as usize;
         if n > self.stop - self.pos {
-            return self.fail("バイト列の長さが節の残りを超えます");
+            return self.fail("バイト列の長さがセクションの残りを超えます");
         }
         let s = self.src[self.pos..self.pos + n].to_vec();
         self.pos += n;
@@ -161,7 +158,7 @@ impl Rd<'_> {
     fn count(&mut self) -> R<usize> {
         let n = self.uleb()? as usize;
         if n > self.stop - self.pos {
-            return self.fail("個数が節の残りのバイト数を超えます");
+            return self.fail("個数がセクションの残りのバイト数を超えます");
         }
         Ok(n)
     }
@@ -192,7 +189,7 @@ impl Rd<'_> {
 
     fn idx(&self, what: &str, n: usize, i: u32) -> R<u32> {
         if i as usize >= n {
-            return self.fail(format!("{what}の添字 {i} が範囲外です(表の大きさは {n})"));
+            return self.fail(format!("{what}の添字 {i} が範囲外です(表のサイズは {n})"));
         }
         Ok(i)
     }
@@ -277,7 +274,7 @@ impl Dec<'_> {
     }
 
     fn glob(&mut self) -> R<GlobalId> {
-        Ok(GlobalId(self.reference("大域", self.t.n_globals)?))
+        Ok(GlobalId(self.reference("グローバル", self.t.n_globals)?))
     }
 
     fn inst(&mut self) -> R<InstanceId> {
@@ -333,7 +330,9 @@ impl Dec<'_> {
             0 => Ok(Cap::Local(self.r.uleb()?)),
             1 => Ok(Cap::Env(self.r.uleb()?)),
             2 => Ok(Cap::DParam(self.r.uleb()?)),
-            c => self.r.fail(format!("捕獲の種類 {c} は定義されていません")),
+            c => self
+                .r
+                .fail(format!("キャプチャの種類 {c} は定義されていません")),
         }
     }
 
@@ -388,7 +387,7 @@ impl Dec<'_> {
                 let tail = self.r.u8()?;
                 if tail > 2 {
                     return self.r.fail(format!(
-                        "レコードのパターンの尾部の種類 {tail} は定義されていません"
+                        "レコードのパターンの末尾の種類 {tail} は定義されていません"
                     ));
                 }
                 let fields = self.list(|s| {
@@ -755,7 +754,7 @@ impl Dec<'_> {
             2 => {
                 let gs = self.list(|s| s.glob())?;
                 if gs.is_empty() {
-                    return self.r.fail("def_fns の大域がありません");
+                    return self.r.fail("def_fns のグローバルがありません");
                 }
                 Ok(Step::DefFns(gs))
             }
@@ -764,7 +763,7 @@ impl Dec<'_> {
             5 => Ok(Step::RunExp(self.func()?)),
             c => self
                 .r
-                .fail(format!("初期化の手順の番号 {c} は定義されていません")),
+                .fail(format!("初期化手順の番号 {c} は定義されていません")),
         }
     }
 }
@@ -803,10 +802,10 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
         stop: len,
     };
     if len < 16 {
-        return r.fail("見出しの 16 バイトがありません");
+        return r.fail("ヘッダの 16 バイトがありません");
     }
     if src[0..4] != MAGIC {
-        return r.fail("マジックが KIR のものではありません");
+        return r.fail("マジックナンバーが KIR のものではありません");
     }
     r.pos = 4;
     let u16le = |r: &mut Rd<'_>| -> R<u32> {
@@ -817,7 +816,7 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
     let minor = u16le(&mut r)?;
     if major != u32::from(VERSION.0) {
         return r.fail(format!(
-            "版 {major}.{minor} は読めません(読めるのは主版 {} の版だけです)",
+            "バージョン {major}.{minor} は読めません(読めるのはメジャーバージョン {} のバージョンだけです)",
             VERSION.0
         ));
     }
@@ -826,9 +825,7 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
         a | (u16le(&mut r)? << 16)
     };
     if features != 0 {
-        return r.fail(format!(
-            "必要な機能のビット 0x{features:08x} を処理できません"
-        ));
+        return r.fail(format!("必須機能ビット 0x{features:08x} を処理できません"));
     }
     let nsec = {
         let a = u16le(&mut r)?;
@@ -840,15 +837,19 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
     while r.pos < len {
         let id = r.u8()?;
         if id == 0 || (id > SEC_INIT && id < 0x80) {
-            return r.fail(format!("節 0x{id:02x} は定義されていません"));
+            return r.fail(format!("セクション 0x{id:02x} は定義されていません"));
         }
         if id <= last {
-            return r.fail(format!("節 0x{id:02x} が id の昇順に並んでいません"));
+            return r.fail(format!(
+                "セクション 0x{id:02x} が id の昇順に並んでいません"
+            ));
         }
         last = id;
         let size = r.uleb()? as usize;
         if size > len - r.pos {
-            return r.fail(format!("節 0x{id:02x} の大きさがファイルの残りを超えます"));
+            return r.fail(format!(
+                "セクション 0x{id:02x} のサイズがファイルの残りを超えます"
+            ));
         }
         if id <= SEC_INIT {
             secs[usize::from(id)] = Some((r.pos, r.pos + size));
@@ -857,13 +858,13 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
         seen += 1;
     }
     if seen != u64::from(nsec) {
-        return r.fail(format!("節の数が見出し({nsec})と違います({seen})"));
+        return r.fail(format!("セクションの数がヘッダ({nsec})と違います({seen})"));
     }
     let mut bounds = [(0usize, 0usize); 12];
     for id in SEC_STRINGS..=SEC_INIT {
         match secs[usize::from(id)] {
             Some(b) => bounds[usize::from(id)] = b,
-            None => return r.fail(format!("必須の節 0x{id:02x} がありません")),
+            None => return r.fail(format!("必須のセクション 0x{id:02x} がありません")),
         }
     }
     let mut dec = Dec {
@@ -879,9 +880,9 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
     };
     let leave = |dec: &Dec<'_>, id: u8| -> R<()> {
         if dec.r.pos != dec.r.stop {
-            return dec
-                .r
-                .fail(format!("節 0x{id:02x} の中身の後ろにバイトが残っています"));
+            return dec.r.fail(format!(
+                "セクション 0x{id:02x} の内容の後ろにバイトが残っています"
+            ));
         }
         Ok(())
     };
@@ -1016,14 +1017,18 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
             2 => GlobalKind::Fn(s.func()?),
             3 => GlobalKind::Dictabs(s.func()?),
             4 => GlobalKind::Value(s.r.rep()?),
-            c => return s.r.fail(format!("大域の種類 {c} は定義されていません")),
+            c => {
+                return s
+                    .r
+                    .fail(format!("グローバルの種類 {c} は定義されていません"));
+            }
         };
         Ok(Global { sym, kind })
     })?;
     leave(&dec, SEC_GLOBALS)?;
     if let Some(i) = prim_used.iter().position(|u| !u) {
         return dec.r.fail(format!(
-            "prims の項目 {i} を参照する extern の大域がありません"
+            "prims の項目 {i} を参照する extern のグローバルがありません"
         ));
     }
     dec.t.n_globals = globals.len();
@@ -1038,7 +1043,9 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
     let inits = dec.list(|s| s.list(|s| s.step()))?;
     leave(&dec, SEC_INIT)?;
     if inits.len() != units.len() {
-        return dec.r.fail("init の節の単位の数が units の節と違います");
+        return dec
+            .r
+            .fail("init のセクションの単位の数が units のセクションと違います");
     }
     if let Some(i) = dec.t.str_used.iter().position(|u| !u) {
         return dec
@@ -1342,7 +1349,7 @@ fn put_bytes(b: &mut Vec<u8>, s: &[u8]) {
 
 fn check_ref(what: &str, i: u32, n: usize) -> W<u32> {
     if i as usize >= n {
-        return internal(format!("{what}の添字 {i} が表の範囲の外です"));
+        return internal(format!("{what}の添字 {i} が表の範囲外です"));
     }
     Ok(i)
 }
@@ -1358,7 +1365,7 @@ impl<'a> Enc<'a> {
 
     fn len(&mut self, n: usize) -> W<()> {
         if n > u32::MAX as usize {
-            return internal("列が u32 の範囲を超えます");
+            return internal("並びが u32 の範囲を超えます");
         }
         put_uleb(&mut self.b, n as u64);
         Ok(())
@@ -1430,7 +1437,7 @@ impl<'a> Enc<'a> {
     }
 
     fn glob(&mut self, g: GlobalId) -> W<()> {
-        let i = check_ref("大域", g.0, self.p.globals.len())?;
+        let i = check_ref("グローバル", g.0, self.p.globals.len())?;
         self.uleb(i);
         Ok(())
     }
@@ -2231,7 +2238,7 @@ pub fn encode(p: &Program, max_nest: usize) -> Result<Vec<u8>, Error> {
     out.extend_from_slice(&(sections.len() as u32).to_le_bytes());
     for (id, payload) in sections {
         if payload.len() > u32::MAX as usize {
-            return internal("節が u32 の大きさを超えます");
+            return internal("セクションが u32 のサイズを超えます");
         }
         out.push(id);
         put_bytes(&mut out, &payload);

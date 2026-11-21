@@ -191,7 +191,7 @@ fn on_limits_nest<T: Send>(
                     Ok(Some(r)) => r,
                     _ => Err(Error::new(
                         ErrorKind::Internal,
-                        "KIR の処理の中で内部の誤りが起きました",
+                        "KIR の処理の中で内部エラーが起きました",
                     )),
                 }),
                 Err(e) => Err(e),
@@ -247,7 +247,7 @@ pub fn on_stack<T: Send>(
             Ok(r) => r,
             Err(_) => Err(Error::new(
                 ErrorKind::Internal,
-                "KIR の処理の中で内部の誤りが起きました",
+                "KIR の処理の中で内部エラーが起きました",
             )),
         }
     })

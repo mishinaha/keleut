@@ -243,7 +243,7 @@ impl Tc {
         };
         if !param.classes.is_empty() {
             return terr(
-                "クラスパラメータに制約は書けません(スーパークラスは入れない裁定です。両方が要るときは [A: Eq + Ord] のように並べて書いてください)",
+                "クラスパラメータに制約は書けません(スーパークラスは入れないという設計上の決定です。両方が必要なときは [A: Eq + Ord] のように並べて書いてください)",
             );
         }
         let pinfo = VarInfo {
@@ -395,27 +395,31 @@ impl Tc {
                 };
                 for a in args {
                     if !matches!(a.kind, TypeExpKind::Hole) {
-                        return terr("インスタンス頭の型引数は _ だけです(List[_] の形)");
+                        return terr("インスタンスの対象の型の型引数は _ だけです(List[_] の形)");
                     }
                 }
                 let o = self.intern(&comps.join("."));
                 (self.resolve_con(o), args.len())
             }
-            _ => return terr("インスタンス頭は 型構成子 か 型構成子[_, ...] の形で書いてください"),
+            _ => {
+                return terr(
+                    "インスタンスの対象の型は 型構成子 か 型構成子[_, ...] の形で書いてください",
+                );
+            }
         };
         self.check_con_visible(con)?;
         let k = self.con_kind(con, holes);
         let arity = self.kind_arity(k)?;
         if holes != arity {
             return terr(format!(
-                "インスタンス頭 {} は型引数を {arity} 個取りますが、_ が {holes} 個書かれています",
+                "インスタンスの対象の型 {} は型引数を {arity} 個取りますが、_ が {holes} 個書かれています",
                 self.display_of(con)
             ));
         }
         let np = i.tparams.len();
         if np > holes {
             return terr(format!(
-                "インスタンスの型パラメータが {np} 個ありますが、頭 {} の _ は {holes} 個です",
+                "インスタンスの型パラメータが {np} 個ありますが、対象の型 {} の _ は {holes} 個です",
                 self.display_of(con)
             ));
         }
@@ -447,7 +451,7 @@ impl Tc {
                     };
                     if !self.same_kind(a, kb)? {
                         return terr(format!(
-                            "インスタンスの型パラメータ {} のカインドが頭 {} の引数と一致しません",
+                            "インスタンスの型パラメータ {} のカインドが対象の型 {} の引数と一致しません",
                             tp.name,
                             self.display_of(con)
                         ));
@@ -456,14 +460,14 @@ impl Tc {
                 }
                 _ => {
                     return bug(
-                        "instance: 束縛子が頭のアリティを超えています(D96 の検査が先に落とすはず)",
+                        "instance: 束縛子が対象の型のアリティを超えています(D96 の検査が先にエラーにするはず)",
                     );
                 }
             }
         }
         if !self.same_kind(ci.ci_param_kind, k)? {
             return terr(format!(
-                "インスタンス頭 {} のカインドがクラス {} のパラメータと一致しません",
+                "インスタンスの対象の型 {} のカインドがクラス {} のパラメータと一致しません",
                 self.display_of(con),
                 i.class
             ));
@@ -626,7 +630,7 @@ impl Tc {
                     *scheme,
                 )
             }
-            None => bug("instance: メソッドスキーマ未登録"),
+            None => bug("instance: メソッドの型スキーム未登録"),
         }
     }
 
@@ -688,7 +692,7 @@ impl Tc {
             let t = self.repr(t);
             match self.var_cell(t) {
                 Some(r) => mk.push((self.var_info_of(r)?.vid, c)),
-                None => return bug("instance: 剛定数ではありません"),
+                None => return bug("instance: スコーレム定数ではありません"),
             }
         }
         let amark = self.hole_mark();
@@ -734,14 +738,16 @@ impl Tc {
                     } else {
                         match b.params {
                             Some(_) => " の本体がエフェクトを起こしています。元の報告: ",
-                            None => " の初期化式の値の型の最外の行が空ではありません。元の報告: ",
+                            None => {
+                                " の初期化式の値の型の最も外側の行が空ではありません。元の報告: "
+                            }
                         }
                     };
                     match self.unify(ie, se) {
                         Err(Fail::Type(msg)) => {
                             if bare && row_failure_msg(&msg) {
                                 return terr(format!(
-                                    "型クラスのメソッドの実装は純粋でなければなりません(宣言の最外の行にラベルがありません — 仕様 §9)。インスタンスメソッド {mname}{culprit}{msg}"
+                                    "型クラスのメソッドの実装は純粋でなければなりません(宣言の最も外側の行にラベルがありません — 仕様 §9)。インスタンスメソッド {mname}{culprit}{msg}"
                                 ));
                             } else {
                                 return terr(format!(
@@ -949,7 +955,7 @@ impl Tc {
         let a: Vec<super::Oid> = self.dkeys_of(fn_ty)?.into_iter().map(|(_, c)| c).collect();
         let b: Vec<super::Oid> = self.dkeys_of(sg)?.into_iter().map(|(_, c)| c).collect();
         if a != b {
-            return at(span, bug("署名と本体の辞書パラメータが一致しません"));
+            return at(span, bug("シグネチャと本体の辞書パラメータが一致しません"));
         }
         Ok(())
     }

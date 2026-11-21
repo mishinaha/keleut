@@ -178,7 +178,7 @@ fn プレリュードの型と網羅性の警告() {
     assert_eq!(code, 0);
     assert_eq!(
         out,
-        "xs : List[Int32]\nh : (Option[Int32]) => Int32\n⚠ match が非網羅的です。例えば None が漏れています\n_ : {}\n"
+        "xs : List[Int32]\nh : (Option[Int32]) => Int32\n⚠ match が非網羅的です。たとえば None が漏れています\n_ : {}\n"
     );
 }
 
@@ -206,7 +206,7 @@ fn import_した名前を型検査する() {
     assert_eq!(
         (out.as_str(), code),
         (
-            "⚠ lib.kel: match が非網羅的です。例えば None が漏れています\ny : Int32\n",
+            "⚠ lib.kel: match が非網羅的です。たとえば None が漏れています\ny : Int32\n",
             0
         )
     );
@@ -220,7 +220,7 @@ fn import_した名前を型検査する() {
     assert_eq!(
         (out.as_str(), code),
         (
-            "⚠ lib.kel: match が非網羅的です。例えば None が漏れています\n! m.kel:1:21: import エラー: ./lib の hidden は公開されていません\n",
+            "⚠ lib.kel: match が非網羅的です。たとえば None が漏れています\n! m.kel:1:21: import エラー: ./lib の hidden は公開されていません\n",
             1
         )
     );

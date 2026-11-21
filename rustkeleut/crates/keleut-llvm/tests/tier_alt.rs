@@ -51,7 +51,7 @@ fn func(prog: &keleut_lir::Program, sym: &str) -> FuncId {
 fn seed_for(jit: FuncId, interp: FuncId) -> u64 {
     (1..10_000)
         .find(|&s| mixed_selects(s, jit) && !mixed_selects(s, interp))
-        .expect("種が見つかりません")
+        .expect("シードが見つかりません")
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn 交互の末尾呼び出しが_512k_のスタックで完走する() {
         let low = LAST_LOW_STACK_ENTRIES.load(Ordering::Relaxed);
         eprintln!(
             "mixed={seed}(JIT は {}): {calls} 回、{secs:.2} 秒、interp_stub からの起動 {stub}、\
-             末尾呼び出しの依頼 {tail}、ネイティブのスタック {used} バイト",
+             末尾呼び出しの依頼 {tail}、ネイティブスタック {used} バイト",
             prog.funcs[jit.index()].sym
         );
         assert_eq!(code, 0);
@@ -88,9 +88,9 @@ fn 交互の末尾呼び出しが_512k_のスタックで完走する() {
         assert!(stub >= calls / 2 - 1, "interp_stub からの起動 {stub}");
         // インタプリタの最下段のフレームから JIT の関数への末尾呼び出しも、ほぼ半分ある。
         assert!(tail >= calls / 2 - 2, "末尾呼び出しの依頼 {tail}");
-        assert_eq!(low, 0, "スタックの下限でインタプリタに移った入口");
+        assert_eq!(low, 0, "スタックの下限でインタプリタに切り替えたエントリ");
         // 交互にまたいでもネイティブスタックは増えない(境界の 1 段分だけを使う)。
-        assert!(used < 16 * 1024, "ネイティブのスタック {used} バイト");
+        assert!(used < 16 * 1024, "ネイティブスタック {used} バイト");
     }
     let mut opts = keleut_llvm::RunOptions {
         tier: keleut_llvm::Tier::Threshold(1),
@@ -99,5 +99,8 @@ fn 交互の末尾呼び出しが_512k_のスタックで完走する() {
     opts.base.native_stack = 512 * 1024;
     assert_eq!(keleut_llvm::run_program_wait(&prog, &opts), 0);
     let compiled = LAST_COMPILED.load(Ordering::Relaxed);
-    assert!(compiled >= 2, "threshold=1 で翻訳を終えた関数 {compiled}");
+    assert!(
+        compiled >= 2,
+        "threshold=1 でコンパイルを終えた関数 {compiled}"
+    );
 }

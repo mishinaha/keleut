@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""RustKeleut の後段と Diktor の実行時間を測る(計画 261024-1 の M93)。
+"""RustKeleut のバックエンドと Diktor の実行時間を測る(計画 261024-1 の M93)。
 
 使い方は同じディレクトリの README.md にある。
-programs/ の .kel を一時のディレクトリで KIR にし、設定ごとに何回か走らせて、
-経過時間の中央値と最小値、最大の常駐量を表にする。
-どの設定の標準出力も、最初の設定の標準出力と同じでなければならない(違えば終了状態 1)。
+programs/ の .kel を一時ディレクトリで KIR にし、設定ごとに何回か実行して、
+経過時間の中央値と最小値、最大 RSS を表にする。
+どの設定の標準出力も、最初の設定の標準出力と同じでなければならない(違えば終了コード 1)。
 """
 
 import argparse
@@ -95,11 +95,11 @@ def main():
     ap.add_argument("--bench", default="", help="コンマで区切った名前(省くと programs/ のすべて)")
     ap.add_argument("--repeat", type=int, default=5)
     ap.add_argument("--slow-repeat", type=int, default=3, help="dk、dkir、dktc の回数")
-    ap.add_argument("--json", default="", help="すべての標本を書く JSON のファイル")
-    ap.add_argument("--work", default="", help="KIR を置くディレクトリ(省くと一時のディレクトリ)")
-    ap.add_argument("--label", default="", help="表に添える名前(版など)")
-    ap.add_argument("--interleave", action="store_true", help="1 回ごとに設定を順に回す(負荷の揺れを設定の間に散らす)")
-    ap.add_argument("--warmup", type=int, default=0, help="測る前に各設定を捨てる回数だけ走らせる")
+    ap.add_argument("--json", default="", help="すべてのサンプルを書く JSON のファイル")
+    ap.add_argument("--work", default="", help="KIR を置くディレクトリ(省くと一時ディレクトリ)")
+    ap.add_argument("--label", default="", help="表に添える名前(バージョンなど)")
+    ap.add_argument("--interleave", action="store_true", help="1 回ごとに設定を順に回す(負荷の変動を設定の間に散らす)")
+    ap.add_argument("--warmup", type=int, default=0, help="測る前に各設定を捨てる回数だけ実行する")
     a = ap.parse_args()
 
     K = os.path.abspath(a.keleut)
@@ -125,7 +125,7 @@ def main():
     m = machine()
     print(f"# {a.label or 'keleut bench'}  {m['date']}")
     print(f"# {m['cpu']}, {m['cores']} 論理コア, Linux {m['kernel']}, 負荷 {m['load'][0]:.2f}")
-    order = "設定を回ごとに順に回す" if a.interleave else "設定ごとに続けて走らせる"
+    order = "設定を回ごとに順に回す" if a.interleave else "設定ごとに続けて実行する"
     print(
         f"# 回数 {a.repeat}(dk、dkir、dktc は {a.slow_repeat})、捨てる回 {a.warmup}、{order}。"
         "値は経過時間の中央値 [最小値] ミリ秒"

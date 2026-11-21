@@ -46,7 +46,7 @@ let () =
   pr "//! tools/gen_tables.ml が menhir の .cmly から作った。手で書き換えない。\n";
   pr "//! 元の parser.mly の MD5 は %s である。\n\n" digest;
   pr "#![allow(clippy::all)]\n\n";
-  pr "/// 表を作った元の parser.mly の MD5 である(試験が今の parser.mly と比べる)。\n";
+  pr "/// 表を作った元の parser.mly の MD5 である(テストが今の parser.mly と比べる)。\n";
   pr "pub const PARSER_MLY_MD5: &str = \"%s\";\n\n" digest;
   pr "/// 終端記号の数である(`error` と `#` を含む)。\n";
   pr "pub const N_TERMINALS: usize = %d;\n" nt;
@@ -67,7 +67,7 @@ let () =
   pr "    /// 左辺の非終端記号。\n    pub lhs: u16,\n";
   pr "    /// 右辺の長さ。\n    pub len: u8,\n";
   pr "    /// 開始の規則か(還元すると受理する)。\n    pub start: bool,\n";
-  pr "    /// `左辺: 右辺の記号…` の綴り。意味の動作を引く鍵である。\n    pub key: &'static str,\n";
+  pr "    /// `左辺: 右辺の記号…` の表記。意味動作を引くキーである。\n    pub key: &'static str,\n";
   pr "}\n\n";
   pr "/// 規則の一覧である(添字は menhir の番号)。\n";
   pr "pub const PRODS: [Prod; %d] = [\n" np;
@@ -81,7 +81,7 @@ let () =
   (* 動作の表を書き出す。
      値 0 はエラー、1..=0x7fff は値から 1 を引いた番号の状態への shift、0x8000 | p は規則 p の還元を表す。 *)
   pr "/// 動作の表(状態 × 終端記号)である。\n";
-  pr "/// 0 は誤り、`1..=0x7fff` は値から 1 を引いた状態への shift、`0x8000 | p` は規則 p の還元である。\n";
+  pr "/// 0 はエラー、`1..=0x7fff` は値から 1 を引いた状態への shift、`0x8000 | p` は規則 p の還元である。\n";
   pr "pub static ACTION: [u16; N_STATES * N_TERMINALS] = [\n";
   G.Lr1.iter (fun s ->
       let row = Array.make nt 0 in
@@ -98,7 +98,7 @@ let () =
       Array.iter (fun v -> pr "%d," v) row;
       pr "\n");
   pr "];\n\n";
-  pr "/// goto の表(状態 × 非終端記号)である。`u16::MAX` は無いことを表す。\n";
+  pr "/// goto の表(状態 × 非終端記号)である。`u16::MAX` はないことを表す。\n";
   pr "pub static GOTO: [u16; N_STATES * N_NONTERMINALS] = [\n";
   G.Lr1.iter (fun s ->
       let row = Array.make nn 0xffff in
@@ -109,7 +109,7 @@ let () =
       Array.iter (fun v -> pr "%d," v) row;
       pr "\n");
   pr "];\n\n";
-  pr "/// 既定の還元(先読みを見ずに還元する規則)である。`u16::MAX` は無いことを表す。\n";
+  pr "/// 既定の還元(先読みを見ずに還元する規則)である。`u16::MAX` はないことを表す。\n";
   pr "pub static DEFAULT_REDUCTION: [u16; N_STATES] = [\n    ";
   G.Lr1.iter (fun s ->
       match G.Lr1.default_reduction s with Some p -> pr "%d," (G.Production.to_int p) | None -> pr "65535,");

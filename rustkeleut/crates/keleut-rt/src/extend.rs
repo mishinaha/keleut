@@ -152,7 +152,7 @@ impl<'p> Rt<'p> {
             };
             if id.0 as usize != i {
                 return Err(Stop::Internal(format!(
-                    "形の表の番号が合いません(LIR の {i} 番が実行時の {} 番)",
+                    "シェイプ表の番号が合いません(LIR の {i} 番がランタイムの {} 番)",
                     id.0
                 )));
             }

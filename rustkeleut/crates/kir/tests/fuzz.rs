@@ -44,7 +44,7 @@ fn exercise(p: &kir::Program, st: &mut Stats) {
             let b = binary::encode(p, N_NEST).expect("検証を通ったプログラムは書ける");
             let q = binary::decode(&b, N_NEST).expect("書いたものは読める");
             assert_eq!(binary::encode(&q, N_NEST).unwrap(), b);
-            text::print(p, N_NEST).expect("検証を通ったプログラムは印字できる");
+            text::print(p, N_NEST).expect("検証を通ったプログラムは出力できる");
         }
         Err(_) => {
             st.invalid += 1;
@@ -67,7 +67,7 @@ fn binary_truncation() {
             for n in 0..src.len() {
                 assert!(
                     binary::decode(&src[..n], N_NEST).is_err(),
-                    "{name}: 長さ {n} を受け付けました"
+                    "{name}: 長さ {n} を受理しました"
                 );
             }
             // 末尾に 1 バイト追加したものも拒否する

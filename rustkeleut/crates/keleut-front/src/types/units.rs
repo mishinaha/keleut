@@ -396,7 +396,7 @@ impl Tc {
                         Some((ms, all)) => pick(x, ms, all, &format!("{m}.{x}"), &mut out)?,
                     }
                 }
-                _ => return super::bug("import の名前は 2 段まで"),
+                _ => return super::bug("import の名前に含まれる . は 1 個まで"),
             }
         }
         Ok(out)

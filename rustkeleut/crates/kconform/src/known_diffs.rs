@@ -251,7 +251,7 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
             .ok_or_else(|| format!("{n} 行: [[diff]] の前に値があります"))?;
         let (key, value) = l
             .split_once('=')
-            .ok_or_else(|| format!("{n} 行: 「鍵 = 値」の形ではありません"))?;
+            .ok_or_else(|| format!("{n} 行: 「キー = 値」の形式ではありません"))?;
         let key = key.trim();
         let value = value.trim_start();
         match key {
@@ -317,7 +317,7 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
                 }
                 p.pairs = Some(v);
             }
-            _ => return Err(format!("{n} 行: 知らない鍵です: {key}")),
+            _ => return Err(format!("{n} 行: 未知のキーです: {key}")),
         }
     }
     if let Some(p) = cur.take() {
@@ -380,7 +380,7 @@ pub fn validate(entries: &[Entry]) -> Vec<String> {
         );
         if !is_ledger(&e.ledger) {
             errs.push(format!(
-                "{at}: 台帳の番号の形ではありません: {:?}",
+                "{at}: 台帳の番号の形式ではありません: {:?}",
                 e.ledger
             ));
         }
@@ -389,13 +389,13 @@ pub fn validate(entries: &[Entry]) -> Vec<String> {
         }
         for p in &e.pairs {
             if !is_pair_name(p) {
-                errs.push(format!("{at}: 知らない組です: {p}"));
+                errs.push(format!("{at}: 未知のペアです: {p}"));
                 continue;
             }
             let prevs = seen.entry((&e.file, e.line, p, e.when)).or_default();
             if let Some(prev) = prevs.iter().find(|q| overlap(q.against, e.against)) {
                 errs.push(format!(
-                    "{at}: 組 {p} が {} の {} 行の項目と重なっています",
+                    "{at}: ペア {p} が {} の {} 行の項目と重なっています",
                     prev.origin, prev.source_line
                 ));
             }

@@ -272,7 +272,7 @@ impl ValueStack {
     pub fn link_copy(&mut self, top: u64, mem: Vec<u64>) -> Result<u64, (OutOfMemory, Vec<u64>)> {
         assert!(
             !self.chunks.is_empty() && !mem.is_empty(),
-            "空の値スタックか空の写しをつなごうとしました"
+            "空の値スタックか空のコピーをつなごうとしました"
         );
         while self.cur > 0 && top < self.chunks[self.cur].base {
             self.cur -= 1;
@@ -335,7 +335,7 @@ impl ValueStack {
         let off = (pos - c.base) as usize;
         assert!(
             off < c.mem.len(),
-            "値スタックの位置 {pos} がどの塊にも入りません"
+            "値スタックの位置 {pos} がどのチャンクにも入りません"
         );
         // SAFETY: off はチャンクの中にある。
         unsafe { c.mem.as_mut_ptr().add(off) }
@@ -348,12 +348,12 @@ impl ValueStack {
     /// どのチャンクにも入らない位置は処理系のバグなので、パニックする。
     pub fn ptr_at_ro(&self, pos: u64) -> *const u64 {
         let i = self.chunks.partition_point(|c| c.base <= pos);
-        assert!(i > 0, "値スタックの位置 {pos} がどの塊にも入りません");
+        assert!(i > 0, "値スタックの位置 {pos} がどのチャンクにも入りません");
         let c = &self.chunks[i - 1];
         let off = (pos - c.base) as usize;
         assert!(
             off < c.mem.len(),
-            "値スタックの位置 {pos} がどの塊にも入りません"
+            "値スタックの位置 {pos} がどのチャンクにも入りません"
         );
         // SAFETY: off はチャンクの中にある。
         unsafe { c.mem.as_ptr().add(off) }

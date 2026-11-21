@@ -89,7 +89,7 @@ pub fn main_mjs(meta: &str) -> String {
 /// `main.mjs` は `dirname "$0"` で探すので、`run` は、`run` 自身のパスか、`DIR` へのシンボリックリンクを通したパスで起動する。
 /// `run` そのものへのシンボリックリンクから起動すると、Node が `MODULE_NOT_FOUND` のエラーを出して終了コード 1 で終了する。
 pub const RUN_SH: &str = r#"#!/bin/sh
-# keleut build の出力の起動の台本。node main.mjs を直に走らせると、閉じた標準出力を見分けられない。
+# keleut build の出力の起動スクリプト。node main.mjs を直接実行すると、閉じた標準出力を判別できない。
 if { true 3>&1; } 2>/dev/null; then
   unset KELEUT_STDOUT_CLOSED
 else
@@ -108,7 +108,7 @@ exec node "$(dirname "$0")/main.mjs" "$@"
 /// 行の末尾には `k`、`B_prog`、`r`([`crate::clause_path`] の値)を書く。
 /// 切り詰める前のサイズ [`crate::stack_need_kib`] より小さいスタックを使うときは、どう切り詰めたかも書く。
 /// [`crate::STACK_CAP_KIB`] で切り詰めたときは `、スタックを STACK_CAP で切った` と書く。
-/// `STACK_CAP` が `B_prog = B_wasm` のときのサイズ(`k = 0` のサイズ)より小さく、そのサイズで切り詰めたときは `、スタックを k = 0 の大きさで切った` と書く。
+/// `STACK_CAP` が `B_prog = B_wasm` のときのサイズ(`k = 0` のサイズ)より小さく、そのサイズで切り詰めたときは `、スタックを k = 0 のサイズで切った` と書く。
 pub fn build_outputs(prog: &Program, max_depth: u64) -> Result<(Vec<u8>, String, u64), String> {
     let out = compile(prog, &Options { max_depth })?;
     crate::check::validate(&out.program)?;
@@ -123,7 +123,7 @@ pub fn build_outputs(prog: &Program, max_depth: u64) -> Result<(Vec<u8>, String,
         } else if size == crate::STACK_CAP_KIB {
             "、スタックを STACK_CAP で切った"
         } else {
-            "、スタックを k = 0 の大きさで切った"
+            "、スタックを k = 0 のサイズで切った"
         };
         eprintln!(
             "keleut-wasm: {:?}、program.wasm {} バイト、検査した関数 {} 個(補助関数 {} 個)、命令 {} 個、k = {}、B_prog = {} バイト、r = {}{}",
@@ -376,12 +376,12 @@ fn exit_status(status: std::process::ExitStatus) -> u8 {
     match status.code() {
         Some(c @ (0 | 3 | 4 | 70 | 74)) => c as u8,
         Some(c) => {
-            eprintln!("keleut: 内部エラー: node が終了状態 {c} で終わりました");
+            eprintln!("keleut: 内部エラー: node が終了コード {c} で終了しました");
             70
         }
         None => {
             eprintln!(
-                "keleut: 内部エラー: node がシグナル {} で終わりました",
+                "keleut: 内部エラー: node がシグナル {} で終了しました",
                 status.signal().unwrap_or(0)
             );
             70
@@ -402,7 +402,7 @@ pub fn run(prog: &Program, o: &RunOptions) -> u8 {
         Ok(d) => d,
         Err(e) => {
             eprintln!(
-                "keleut: 内部エラー: 一時の場所を作れません: {}: {e}",
+                "keleut: 内部エラー: 一時ディレクトリを作れません: {}: {e}",
                 std::env::temp_dir().display()
             );
             return 70;
@@ -410,7 +410,7 @@ pub fn run(prog: &Program, o: &RunOptions) -> u8 {
     };
     if let Err(e) = write_dir(&dir.0, &program, &main) {
         eprintln!(
-            "keleut: 内部エラー: 一時の場所に書けません: {}: {e}",
+            "keleut: 内部エラー: 一時ディレクトリに書けません: {}: {e}",
             dir.0.display()
         );
         return 70;

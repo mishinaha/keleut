@@ -92,7 +92,7 @@ fn main() {
 
     let target = env::var("TARGET").expect("TARGET");
     if !target.starts_with("x86_64-") {
-        panic!("keleut-rtcore: x86_64 の対象だけに対応している(TARGET = {target})");
+        panic!("keleut-rtcore: x86_64 のターゲットだけに対応している(TARGET = {target})");
     }
 
     let shim = rtcore.join("shim");

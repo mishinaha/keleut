@@ -483,7 +483,10 @@ impl Session {
         let mut shown = Vec::with_capacity(pre.len());
         for (label, key, unit_exp, show, layout) in pre {
             let Some(g) = globals.get(&key).copied() else {
-                return super::bug(format!("REPL の束縛の大域が見つかりません: {}", key.1));
+                return super::bug(format!(
+                    "REPL の束縛のグローバルが見つかりません: {}",
+                    key.1
+                ));
             };
             shown.push(Shown {
                 label,

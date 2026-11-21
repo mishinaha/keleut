@@ -99,7 +99,7 @@ impl Stop {
             }
             Stop::Internal(s) => m.extend_from_slice(format!("keleut: 内部エラー: {s}").as_bytes()),
             Stop::Pending => {
-                m.extend_from_slice("keleut: 内部エラー: 状態語が最上位で残りました".as_bytes())
+                m.extend_from_slice("keleut: 内部エラー: 状態ワードが最上位で残りました".as_bytes())
             }
         }
         m.push(b'\n');

@@ -529,7 +529,7 @@ fn has_propagate(f: &keleut_lir::Func) -> bool {
 pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     let prog = cg.prog;
     let f = &prog.funcs[fid.index()];
-    let frame = f.frame.as_ref().ok_or("フレームの無い関数")?;
+    let frame = f.frame.as_ref().ok_or("フレームのない関数")?;
     let n = f.params.len() as u32;
     // Wasm の引数の個数。まとめた引数の配列は 1 つと数える。
     let w = crate::wire_arity(n);
@@ -1083,7 +1083,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         } else {
             j
         };
-        let entry = rec.tramps[q].expect("再開の入口の無い部分");
+        let entry = rec.tramps[q].expect("再開用エントリのない分割関数");
         self.fb
             .i()
             .i32_const(rp as i32)
@@ -1115,7 +1115,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         let tp = self
             .cg
             .tpl
-            .internal("yield が noyield の再開点に届きました(may_yield の印の誤り)");
+            .internal("yield が noyield の再開点に達しました(may_yield の印の誤り)");
         self.fb
             .i()
             .global_get(g.p_kind)
@@ -1134,7 +1134,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         let est = frame_estimate(self.fb.nlocals() as u64, params);
         if est > self.budget {
             return Err(format!(
-                "関数 {} の 1 段の推定 {est} バイトが予算 {} を超えます(B_wasm = {B_WASM})",
+                "関数 {} の 1 段の見積もり {est} バイトが上限 {} を超えます(B_wasm = {B_WASM})",
                 self.f.sym, self.budget
             ));
         }
@@ -1937,7 +1937,7 @@ impl<'a, 'p> Tr<'a, 'p> {
             }
             Fx { op, dst, args } => self.fx(op, *dst, args)?,
             CallDirect { .. } | CallValue { .. } | CallMethod { .. } | DictApp { .. } => {
-                return Err("呼び出しの命令は call_pre が出す".into());
+                return Err("呼び出しの命令は call_pre が生成する".into());
             }
         }
         Ok(())
@@ -2248,7 +2248,7 @@ impl<'a, 'p> Tr<'a, 'p> {
     ) -> Result<(), String> {
         let t = self.t();
         let g = self.cg.g;
-        let out = |s: &mut Self| dst.ok_or("結果の無いエフェクトの命令").map(|d| s.set(d));
+        let out = |s: &mut Self| dst.ok_or("結果のないエフェクトの命令").map(|d| s.set(d));
         match op {
             FxOp::HandlerNew { effect, ops, .. } => {
                 let nops = ops.len();
@@ -2340,7 +2340,7 @@ impl<'a, 'p> Tr<'a, 'p> {
             | FxOp::ContResume
             | FxOp::CallClause => {
                 return Err(format!(
-                    "呼び出しのエフェクトの命令 {op:?} は call_pre が出す"
+                    "呼び出しのエフェクトの命令 {op:?} は call_pre が生成する"
                 ));
             }
             FxOp::ContCheck { nontail } => {

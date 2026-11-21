@@ -469,7 +469,7 @@ function runProgram(dir, META, exit) {
     const at = (p + 7) & ~7;
     const t = rt.krt_shapes_init(at, cs, cl);
     if (t === 0) {
-      out.eprint(enc.encode('keleut: 内部エラー: 形の表を作れません\n'));
+      out.eprint(enc.encode('keleut: 内部エラー: シェイプ表を作れません\n'));
       exit(70);
     }
     return t;
@@ -493,7 +493,7 @@ function runProgram(dir, META, exit) {
     new Uint32Array(mem.buffer, p, s.length).set(s);
     const id = rt.krt_shape_intern(table, p, s.length, 0);
     if (id !== i) {
-      out.eprint(enc.encode(`keleut: 内部エラー: 形の表の番号が合いません(LIR の ${i} 番が実行時の ${id} 番)\n`));
+      out.eprint(enc.encode(`keleut: 内部エラー: シェイプ表の番号が合いません(LIR の ${i} 番がランタイムの ${id} 番)\n`));
       exit(70);
     }
   }
@@ -506,7 +506,7 @@ function runProgram(dir, META, exit) {
   const stage = startAlloc(STAGE);
   function buf(n) {
     if (n > STAGE) {
-      out.eprint(enc.encode('keleut: 内部エラー: 受け渡しの領域より大きい切れです\n'));
+      out.eprint(enc.encode('keleut: 内部エラー: 受け渡し用のバッファより大きい断片です\n'));
       exit(70);
     }
     return stage;
@@ -683,7 +683,7 @@ function runProgram(dir, META, exit) {
       case K_UNHANDLED:
         return bytesOf(['未処理のエフェクト操作: ', m.text, '\n']);
       default:
-        return bytesOf(['keleut: 内部エラー: 知らない種類の誤り\n']);
+        return bytesOf(['keleut: 内部エラー: 未知の種類のエラー\n']);
     }
   }
 
@@ -783,7 +783,7 @@ function runProgram(dir, META, exit) {
       const t2 = newTable(capShapes * 2, capLabels * 2);
       if (t2 === 0) return 1;
       if (rt.krt_shapes_copy(t2, shapes.value) !== 0) {
-        fatal(K_INTERNAL, '形の表を広げられません');
+        fatal(K_INTERNAL, 'シェイプ表を拡張できません');
       }
       capShapes *= 2;
       capLabels *= 2;
@@ -823,7 +823,7 @@ function runProgram(dir, META, exit) {
     out.eprint(message(m));
     exit(exitCode(m));
   }
-  out.eprint(enc.encode(`keleut: 内部エラー: 最上位に届いた状態語: ${kind}\n`));
+  out.eprint(enc.encode(`keleut: 内部エラー: 最上位に届いた状態ワード: ${kind}\n`));
   exit(70);
 }
 
@@ -848,7 +848,7 @@ export async function start(META) {
     if (sig === 'SIGINT' || sig === 'SIGTERM' || sig === 'SIGHUP') process.on(sig, () => {});
   }
   if (!versionOk()) {
-    writeQuiet(2, enc.encode(`keleut: 内部エラー: Node ${NODE_MIN.join('.')} 以上が要ります(この Node は ${process.versions.node})\n`));
+    writeQuiet(2, enc.encode(`keleut: 内部エラー: Node ${NODE_MIN.join('.')} 以上が必要です(この Node は ${process.versions.node})\n`));
     exit(70);
   }
   // 環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックサイズを標準エラーに 1 行書く。測定とテストに使う。
@@ -879,7 +879,7 @@ export async function start(META) {
       stderr: false,
     });
   } catch (e) {
-    writeQuiet(2, enc.encode(`keleut: 内部エラー: 実行のスレッドを作れません(${stackSizeMb} MiB のスタック): ${e.message ?? e}\n`));
+    writeQuiet(2, enc.encode(`keleut: 内部エラー: 実行スレッドを作れません(${stackSizeMb} MiB のスタック): ${e.message ?? e}\n`));
     exit(70);
     return;
   }

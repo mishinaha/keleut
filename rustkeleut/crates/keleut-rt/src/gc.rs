@@ -1050,7 +1050,7 @@ impl Rt<'_> {
     /// GC の統計の 1 行を返す。`KELEUT_GC_STATS` を設定したときに標準エラーに書く行である。
     pub fn gc_stats(&self) -> String {
         format!(
-            "keleut: gc: 回収 {} 回、{:.3} 秒、外した表の項目 {}、持っている語 {}、表の項目 {}/{}/{}、試した確保の場所 {}、打ち切った回収 {}\n",
+            "keleut: gc: GC {} 回、{:.3} 秒、外した表の項目 {}、持っているワード {}、表の項目 {}/{}/{}、試した確保箇所 {}、中断した GC {}\n",
             self.gc.collections,
             self.gc.time.as_secs_f64(),
             self.gc.freed_entries,

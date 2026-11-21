@@ -79,7 +79,7 @@ fn record(name: &str) -> (Vec<u8>, Vec<u8>, i32) {
 #[test]
 fn fixture_の_kir_を_wasm_で記録どおりに走らせる() {
     if !have_node() {
-        eprintln!("node が無いので飛ばす");
+        eprintln!("node がないので飛ばす");
         return;
     }
     let dir = root().join("tests/fixtures/run");
@@ -95,7 +95,7 @@ fn fixture_の_kir_を_wasm_で記録どおりに走らせる() {
         let (out, err, code) = record(&n);
         if r.stdout != out || r.stderr != err || r.status.code() != Some(code) {
             fails.push(format!(
-                "{n}: 終了状態 {:?}(記録 {code})\n標準出力:\n{}\n標準エラー:\n{}",
+                "{n}: 終了コード {:?}(期待値 {code})\n標準出力:\n{}\n標準エラー:\n{}",
                 r.status.code(),
                 String::from_utf8_lossy(&r.stdout),
                 String::from_utf8_lossy(&r.stderr)
@@ -108,7 +108,7 @@ fn fixture_の_kir_を_wasm_で記録どおりに走らせる() {
 #[test]
 fn build_の出力は_node_だけで走る() {
     if !have_node() {
-        eprintln!("node が無いので飛ばす");
+        eprintln!("node がないので飛ばす");
         return;
     }
     let d = scratch("build");
@@ -164,7 +164,7 @@ fn build_の出力は_node_だけで走る() {
 #[test]
 fn 閉じた標準出力は_74_になる() {
     if !have_node() {
-        eprintln!("node が無いので飛ばす");
+        eprintln!("node がないので飛ばす");
         return;
     }
     let num = root().join("tests/fixtures/run/num.kir");
@@ -207,7 +207,7 @@ fn sh_out(cmd: &str, envs: &[(&str, &str)]) -> Output {
 #[test]
 fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
     if !have_node() {
-        eprintln!("node が無いので飛ばす");
+        eprintln!("node がないので飛ばす");
         return;
     }
     let d = scratch("launcher");
@@ -700,7 +700,7 @@ fn 仮想メモリの上限の下でも止まったままにならない() {
         let c = o.status.code().unwrap_or(-1);
         assert!(
             want.contains(&c),
-            "ulimit -v {v}: 終了状態 {c}: {}",
+            "ulimit -v {v}: 終了コード {c}: {}",
             String::from_utf8_lossy(&o.stderr)
         );
     }
@@ -928,7 +928,7 @@ fn cancel_節の中のハンドラ式を重ねても_interp_と同じ() {
     let stats = wasm_stats_stderr(&d, &kel);
     assert!(
         stats.contains("keleut-host: path=direct\n"),
-        "直の経路を通らなかった(RLIMIT_AS が有限か、RLIMIT_STACK の上限が低い): {stats}"
+        "直接の経路を通らなかった(RLIMIT_AS が有限か、RLIMIT_STACK の上限が低い): {stats}"
     );
     let _ = std::fs::remove_dir_all(&d);
 }
@@ -973,7 +973,7 @@ fn cancel_節の中のハンドラ式を重ねても_jit_only_と同じ() {
     let stats = wasm_stats_stderr(&d, &kel);
     assert!(
         stats.contains("keleut-host: path=direct\n"),
-        "直の経路を通らなかった(RLIMIT_AS が有限か、RLIMIT_STACK の上限が低い): {stats}"
+        "直接の経路を通らなかった(RLIMIT_AS が有限か、RLIMIT_STACK の上限が低い): {stats}"
     );
     let _ = std::fs::remove_dir_all(&d);
 }
@@ -1020,7 +1020,7 @@ fn worker_の経路のスタックは_b_prog_で決まる() {
     // k = 1 なので B_prog = 1,040 + 320 + 1,040 + 320 + 176 = 2,896 である。
     assert!(
         main.contains("\"bProg\":2896,\"cancelNest\":1,"),
-        "META に bProg と cancelNest が無い"
+        "META に bProg と cancelNest がない"
     );
     let r = Command::new(node())
         .arg(out.join("main.mjs"))
@@ -1119,12 +1119,12 @@ fn worker_のスタックは_stack_cap_で切る() {
         (&b"2\nbottom\n7\n"[..], Some(0))
     );
     assert_eq!((r.stdout, r.status.code()), (i.stdout, i.status.code()));
-    // STACK_CAP が k = 0 のスタックサイズより小さくなる深さでは、スタックを STACK_CAP まで下げず、k = 0 のスタックサイズにする(統計の行では `スタックを k = 0 の大きさで切った`)。
+    // STACK_CAP が k = 0 のスタックサイズより小さくなる深さでは、スタックを STACK_CAP まで下げず、k = 0 のスタックサイズにする(統計の行では `スタックを k = 0 のサイズで切った`)。
     // ここではビルドするだけで、実行はしない。
     let out2 = d.join("out2");
     let err = build_at(&d, &kel, &out2, "2000000000");
     assert!(
-        err.contains("、スタックを k = 0 の大きさで切った\n"),
+        err.contains("、スタックを k = 0 のサイズで切った\n"),
         "{err}"
     );
     let _ = std::fs::remove_dir_all(&d);

@@ -1824,7 +1824,7 @@ impl Gen<'_> {
             }
             return Ok(());
         }
-        let d = dst.ok_or("書き先の無いエフェクトの呼び出し")?;
+        let d = dst.ok_or("書き込み先のないエフェクトの呼び出し")?;
         let (rp, live, y) = self.resume(bi, ii)?;
         self.spill_set(&live, y);
         for &a in args {

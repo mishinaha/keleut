@@ -833,7 +833,7 @@ impl Tc {
                 "match が非網羅的です。照合対象の型は、網羅性を調べた時点で Never のようなコンストラクタを持たない型と分かっていません(節のない match {} が網羅的なのは、照合対象がそのような型のときだけです)".to_string(),
             ),
             Some(w) => out.push(format!(
-                "match が非網羅的です。例えば {} が漏れています",
+                "match が非網羅的です。たとえば {} が漏れています",
                 w.iter().map(|p| self.show_ipat(p)).collect::<Vec<_>>().join(", ")
             )),
             None => {}

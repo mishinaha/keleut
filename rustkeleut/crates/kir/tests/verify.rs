@@ -55,13 +55,13 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         "(call ntail yield (env 0)))",
         "(call tail yield (env 0)))",
-        "handlebody の根の call を tail と書く",
+        "handlebody の最も外側の call を tail と書く",
     ),
     (
         "ex_handle",
         r#"(result i32) (perform "main/Ask" ask))"#,
         r#"(result i32) (resume ntail (lit i32 0)))"#,
-        "ラムダの本体の resume",
+        "種類 lambda の関数の本体の resume",
     ),
     (
         "ex_handle",
@@ -73,13 +73,13 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         r#"(body "main/once$h0.body" (local 0))"#,
         r#"(body "main/once$h0.body")"#,
-        "捕獲の数",
+        "キャプチャの数",
     ),
     (
         "ex_handle",
         "  (caps any)\n  (result i32)\n  (call ntail yield (env 0)))\n(fn \"main/once$h0.op.ask\"",
         "  (caps i32)\n  (result i32)\n  (call ntail yield (env 0)))\n(fn \"main/once$h0.op.ask\"",
-        "捕獲の Rep",
+        "キャプチャの Rep",
     ),
     (
         "ex_handle",
@@ -103,7 +103,7 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         "(fn \"main/r1\" thunk yield\n  (params)\n  (locals)\n  (dicts 0)\n  (caps)",
         "(fn \"main/r1\" thunk yield\n  (params)\n  (locals)\n  (dicts 0)\n  (caps any)",
-        "根の関数の捕獲",
+        "ルート関数のキャプチャ",
     ),
     (
         "ex_handle",
@@ -115,7 +115,7 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         r#"(def_fns "main/once") (def_fns "main/twice")"#,
         r#"(def_fns "main/once") (def_fns "main/once" "main/twice")"#,
-        "大域を 2 回定義する",
+        "グローバルを 2 回定義する",
     ),
     (
         "ex_handle",
@@ -133,7 +133,7 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         r#"(fn "main/r2$0" lambda yield (params) (locals) (dicts 0)"#,
         r#"(fn "main/r2$0" lambda yield (params) (locals) (dicts 1)"#,
-        "ラムダの辞書の数",
+        "種類 lambda の関数の辞書の数",
     ),
     (
         "ex_handle",
@@ -151,7 +151,7 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         r#"(opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/Int32") (local 0) (lit i32 100))"#,
         r#"(opcall "builtin/Add" add (dbuiltin "builtin/Add" "builtin/Boolean") (local 0) (lit i32 100))"#,
-        "付録 A.3 に無い組み込みのインスタンス",
+        "付録 A.3 にない組み込みのインスタンス",
     ),
     (
         "ex_handle",
@@ -217,7 +217,7 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_dict",
         r#"(class "main/Size" (method size 0))"#,
         r#"(class "main/Size" (method size 0) (method other 0))"#,
-        "インスタンスがメソッドを覆わない",
+        "インスタンスがすべてのメソッドを実装していない",
     ),
     (
         "ex_dict",
@@ -229,14 +229,14 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ex_handle",
         "*\"main/r3\"",
         "\"r3\"",
-        "単位の鍵/名前 の形でない記号",
+        "単位の鍵/名前 の形式でないシンボル",
     ),
-    ("ex_handle", "*\"prelude\"", "\"prelux\"", "単位の列の形"),
+    ("ex_handle", "*\"prelude\"", "\"prelux\"", "単位の並びの形"),
     (
         "ex_handle",
         "*\"main/r3\"",
         "\"prelude/r3\"",
-        "ほかの単位の大域を定義する",
+        "ほかの単位のグローバルを定義する",
     ),
     (
         "ir_emit_008",
@@ -248,7 +248,7 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
         "ir_emit_008",
         "    (globals \"main/a\" \"main/b\")\n    (ctor \"main/P\" P\n      (field 0 (bind 0))\n      (field 1 (bind 1))))",
         "    (globals \"main/a\" \"main/b\")\n    (ctor \"main/P\" P\n      (field 0 (bind 0))\n      (field 1 (wild))))",
-        "def_pattern が大域を束縛しない",
+        "def_pattern がグローバルを束縛しない",
     ),
     (
         "sample",
@@ -310,7 +310,7 @@ fn mutate(fixture: &str, old: &str, new: &str) -> Vec<u8> {
     };
     assert!(
         text.contains(old),
-        "{fixture}: 書き換える前の綴りがありません: {old}"
+        "{fixture}: 書き換える前の文字列がありません: {old}"
     );
     let mut t = if all {
         text.replace(old, new)
@@ -376,7 +376,7 @@ fn mutations_are_rejected() {
             && let Some(code) = diktor_run_ir(&bin, i)
             && code != 65
         {
-            bad.push(format!("{what}: Diktor の終了状態が {code} です"));
+            bad.push(format!("{what}: Diktor の終了コードが {code} です"));
         }
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
