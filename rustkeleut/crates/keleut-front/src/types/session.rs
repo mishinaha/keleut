@@ -10,7 +10,7 @@
 //!    プログラムは、組み込みの単位、プレリュードの単位、追加した入力の単位(キーは `repl/1`、`repl/2` …)からなる。
 //!    入力の単位は、結果の表示に使う、ソースにはないグローバルを持つ。
 //!    式文の値を入れるグローバルと、`Show.show` を呼ぶ関数を入れるグローバルである。
-//! 3. 呼び出し側が、追加した単位だけを実行する。
+//! 3. 呼び出し元が、追加した単位だけを実行する。
 //!    その結果を受け取って、入力を受理するか捨てるかを決める([`Session::finish`])。
 //!
 //! 受理しなかった入力(構文エラー、型エラー、実行時エラーになった入力)は捨てる。
@@ -22,7 +22,7 @@
 //! KIR のライタの名前の表も、同じようにマークを取って入力の前に戻す。
 //! 一方、実行した単位は、入力を捨てるときもプログラムに残す。
 //! 関数とグローバルの番号を詰め直さずに済ませるためである。
-//! 実行時エラーになった入力のグローバルの値は、呼び出し側が捨てる。
+//! 実行時エラーになった入力のグローバルの値は、呼び出し元が捨てる。
 
 use super::check::{PRELUDE, Stop, fail_to_error, parse_unit, render_line};
 use super::decls::{ROOT_UNIT, STD_UNIT};
@@ -97,7 +97,7 @@ pub struct Shown {
 /// ラベルの番号は、受理しなかった入力を含むセッションの履歴で決まるので、正準なレイアウトの順序は表示に使わない。
 /// 再帰する型を表せるように、レイアウトは子のレイアウトを表の添字で参照する。
 /// 0 番は、型の分からない値のレイアウトである。
-/// 型の分からない値のレコードは、フィールドをラベル名の順に表示する(`keleut repl` の `show_value`)。
+/// 型の分からない値のレコードは、フィールドをラベルの表示名の順に表示し、表示名が同じなら内部名の順に表示する(`keleut repl` の `show_value`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
     /// 型の分からない値(型変数、関数など)。子も型の分からない値として表示する。
@@ -134,7 +134,7 @@ const LAYOUT_SIZE_MAX: usize = 820;
 pub enum Outcome {
     /// 受理しなかった。値は報告する行(警告とエラー)である。
     Rejected(Vec<String>),
-    /// 型検査に通った。呼び出し側は警告の行を出力し、追加した単位を実行してから [`Session::finish`] を呼ぶ。
+    /// 型検査に通った。呼び出し元は警告の行を出力し、追加した単位を実行してから [`Session::finish`] を呼ぶ。
     Run {
         /// 警告の行。
         lines: Vec<String>,
@@ -184,7 +184,7 @@ pub struct Session {
     env: Env,
     /// KIR のライタ。
     writer: ReplWriter,
-    /// セッションのプログラム。入力を実行している間は呼び出し側が持つ。
+    /// セッションのプログラム。入力を実行している間は呼び出し元が持つ。
     program: Option<Box<kir::Program>>,
     /// 次に追加する単位の番号。受理しなかった入力の単位のキーも再利用しない。
     next_unit: u32,
@@ -332,7 +332,7 @@ impl Session {
     /// 1 つの入力を平坦化して型検査し、受理できれば KIR を書く(Diktor の `repl` の `process` の前半)。
     ///
     /// 受理しなかったときは、型検査のコンテキストを入力の前に戻してから返す。
-    /// [`Outcome::Run`] を返したときは、呼び出し側が [`Session::finish`] を呼ぶ。
+    /// [`Outcome::Run`] を返したときは、呼び出し元が [`Session::finish`] を呼ぶ。
     pub fn check(&mut self, decls: Vec<Decl>) -> Outcome {
         let snap = self.tc.snapshot();
         let flat = match self.tc.flatten_input(&self.session_vals, decls) {
@@ -618,7 +618,7 @@ impl Session {
         Ok(id)
     }
 
-    /// 型の先頭の型構成子が newtype で、その型が `Show` を満たせば真を返す(Diktor の `show_value` の `shows`)。
+    /// 型の先頭の型構成子が宣言表 `datas` にあり(`newtype` で宣言した型と、組み込みのデータ型)、その型が `Show` を満たせば真を返す(Diktor の `show_value` の `shows`)。
     ///
     /// 満たすかどうかは、型検査のコンテキストに `Show` の制約を追加して調べる。
     /// 調べた後で、コンテキストを制約を追加する前の状態に戻す。

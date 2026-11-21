@@ -157,6 +157,7 @@ pub(crate) fn ocaml_int64_opt(s: &str) -> Option<i64> {
 }
 
 /// OCaml の `float_of_string_opt` に当たる。桁区切りの `_` を取り除いてから読む。
+/// 16 進は整数の桁だけを読む。小数点か指数部のある 16 進の表記は読めず、`None` を返す。
 fn ocaml_float_opt(s: &str) -> Option<f64> {
     let t: String = s.chars().filter(|c| *c != '_').collect();
     if t.is_empty() {

@@ -893,7 +893,7 @@ impl Tc {
         let i32t = self.t_int32;
         let empty = self.row_empty;
         let heap_row = |tc: &mut Tc, h: Ty| tc.extend(heap, h, empty);
-        // OCaml の `let h = generic () and a = generic ()` は右から評価するので、`a` を先に作る。
+        // Diktor をビルドする OCaml の処理系は `let h = generic () and a = generic ()` を右から評価するので、`a` を先に作る。
         macro_rules! ha {
             () => {{
                 let a = self.generic(star, Vec::new());

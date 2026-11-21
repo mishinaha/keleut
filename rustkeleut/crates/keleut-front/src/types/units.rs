@@ -131,7 +131,7 @@ pub(crate) enum ImportKind {
 
 /// import した名前の表である。
 /// キーは(種類, 名前)で、値は(参照先の宣言を識別する文字列, import 元のパス, 持ち主)である。
-/// 持ち主は、コンストラクタなら型の名前、クラスのメソッドの修飾しない名前なら `"method"`、それ以外は空文字列である。
+/// 持ち主は、コンストラクタなら型の名前、クラスのメソッドの非修飾名なら `"method"`、それ以外は空文字列である。
 pub(crate) type Claims = HashMap<(ImportKind, String), (String, String, String)>;
 
 fn gref_key(g: &GRef) -> String {
@@ -198,7 +198,7 @@ pub(crate) fn import_claims(tc: &Tc, binds: &[Bind]) -> R<Claims> {
             PubEntry::Class(o, methods) => {
                 let q = tc.name_of(*o).to_string();
                 c.claim(ImportKind::Class, x, q.clone(), "")?;
-                // メソッドの修飾しない名前も、値の名前として登録する。
+                // メソッドの非修飾名も、値の名前として登録する。
                 for (m, _) in methods {
                     c.claim(ImportKind::Value, m, format!("m:{q}.{m}"), "method")?;
                 }
@@ -294,7 +294,7 @@ impl Tc {
                 }
                 SkelKind::Newtype(p, name, ctors) => {
                     // Diktor は `PType (intern …, ctors n)` と書いている。
-                    // OCaml は値コンストラクタ `PType` の引数を右から評価するので、newtype のコンストラクタが型より先に intern される。
+                    // Diktor をビルドする OCaml の処理系は値コンストラクタ `PType` の引数を右から評価するので、newtype のコンストラクタが型より先に intern される。
                     // 同じ順序になるように、ここでもコンストラクタを先に intern する。
                     let cs: Vec<(String, Oid)> = ctors
                         .iter()
@@ -404,7 +404,7 @@ impl Tc {
 
     /// ファイルのトップレベルの宣言が、import した名前と衝突していないかを検査する(Diktor の `check_own_clashes`)。
     ///
-    /// クラスのメソッドとして import された修飾しない名前は、同じ名前の値を宣言しても衝突にしない。
+    /// クラスのメソッドとして import された非修飾名は、同じ名前の値を宣言しても衝突にしない。
     pub(crate) fn check_own_clashes(seen: &Claims, raw: &[Skel]) -> R<()> {
         let clash = |kind: ImportKind, name: &str| -> R<()> {
             match seen.get(&(kind, name.to_string())) {
@@ -477,8 +477,8 @@ impl Tc {
                     let k = self.intern(x);
                     self.d.unit_classes.insert((unit, k), *o);
                     self.d.unit_qualifiers.insert((unit, x.clone()), q.clone());
-                    // メソッドは修飾名と修飾しない名前の両方で参照できる。
-                    // 修飾しない名前がすでに環境にあれば、先にある束縛を残す。
+                    // メソッドは修飾名と非修飾名の両方で参照できる。
+                    // 非修飾名がすでに環境にあれば、先にある束縛を残す。
                     for (m, t) in methods {
                         let g = GRef::Method(format!("{q}.{m}"));
                         env = self.add_top(&env, &format!("{q}.{m}"), *t, g.clone());
