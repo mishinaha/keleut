@@ -1,38 +1,42 @@
-//! 実行時の関数(モジュールの中に置く)。
+//! モジュールの中に置くランタイム関数を生成する。
 //!
-//! ## 値の表現(計画 6.10 節の表からの変更を含む)
+//! ## 値の表現
 //!
 //! | 値 | WasmGC |
 //! | --- | --- |
-//! | 一様な語 | `eqref`(null は番兵で、値には現れない) |
+//! | 一様表現の値(Rep `any`) | `eqref`(null は番兵で、値には現れない) |
 //! | `Int32` | 31 ビットに収まれば `i31ref`、収まらなければ `$BoxI32` |
-//! | Unit、真偽値 | 大域に 1 つずつ置いた `$Unit`、`$Bool` の構造体(`ref.eq` で比べる) |
-//! | データ | `$Data`(型、コンストラクタ、フィールドの配列)。引数の無いコンストラクタは空の配列で、大域に 1 つずつ置く |
+//! | Unit、真偽値 | グローバルに 1 つずつ置いた `$Unit`、`$Bool` の構造体(`ref.eq` で比較する) |
+//! | データ | `$Data`(型、コンストラクタ、フィールドの配列)。引数のないコンストラクタは空の配列を持ち、グローバルに 1 つずつ置く |
 //! | `Int64`、`Float64` | `$BoxI64`、`$BoxF64` |
 //! | 文字列 | `$Str = (array (mut i8))` |
-//! | レコード、ヴァリアント | `$Record`(形、フィールドの配列)、`$Variant`(ラベル、積載値)。Unit は空のレコードとして扱う |
-//! | クロージャ | `$CloN`(関数の番号、捕獲の配列、`(ref $FnN)`)。基底は `$Clo` |
-//! | `Ref`、`Array`、`MutableArray` | `$Ref`、`$ImmArr`、`$MutArr`(どちらも `$AnyArr` の部分型) |
+//! | レコード、ヴァリアント | `$Record`(シェイプ、フィールドの配列)、`$Variant`(ラベル、ペイロード)。Unit は空のレコードとして扱う |
+//! | クロージャ | `$CloN`(関数の番号、キャプチャの配列、`(ref $FnN)`)。基底型は `$Clo` |
+//! | `Ref`、`Array`、`MutableArray` | `$Ref`、`$ImmArr`、`$MutArr`(`$ImmArr` と `$MutArr` は `$AnyArr` の部分型) |
 //!
-//! 計画の表は、Unit、真偽値、引数の無いコンストラクタも `i31ref` にする。
-//! しかし `Int32` と同じ `i31ref` にすると値の種類が分からず、実行時エラーの文面の `<値>`
-//! (`()`、`true`、コンストラクタの名前)をインタプリタと同じに書けない。
-//! 後段の間の一致(D499)は標準エラーも比べるので、これらは種類の分かる構造体にした。
+//! Unit、真偽値、引数のないコンストラクタは、`i31ref` にせず、種類の分かる構造体にする。
+//! バックエンドの間では標準エラーの出力も一致させるので、実行時エラーのメッセージの `<値>`
+//! (`()`、`true`、コンストラクタの名前)をインタプリタと同じように書く必要がある。
+//! `Int32` と同じ `i31ref` にすると、値の種類が分からず、これを書けない。
 //!
-//! ## 状態語
+//! ## 状態ワード
 //!
-//! 状態語は大域 `$p_kind`(種類)と、`$p_hr`、`$p_val`、`$p_clause`、`$p_args`、`$p_msg` に置く。
-//! 状態語が立っているとき、関数は null(番兵)を返す。
-//! 実行時エラーの文面は、立てた時点でホストが作り(`host.err`)、番号 `$p_msg` で指す。
+//! 状態ワードと番兵の意味は `doc/lir.md` の 16.1 節にある。
+//! 状態ワードはグローバル `$p_kind`(種類)と、`$p_hr`、`$p_val`、`$p_clause`、`$p_args`、`$p_msg` に置く。
+//! 状態ワードが設定されているとき、関数は null(番兵)を返す。
+//! 実行時エラーのメッセージは、`ERROR` を設定する時点でホストが作り(`host.err`)、その番号を `$p_msg` に置く。
 //!
-//! ## trap しないこと(D543)
+//! ## trap しないこと
 //!
-//! trap しうる命令(整数の除算と剰余、配列の添字と長さと写し、`array.new_data`、線形メモリの読み書き)は、
-//! 名前が `safe.` で始まる関数の中にだけ置く([`crate::check`] の検査器が確かめる)。
-//! これらの関数は、先に添字や長さを確かめてから命令を使う。
-//! 長さを取る確保は `N_alloc_max` と比べ、超えればメモリの不足の `ERROR` にする。
-//! 形の表を広げる `host.shapes_grow` が失敗したとき(ホストが線形メモリを広げられないとき)も、メモリの不足の `ERROR` にする。
-//! 文字列を host に渡す `Write` と `SOut` は、起動のときに host が取った `STAGE` バイトの領域に一切れずつ写すので、起動の後に host が線形メモリを取るのは形の表だけである。
+//! trap することがある命令は、名前が `safe.` で始まる補助関数の中にだけ置く。
+//! 対象は、整数の除算と剰余、配列の要素の読み書き、長さを指定する配列の生成、配列のコピー、`array.new_data`、線形メモリの読み書きなどである。
+//! 対象の命令の全体は [`crate::check::forbidden`] が決める。
+//! 補助関数の外にこれらの命令がないことは、[`crate::check`] の trap の検査が確かめる。
+//! 補助関数は、先に添字や長さを検査してから命令を使う。
+//! 長さを引数に取る確保は、長さを `N_alloc_max` と比較し、超えていればメモリ不足の `ERROR` を設定する。
+//! シェイプ表を拡張する `host.shapes_grow` が失敗したとき(ホストが線形メモリを拡張できないとき)も、メモリ不足の `ERROR` を設定する。
+//! 文字列をホストに渡す `Write` と `SOut` は、起動時にホストが確保した `STAGE` バイトの受け渡し用のバッファに、断片ごとにコピーする。
+//! そのため、起動の後にホストが線形メモリを確保するのは、シェイプ表を拡張するときだけである。
 
 use keleut_lir::{FuncId, N_ALLOC_MAX};
 use wasm_encoder::{BlockType, Function, HeapType, MemArg, RefType, ValType};
@@ -41,7 +45,9 @@ use crate::emit::{EQ, F64, Fb, HEQ, HI31, I32, I64, ctf, frf, gimp, hrf, imp, rv
 use crate::meta::{arg, kind};
 use crate::{Cg, FKey, cls, pk};
 
-/// 固定の実行時の関数。
+/// 固定のランタイム関数の種類。
+///
+/// 引数の個数ごとに作る `FKey::CallV` などと違い、種類ごとに 1 つだけ作る。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum H {
     Raise,
@@ -94,7 +100,7 @@ pub enum H {
     VGet,
 }
 
-/// ホストに export する関数(値の印字に使う)。
+/// ホストに export する関数の、export 名と種類の対応。ホストが値を文字列にするときに使う。
 pub const EXPORTED: &[(&str, H)] = &[
     ("v_kind", H::VKind),
     ("v_a", H::VA),
@@ -105,7 +111,8 @@ pub const EXPORTED: &[(&str, H)] = &[
     ("s_out", H::SOut),
 ];
 
-/// 値の種類の番号(ホストの `v_kind` と同じ)。
+/// 値の種類の番号。export した `v_kind` がホストに返す。
+/// 番号は、ホスト(`keleut-host.mjs`)の定数 `VK` と同じにする。
 pub mod vk {
     pub const OTHER: i32 = 0;
     pub const I31: i32 = 1;
@@ -139,14 +146,14 @@ const MEM32: MemArg = MemArg {
     memory_index: 0,
 };
 
-/// `krt_shape_*` の「見つからない」。
+/// シェイプが見つからないときに `krt_shape_*` が返す値。
 const SHAPE_NONE: i32 = -1;
-/// `krt_shape_*` の「表が満ちた」。
+/// シェイプ表がいっぱいのときに `krt_shape_*` が返す値。
 const SHAPE_FULL: i32 = -2;
-/// 文字列を host に渡す受け渡しの領域のバイト数(host の `STAGE` と同じ)。
+/// 文字列をホストに渡す、受け渡し用のバッファのバイト数。ホストの `STAGE` と同じ値にする。
 pub const STAGE: i32 = 65536;
 
-/// 関数の型と、trap しうる命令を許すか。
+/// ランタイム関数 `h` の引数の型、結果の型と、trap することがある命令を置いてよいかどうかを返す。
 pub fn sig(cg: &mut Cg, h: H) -> (Vec<ValType>, Vec<ValType>, bool) {
     let t = cg.m.t;
     let s = rv(true, t.str_);
@@ -199,19 +206,19 @@ fn ht(idx: u32) -> HeapType {
     HeapType::Concrete(idx)
 }
 
-/// 内部の誤りで止まる(`host.fatal`)。後に `unreachable` を置く。
+/// `host.fatal` を呼び、内部エラーとして終了コード 70 で終了する命令を生成する。呼び出しの後に `unreachable` を置く。
 pub fn fatal(cg: &mut Cg, fb: &mut Fb, text: &str) {
     let t = cg.tpl.internal(text);
     fb.i().i32_const(t as i32).call(imp::FATAL).unreachable();
 }
 
-/// 未実装で止まる。
+/// `host.fatal` を呼び、未実装の機能であることを報告して終了コード 4 で終了する命令を生成する。
 pub fn unimpl(cg: &mut Cg, fb: &mut Fb, text: &str) {
     let t = cg.tpl.add(kind::UNIMPL, arg::NONE, text);
     fb.i().i32_const(t as i32).call(imp::FATAL).unreachable();
 }
 
-/// 本体を作る。
+/// キー `k` のランタイム関数の本体を作る。LIR の関数は `func::generate` が作るので、ここでは扱わない。
 pub fn generate(cg: &mut Cg, k: &FKey) -> Function {
     match k {
         FKey::H(h) => gen_h(cg, *h),
@@ -229,7 +236,9 @@ fn nparams(cg: &mut Cg, h: H) -> u32 {
     sig(cg, h).0.len() as u32
 }
 
-/// `v` の形と(Unit なら 0 と空の配列)フィールドを局所 `shape`、`fs` に置く。
+/// レコード `v` のシェイプとフィールドの配列を、ローカル `shape` と `fs` に置く。
+///
+/// `v` が `$Record` でなければ Unit として扱い、0 と空の配列を置く。
 fn shape_fields(cg: &mut Cg, fb: &mut Fb, v: u32, shape: u32, fs: u32) {
     let t = cg.m.t;
     let g = cg.g;
@@ -254,10 +263,11 @@ fn shape_fields(cg: &mut Cg, fb: &mut Fb, v: u32, shape: u32, fs: u32) {
         .end();
 }
 
-/// `krt_shape_extend` か `krt_shape_restrict` を、表が満ちたら広げてやり直す形で呼び、結果を `ns` に置く。
+/// `krt_shape_extend` か `krt_shape_restrict`(`f`)を呼び、結果を `ns` に置く。
 ///
-/// 表を広げられなければ(ホストが線形メモリを広げられなければ)、`N_alloc_max` を超える確保と同じく
-/// メモリの不足の `ERROR` を立て、null を返す。
+/// シェイプ表がいっぱいなら、表を拡張して呼び直す。
+/// 表を拡張できなければ(ホストが線形メモリを拡張できなければ)、`N_alloc_max` を超える確保と同じく、
+/// メモリ不足の `ERROR` を設定して null を返す。
 fn shape_op(cg: &mut Cg, fb: &mut Fb, f: u32, shape: u32, label: u32, ns: u32) {
     let oom = cg.func(FKey::H(H::RaiseOom));
     fb.i()
@@ -282,7 +292,7 @@ fn shape_op(cg: &mut Cg, fb: &mut Fb, f: u32, shape: u32, label: u32, ns: u32) {
         .end();
 }
 
-/// `i < n` の間 `body` を繰り返す(`i` は 0 から)。
+/// `i` を 0 から始め、`i < n` の間 `body` を繰り返す。
 fn for_range(fb: &mut Fb, i: u32, n: u32, body: impl FnOnce(&mut Fb)) {
     fb.i()
         .i32_const(0)
@@ -721,10 +731,10 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .ref_as_non_null();
         }
         Write | SOut => {
-            // 文字列は受け渡しの領域(`STAGE` バイト、起動のときに host が取る)に一切れずつ写す。
-            // 領域を広げないので、形の表が線形メモリを使い切った後でも書き出せる。
-            // `Write` は一切れごとに `host.write` を呼び、最後の一切れ(`more` が 0)で host がまとめて書き出す。
-            // `SOut` は第 2 引数の位置から 1 切れだけ写し、host が位置を進めて呼び直す。
+            // 文字列は、受け渡し用のバッファに断片ごとにコピーする。バッファは `STAGE` バイトで、起動時にホストが確保する。
+            // バッファを拡張しないので、シェイプ表が線形メモリを使い切った後でも書き出せる。
+            // `Write` は断片ごとに `host.write` を呼び、最後の断片(`more` が 0)でホストがまとめて書き出す。
+            // `SOut` は第 2 引数の位置から断片を 1 つだけコピーし、ホストが位置を進めて呼び直す。
             let s = fb.local(rv(true, t.str_));
             let n = fb.local(I32);
             let ptr = fb.local(I32);
@@ -745,7 +755,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .call(imp::BUF)
                 .local_set(ptr);
             if h == SOut {
-                // 長さを超える位置は長さに切り詰める(写す切れは空になる)。
+                // 長さを超える位置は長さに切り詰める。このとき、コピーする断片は空になる。
                 fb.i()
                     .local_get(1)
                     .local_set(off)
@@ -1192,7 +1202,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .global_set(g.p_args);
         }
         PerformUnwound => {
-            // 結果は、この perform の G の節が選ばれて YIELD を立てたら 1、ほかは 0 である。
+            // 結果は、この perform の G の節が選ばれて YIELD を設定したときは 1、それ以外は 0 である。
             let i32get = cg.func(FKey::H(I32Get));
             let ttr = cg.tpl.internal("末尾の resume の印が perform に届きました");
             let tnone = cg.tpl.internal("状態語の立っていない巻き戻し");
@@ -1220,7 +1230,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .i32_const(0)
                 .return_()
                 .end()
-                // G の節: YIELD(hr, 節, 引数, 切り取りの先頭)を立てる。積んだ記録の列は空から始める。
+                // G の節: 状態ワードに YIELD(hr、節、引数、連鎖の切り出した部分の先頭)を設定する。フレームの記録の並びは空から始める。
                 .i32_const(pk::YIELD)
                 .global_set(g.p_kind)
                 .local_get(0)
@@ -1274,7 +1284,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .i32_const(0);
         }
         YfPush => {
-            // 記録の列の末尾(外側)に足す。列は最上段(perform のフレーム)から最下段の順である。
+            // フレームの記録を、並びの末尾(外側)に追加する。並びは最上段(perform のフレーム)から最下段の順である。
             fb.i()
                 .global_get(g.yf_tail)
                 .ref_is_null()
@@ -1290,7 +1300,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
                 .global_set(g.yf_tail);
         }
         ContMake => {
-            // 自分宛ての YIELD から継続を作り、状態語を消す。引数はハンドラ記録とハンドラのフレームの深さ h。
+            // 自分宛ての YIELD から継続を作り、状態ワードを消す。引数は、ハンドラ記録と、ハンドラのフレームの深さ h である。
             let tnone = cg.tpl.internal("継続のフレームの記録がありません");
             let top = fb.local(rv(true, t.frame));
             fb.i()
@@ -1564,7 +1574,7 @@ fn gen_h(cg: &mut Cg, h: H) -> Function {
     fb.finish()
 }
 
-/// 関数 `f` の、捕獲を持たないクロージャを積む。
+/// 関数 `f` の、キャプチャを持たないクロージャを作って Wasm のオペランドスタックに積む命令を生成する。
 pub fn closure0(cg: &mut Cg, fb: &mut Fb, f: FuncId) {
     let n = cg.arity(f);
     let (_, clo) = cg.m.fn_types(n);
@@ -1661,7 +1671,7 @@ fn gen_main(cg: &mut Cg, fb: &mut Fb) {
     fb.i().i32_const(0);
 }
 
-/// 内部の誤り(70)で止まる。
+/// 内部エラーとして終了コード 70 で終了する命令を生成する。
 fn bail(cg: &mut Cg, fb: &mut Fb, text: &str) {
     fatal(cg, fb, text);
 }
@@ -1669,7 +1679,7 @@ fn bail(cg: &mut Cg, fb: &mut Fb, text: &str) {
 fn gen_callv(cg: &mut Cg, n: u32) -> Function {
     let t = cg.m.t;
     let (fty, cty) = cg.m.fn_types(n);
-    // 引数は呼び出し先の型と同じ形(まとめた形を含む)で受け取り、そのまま渡す。
+    // 引数は、呼び出し先の型と同じ形式で受け取り、そのまま渡す。`P_DIRECT` 個を超える分は 1 つの配列にまとめてある。
     let w = crate::wire_arity(n);
     let mut fb = Fb::new(1 + w);
     let c = fb.local(rv(true, cty));
@@ -1689,7 +1699,7 @@ fn gen_callv(cg: &mut Cg, n: u32) -> Function {
         .struct_get(cty, 2)
         .return_call_ref(fty)
         .end();
-    // メソッドの値。
+    // メソッドの値の場合。
     let mv = fb.local(rv(true, t.method));
     let aget = cg.func(FKey::H(H::Aget));
     fb.i()
@@ -1734,7 +1744,7 @@ fn gen_callv(cg: &mut Cg, n: u32) -> Function {
     }
     bail(cg, &mut fb, "メソッドの値の種類が翻訳の表にありません");
     fb.i().end();
-    // 実装の無い extern。
+    // 実装のない extern の場合。
     let raise = cg.func(FKey::H(H::Raise));
     fb.i()
         .local_get(0)
@@ -1775,7 +1785,7 @@ fn gen_callm(cg: &mut Cg, c: u32, m: u32, no: u32, n: u32) -> Function {
             fb.i().local_get(arg0 + k);
         }
     };
-    // 組み込みのインスタンス。
+    // 組み込みのインスタンスの場合。
     let db = fb.local(rv(true, t.dictb));
     fb.i()
         .local_get(0)
@@ -1806,7 +1816,7 @@ fn gen_callm(cg: &mut Cg, c: u32, m: u32, no: u32, n: u32) -> Function {
     }
     bail(cg, &mut fb, "組み込みのメソッドがありません");
     fb.i().end();
-    // 利用者のインスタンス。
+    // ユーザ定義のインスタンスの場合。
     let di = fb.local(rv(true, t.dicti));
     let tf = fb.local(EQ);
     let raise = cg.func(FKey::H(H::Raise));
@@ -1862,7 +1872,7 @@ fn gen_callm(cg: &mut Cg, c: u32, m: u32, no: u32, n: u32) -> Function {
                 fb.i().local_get(1 + k);
             }
             cg.pack_args(&mut fb, inst.premises + no);
-            // 実装の関数の本体はクロージャを作るだけで、yield しない(届いたら内部の誤り)。
+            // 実装の関数の本体はクロージャを作るだけなので、yield しない。YIELD が届いたら、内部エラーとして終了する。
             let ty = cg
                 .tpl
                 .internal("yield がメソッドの実装の関数の評価の外へ届きました");
@@ -1890,7 +1900,7 @@ fn gen_callm(cg: &mut Cg, c: u32, m: u32, no: u32, n: u32) -> Function {
     }
     bail(cg, &mut fb, "インスタンスが翻訳の表にありません");
     fb.i().end();
-    // 構造的な Eq。
+    // 構造的な Eq の場合。
     fb.i()
         .local_get(0)
         .ref_test_non_null(ht(t.dictr))
@@ -1959,10 +1969,12 @@ fn gen_dictapp(cg: &mut Cg, n: u32) -> Function {
     fb.finish()
 }
 
-/// G か N の節の本体の段を末尾で呼ぶ。
+/// G か N の節の関数を、本体フェーズとして末尾呼び出しで呼ぶ関数を作る。
+/// G と N は操作節の分類である(`doc/lir.md` の 16.2 節)。
 ///
-/// `with_k` が偽なら引数は退避した `DISCARD(NeverBody)` で、隠れた引数 `x` は Unit である(`tail_call_never`)。
-/// 真なら引数は継続で、`x` は継続である(`call_clause`。呼ぶ側が深さを `h + 1` にしてから呼ぶ)。
+/// `with_k` が偽なら、引数は退避した `DISCARD(NeverBody)` で、節の暗黙の引数 `x` には Unit を渡す(`tail_call_never`)。
+/// 真なら、引数は継続で、`x` にもその継続を渡す(`call_clause`)。
+/// `call_clause` では、呼び出し元が深さを `h + 1` にしてからこの関数を呼ぶ。
 fn gen_clause_body(cg: &mut Cg, with_k: bool) -> Function {
     let t = cg.m.t;
     let g = cg.g;
@@ -2042,14 +2054,15 @@ fn gen_clause_body(cg: &mut Cg, with_k: bool) -> Function {
     fb.finish()
 }
 
-/// `rt_resume(k, v, base)`(`cont_resume`。計画 6.6 節、`doc/lir.md` の 16.4 節)。
+/// `rt_resume(k, v, base)` の本体を作る。`cont_resume` の実装である(`doc/lir.md` の 16.4 節)。
 ///
-/// `base` は再開するハンドラのフレームの深さ `c` である。
-/// 継続の記録の列を最上段から順に、各フレームの再開の入口で呼ぶ。
-/// 最上段(取り出された `perform`)には `v` を渡し、その後は内側のフレームの結果を外側のフレームに渡す。
-/// `v` が退避した状態語なら、それを状態語にして、最上段に番兵を渡す(注入)。
+/// `base` は、再開するハンドラのフレームの深さ `c` である。
+/// 継続が持つフレームの記録の並びを最上段から順にたどり、各フレームを再開用エントリから呼ぶ。
+/// 最上段(継続をキャプチャした `perform` のフレーム)には `v` を渡し、その後は内側のフレームの結果を外側のフレームに渡す。
+/// `v` が退避した状態ワードなら、それを状態ワードに設定し、最上段には番兵を渡す(注入)。
 /// 各フレームの深さは `base + (取り出したときの深さ − h)` にする(IRSpec 11.4 節のずれ)。
-/// 最下段のフレームは末尾で呼ぶので、再開した計算の Wasm のフレームは、どの時点でも 1 つだけがこの関数の上にある。
+/// 式の中の「取り出したときの深さ」は、継続をキャプチャしたときの、そのフレームの深さである。
+/// 最下段のフレームは末尾呼び出しで呼ぶので、再開した計算の Wasm のフレームのうち、この関数の上にあるものは、どの時点でも 1 つだけである。
 fn gen_rt_resume(cg: &mut Cg, fb: &mut Fb) {
     let t = cg.m.t;
     let g = cg.g;
@@ -2152,11 +2165,12 @@ fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
     let xb = fb.local(EQ);
     let sd = fb.local(I64);
     let rv_ = fb.local(EQ);
-    // Eq のメソッドはエフェクトを持たないので、この境目の外へ YIELD は届かない(届いたら内部の誤り。doc/lir.md 16.1 節)。
+    // Eq のメソッドはエフェクトを持たないので、この境界の外へ YIELD は届かない。届いたら、内部エラーとして終了する(`doc/lir.md` の 16.1 節)。
     let ty_eq = cg
         .tpl
         .internal("yield が構造的な Eq の比べ方の外へ届きました");
-    // 項目の辞書 `d`(積んだ形で)で xa と xb を比べ、偽なら 0、番兵なら -1 を返す。
+    // オペランドスタックに積んである項目の辞書で、xa と xb を比較する。
+    // 結果が偽なら 0 を、番兵なら -1 を、この関数の結果として返す。
     let eq_item = |fb: &mut Fb| {
         fb.i()
             .local_set(rv_)
@@ -2204,7 +2218,7 @@ fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
             .return_()
             .end();
     };
-    // レコード。
+    // レコードの場合。
     fb.i()
         .local_get(0)
         .ref_test_non_null(ht(t.dictr))
@@ -2256,7 +2270,7 @@ fn gen_eq_struct(cg: &mut Cg, c: u32) -> Function {
         eq_item(fb);
     });
     fb.i().i32_const(1).return_().end();
-    // ヴァリアント。
+    // ヴァリアントの場合。
     fb.i()
         .local_get(0)
         .ref_test_non_null(ht(t.dictv))

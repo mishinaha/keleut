@@ -1,16 +1,18 @@
-//! LIR の関数の翻訳(計画 6.10 節の制御)。
+//! LIR の関数から Wasm の関数を生成する。
 //!
 //! ## 関数の型
 //!
-//! 引数が N 個の LIR の関数は `$FnN = (env (ref null $Clo)) (eqref × N) (frame (ref null $Frame)) → eqref` である。
-//! `env` は自分を呼んだクロージャ(直の呼び出しでは null)、`frame` は再開の入口で渡すフレームの記録(ふつうの呼び出しでは null)である。
+//! 引数が N 個の LIR の関数の型は `$FnN = (env (ref null $Clo)) (eqref × N) (frame (ref null $Frame)) → eqref` である。
+//! `env` は自分を呼び出したクロージャで、直接呼び出しでは null である。
+//! `frame` は再開用エントリが渡すフレームの記録で、通常の呼び出しでは null である。
 //! N が [`crate::P_DIRECT`] を超える関数は、`eqref × N` の代わりに、先頭の `P_DIRECT` 個と、残りをまとめた配列 `(ref $anyarr)` を受け取る。
-//! 呼ぶ側は引数を積んだ後で残りを `array.new_fixed` でまとめ、呼ばれた側は入口で配列を読んで残りの引数をふつうのレジスタに置く。
-//! 状態語が立っていれば null(番兵)を返す。
+//! 呼び出し元は、引数を積んだ後で、残りを `array.new_fixed` で配列にまとめる。
+//! 呼び出し先は、関数の入口で配列を読み、残りの引数を通常のレジスタに置く。
+//! 関数は、状態ワードが設定されていれば null(番兵)を返す。
 //!
 //! ## ブロック
 //!
-//! LIR のブロックは位相の順に並び、どの枝も後ろのブロックへ向かう。
+//! LIR のブロックはトポロジカル順に並び、どの分岐も後ろのブロックへ向かう。
 //! そこで、ブロック 1〜n-1 の入口を、入れ子の `block` として先に開く。
 //!
 //! ```text
@@ -22,54 +24,63 @@
 //! B(n-1) の命令
 //! ```
 //!
-//! `$Bk` の `end` の直後が Bk の命令なので、後ろのブロックへの枝は前向きの `br` になる。
-//! 次のブロックへの `jump` は何も書かずに落ちる。
-//! 状態語を伝播する箇所は、1 つの出口へ枝を張らず、その場で深さを書き戻して null を返す。
+//! `$Bk` の `end` の直後が Bk の命令なので、後ろのブロックへの分岐は前向きの `br` になる。
+//! 次のブロックへの `jump` には命令を書かず、そのまま次へ進む。
+//! 状態ワードを伝播する箇所は、1 つの出口へ分岐せず、その場で深さを書き戻して null を返す。
 //!
 //! ## 重い関数の分割
 //!
-//! 命令の多い関数と、フィールドの多い大きなフレームの形にする関数(下の「局所」)は、いくつかの Wasm の関数(部分)に分ける。
-//! V8 の最適化の翻訳は 1 つの関数の大きさについて線形より速く記憶を使い、何度も呼ぶ大きな関数で記憶を使い尽くすからである。
-//! 大きなフレームの形の関数を小さな部分に分けるのは、1 段のスタックを抑えるためである([`piece_max_big`])。
-//! 分ける関数は大きなフレームの形にし、すべてのレジスタを構造体に置く。
-//! LIR のブロックは重さに応じてさらに区切り、区切りを順に部分へ束ねる。
-//! 部分は入口の番号で区切りへ移り、ほかの部分の区切りへは、その部分を末尾で呼んで移る([`generate`])。
+//! 命令の多い関数と、フィールドの多い大きなフレーム方式の関数(下の「ローカル」)は、いくつかの Wasm の関数に分ける。
+//! 分けてできた Wasm の関数を、以下では分割関数と呼ぶ。
+//! 命令の多い関数を分けるのは、V8 の最適化コンパイルが使うメモリが、1 つの関数のサイズに対して線形より速く増えるからである。
+//! 何度も呼び出される大きな関数では、V8 がメモリを使い尽くす。
+//! 大きなフレーム方式の関数を小さな分割関数に分けるのは、1 段が使うスタックを抑えるためである([`piece_max_big`])。
+//! 分割する関数は大きなフレーム方式にし、すべてのレジスタを構造体に置く。
+//! LIR のブロックは、重み(命令と終端命令の個数に、それらが読むレジスタの個数を足した値)に応じてさらに区切り(ブロックを切った断片)に分け、区切りを順に分割関数へまとめる。
+//! 分割関数は、引数で受け取った番号の区切りへ `br_table` で分岐する。
+//! ほかの分割関数にある区切りへ分岐するときは、その分割関数を末尾呼び出しで呼ぶ([`generate`])。
 //!
-//! ## 取り出しと再開(計画 6.6 節と 6.10 節)
+//! ## 継続のキャプチャと再開
 //!
-//! yield を受け取る再開点(パス 11 の印。`perform` と番兵を受け取る呼び出しを含む)の呼び出しは、
-//! 前半(結果を積むまで)と後半(結果を受け取る部分)の間で区切る。
-//! 後半の区切りは入れ子の `block` の境目から始まるので、関数の先頭の `br_table` から前向きに届く。
+//! yield を受け取る再開点の呼び出しは、前半(結果を積むまで)と後半(結果を受け取る部分)の間で区切る。
+//! yield を受け取る再開点は、パス 11 が `yield` の印を付けた再開点で、`perform` と、番兵を受け取る呼び出しを含む。
+//! 後半の区切りは入れ子の `block` の境界から始まるので、関数の先頭の `br_table` から前向きに分岐できる。
 //!
-//! - 取り出し: 呼び出しが番兵で戻り、状態語が `YIELD` なら、後半は局所(分けない関数では引数と
-//!   スロットの局所、大きなフレームの形では構造体の参照)と深さと再開する区切りを、関数ごとの
-//!   フレームの記録(`$Frame` の部分型)に詰めて大域の列 `yf` の末尾に積み、番兵で戻る。
-//!   列は最上段(G の節を選んだ `perform`)から外側へ並ぶ。
-//!   自分宛ての `YIELD` を受け取った `$rt_handle` の `cont_make` が列を継続 `$Cont` にする。
-//!   `perform` は、取り出された後の再開の区切り(結果は再開の値)を別に持つ。
-//!   `$rt_handle` の `propagate` は、番兵を受け取った最後の呼び出しの後半(`lastrp`)を記録する。
-//! - 再開: `rt_resume` は記録の列を最上段から順に、記録の再開の入口(`$ResFn`。関数ごと、
-//!   分けた関数では部分ごとの小さな関数)で呼ぶ。
-//!   入口は関数を最後の引数に記録を渡して呼び、関数は局所を戻して記録の区切りへ移る。
-//!   渡す値(内側のフレームの結果か番兵)は大域 `$rv` に置く。
-//!   再開したフレームが再び番兵で戻れば、外側のフレームも番兵を受け取り、自分の記録を作り直す。
+//! - 継続のキャプチャ: 呼び出しが番兵を返し、状態ワードが `YIELD` なら、後半は、ローカルと深さと再開する区切りを、
+//!   関数ごとのフレームの記録(`$Frame` の部分型)に入れる。
+//!   記録に入れるローカルは、分割しない関数では引数とスロットのローカルで、大きなフレーム方式では構造体の参照である。
+//!   後半は、その記録をグローバルの並び `yf` の末尾に追加して、番兵を返す。
+//!   並びは、最上段(G の節を選んだ `perform`)から外側へ向かう順である。
+//!   自分宛ての `YIELD` を受け取った `$rt_handle` の `cont_make` が、この並びを継続 `$Cont` にする。
+//!   `perform` は、継続をキャプチャした後に再開する区切りを、後半とは別に持つ。
+//!   その区切りでは、再開の値が `perform` の結果になる。
+//!   `$rt_handle` の `propagate` は、最後に番兵を受け取った呼び出しの後半(`lastrp`)を、再開する区切りとして記録に書く。
+//! - 再開: `rt_resume` は、記録の並びを最上段から順にたどり、各記録の再開用エントリ(`$ResFn`)を呼ぶ。
+//!   再開用エントリは小さな関数で、関数ごとに作る。分割する関数では分割関数ごとに作る。
+//!   分割しない関数の再開用エントリは、記録を最後の引数に渡して関数を呼ぶ。
+//!   関数は、記録からローカルを復元して、記録にある区切りへ分岐する。
+//!   分割する関数の再開用エントリは、記録から構造体の参照と区切りの番号を読み、それらを渡して分割関数を末尾呼び出しで呼ぶ。
+//!   再開するフレームに渡す値(内側のフレームの結果か番兵)は、グローバル `$rv` に置く。
+//!   再開したフレームがまた番兵を返せば、外側のフレームも番兵を受け取り、自分の記録を作り直す。
 //!
-//! yield を受け取る再開点の無い関数は、区切りも再開の入口も持たない。
-//! G の節を持つハンドラがプログラムのどこにも無ければ `YIELD` は立たないので、どの関数も区切りを持たない。
-//! そのときの `perform` は、取り出しの印を見ずに伝播し、`YIELD` が届けば内部の誤りで止まる。
+//! yield を受け取る再開点のない関数は、再開点での区切りも再開用エントリも持たない。
+//! G の節を持つハンドラがプログラムのどこにもなければ `YIELD` は設定されないので、どの関数も再開点で区切らない。
+//! そのときの `perform` は、継続がキャプチャされたかどうかを調べずに伝播し、`YIELD` を受け取ったら内部エラーで終了する。
 //!
-//! ## 局所
+//! ## ローカル
 //!
-//! レジスタは、パス 12 のスロットと Wasm の型の組ごとに 1 つの局所を使う。
-//! 2 つのレジスタが同じ組を使うのは、区間が重ならないときだけである。
-//! 一時の局所は Wasm の型ごとに 1 つなので、局所の数はスロットと型の組の数に 8 を足した数を超えない。
-//! 1 段のバイト数の推定(`8 × K + 24 × P + 64`。P は Wasm の引数の数)が関数の予算([`budget_of`])を超える関数は、
-//! レジスタを、入口で確保する構造体のフィールドに置く(大きなフレームの形。D544)。
-//! フィールドが多ければ、関数を小さな部分に分ける([`piece_max_big`])。
-//! 予算はふつう `B_wasm` である。
-//! `$rt_handle` を末尾でなく呼ぶ関数と `cancel` 節では `B_wasm − E_rth − E_rres`、`$rt_handle` 自身では `E_rth` である。
-//! まとめた配列から読む引数もこの構造体に置くので、引数の多い関数でも 1 段が予算に収まる。
-//! 書き終えた関数の推定が予算を超えたら、翻訳の誤りにする。
+//! レジスタは、パス 12 のスロットと Wasm の型の組ごとに 1 つのローカルを使う。
+//! 2 つのレジスタが同じ組を使うのは、生存区間が重ならないときだけである。
+//! 一時ローカルは Wasm の型ごとに 1 つで、使う型は 8 種類である。
+//! これに深さのローカルと `lastrp` のローカルを合わせても、ローカルの個数は、スロットと型の組の個数に `TMP_MAX`(10)を足した数を超えない。
+//! 1 段のバイト数の見積もり(`8 × K + 24 × P + 64`。K はローカルの個数、P は Wasm の引数の個数)が関数ごとの上限([`budget_of`])を超える関数は、
+//! レジスタを、関数の入口で確保する構造体のフィールドに置く。
+//! この方式を、大きなフレーム方式と呼ぶ。
+//! フィールドが多ければ、関数を小さな分割関数に分ける([`piece_max_big`])。
+//! 上限は通常 `B_wasm` である。
+//! `$rt_handle` を非末尾呼び出しで呼ぶ関数と `cancel` 節では `B_wasm − E_rth − E_rres`、`$rt_handle` 自身では `E_rth` である。
+//! まとめた配列から読む引数もこの構造体に置くので、引数の多い関数でも 1 段が上限に収まる。
+//! 生成し終えた関数の見積もりが上限を超えたら、コード生成はエラーを返す。
 
 use std::collections::HashMap;
 
@@ -84,63 +95,66 @@ use crate::meta::{self, arg, kind};
 use crate::rt::{self, H};
 use crate::{B_WASM, Cg, E_RRES, E_RTH, FKey, cls, frame_estimate, pk};
 
-/// 1 回の `array.new_fixed` で作る要素の数の上限(V8 は 10,000)。
+/// 1 回の `array.new_fixed` で作る要素の個数の上限。V8 の上限は 10,000 である。
 const NEW_FIXED_MAX: usize = 1000;
 
 #[derive(Clone, Copy)]
 enum Loc {
     Local(u32),
-    /// 大きなフレームの構造体(何番目の構造体か)のフィールド。
+    /// 大きなフレームの構造体のフィールド。値は、何番目の構造体かと、フィールドの番号である。
     Field(u32, u32),
 }
 
-/// 大きなフレームの 1 つの構造体のフィールドの数の上限(V8 の上限は 10,000)。
+/// 大きなフレームの構造体 1 つに置くフィールドの個数の上限。V8 の上限は 10,000 である。
 const BIG_CHUNK: usize = 1000;
 
-/// 関数を分けるときの 1 つの Wasm の関数の重さの上限(命令と終わりの数に、読むレジスタの数を足したもの)。
+/// 関数を分けるときの、分割関数 1 つの重みの上限。
 ///
-/// V8 の最適化の翻訳は、1 つの関数の大きさについて線形より速く記憶を使う。
-/// 分けずに何度も呼ぶと、3,000 個の値を生かす直線の関数(重さ約 42,000)が約 1 GiB を使い、
-/// その 2 倍の関数で翻訳の記憶が尽きて Node が落ちた。
-/// 伝播の枝を 1 つの出口に集めていたときは、重さ約 27,000 の関数で落ちた。
-/// 上限は、落ちた最も小さい関数の重さの 6 分の 1 ほどにとる。
+/// 重みは、命令と終端命令の個数に、それらが読むレジスタの個数を足したものである。
+/// V8 の最適化コンパイルが使うメモリは、1 つの関数のサイズに対して線形より速く増える。
+/// 実測では、3,000 個の値を生存させる分岐のない関数(重み約 42,000)を分けずに何度も呼び出すと、V8 は約 1 GiB を使った。
+/// その 2 倍の関数では、コンパイルに使うメモリが尽きて Node が異常終了した。
+/// 伝播の分岐を 1 つの出口に集める方式では、重み約 27,000 の関数で異常終了した。
+/// 上限は、異常終了した最も小さい関数の重みの 6 分の 1 ほどにしてある。
 const PIECE_MAX: usize = 4000;
 
-/// 大きなフレームの形の部分の重さの上限の下限。
+/// [`piece_max_big`] が返す上限の最小値。
 const PIECE_BIG_MIN: usize = 32;
 
-/// 大きなフレームの形の関数の、1 つの部分の重さの上限。
+/// 大きなフレーム方式の関数の、分割関数 1 つの重みの上限を返す。
 ///
-/// V8 の最適化の翻訳は、構造体のフィールドに書いた値を後で読むところへ直に渡し(書いて読む往復を省く)、
-/// 同じ計算を 1 つにまとめる。
-/// そのため 1 つの Wasm の関数の中では、構造体に置いたはずの値がレジスタとスタックの場所に残り、
-/// フレームの大きさが関数の中で同時に生きる値の数(最大で関数の重さ)に比例する。
-/// 200 個の値を生かす節では、フレームが 194 個のスタックの場所(約 1.6 KB)になり、既定の L の近くでスタックが尽きた(M95 の記録)。
-/// 部分の境目は末尾の呼び出しで、部分は構造体を引数で受け取るので、値は境目をまたいでレジスタに残らない。
-/// そこで、1 つの部分の重さを、退避する値を 1 つ 8 バイトとして部分の 1 段が予算に収まる数に抑える。
-/// `nkeys` は構造体のフィールドの数の見積もりである。
+/// V8 の最適化コンパイルは、構造体のフィールドに書いた値を、後で読む箇所へ直接渡し、フィールドからの読み出しを省く。
+/// 同じ計算も 1 つにまとめる。
+/// そのため 1 つの Wasm の関数の中では、構造体に置いたはずの値がレジスタとスタックスロットに残り、
+/// フレームのサイズが、関数の中で同時に生存する値の個数(最大で関数の重み)に比例する。
+/// 実測では、200 個の値を生存させる節でフレームがスタックスロット 194 個(約 1.6 KB)になり、既定の深さの上限 L の近くでスタックオーバーフローになった。
+/// 分割関数の境界は末尾呼び出しで、分割関数は構造体を引数で受け取るので、値は境界をまたいでレジスタに残らない。
+/// そこで、分割関数 1 つの重みを、退避する値を 1 つ 8 バイトと数えて、分割関数の 1 段が上限 `budget` に収まる数に抑える。
+/// 返す値は [`PIECE_BIG_MIN`] 以上、[`PIECE_MAX`] 以下である。
+/// `nkeys` は構造体のフィールドの個数の見積もりである。
 fn piece_max_big(budget: u64, nkeys: usize) -> usize {
     let chunks = nkeys.div_ceil(BIG_CHUNK) as u64;
     let base = frame_estimate(TMP_MAX, chunks + 3);
     ((budget.saturating_sub(base) / 8) as usize).clamp(PIECE_BIG_MIN, PIECE_MAX)
 }
 
-/// 区切りの最初の命令の出し方。
+/// 区切りの最初の命令の生成方法。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Head {
-    /// ふつうに出す。
+    /// 命令の全体を生成する。
     Full,
-    /// 呼び出しの後半(結果を受け取る部分)だけを出す。結果は一時の局所 `eqref` にある。
+    /// 呼び出しの後半(結果を受け取る部分)だけを生成する。結果は `eqref` の一時ローカルにある。
     Post,
-    /// 取り出された `perform` の再開の後半だけを出す(結果は再開の値)。
+    /// 継続をキャプチャした後で `perform` を再開するときの後半だけを生成する。結果は再開の値である。
     PostY,
 }
 
-/// 区切り。LIR のブロック `block` の命令 `start..end` で、`last` なら終わりの命令を含む。
+/// 区切り。LIR のブロック `block` の命令 `start..end` を表し、`last` なら終端命令も含む。
 ///
-/// `head` が `Full` でなければ、`start` の命令はその後半だけを出す。
-/// `pre` なら、`end - 1` の命令は呼び出しの前半(結果を積むまで)だけを出し、結果を一時の局所に置いて `next` へ移る。
-/// `last` でない区切りは、最後に `next` へ移る。
+/// `head` が `Full` でなければ、`start` の命令は後半だけを生成する。
+/// `pre` なら、`end - 1` の命令は呼び出しの前半(結果を積むまで)だけを生成し、結果を後半に渡して `next` へ分岐する。
+/// 結果は、`next` が同じ分割関数にあれば一時ローカルに、ほかの分割関数にあればグローバル `$rv` に置く。
+/// `last` でない区切りは、最後に `next` へ分岐する。
 #[derive(Clone, Copy, Debug)]
 struct Piece {
     block: usize,
@@ -152,27 +166,27 @@ struct Piece {
     next: usize,
 }
 
-/// yield を受け取る再開点の呼び出し。
+/// yield を受け取る再開点の呼び出しが持つ区切りの番号。
 #[derive(Clone, Copy, Debug)]
 struct Site {
     /// 後半の区切り。
     post: usize,
-    /// `perform` なら、取り出された後の再開の区切り。
+    /// `perform` なら、継続をキャプチャした後に再開する区切り。
     posty: Option<usize>,
 }
 
-/// 区切りと、区切りを束ねた Wasm の関数の配置。
+/// 区切りの並びと、区切りを分割関数にまとめた結果。
 struct Layout {
     pieces: Vec<Piece>,
-    /// LIR のブロックの最初の区切り。
+    /// LIR のブロックごとの、最初の区切りの番号。
     first: Vec<usize>,
-    /// 区切りを含む部分の番号。
+    /// 区切りごとの、それを含む分割関数の番号。
     part_of: Vec<usize>,
-    /// 部分ごとの最初の区切り(最後に区切りの数を置く)。
+    /// 分割関数ごとの、最初の区切りの番号。末尾に区切りの総数を置く。
     part_lo: Vec<usize>,
-    /// 部分ごとの Wasm の関数の番号(分けない関数では空)。
+    /// 分割関数ごとの Wasm の関数の番号。分割しない関数では空である。
     funcs: Vec<u32>,
-    /// ブロックと命令の位置ごとの、yield を受け取る再開点の呼び出し。
+    /// yield を受け取る再開点の呼び出し。キーは、ブロックの番号と、ブロックの中での命令の位置である。
     sites: HashMap<(usize, usize), Site>,
 }
 
@@ -180,10 +194,10 @@ impl Layout {
     /// 区切りを作る。
     ///
     /// yield を受け取る再開点の呼び出し(`cuts`)では、呼び出しの前半と後半の間で区切る。
-    /// 再開の入口が後半の区切りへ `br_table` で移れるようにするためである(計画 6.10 節)。
-    /// `perform` は、取り出された後の再開の区切りを後半の区切りの前に置き、続きを別の区切りにする。
-    /// `split` なら、重さが `pmax`([`PIECE_MAX`] か [`piece_max_big`])を超えないようにブロックの途中でも区切り、区切りを部分に束ねる。
-    /// `save_w` は、yield を受け取る再開点ごとに足す重さ(フレームの記録を作る命令)である。
+    /// 再開するときに、後半の区切りへ `br_table` で分岐できるようにするためである。
+    /// `perform` では、継続をキャプチャした後に再開する区切りを後半の区切りの前に置き、`perform` に続く命令を別の区切りにする。
+    /// `split` なら、重みが `pmax`([`PIECE_MAX`] か [`piece_max_big`])を超えないようにブロックの途中でも区切り、区切りを分割関数にまとめる。
+    /// `save_w` は、yield を受け取る再開点 1 つにつき加える重みで、フレームの記録を作る命令の分である。
     fn build(
         f: &keleut_lir::Func,
         cuts: &HashMap<(usize, usize), bool>,
@@ -222,13 +236,13 @@ impl Layout {
                 let Some(&perform) = cuts.get(&(k, i)) else {
                     continue;
                 };
-                // `perform` の記録を作る命令は 2 組とも後半の区切りにあるので、後半の重さに数える。
+                // `perform` の記録を作る命令は 2 組とも後半の区切りにあるので、後半の重みに数える。
                 if !perform {
                     w += save_w;
                 }
                 let n = pieces.len();
                 if perform {
-                    // 前半、取り出された後の再開、後半、続きの順に置く。
+                    // 前半、継続をキャプチャした後に再開する区切り、後半、続きの順に置く。
                     pieces.push(Piece {
                         block: k,
                         start,
@@ -330,7 +344,7 @@ impl Layout {
     }
 }
 
-/// LIR の関数の重さ。
+/// LIR の関数の重みを返す。
 fn weight(f: &keleut_lir::Func) -> usize {
     f.blocks
         .iter()
@@ -340,7 +354,9 @@ fn weight(f: &keleut_lir::Func) -> usize {
         .sum()
 }
 
-/// yield を受け取る再開点の呼び出し(位置と、`perform` か)。
+/// yield を受け取る再開点の呼び出しを集める。
+///
+/// キーは、ブロックの番号と、ブロックの中での命令の位置である。値は、命令が `perform` なら真である。
 fn yield_cuts(f: &keleut_lir::Func, frame: &keleut_lir::Frame) -> HashMap<(usize, usize), bool> {
     let mut out = HashMap::new();
     let mut rp = 0usize;
@@ -366,27 +382,27 @@ fn yield_cuts(f: &keleut_lir::Func, frame: &keleut_lir::Frame) -> HashMap<(usize
     out
 }
 
-/// 呼び出しの命令の出し方。
+/// 呼び出しの命令の生成方法。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mode {
-    /// 前半と後半を続けて出す。
+    /// 前半と後半を続けて生成する。
     Full,
-    /// 前半だけ(結果を積むまで)。
+    /// 前半(結果を積むまで)だけを生成する。
     Pre,
-    /// 後半だけ(結果を一時の局所から読む)。
+    /// 後半だけを生成する。結果は一時ローカルから読む。
     Post,
-    /// 取り出された `perform` の再開の後半だけ。
+    /// 継続をキャプチャした後で `perform` を再開するときの後半だけを生成する。
     PostY,
 }
 
-/// フレームの記録の作り方(関数ごと)。
+/// 関数ごとの、フレームの記録の作り方。
 #[derive(Clone)]
 struct Rec {
     /// 記録の型(`$Frame` の部分型)。
     ty: u32,
-    /// 記録に書く局所(基底の後ろのフィールドの順)。
+    /// 記録に書くローカル。基底型のフィールドの後ろに置く順に並べる。
     saved: Vec<u32>,
-    /// 部分ごとの再開の入口(`$ResFn`)。分けない関数では 1 つ。
+    /// 分割関数ごとの再開用エントリ(`$ResFn`)。分割しない関数では 1 つだけである。
     tramps: Vec<Option<u32>>,
 }
 
@@ -397,45 +413,45 @@ struct Tr<'a, 'p> {
     loc: Vec<Loc>,
     wt: Vec<ValType>,
     lay: std::rc::Rc<Layout>,
-    /// 今の区切り。
+    /// 現在の区切り。
     cur: usize,
-    /// 今の部分の区切りの範囲。
+    /// 現在の分割関数に入る区切りの範囲。分割しない関数では、すべての区切りである。
     lo: usize,
     hi: usize,
-    /// 今の区切りの命令の中で開いている構造の数。
+    /// 現在の区切りの命令の中で開いている制御構造(`if` など)の個数。
     extra: u32,
     fdepth: u32,
-    /// 分けた部分の入口の区切りの番号(i32 の引数)。
+    /// 分割関数が入口の区切りの番号を受け取る、`i32` の引数のローカル。
     entry: Option<u32>,
-    /// 大きなフレームの構造体(局所、型)。
+    /// 大きなフレームの構造体。値は、構造体を置くローカルの番号と、構造体の型の番号である。
     bf: Vec<(u32, u32)>,
     tmps: HashMap<ValType, u32>,
-    /// まとめた配列から入口で読む引数のレジスタ。
+    /// 関数の入口で、まとめた配列から読む引数のレジスタ。
     packed: Vec<keleut_lir::Reg>,
-    /// まとめた配列の引数の局所。
+    /// まとめた配列を受け取る引数のローカル。
     packed_arr: Option<u32>,
-    /// yield を受け取る再開点があれば、フレームの記録の作り方。
+    /// yield を受け取る再開点があるときの、フレームの記録の作り方。
     rec: Option<std::rc::Rc<Rec>>,
-    /// 分けた関数か。
+    /// 分割する関数なら真。
     split: bool,
-    /// 番兵を受け取った最後の呼び出しの後半の区切り(`propagate` を持つ関数の i32 の場所)。
+    /// 最後に番兵を受け取った呼び出しの、後半の区切りの番号を置く `i32` の格納先。`propagate` を持つ関数だけが使う。
     ///
-    /// 大きなフレームの形の関数では構造体のフィールドに置くので、分けた関数の部分の間でも値が残る。
+    /// 大きなフレーム方式の関数では構造体のフィールドに置くので、分割関数をまたいでも値が残る。
     lastrp: Option<Loc>,
-    /// 番兵を受け取る呼び出しの後半の区切り(`propagate` が記録に書く候補)。
+    /// 番兵を受け取る呼び出しの後半の区切り。`propagate` が、再開する区切りとして記録に書く候補である。
     catch_posts: std::rc::Rc<Vec<usize>>,
-    /// 1 段のバイト数の推定の予算([`budget_of`])。
+    /// 1 段のバイト数の見積もりに許す上限([`budget_of`])。
     budget: u64,
 }
 
-/// 関数の 1 段のバイト数の推定の予算。
+/// 関数の 1 段に許す、見積もりバイト数の上限を返す。
 ///
-/// 論理的な 1 段の Wasm のフレームの合計が `B_wasm` に収まるようにする。
-/// ハンドラ式と末尾でない `resume` は `$rt_handle` を深さを増やさずに呼び、
-/// 継続の再開ではさらに `rt_resume` が同じ深さにある(`doc/lir.md` の 13 節と 16.2 節)。
-/// そこで `$rt_handle` を末尾でなく呼ぶ関数は、その 2 つのフレームの分を引いた予算に収める。
-/// `cancel` 節も `$rt_handle` と同じ深さで走るので、同じ予算にする。
-/// `$rt_handle` 自身は [`E_RTH`] に収める。
+/// 論理的な 1 段に入る Wasm のフレームの合計が `B_wasm` に収まるようにする。
+/// ハンドラ式と末尾位置にない `resume` は、深さを増やさずに `$rt_handle` を呼ぶ。
+/// 継続の再開では、さらに `rt_resume` が同じ深さにある(`doc/lir.md` の 13 節と 16.2 節)。
+/// そこで、`$rt_handle` を非末尾呼び出しで呼ぶ関数の上限は、`B_wasm` からこの 2 つのフレームの分を引いた値にする。
+/// `cancel` 節も `$rt_handle` と同じ深さで実行されるので、同じ上限にする。
+/// `$rt_handle` 自身の上限は [`E_RTH`] である。
 fn budget_of(prog: &keleut_lir::Program, fid: FuncId) -> u64 {
     let Some(rh) = prog.rt_handle else {
         return B_WASM;
@@ -460,7 +476,7 @@ fn ht(idx: u32) -> HeapType {
     HeapType::Concrete(idx)
 }
 
-/// Rep の Wasm の型。
+/// Rep に対応する Wasm の型を返す。
 fn wtype(cg: &Cg, r: Rep) -> ValType {
     match r {
         Rep::Bool | Rep::I32 => I32,
@@ -471,17 +487,22 @@ fn wtype(cg: &Cg, r: Rep) -> ValType {
     }
 }
 
-/// 一時の局所の数の上限。
+/// スロットに対応しないローカルの個数の上限。
 ///
-/// 一時の局所は Wasm の型ごとに 1 つで、使う型は i32、i64、f64、eqref、文字列、`$anyarr`、`$Clo` と、
-/// 再開の入口で読むフレームの記録の 8 つである。
-/// 深さの局所と、`propagate` を持つ関数の `lastrp` を足して 10 個になる(大きなフレームの形では多めの見積もり)。
+/// 一時ローカルは Wasm の型ごとに 1 つで、使う型は i32、i64、f64、eqref、文字列、`$anyarr`、`$Clo` と、
+/// 再開するときに読むフレームの記録の 8 種類である。
+/// これに、深さのローカルと、`propagate` を持つ関数の `lastrp` のローカルを加えて 10 個になる。
+/// 大きなフレーム方式では多めの見積もりになる。
 const TMP_MAX: u64 = 10;
 
-/// yield を受け取る再開点ごとにフレームの記録を作る命令の重さ(記録に書く局所の数を足す)。
+/// yield を受け取る再開点 1 つにつき、フレームの記録を作る命令の分として見積もる重み。
+///
+/// 実際に加える重みは、これに、記録に書くローカルの個数を足した値である。
 const SAVE_W: usize = 8;
 
-/// `propagate` を終わりに持つブロックがあるか(ハンドラのフレームの関数)。
+/// `propagate` を終端命令に持つブロックがあれば真を返す。
+///
+/// `propagate` を持つのは、ハンドラのフレームになる関数 `$rt_handle` だけである。
 fn has_propagate(f: &keleut_lir::Func) -> bool {
     f.blocks.iter().any(|b| {
         matches!(
@@ -494,39 +515,40 @@ fn has_propagate(f: &keleut_lir::Func) -> bool {
     })
 }
 
-/// LIR の関数を翻訳する。
+/// LIR の関数から Wasm の関数を生成する。
 ///
-/// 重さが [`PIECE_MAX`] を超える関数は、大きなフレームの形にしたうえで、いくつかの Wasm の関数(部分)に分ける。
-/// 推定が予算を超えて大きなフレームの形にする関数も、フィールドが多ければ、重さが [`piece_max_big`] 以下の部分に分ける。
-/// LIR の関数の入口は構造体を確保して引数を置き、最初の部分を末尾で呼ぶ。
-/// 部分は `(env (ref null $Clo)) (構造体 × C) (深さ i64) (入口 i32) → eqref` を受け取り、入口の区切りへ `br_table` で移る。
-/// 後ろの部分の区切りへの枝は、その部分を末尾で呼ぶ。
-/// 末尾で呼ぶので、論理的な 1 段が持つ Wasm のフレームは、どの時点でも 1 つの部分のフレームだけである。
+/// 重み([`weight`])に記録を作る命令の分を加えた値が [`PIECE_MAX`] を超える関数は、大きなフレーム方式にしたうえで、いくつかの分割関数に分ける。
+/// 見積もりが上限を超えて大きなフレーム方式にする関数も、フィールドが多ければ、重みが [`piece_max_big`] 以下の分割関数に分ける。
+/// 分割する関数では、LIR の関数の入口が構造体を確保して引数を置き、最初の分割関数を末尾呼び出しで呼ぶ。
+/// 分割関数は `(env (ref null $Clo)) (構造体 × C) (深さ i64) (入口 i32) → eqref` を受け取り、入口の区切りへ `br_table` で分岐する。
+/// ほかの分割関数にある区切りへ分岐するときは、その分割関数を末尾呼び出しで呼ぶ。
+/// 末尾呼び出しなので、論理的な 1 段が持つ Wasm のフレームは、どの時点でも分割関数 1 つのフレームだけである。
 ///
-/// yield を受け取る再開点を持つ関数には、再開の入口(`$ResFn` の小さな関数)を作る(冒頭の「取り出しと再開」)。
+/// yield を受け取る再開点を持つ関数には、再開用エントリ(`$ResFn` の小さな関数)を作る(モジュールの説明の「継続のキャプチャと再開」)。
+/// 返すのは LIR の関数の入口になる Wasm の関数の本体で、分割関数と再開用エントリの本体はモジュールに直接置く。
 pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     let prog = cg.prog;
     let f = &prog.funcs[fid.index()];
     let frame = f.frame.as_ref().ok_or("フレームの無い関数")?;
     let n = f.params.len() as u32;
-    // Wasm の引数の数(まとめた引数の配列を 1 つと数える)。
+    // Wasm の引数の個数。まとめた引数の配列は 1 つと数える。
     let w = crate::wire_arity(n);
     let mut fb = Fb::new(w + 2);
     let wt: Vec<ValType> = f.regs.iter().map(|r| wtype(cg, *r)).collect();
-    // 直に受け取る引数と、まとめた配列から入口で読む引数。
+    // 直接受け取る引数と、関数の入口でまとめた配列から読む引数。
     let direct = n.min(crate::P_DIRECT) as usize;
     let packed: Vec<keleut_lir::Reg> = f.params[direct..].to_vec();
     if packed.iter().any(|p| wt[p.index()] != EQ) {
         return Err("引数のレジスタの型が eqref でありません".into());
     }
-    // G の節がプログラムに無ければ YIELD は立たないので、区切りを作らない([`Cg::has_g`])。
+    // G の節がプログラムになければ YIELD は設定されないので、再開点で区切らない([`Cg::has_g`])。
     let cuts = if cg.has_g {
         yield_cuts(f, frame)
     } else {
         HashMap::new()
     };
     let lastrp_needed = cg.has_g && has_propagate(f);
-    // 分けるかの判断は、記録を作る命令の重さも含める。局所の数はスロットと型の組の数で見積もる。
+    // 分けるかどうかの判断には、記録を作る命令の重みも含める。ローカルの個数は、スロットと型の組の個数で見積もる。
     let nkeys_est = (0..f.regs.len())
         .map(|r| (frame.slot[r], wt[r]))
         .collect::<std::collections::HashSet<_>>()
@@ -538,18 +560,18 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     } else {
         nkeys_est
     };
-    // `perform` の再開点は記録を作る命令を 2 組持つ。
+    // `perform` の再開点は、記録を作る命令を 2 組持つ。
     let nsaves = cuts.values().map(|&p| if p { 2 } else { 1 }).sum::<usize>();
-    // 大きなフレームの形にする関数は、構造体のフィールドが 1 つの部分の重さの上限より多ければ、
-    // 重さに依らず小さな部分に分ける([`piece_max_big`])。
-    // フィールドが少なければ、1 つの Wasm の関数の中で同時に生きる値もその数を超えないので、分けない。
+    // 大きなフレーム方式にする関数は、構造体のフィールドが分割関数 1 つの重みの上限より多ければ、
+    // 重みによらず小さな分割関数に分ける([`piece_max_big`])。
+    // フィールドが少なければ、1 つの Wasm の関数の中で同時に生存する値もその個数を超えないので、分けない。
     let pbig = piece_max_big(budget, nkeys_est + 1);
     let force = big_est && nkeys_est > pbig;
     let split = force || weight(f) + nsaves * (SAVE_W + save_est) > PIECE_MAX;
     let pmax = if force { pbig } else { PIECE_MAX };
-    // スロットと型の組ごとの局所。分けない関数では、直に受け取る引数は引数の局所を使い、
-    // まとめた配列から読む引数はふつうのレジスタと同じく扱う。
-    // 分ける関数では、直に受け取る引数も構造体に置く(部分の間で受け渡すため)。
+    // スロットと型の組ごとのローカル。分割しない関数では、直接受け取る引数は引数のローカルを使い、
+    // まとめた配列から読む引数は通常のレジスタと同じように扱う。
+    // 分割する関数では、分割関数の間で受け渡すために、直接受け取る引数も構造体に置く。
     let mut keys: HashMap<(Slot, ValType), usize> = HashMap::new();
     let mut key_list: Vec<ValType> = Vec::new();
     let mut is_param = vec![None; f.regs.len()];
@@ -576,10 +598,10 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         });
         reg_key[r] = k;
     }
-    // 推定。局所の数に、深さと一時の局所(TMP_MAX 個)を足す。
+    // 見積もり。ローカルの個数に、深さのローカルと一時ローカルの分(TMP_MAX 個)を足す。
     let est = frame_estimate(key_list.len() as u64 + TMP_MAX, u64::from(w) + 2);
     let big = split || est > budget;
-    // `lastrp` は、大きなフレームの形ではレジスタと同じく構造体に置く。
+    // `lastrp` は、大きなフレーム方式ではレジスタと同じように構造体に置く。
     let lastrp_key = if lastrp_needed && big {
         key_list.push(I32);
         Some(key_list.len() - 1)
@@ -639,7 +661,7 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
     let idx = cg.lir(fid);
     let base = cg.m.func_name(idx).to_string();
     if split {
-        // 部分の関数を宣言する。
+        // 分割関数を宣言する。
         let mut params = vec![rv(true, t.clo)];
         params.extend(bf.iter().map(|&(_, ty)| rv(true, ty)));
         params.extend([I64, I32]);
@@ -651,7 +673,7 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         cg.stats.split_funcs += 1;
         cg.stats.max_parts = cg.stats.max_parts.max(lay.nparts());
     }
-    // フレームの記録と再開の入口。
+    // フレームの記録の型と再開用エントリ。
     let rec = if lay.sites.is_empty() {
         None
     } else {
@@ -698,7 +720,7 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
                 tramps.push(None);
             }
         }
-        // 再開の入口の本体。
+        // 再開用エントリの本体。
         for (q, tr) in tramps.iter().enumerate() {
             let Some(fi) = *tr else { continue };
             let mut tb = Fb::new(1);
@@ -766,7 +788,7 @@ pub fn generate(cg: &mut Cg, fid: FuncId) -> Result<Function, String> {
         budget,
     };
     if split {
-        // 入口: 構造体に直に受け取った引数を置き、最初の部分を末尾で呼ぶ。
+        // 入口: 直接受け取った引数を構造体に置き、最初の分割関数を末尾呼び出しで呼ぶ。
         x.prologue();
         for (i, p) in f.params[..direct].iter().enumerate() {
             x.fb.i().local_get(1 + i as u32);
@@ -840,7 +862,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.get_loc(self.loc[r.index()]);
     }
 
-    /// 場所の値を積む。
+    /// 格納先 `l` の値を積む。
     fn get_loc(&mut self, l: Loc) {
         match l {
             Loc::Local(l) => {
@@ -858,7 +880,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.set_loc(self.loc[r.index()], self.wt[r.index()]);
     }
 
-    /// 積んだ型 `t` の値を場所に書く。
+    /// 積んだ型 `t` の値を格納先 `loc` に書く。
     fn set_loc(&mut self, loc: Loc, t: ValType) {
         match loc {
             Loc::Local(l) => {
@@ -877,25 +899,27 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
     }
 
-    /// 区切り `j` への枝の深さ(今の部分の中の、今より後ろの区切り)。
+    /// 区切り `j` へ分岐する `br` の深さを返す。
+    ///
+    /// `j` は、現在の分割関数の中にあり、現在の区切りより後ろでなければならない。
     fn depth_to(&self, j: usize) -> u32 {
         debug_assert!(j > self.cur && j < self.hi);
         (j - self.cur - 1) as u32 + self.extra
     }
 
-    /// 区切り `j` が今の部分にあるか。
+    /// 区切り `j` が現在の分割関数にあれば真を返す。
     fn in_part(&self, j: usize) -> bool {
         self.lo <= j && j < self.hi
     }
 
-    /// 区切り `j` へ移る。次の区切りなら何も書かずに落ちる。
+    /// 区切り `j` へ分岐する。次の区切りなら命令を書かず、そのまま次へ進む。
     fn goto(&mut self, j: usize) {
         if !(j == self.cur + 1 && self.in_part(j)) {
             self.branch_to(j);
         }
     }
 
-    /// 区切り `j` へ枝を張る(落ちることに頼らない)。
+    /// 区切り `j` へ分岐する命令を書く。`j` が次の区切りでも、命令を省かない。
     fn branch_to(&mut self, j: usize) {
         if self.in_part(j) {
             let d = self.depth_to(j);
@@ -908,7 +932,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
     }
 
-    /// 入口の区切りの番号(積んである)で、部分 `q` を末尾で呼ぶ。
+    /// 分割関数 `q` を末尾呼び出しで呼ぶ。入口の区切りの番号は、あらかじめ積んでおく。
     fn call_part(&mut self, q: usize) {
         let tl = self.tmp(I32);
         self.fb.i().local_set(tl).local_get(0);
@@ -922,7 +946,9 @@ impl<'a, 'p> Tr<'a, 'p> {
             .return_call(self.lay.funcs[q]);
     }
 
-    /// 本体の前に、深さを記録し、構造体を確保し、まとめた配列の引数を読む(LIR の関数の入口)。
+    /// LIR の関数の入口の処理を生成する。
+    ///
+    /// 深さをローカルに記録し、構造体を確保し、まとめた配列から引数を読む。
     fn prologue(&mut self) {
         let g = self.cg.g;
         self.fb.i().global_get(g.depth).local_set(self.fdepth);
@@ -938,12 +964,11 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
     }
 
-    /// 今の部分の区切りを翻訳する。
+    /// 現在の分割関数に入る区切りのコードを生成する。分割しない関数では、すべての区切りのコードを生成する。
     ///
-    /// `dispatch` なら(分けた関数の部分)、入口の番号で区切りへ移る `br_table` を先に置く。
-    /// 偽なら(分けない関数)、入口の手続きを置く。
-    /// yield を受け取る再開点を持つ分けない関数は、その前に、フレームの記録を受け取ったときに
-    /// 局所を戻して区切りへ移る `br_table` を置く(再開の入口)。
+    /// `dispatch` が真なら(分割関数)、入口の区切りの番号で区切りへ分岐する `br_table` を先頭に置く。
+    /// 偽なら(分割しない関数)、関数の入口の処理([`Tr::prologue`])を置く。
+    /// 分割しない関数のうち、yield を受け取る再開点を持つものは、その前に、再開のための分岐([`Tr::resume_entry`])を置く。
     fn part(&mut self, dispatch: bool) -> Result<(), String> {
         let (lo, hi) = (self.lo, self.hi);
         let resumable = self.rec.is_some();
@@ -953,7 +978,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
         if let (true, Some(e)) = (dispatch, self.entry) {
             if resumable {
-                // 再開の入口と、部分をまたぐ呼び出しの後半は、結果を大域 $rv で受け取る。
+                // 再開用エントリから呼ばれたときと、分割関数をまたぐ呼び出しの後半は、結果をグローバル $rv で受け取る。
                 let tl = self.tmp(EQ);
                 self.fb.i().global_get(self.cg.g.rv).local_set(tl);
             }
@@ -989,7 +1014,7 @@ impl<'a, 'p> Tr<'a, 'p> {
                 self.term(&b.term)?;
             } else {
                 if pc.pre {
-                    // 前半の結果を後半へ渡す。同じ部分なら一時の局所、ほかの部分なら大域 $rv に置く。
+                    // 前半の結果を後半へ渡す。同じ分割関数なら一時ローカルに、ほかの分割関数ならグローバル $rv に置く。
                     if self.in_part(pc.next) {
                         let tl = self.tmp(EQ);
                         self.fb.i().local_set(tl);
@@ -1003,15 +1028,16 @@ impl<'a, 'p> Tr<'a, 'p> {
                 self.fb.i().end();
             }
         }
-        // どの区切りも枝か戻りで終わるので、ここには届かない。型を合わせるために伝播の出口を置く。
+        // どの区切りも分岐か return で終わるので、ここは実行されない。型を合わせるために、伝播して返る命令を置く。
         self.prop_br();
         Ok(())
     }
 
-    /// 分けない関数の再開の入口。最後の引数(フレームの記録)が null なら、ふつうの入口へ落ちる。
+    /// 分割しない関数の先頭に置く、再開のための分岐を生成する。
     ///
-    /// null でなければ、記録から局所を戻し、深さを大域の深さ(`rt_resume` が置いた)にし、
-    /// 渡された値を一時の局所に置いて、記録の区切りへ `br_table` で移る。
+    /// 最後の引数(フレームの記録)が null なら、通常の入口へそのまま進む。
+    /// null でなければ、記録からローカルを復元し、深さのローカルに、`rt_resume` が設定したグローバルの深さを書く。
+    /// 続いて、渡された値を一時ローカルに置き、記録にある区切りへ `br_table` で分岐する。
     fn resume_entry(&mut self, rec: &Rec, npieces: u32) {
         let g = self.cg.g;
         let w = crate::wire_arity(self.f.params.len() as u32);
@@ -1044,7 +1070,7 @@ impl<'a, 'p> Tr<'a, 'p> {
             .end();
     }
 
-    /// フレームの記録を作って列に積む(伝播する前に呼ぶ)。`j` は再開する区切りである。
+    /// フレームの記録を作って、並び `yf` の末尾に追加する。伝播する前に呼ぶ。`j` は再開する区切りである。
     fn save(&mut self, j: usize) {
         let Some(rec) = self.rec.clone() else {
             return;
@@ -1070,7 +1096,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.fb.i().struct_new(rec.ty).call(push);
     }
 
-    /// 状態語が `YIELD` なら、フレームの記録を作って積む。
+    /// 状態ワードが `YIELD` なら、フレームの記録を作って並びに追加する。
     fn save_if_yield(&mut self, j: usize) {
         let g = self.cg.g;
         self.fb
@@ -1083,7 +1109,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.fb.i().end();
     }
 
-    /// yield を受け取らない再開点に `YIELD` が届いたら、内部の誤りで止まる(`doc/lir.md` の 17 節)。
+    /// yield を受け取らない再開点が `YIELD` を受け取ったら、内部エラーで終了する(`doc/lir.md` の 17 節)。
     fn fatal_if_yield(&mut self) {
         let g = self.cg.g;
         let tp = self
@@ -1101,7 +1127,9 @@ impl<'a, 'p> Tr<'a, 'p> {
             .end();
     }
 
-    /// 書き終えた関数の 1 段のバイト数の推定。関数の予算(`self.budget`。[`budget_of`])を超えたら誤りにする。
+    /// 生成し終えた関数の、1 段のバイト数の見積もりを返す。
+    ///
+    /// 見積もりが関数ごとの上限(`self.budget`。[`budget_of`])を超えたら、エラーを返す。
     fn finish_estimate(&self, params: u64) -> Result<u64, String> {
         let est = frame_estimate(self.fb.nlocals() as u64, params);
         if est > self.budget {
@@ -1113,10 +1141,10 @@ impl<'a, 'p> Tr<'a, 'p> {
         Ok(est)
     }
 
-    /// 伝播する(深さを書き戻して null を返す)。
+    /// 伝播する命令を生成する。深さを書き戻して null を返す。
     ///
-    /// 伝播の枝を 1 つの出口のブロックに集める形では、V8 の最適化の翻訳が、伝播しうる命令の多い関数で記憶を使い尽くした。
-    /// そこで、伝播する箇所ごとにその場で返す。
+    /// 伝播の分岐を 1 つの出口のブロックに集めると、伝播することがある命令の多い関数で、V8 の最適化コンパイルがメモリを使い尽くす。
+    /// そこで、伝播する箇所ごとに、その場で返す。
     fn prop_br(&mut self) {
         let g = self.cg.g;
         self.fb
@@ -1127,7 +1155,7 @@ impl<'a, 'p> Tr<'a, 'p> {
             .return_();
     }
 
-    /// 状態語が立っていれば(null なら)伝播し、そうでなければ値をレジスタ `dst` に書く。
+    /// 積んだ値が null なら(状態ワードが設定されている)伝播し、そうでなければ値をレジスタ `dst` に書く。
     fn check_set(&mut self, dst: keleut_lir::Reg) {
         let tl = self.tmp(self.wt[dst.index()]);
         self.fb
@@ -1140,7 +1168,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.set(dst);
     }
 
-    /// `cond` の i32 が真なら伝播する。
+    /// 積んだ `i32` が 0 でなければ伝播する。
     fn prop_if(&mut self) {
         self.fb.i().if_(BlockType::Empty);
         self.prop_br();
@@ -1198,7 +1226,10 @@ impl<'a, 'p> Tr<'a, 'p> {
         }
     }
 
-    /// 実行時エラーを立てて伝播する(型紙 `tp`、値と数は積んである)。
+    /// テンプレート `tp` の実行時エラーを設定して伝播する。
+    ///
+    /// `v` はエラーに添える値のレジスタ、`x` はエラーに添える `f64` の値のレジスタである。
+    /// どちらかがないときは、それぞれ null と 0 を渡す。
     fn raise_with(&mut self, tp: u32, v: Option<keleut_lir::Reg>, x: Option<keleut_lir::Reg>) {
         let raise = self.cg.func(FKey::H(H::Raise));
         self.fb.i().i32_const(tp as i32);
@@ -1221,7 +1252,10 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.prop_br();
     }
 
-    /// 引数を積んで、クロージャを速い道で呼ぶか、`callv` を呼ぶ。
+    /// 関数値の呼び出しを生成する。
+    ///
+    /// 呼び出し先が引数 `n` 個のクロージャなら、高速経路(fast path)として `call_ref` で直接呼ぶ。
+    /// そうでなければ、引数の個数ごとに生成する関数 `callvN`(`FKey::CallV`)を呼ぶ。
     fn call_value(&mut self, callee: keleut_lir::Reg, args: &[keleut_lir::Reg], tail: bool) {
         let n = args.len() as u32;
         let (fty, cty) = self.cg.m.fn_types(n);
@@ -1235,8 +1269,8 @@ impl<'a, 'p> Tr<'a, 'p> {
         };
         self.fb.i().ref_test_non_null(ht(cty)).if_(bt);
         self.extra += 1;
-        // クロージャは環境の引数と関数の参照に 2 回使う。どちらもレジスタから読み直して型を絞る
-        // (閉包の型ごとに一時の局所を足すと、局所の数に上限が無くなる)。
+        // クロージャは、環境の引数と関数の参照の 2 か所で使う。どちらもレジスタから読み直して型を絞る。
+        // クロージャの型ごとに一時ローカルを追加すると、ローカルの個数に上限がなくなるからである。
         self.get(callee);
         self.fb.i().ref_cast_non_null(ht(cty));
         for a in args {
@@ -1909,7 +1943,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         Ok(())
     }
 
-    /// 呼び出しの前半。結果(`eqref`。null は番兵)を積むまでを出す。
+    /// 呼び出しの前半を生成する。結果(`eqref`。null は番兵)を積むところまでである。
     fn call_pre(&mut self, i: &Inst) -> Result<(), String> {
         let t = self.t();
         let g = self.cg.g;
@@ -2006,7 +2040,7 @@ impl<'a, 'p> Tr<'a, 'p> {
                     self.fb.i().local_get(self.fdepth).call(h);
                 }
                 FxOp::CallClause => {
-                    // 深さ h + 1 が限度を超えたら、節を呼ばずに ERROR を立てて番兵を結果にする。
+                    // 深さ h + 1 が上限を超えたら、節を呼ばずに ERROR を設定し、番兵を結果にする。
                     let raise = self.cg.func(FKey::H(H::RaiseDepth));
                     let ck = self.cg.func(FKey::ClauseK);
                     self.fb
@@ -2034,12 +2068,12 @@ impl<'a, 'p> Tr<'a, 'p> {
         Ok(())
     }
 
-    /// 呼び出しの後半。積んだ結果を受け取る。
+    /// 呼び出しの後半を生成する。積んである結果を受け取る。
     ///
-    /// ふつうの呼び出しは、番兵なら伝播する。
-    /// そのとき状態語が `YIELD` なら、yield を受け取る再開点ではフレームの記録を作って積み、
-    /// 受け取らない再開点では内部の誤りで止まる。
-    /// 番兵を受け取る呼び出しは、結果をレジスタに書いて続ける。
+    /// 通常の呼び出しでは、結果が番兵なら伝播する。
+    /// そのとき状態ワードが `YIELD` なら、yield を受け取る再開点ではフレームの記録を作って並びに追加し、
+    /// 受け取らない再開点では内部エラーで終了する。
+    /// 番兵を受け取る呼び出しでは、結果が番兵でもレジスタに書いて、次の命令へ進む。
     fn call_post(&mut self, i: &Inst, mode: Mode, site: Option<Site>) -> Result<(), String> {
         let g = self.cg.g;
         match i {
@@ -2049,14 +2083,14 @@ impl<'a, 'p> Tr<'a, 'p> {
                 args,
             } => {
                 let dst = dst.ok_or("perform の結果")?;
-                // 再開点の表に無いのは、G の節がプログラムに無いときだけである。
+                // `perform` が再開点の表にないのは、G の節がプログラムにないときだけである。
                 if site.is_none() && self.cg.has_g {
                     return Err("perform が再開点の表にありません".into());
                 }
                 let tr = self.tmp(EQ);
                 if mode == Mode::PostY {
-                    // 継続の再開。値が perform の結果になる(連鎖と深さは rt_resume が戻した)。
-                    // 番兵なら注入した状態語で、そのまま伝播する。
+                    // 継続の再開。再開の値が perform の結果になる(連鎖と深さは rt_resume が復元した)。
+                    // 番兵なら、注入された状態ワードが設定されているので、そのまま伝播する。
                     self.fb
                         .i()
                         .local_tee(tr)
@@ -2084,14 +2118,14 @@ impl<'a, 'p> Tr<'a, 'p> {
                 self.fb.i().call(unwound);
                 if let Some(site) = site {
                     self.fb.i().if_(BlockType::Empty);
-                    // この perform の G の節が選ばれた: 取り出された印の区切りで記録を作る。
+                    // この perform の G の節が選ばれた場合: 継続をキャプチャした後に再開する区切りを再開先にして、記録を作る。
                     self.save(site.posty.ok_or("perform の再開の区切りがありません")?);
                     self.fb.i().else_();
-                    // 節の中からほかの宛ての YIELD が届いた: 節の呼び出しの後半で記録を作る。
+                    // 節の中からほかのハンドラ宛ての YIELD を受け取った場合: 節の呼び出しの後半を再開先にして、記録を作る。
                     self.save_if_yield(site.post);
                     self.fb.i().end();
                 } else {
-                    // G の節が無いので、結果はいつも 0 である。
+                    // G の節がないので、結果は常に 0 である。
                     self.fb.i().drop();
                     self.fatal_if_yield();
                 }
@@ -2139,7 +2173,7 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.fb.i().ref_cast_non_null(ht(t.hr));
     }
 
-    /// 番兵を受け取る呼び出しの後。null なら深さを書き戻す。
+    /// 番兵を受け取る呼び出しの後の処理を生成する。結果をレジスタ `dst` に書き、null なら深さを書き戻す。
     fn catch_after(&mut self, dst: keleut_lir::Reg) {
         let g = self.cg.g;
         self.set(dst);
@@ -2153,7 +2187,9 @@ impl<'a, 'p> Tr<'a, 'p> {
             .end();
     }
 
-    /// 操作に一致する節が無い(付録 B の 9 番)。`args` は操作の引数。
+    /// 操作に一致する節がないときの実行時エラー(IRSpec 付録 B の 9 番)を設定して、伝播する。
+    ///
+    /// `args` は操作の引数である。
     fn no_clause(&mut self, effect: u32, op: u32, args: &[keleut_lir::Reg]) {
         let prog = self.cg.prog;
         let eff = &prog.effects[effect as usize];
@@ -2169,13 +2205,13 @@ impl<'a, 'p> Tr<'a, 'p> {
         self.prop_br();
     }
 
-    /// 節の候補 `tj`(i32 の局所)の関数を、引数 `args`、`hr`、`tj` で呼ぶ(末尾なら末尾で)。
+    /// 節の候補 `tj`(`i32` のローカル)の関数を、引数 `args`、`hr`、`tj` で呼ぶ。`tail` なら末尾呼び出しで呼ぶ。
     fn call_clause(&mut self, hr: keleut_lir::Reg, tj: u32, args: &[keleut_lir::Reg], tail: bool) {
         let t = self.t();
         let a = args.len() as u32 + 2;
         let (fty, cty) = self.cg.m.fn_types(a);
         let aget = self.cg.func(FKey::H(H::Aget));
-        // 一時の局所は `$Clo` の型の 1 つを使い、関数の参照を読むときに型を絞り直す。
+        // 一時ローカルは基底型 `$Clo` のもの 1 つを共用し、関数の参照を読むときに型を絞り直す。
         let c = self.tmp(rv(true, t.clo));
         self.hr_cast(hr);
         self.fb
@@ -2308,8 +2344,9 @@ impl<'a, 'p> Tr<'a, 'p> {
                 ));
             }
             FxOp::ContCheck { nontail } => {
-                // nontail なら、節の外(8)、再開済み(7)、c + Δ が限度を超えること(depth_limit)を調べる。
-                // tail なら、再開済みかだけを調べる。
+                // nontail なら、節の外での再開(IRSpec 付録 B の 8 番)、再開済み(7 番)、
+                // c + Δ が上限を超えること(depth_limit)を調べる。
+                // tail なら、再開済みかどうかだけを調べる。
                 let k = args[0];
                 if *nontail {
                     let tp = self.cg.tpl.add(
@@ -2556,8 +2593,8 @@ impl<'a, 'p> Tr<'a, 'p> {
             }
             Term::Fx { op, args } => match op {
                 FxTermOp::Propagate => {
-                    // ほかの宛ての YIELD なら、自分のフレームも継続に含める(再開されたら、
-                    // 番兵を受け取った最後の呼び出しの結果から続ける)。
+                    // ほかのハンドラ宛ての YIELD なら、自分のフレームも継続に含める。
+                    // 再開されたら、最後に番兵を受け取った呼び出しの結果を受け取るところから続ける。
                     if let (Some(l), true) = (self.lastrp, self.rec.is_some()) {
                         self.fb
                             .i()
@@ -2634,7 +2671,7 @@ impl<'a, 'p> Tr<'a, 'p> {
                         .i32_lt_s()
                         .if_(BlockType::Empty);
                     self.extra += 1;
-                    // 操作のエフェクトはハンドラ記録が持つ(候補が無いときの文面に使う)。
+                    // 操作のエフェクトはハンドラ記録が持つ(候補がないときのメッセージに使う)。
                     self.no_clause_dyn(hr, *op, user);
                     self.fb.i().end();
                     self.extra -= 1;
@@ -2645,11 +2682,13 @@ impl<'a, 'p> Tr<'a, 'p> {
         Ok(())
     }
 
-    /// 選択の段の候補が尽きた(エフェクトはハンドラ記録から引く)。
+    /// 選択フェーズで候補がなくなったときの実行時エラーを設定して、伝播する。
+    ///
+    /// エフェクトはハンドラ記録から読む。
     fn no_clause_dyn(&mut self, hr: keleut_lir::Reg, op: u32, args: &[keleut_lir::Reg]) {
         let t = self.t();
         let prog = self.cg.prog;
-        // エフェクトごとに型紙を作り、ハンドラ記録のエフェクトの番号で選ぶ。
+        // エフェクトごとにテンプレートを作り、ハンドラ記録のエフェクトの番号で選ぶ。
         let effs: Vec<u32> = (0..prog.effects.len() as u32)
             .filter(|e| (op as usize) < prog.effects[*e as usize].ops.len())
             .collect();

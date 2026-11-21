@@ -1,20 +1,29 @@
-//! wasmparser による検証と、trap の検査器(計画 6.10 節の「trap しないこと」、D543)。
+//! wasmparser による検証と、trap の検査。
 //!
-//! 検証は wasmparser の既定の機能集合(GC、tail_call、exceptions を含み、stack_switching を含まない)で行う。
+//! 検証は wasmparser の既定の機能集合で行う。
+//! この集合は GC、tail_call、exceptions を含み、stack_switching を含まない。
 //!
-//! 検査器は、名前の節で名前が `safe.` で始まる関数(許可した補助関数)の外に、trap しうる命令が無いことを確かめる。
-//! 対象の命令は計画が挙げたもの(整数の除算と剰余、浮動小数点数から整数への trap する変換、
-//! 配列の添字と長さと写しと初期化)に、`array.new_data`、`array.new_elem`、線形メモリの読み書きと写し、
-//! 表の読み書きと `call_indirect` を足したものである。
-//! これらは添字や長さの範囲で trap しうるので、補助関数が先に範囲を確かめる。
-//! `ref.cast`、`ref.as_non_null`、`unreachable`、null を取りうる参照への `struct.get|set`、`array.len`、`call_ref` は、
-//! 型の健全性の上では失敗しないので残してよい(trap したら不具合の印で、70 で終わる)。
+//! trap の検査では、trap することがある命令が補助関数の外にないことを調べる。
+//! 補助関数は、名前セクションでの名前が `safe.` で始まる関数である。
+//! 対象の命令は次のとおりである([`forbidden`])。
+//!
+//! - 整数の除算と剰余
+//! - 浮動小数点数から整数への変換のうち、trap するもの(飽和する `trunc_sat` は対象外)
+//! - 配列の生成(`array.new`、`array.new_default`、`array.new_data`、`array.new_elem`)、
+//!   要素の読み書き、`array.copy`、`array.fill`、`array.init_data`、`array.init_elem`
+//! - 線形メモリの読み書き、`memory.copy`、`memory.fill`、`memory.init`、アトミック命令
+//! - 表の読み書き、`table.copy`、`table.init`、`table.fill`、`call_indirect`、`return_call_indirect`
+//!
+//! これらは添字や長さが範囲外だと trap するので、補助関数が先に範囲を検査する。
+//! `ref.cast`、`ref.as_non_null`、`unreachable`、null になることがある参照への `struct.get|set`、`array.len`、`call_ref` は、
+//! 型が健全であるかぎり失敗しないので、補助関数の外に置いてよい。
+//! これらが trap したら処理系のバグであり、終了コード 70 で終了する。
 
 use std::collections::HashMap;
 
 use wasmparser::{KnownCustom, Name, Parser, Payload, Validator, WasmFeatures};
 
-/// 検証する。失敗したら文面を返す。
+/// モジュールのバイト列を wasmparser で検証する。失敗したらエラーメッセージを返す。
 pub fn validate(bytes: &[u8]) -> Result<(), String> {
     let mut v = Validator::new_with_features(WasmFeatures::default());
     v.validate_all(bytes)
@@ -22,7 +31,9 @@ pub fn validate(bytes: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("wasmparser の検証に失敗しました: {e}"))
 }
 
-/// 命令の名前(`Operator` の綴りの最初の語)が、補助関数の外で許さない命令か。
+/// 命令の名前 `name` が、補助関数の外に置けない命令のものなら真を返す。
+///
+/// 名前は、`Operator` を `{:?}` で文字列化したときの、先頭の英数字の並びである。
 pub fn forbidden(name: &str) -> bool {
     const LIST: &[&str] = &[
         "I32DivS",
@@ -70,18 +81,20 @@ pub fn forbidden(name: &str) -> bool {
         || name.contains("Atomic")
 }
 
-/// 検査の結果。
+/// trap の検査が調べた関数と命令の個数。
 #[derive(Debug, Default)]
 pub struct Report {
-    /// 調べた関数の数。
+    /// 調べた関数の個数。
     pub funcs: usize,
-    /// そのうち許可した補助関数の数。
+    /// そのうち、補助関数の個数。
     pub safe: usize,
-    /// 調べた命令の数。
+    /// 調べた命令の個数(補助関数の命令は数えない)。
     pub ops: usize,
 }
 
-/// trap の検査器。補助関数の外に trap しうる命令があれば、その関数と命令を返す。
+/// trap の検査を行う。
+///
+/// trap することがある命令が補助関数の外にあれば、その関数と命令を書いたエラーメッセージを返す。
 pub fn trap_check(bytes: &[u8]) -> Result<Report, String> {
     let mut nimports = 0u32;
     let mut bodies = Vec::new();
@@ -169,7 +182,7 @@ mod tests {
         }
     }
 
-    /// `i32.div_s` を持つ関数 1 つのモジュール。名前は `name`。
+    /// `i32.div_s` を含む関数を 1 つだけ持つモジュールを作る。関数の名前は `name` にする。
     fn module_with_div(name: &str) -> Vec<u8> {
         use wasm_encoder::{
             CodeSection, Function, FunctionSection, Module, NameMap, NameSection, TypeSection,
@@ -207,7 +220,9 @@ mod tests {
         assert_eq!((r.funcs, r.safe), (1, 1));
     }
 
-    /// 3 つ目の出力 rt.wasm も既定の機能集合で検証に通る(trap の検査器は C の線形メモリのコードに当てない)。
+    /// `rt.wasm` も既定の機能集合で検証に通る。
+    ///
+    /// `rt.wasm` は C で書いた線形メモリのコードなので、trap の検査は適用しない。
     #[test]
     fn rt_wasm_は検証に通る() {
         validate(keleut_rtcore::RT_WASM).unwrap();

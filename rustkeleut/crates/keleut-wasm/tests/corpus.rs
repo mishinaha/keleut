@@ -1,10 +1,11 @@
-//! KIR の fixture とコーパスの全件を WasmGC に翻訳し、wasmparser の検証と trap の検査器に通す。
+//! KIR のフィクスチャとコーパスの全件から WasmGC のコードを生成し、wasmparser の検証と trap の検査に通す。
 //!
-//! - `crates/kir/tests/fixtures/*.kir` は常に確かめる。
-//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行形を与えると、`conformance/corpus/` の各 `.kel` を
-//!   `diktor --emit-ir` で KIR にし(旗は `index.tsv` のもの。`?` なら旗なしで試し、型検査の誤りなら
-//!   `--no-prelude` で試し直す)、`diktor` が 0 で終わったものをすべて翻訳して確かめる。
-//!   翻訳の統計(大きなフレームの形にした関数の数、1 段のバイト数の推定の最大など)を標準エラーに書く。
+//! - `crates/kir/tests/fixtures/*.kir` は常に検査する。
+//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行ファイルを指定すると、`conformance/corpus/` の各 `.kel` を
+//!   `diktor --emit-ir` で KIR にし、`diktor` が終了コード 0 で終了したものすべてについて、コードを生成して検査する。
+//!   `diktor` には、`index.tsv` のその行に書いてあるオプションを渡す。
+//!   オプションの列が `?` ならオプションなしで試し、終了コード 1 で終了したら `--no-prelude` を付けてやり直す。
+//!   コード生成の統計(大きなフレーム方式にした関数の個数、フレーム 1 段の見積もりバイト数の最大値など)を標準エラーに書く。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -15,7 +16,7 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// 翻訳して確かめ、統計とバイト数を返す。
+/// KIR のバイト列からコードを生成して検証と trap の検査に通し、統計と `program.wasm` のバイト数を返す。
 fn translate(path: &Path, bytes: &[u8]) -> Result<(Stats, usize), String> {
     let k = kir::load(bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     let p = keleut_lir::lower(&k).map_err(|e| format!("{}: {e}", path.display()))?;

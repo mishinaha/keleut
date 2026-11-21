@@ -1,45 +1,54 @@
-//! ホストに渡す表(診断の文面の型紙と、値の印字に要る名前)と、その JSON。
+//! ホストに渡す表と、その JSON への書き出し。
 //!
-//! 実行時エラーの文面は、インタプリタ(`keleut-interp`)と同じバイト列にする(後段の間の完全な一致。D499)。
-//! 文面のうち値に依らない部分はここで作り、値を印字する部分(`<値>`)だけをホストが足す。
+//! 表は、診断メッセージのテンプレートと、値の表示に必要な名前を持つ。
+//! 実行時エラーのメッセージは、インタプリタ(`keleut-interp`)と同じバイト列にする。
+//! RustKeleut のバックエンドの出力は、互いにバイト単位で一致しなければならないからである。
+//! メッセージのうち値によらない部分はここで作り、値を表示する部分(`<値>`)だけをホストが追加する。
 
 use std::collections::HashMap;
 
 use keleut_lir::{GlobalKind, Program, RtError};
 
-/// 型紙の種類(ホストの `KIND` と同じ番号)。
+/// テンプレートの種類。
+///
+/// 番号は、ホストの定数 `K_RT`〜`K_INTERNAL` と同じである。
+/// 各定数の説明の括弧の中は、その種類の診断で終了するときの終了コードである。
 pub mod kind {
-    /// 実行時エラー(3)。
+    /// 実行時エラー(終了コード 3)。
     pub const RT: u8 = 0;
-    /// 論理的な深さの限度(3)。
+    /// 論理的な深さが上限を超えた実行時エラー(終了コード 3)。
     pub const DEPTH: u8 = 1;
-    /// メモリの不足(3)。
+    /// メモリ不足(終了コード 3)。
     pub const OOM: u8 = 2;
-    /// 標準出力の失敗(74)。文面はホストが作る。
+    /// 標準出力への出力エラー(終了コード 74)。メッセージはホストが作る。
     pub const IO: u8 = 3;
-    /// どのハンドラも処理しない操作(3)。
+    /// どのハンドラも処理しない操作(終了コード 3)。
     pub const UNHANDLED: u8 = 4;
-    /// 未実装(4。巻き戻さずに止まる)。
+    /// 未実装の機能(終了コード 4)。巻き戻さずに終了する。
     pub const UNIMPL: u8 = 5;
-    /// 内部の誤り(70。巻き戻さずに止まる)。
+    /// 内部エラー(終了コード 70)。巻き戻さずに終了する。
     pub const INTERNAL: u8 = 6;
 }
 
-/// 型紙の後ろに足すもの。
+/// テンプレートの後ろにホストが追加するものの種類。
+///
+/// 番号は、ホストの定数 `A_NONE`〜`A_ARGS` と同じである。
 pub mod arg {
-    /// 何も足さない。
+    /// 何も追加しない。
     pub const NONE: u8 = 0;
-    /// 値を印字する。
+    /// 値を文字列化して追加する。
     pub const SHOW: u8 = 1;
-    /// `Float64` を印字する(ビット列)。
+    /// `Float64` の値(ビット列で渡す)を文字列化して追加する。
     pub const F64: u8 = 2;
-    /// 文字列のバイト列をそのまま足す。
+    /// 文字列のバイト列をそのまま追加する。
     pub const STR: u8 = 3;
-    /// 引数の配列を `(a, b)` の形で印字する。
+    /// 引数の配列を `(a, b)` の形式で文字列化して追加する。
     pub const ARGS: u8 = 4;
 }
 
-/// 診断の型紙の表。
+/// 診断メッセージのテンプレートの表。
+///
+/// テンプレートは(種類 [`kind`]、追加するもの [`arg`]、メッセージ)の組で、表の添字がテンプレートの番号になる。
 #[derive(Default)]
 pub struct Templates {
     list: Vec<(u8, u8, String)>,
@@ -47,7 +56,8 @@ pub struct Templates {
 }
 
 impl Templates {
-    /// 型紙を足して番号を返す。同じものは 1 つにまとめる。
+    /// テンプレートを追加して番号を返す。
+    /// 同じテンプレートがすでにあれば、その番号を返す。
     pub fn add(&mut self, kind: u8, arg: u8, text: impl Into<String>) -> u32 {
         let k = (kind, arg, text.into());
         if let Some(&i) = self.map.get(&k) {
@@ -59,13 +69,15 @@ impl Templates {
         i
     }
 
-    /// 内部の誤り。
+    /// 内部エラーのテンプレートを追加して番号を返す。
     pub fn internal(&mut self, text: &str) -> u32 {
         self.add(kind::INTERNAL, arg::NONE, text)
     }
 }
 
-/// 記号から単位の鍵(最後の `/` まで)と末尾の `#n` を除いた名前(IRSpec 3.1 節。`keleut-rt` の `display_of_symbol` と同じ)。
+/// シンボルから、単位のキー(最後の `/` まで)と末尾の `#n`(`n` は 10 進の数字の並び)を取り除いた名前を返す(IRSpec 3.1 節)。
+///
+/// `keleut-rt` の `display_of_symbol` と同じ規則である。
 pub fn display_of_symbol(s: &str) -> &str {
     let s = match s.rfind('/') {
         Some(i) => &s[i + 1..],
@@ -80,7 +92,9 @@ pub fn display_of_symbol(s: &str) -> &str {
     s
 }
 
-/// ラベルやコンストラクタの名前の表示(`keleut-rt` の `display_name` と同じ)。
+/// ラベルやコンストラクタの名前から、表示に使う名前を返す(`keleut-rt` の `display_name` と同じ規則)。
+///
+/// `%` で始まる内部名は、最初の `.` より後ろの部分を返す。
 pub fn display_name(name: &str) -> &str {
     if name.len() > 1 && name.starts_with('%') {
         match name.find('.') {
@@ -92,7 +106,9 @@ pub fn display_name(name: &str) -> &str {
     }
 }
 
-/// 実行時エラーの型紙(`keleut-interp` の `error` と同じ文面)。
+/// 実行時エラー `k` のテンプレートを追加して番号を返す。
+///
+/// メッセージは、`keleut-interp` が同じ実行時エラーで書くものと同じである。
 pub fn error_template(t: &mut Templates, prog: &Program, k: &RtError) -> u32 {
     use arg::*;
     use kind::*;
@@ -127,7 +143,7 @@ pub fn error_template(t: &mut Templates, prog: &Program, k: &RtError) -> u32 {
     }
 }
 
-/// 付録 B の 6 番。
+/// 初期化の前のインスタンス `i` からメソッドを選んだときの実行時エラー(IRSpec 付録 B の 6 番)のテンプレートを追加して番号を返す。
 pub fn inst_not_ready(t: &mut Templates, prog: &Program, i: usize) -> u32 {
     t.add(
         kind::RT,
@@ -139,7 +155,10 @@ pub fn inst_not_ready(t: &mut Templates, prog: &Program, i: usize) -> u32 {
     )
 }
 
-/// 付録 B の 17 番と 18 番。
+/// 実装のないプリミティブ(グローバル `g`)を呼んだときの実行時エラーのテンプレートを追加して番号を返す。
+///
+/// IRSpec 付録 B の 17 番と 18 番に相当する。
+/// 表示名と実装名が違うとき(18 番)は、メッセージに実装名も書く。
 pub fn unimpl_prim(t: &mut Templates, prog: &Program, g: usize) -> u32 {
     let gl = &prog.globals[g];
     let name = match &gl.kind {
@@ -157,7 +176,7 @@ pub fn unimpl_prim(t: &mut Templates, prog: &Program, g: usize) -> u32 {
     t.add(kind::RT, arg::NONE, text)
 }
 
-/// JSON の文字列。
+/// `s` を JSON の文字列リテラルにして `out` に追記する。
 fn js(out: &mut String, s: &str) {
     out.push('"');
     for c in s.chars() {
@@ -174,6 +193,7 @@ fn js(out: &mut String, s: &str) {
     out.push('"');
 }
 
+/// `xs` の各要素を `f` で書き、JSON の配列にして `out` に追記する。
 fn js_list<T>(out: &mut String, xs: &[T], f: impl Fn(&mut String, &T)) {
     out.push('[');
     for (i, x) in xs.iter().enumerate() {
@@ -185,12 +205,15 @@ fn js_list<T>(out: &mut String, xs: &[T], f: impl Fn(&mut String, &T)) {
     out.push(']');
 }
 
-/// ホストに渡す表(JSON の 1 つのオブジェクト)。
+/// ホストに渡す表を、JSON のオブジェクト 1 つとして返す。
+///
+/// `b_prog` はプログラムの 1 段に必要なバイト数 `B_prog`、`k` はその計算に使った `cancel` 節の数である([`crate::b_prog`])。
 pub fn meta_json(prog: &Program, t: &Templates, max_depth: u64, b_prog: u64, k: u32) -> String {
     let mut o = String::new();
     o.push_str("{\"maxDepth\":");
     o.push_str(&max_depth.to_string());
-    // host の Worker の経路がスタックの大きさを決める 1 段のバイト数 B_prog と、その k(crate の b_prog と clause_path)。
+    // プログラムの 1 段に必要なバイト数 B_prog と、その計算に使った cancel 節の数 k を書く(crate::b_prog と crate::clause_path が求める値)。
+    // B_prog は、ホストが Worker の経路でスタックサイズを決めるのに使う。
     o.push_str(",\"bProg\":");
     o.push_str(&b_prog.to_string());
     o.push_str(",\"cancelNest\":");
@@ -201,7 +224,7 @@ pub fn meta_json(prog: &Program, t: &Templates, max_depth: u64, b_prog: u64, k: 
         js(o, s);
         o.push(']');
     });
-    // ラベルの表示と、組のラベル(`_item`)か。
+    // labels はラベルの表示名、items はラベルが組のラベル(`_item`)なら 1 になるフラグである。
     o.push_str(",\"labels\":");
     js_list(&mut o, &prog.labels, |o, l| js(o, display_name(l)));
     o.push_str(",\"items\":");
@@ -212,7 +235,8 @@ pub fn meta_json(prog: &Program, t: &Templates, max_depth: u64, b_prog: u64, k: 
     js_list(&mut o, &prog.types, |o, ty| {
         js_list(o, &ty.ctors, |o, c| js(o, display_name(&c.name)))
     });
-    // 関数ごとの `<prim …>` の名前(組み込みの値と extern の本体だけ)。
+    // 関数値を `<prim …>` と表示するときの名前を、関数ごとに持つ。
+    // 名前を持つのは、組み込みの値の関数と extern の本体の関数だけである。
     let mut prim: Vec<Option<String>> = vec![None; prog.funcs.len()];
     for g in &prog.globals {
         match &g.kind {

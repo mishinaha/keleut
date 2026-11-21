@@ -1,20 +1,22 @@
-//! WasmGC の後段(計画 261024-1 の 6.10 節、D541〜D545)。
+//! WasmGC バックエンド。
 //!
 //! LIR のプログラム(パス 12 を済ませたもの)から、WasmGC のモジュール `program.wasm` を作る。
-//! モジュールは、rtcore を組んだ `rt.wasm`(線形メモリ、`show(Float64)`、libm、形の表)と、
-//! Node 側の実行時 `host/keleut-host.mjs`(起動、入出力、診断の文面)を import する。
+//! モジュールは、次の 2 つを import する。
 //!
-//! | モジュール | 中身 |
+//! - rtcore をビルドした `rt.wasm`。線形メモリ、`show(Float64)`、libm、シェイプ表を持つ。
+//! - Node 側のランタイム `host/keleut-host.mjs`。起動、入出力、診断メッセージの作成を受け持つ。
+//!
+//! | モジュール | 内容 |
 //! | --- | --- |
-//! | [`emit`] | モジュールの組み立て(型の再帰群、関数、大域、データ、名前の節) |
-//! | `rt` | 実行時の関数(trap しうる命令を置く補助関数、エフェクト、メソッドの選択) |
-//! | `func` | LIR の関数の翻訳(平らなブロック、状態語の伝播、大きなフレームの形) |
-//! | [`meta`] | ホストに渡す表(診断の型紙と名前) |
-//! | [`check`] | wasmparser による検証と trap の検査器 |
-//! | [`launch`] | `keleut run --backend wasm` と `keleut build` の出力と Node の起動 |
+//! | [`emit`] | モジュールの組み立て(型の rec グループ、関数、グローバル、データ、名前セクション) |
+//! | `rt` | ランタイム関数(trap することがある命令を置く補助関数 `safe.*`、エフェクト、メソッドの選択) |
+//! | `func` | LIR の関数のコード生成(ブロックの並べ方、状態ワードの伝播、大きなフレーム方式) |
+//! | [`meta`] | ホストに渡す表(診断メッセージのテンプレートと名前) |
+//! | [`check`] | wasmparser による検証と trap の検査 |
+//! | [`launch`] | `keleut run --backend wasm` と `keleut build` の出力の書き出しと Node の起動 |
 //!
-//! 値の表現と制御の形は `rt` と `func` の冒頭に書く。
-//! G の節の継続は、フレームの記録の列で持つ(`func` の冒頭の「取り出しと再開」)。
+//! 値の表現と制御の構造は、`rt` と `func` の冒頭に書く。
+//! 分類 G の操作節(G の節)の継続は、フレームの記録の並びとして持つ(`func` の冒頭の「継続のキャプチャと再開」)。
 
 pub mod check;
 pub mod emit;
@@ -31,54 +33,69 @@ use wasm_encoder::{ConstExpr, ExportKind, Instruction, ValType};
 use emit::{EQ, I32, I64, Mb, rv};
 use meta::Templates;
 
-/// 1 段に見込むバイト数 `B_wasm`(M79 の測定。`doc/log/261024-2-m79.md` の 1.5 節)。
+/// 論理的な深さの 1 段に必要と見積もる、スタックのバイト数 `B_wasm`。
+///
+/// 実測に基づいて決めた値である。
+/// `B_prog` の計算([`b_prog`])、スタックサイズを切り詰めるときの下限([`stack_size_kib`])、Wasm の関数 1 段に許す見積もりバイト数の上限に使う。
 pub const B_WASM: u64 = 1536;
 
-/// 1 段のバイト数の推定 `8 × K + 24 × P + 64`(K は局所の数、P は引数の数。M79 の 1.2 節)。
+/// Wasm の関数 1 段のバイト数を、`8 × K + 24 × P + 64` と見積もって返す。
+///
+/// `K` はローカルの個数(`locals`)、`P` は引数の個数(`params`)である。
 pub fn frame_estimate(locals: u64, params: u64) -> u64 {
     8 * locals + 24 * params + 64
 }
 
-/// 呼び出しで Wasm の引数として直に渡す LIR の引数の数の上限。
+/// 呼び出しで Wasm の引数として直接渡す、LIR の引数の個数の上限。
 ///
-/// 引数が `P_DIRECT` 個を超える呼び出しは、先頭の `P_DIRECT` 個を直に渡し、残りを 1 つの配列(`$anyarr`)にまとめて渡す。
-/// 呼ばれた側は入口で配列を読み、残りの引数をふつうのレジスタに置く。
-/// 引数の多い関数でも 1 段が [`B_WASM`] に収まるようにするためである(推定で `24 × (32 + 3) + 64 = 904` バイト)。
+/// 引数が `P_DIRECT` 個を超える呼び出しは、先頭の `P_DIRECT` 個を直接渡し、残りを 1 つの配列(`$anyarr`)にまとめて渡す。
+/// 呼び出し先は入口で配列を読み、残りの引数を通常のレジスタに置く。
+/// こうして、引数の多い関数でも 1 段が [`B_WASM`] に収まるようにする。
+/// ローカルを除いた見積もりは、最大で `24 × (32 + 3) + 64 = 904` バイトである。
 pub const P_DIRECT: u32 = 32;
 
-/// 1 つの呼び出しでまとめて渡せる引数の数の上限(`array.new_fixed` の要素の数。V8 の上限は 10,000)。
+/// 1 つの呼び出しで配列にまとめて渡せる引数の個数の上限。
+///
+/// まとめる引数の個数は `array.new_fixed` の要素数になる。
+/// V8 が許す要素数の上限は 10,000 である。
 pub const PACKED_MAX: u32 = 1000;
 
-/// LIR の引数が `n` 個の呼び出しで、Wasm の引数として渡す値の数。
+/// LIR の引数が `n` 個の呼び出しで、Wasm の引数として渡す値の個数を返す。
 pub fn wire_arity(n: u32) -> u32 {
     if n > P_DIRECT { P_DIRECT + 1 } else { n }
 }
 
-/// ハンドラのフレームの関数 `$rt_handle` の 1 段のバイト数の推定の上限 `E_rth`(翻訳した推定が超えたら翻訳の誤り)。
+/// ハンドラのフレームになる関数 `$rt_handle` の 1 段に許す、見積もりバイト数の上限 `E_rth`。
+///
+/// 生成した `$rt_handle` の見積もりがこの値を超えたら、コード生成のエラーにする。
 pub const E_RTH: u64 = 320;
 
-/// `rt_resume` の補助関数の 1 段のバイト数の推定 `E_rres`(局所 5 個、引数 3 個)。
+/// `rt_resume` の補助関数の 1 段の見積もりバイト数 `E_rres`。
+///
+/// ローカル 5 個、引数 3 個として [`frame_estimate`] の式で計算した値である。
 pub const E_RRES: u64 = 8 * 5 + 24 * 3 + 64;
 
-/// プログラムの 1 段に見込むバイト数 `B_prog`(計画 261104-3 の D564 と、その実施記録の M106 の節)。
+/// プログラムの 1 段に必要なバイト数 `B_prog` を返す。
 ///
 /// `B_prog = B_wasm + k × (B_wasm − E_rres) + R(r)` である。
-/// `R(0) = 0`、`r ≥ 1` なら `R(r) = r × B_wasm − E_rth` とする。
-/// `k` と `r` は [`clause_path`] の値で、同じ深さに重なる節の 1 本の道に沿って数える。
+/// `R(0) = 0` で、`r ≥ 1` なら `R(r) = r × B_wasm − E_rth` である。
+/// `k` と `r` は [`clause_path`] の値で、同じ深さに重なる節の 1 本の経路に沿って数える。
+/// 以下では、分類 N の操作節を「N の節」と書く。
 ///
-/// `cancel` 節の中にハンドラ式があると、論理的な 1 つの深さに、ハンドラ式を書いた関数と `$rt_handle` の上に、
-/// さらに `cancel` 節と内側の `$rt_handle` が重なる。
-/// 重なる 1 組の予算は `(B_wasm − E_rth − E_rres) + E_rth = B_wasm − E_rres` である。
+/// `cancel` 節の中にハンドラ式があると、論理的な深さの 1 段に、ハンドラ式を書いた関数と `$rt_handle` に加えて、`cancel` 節と内側の `$rt_handle` が重なる。
+/// 重なる 1 組(`cancel` 節と内側の `$rt_handle`)の上限は `(B_wasm − E_rth − E_rres) + E_rth = B_wasm − E_rres` である。
 /// `rt_resume` は 1 つの深さに 1 つしか重ならないので、組ごとには足さない。
 ///
-/// `return` 節と種類 N の操作節は、`$rt_handle` が末尾で呼んで自分を置き換えるので、ハンドラ式を書いた関数と同じ深さに載る。
-/// 鎖の長さが `r` なら、深さ `h` には、ハンドラ式を書いた関数(予算 `B_wasm − E_rth − E_rres`)、
-/// `r` 個の節(どれも予算 `B_wasm`)、最後の節の呼ぶ `$rt_handle` と `rt_resume` が重なる。
+/// `return` 節と N の節は、`$rt_handle` が末尾呼び出しで呼んで自分のフレームと置き換えるので、ハンドラ式を書いた関数と同じ深さに重なる。
+/// これらの節の連鎖の長さが `r` なら、深さ `h` には、ハンドラ式を書いた関数(上限 `B_wasm − E_rth − E_rres`)、
+/// `r` 個の節(どれも上限 `B_wasm`)、最後の節が呼ぶ `$rt_handle` と `rt_resume` が重なる。
 /// 和は `B_wasm + r × B_wasm − E_rth` で、`R(r)` はこの和から `B_wasm` を引いたものである。
-/// 鎖の 2 つ目からの節は、前の節が末尾でなく呼んだ `$rt_handle` の場所に載り、その `$rt_handle` は予算に入っていないので、節ごとに `B_wasm` を足す。
-/// `cancel` 節と、`return` 節や N の節が 1 本の道に交互に並ぶときは、2 つの重なりを足す。
-/// 道の 2 つ目からの節は、前の節が末尾でなく呼んだ `$rt_handle` の上(`cancel` 節)か、その `$rt_handle` の場所(`return` 節と N の節)に載る。
-/// どちらの場合も前の節のフレームは残るので、どの節の分も別々に要る。
+/// 連鎖の 2 つ目以降の節は、前の節が非末尾呼び出しで呼んだ `$rt_handle` の位置に重なる。
+/// その `$rt_handle` は上限に入っていないので、節ごとに `B_wasm` を足す。
+///
+/// `cancel` 節と、`return` 節や N の節が 1 本の経路に交互に並ぶときは、2 種類の重なりを足し合わせる。
+/// 経路の 2 つ目以降の節は、前の節が非末尾呼び出しで呼んだ `$rt_handle` の上(`cancel` 節の場合)か、その `$rt_handle` の位置(`return` 節と N の節の場合)に重なる。
+/// どちらの場合も前の節のフレームは残るので、節ごとのバイト数をすべて足す必要がある。
 /// `k = 0` かつ `r = 0` なら `B_prog = B_wasm` である。
 pub fn b_prog(k: u32, r: u32) -> u64 {
     let rr = if r == 0 {
@@ -91,18 +108,20 @@ pub fn b_prog(k: u32, r: u32) -> u64 {
         .saturating_add(rr)
 }
 
-/// 関数ごとに、直の呼び出し(末尾の呼び出しも含む)をたどって深い再帰の道に届くかを求める。
+/// 関数ごとに、直接呼び出しをたどると深い再帰に入ることがあるかどうかを求める。
 ///
-/// 関数 `f` から直の呼び出しをたどって届く関数(`f` 自身も含む)の中に、次のどちらかがあれば真である。
+/// 直接呼び出しには末尾呼び出しも含める。
+/// 関数 `f` から直接呼び出しをたどって到達できる関数(`f` 自身も含む)の中に、次のどちらかがあれば、`f` の結果は真である。
 ///
-/// - 値の呼び出し、メソッドの呼び出し、`perform` を持つ関数か、`$rt_handle`(節と本体を値として呼ぶ)。
-/// - 直の呼び出しの循環に入る関数。
+/// - 関数値の呼び出し、メソッドの呼び出し、`perform` のどれかを持つ関数。
+///   節と本体を関数値として呼ぶ `$rt_handle` も、これに含める。
+/// - 直接呼び出しの循環に入っている関数。
 ///
-/// どちらも無ければ、`f` から呼ぶ関数の入れ子の深さは有限で、`f` の上に論理的な段を際限なく積むことはない。
-/// 直の呼び出しのグラフの強連結成分を Tarjan の方法で求め、呼ばれる側の成分から順に決める。
+/// どちらもなければ、`f` から始まる呼び出しの入れ子の深さは有限で、`f` の上に論理的な段が際限なく重なることはない。
+/// 直接呼び出しのグラフの強連結成分を Tarjan のアルゴリズムで求め、呼び出し先の成分から順に結果を決める。
 fn reaches_recursion(prog: &Program) -> Vec<bool> {
     let n = prog.funcs.len();
-    // 関数ごとの(値やメソッドの呼び出しか perform を持つか、直に呼ぶ関数)。
+    // 関数ごとに、(関数値やメソッドの呼び出しか perform を持てば真、直接呼び出す関数の並び)の組を作る。
     let info: Vec<(bool, Vec<usize>)> = prog
         .funcs
         .iter()
@@ -132,7 +151,8 @@ fn reaches_recursion(prog: &Program) -> Vec<bool> {
             (open, direct)
         })
         .collect();
-    // Tarjan の方法を明示のスタックで行う(呼び出しの鎖が長くても Rust のスタックを使い切らない)。
+    // Tarjan のアルゴリズムを、再帰を使わずに明示的なスタックで行う。
+    // 呼び出しの連鎖が長くても、Rust のスタックを使い切らないようにするためである。
     let mut index = vec![usize::MAX; n];
     let mut low = vec![0usize; n];
     let mut on = vec![false; n];
@@ -171,7 +191,8 @@ fn reaches_recursion(prog: &Program) -> Vec<bool> {
             if low[v] != index[v] {
                 continue;
             }
-            // v を根とする成分を取り出す。呼ばれる側の成分は先に決まっている。
+            // v を根とする強連結成分を取り出す。
+            // 呼び出し先の成分の結果は、先に決まっている。
             let mut comp = Vec::new();
             loop {
                 let w = st.pop().unwrap();
@@ -194,38 +215,46 @@ fn reaches_recursion(prog: &Program) -> Vec<bool> {
     reach
 }
 
-/// 同じ深さに重なる節の道の、`cancel` 節の数 `k` と、数える `return` 節と分類 N の操作節の数 `r`(`B_prog` の `k` と `r`。[`b_prog`])。
+/// 同じ深さに重なる節の経路について、`k` と `r` を返す。
 ///
-/// LIR から求める。
-/// 扱う節は、種類 `cancelclause` の関数、種類 `retclause` の関数、分類 N の操作節の関数の 3 つである。
-/// 節の関数は、ハンドラ式を書いた関数の中で `closure_new` で作られ、`handler_new` に渡される(`doc/lir.md` の 16.2 節)。
-/// そのため、節 `f` が `closure_new` で作る節 `g` は、`f` の中に直に書いたハンドラ式の節である。
-/// 節 `f` から、`f` が作る節 `g` へ辺を引き、辺をたどる道ごとに 1 つの深さに重なるバイト数を見積もる。
+/// `k` はハンドラ式を持つ `cancel` 節の数、`r` は深い再帰に入ることがある `return` 節と分類 N の操作節(N の節)の数である。
+/// `k` と `r` は、`B_prog` の計算に使う([`b_prog`])。
 ///
-/// 3 つの節は、どれもハンドラ式を書いた関数と同じ深さに重なる。
-/// `cancel` 節は `$rt_handle` と同じ深さで走り、その中のハンドラ式の `$rt_handle` を末尾でなく呼ぶ(IRSpec 5.3 節)。
-/// `return` 節と分類 N の操作節は、`$rt_handle` が末尾で呼んで自分を置き換える(`rustkeleut/doc/lir.md` 16.3 節)。
-/// そのため、`cancel` 節と、`return` 節や N の節が交互に入れ子になった道でも、道の節はすべて同じ深さに重なる。
-/// ハンドラ式の本体、ラムダ、分類 T と G の操作節の中のハンドラ式は別の関数になり、深さを 1 つ増やして走るので、道に入れない。
+/// `k` と `r` は LIR から求める。
+/// 対象の節は、種類 `cancelclause` の関数、種類 `retclause` の関数、N の節の関数の 3 種類である。
+/// 節の関数値は、ハンドラ式を書いた関数の中で `closure_new` が作り、`handler_new` に渡す(`doc/lir.md` の 16.2 節)。
+/// そのため、節 `f` が `closure_new` で作る節 `g` は、`f` の中に直接書いたハンドラ式の節である。
+/// 節 `f` から、`f` が作る節 `g` へ辺を引き、辺をたどる経路ごとに、1 つの深さに重なるバイト数を見積もる。
 ///
-/// 道に入れる節と、その重みは次のとおりである。
+/// 3 種類の節は、どれもハンドラ式を書いた関数と同じ深さに重なる。
+/// `cancel` 節は `$rt_handle` と同じ深さで実行され、その中のハンドラ式の `$rt_handle` を非末尾呼び出しで呼ぶ(IRSpec 5.3 節)。
+/// `return` 節と N の節は、`$rt_handle` が末尾呼び出しで呼んで自分のフレームと置き換える(`doc/lir.md` の 16.3 節)。
+/// そのため、`cancel` 節と、`return` 節や N の節が交互に入れ子になった経路でも、経路の上の節はすべて同じ深さに重なる。
+/// ハンドラ式の本体、無名関数や関数の定義(種類 `lambda` の関数)、分類 T と G の操作節は別の関数になり、深さを 1 つ増やして実行される。
+/// そのため、それらの中に書いたハンドラ式の節へは、外側の節から辺を引かない。
+/// そのような節は、外側の節の経路には入らず、そこから別の経路が始まる。
 ///
-/// - `handler_new` を持つ `cancel` 節は `k` に 1 を足す(重み `B_wasm − E_rres`)。
-///   `handler_new` を持たない `cancel` 節は道の終わりで、何も足さない。
-/// - 深い再帰の道に届く `return` 節と N の節は `r` に 1 を足す(重み `B_wasm`、道に 1 つでもあれば全体から `E_rth` を引く)。
-///   届かない節(`echoln` のような葉の関数だけを呼ぶ節)は道の終わりで、何も足さない。
-/// - ただし、`return` 節が無く N の節が 1 つだけの道では、その N の節を数えない(`r = 0`)。
-///   N の節が 1 つだけで重なる形は、測った 1 段のバイト数が `B_wasm` に収まったからである。
+/// 経路に入れる節と、その重みは次のとおりである。
 ///
-/// 返すのは、重み([`b_prog`] の値)が最大の道の `(k, r)` である。
-/// 道の重みの最大を `k` と `r` の別々の最大から求めると、交互の鎖を見落とすので、1 本の道に沿って数える。
-/// 節は字面の入れ子なので辺は循環しないが、念のため開いている途中の節は道の終わりと見る。
+/// - `handler_new` を持つ `cancel` 節は、`k` に 1 を足す(重み `B_wasm − E_rres`)。
+///   `handler_new` を持たない `cancel` 節は経路の終わりで、何も足さない。
+/// - 直接呼び出しをたどると深い再帰に入ることがある `return` 節と N の節は、`r` に 1 を足す(重み `B_wasm`)。
+///   経路にこの種類の節が 1 つでもあれば、経路全体の重みから `E_rth` を 1 度だけ引く。
+///   深い再帰に入ることのない節(`echoln` のような葉の関数だけを呼ぶ節)は経路の終わりで、何も足さない。
+/// - ただし、`return` 節がなく N の節が 1 つだけの経路では、その N の節を数えない(`r = 0`)。
+///   N の節が 1 つだけ重なる場合は、実測した 1 段のバイト数が `B_wasm` に収まったからである。
+///
+/// 返すのは、重み([`b_prog`] の値)が最大の経路の `(k, r)` である。
+/// `k` を `cancel` 節だけの連鎖で、`r` を `return` 節と N の節だけの連鎖で別々に数えて最大を求めると、`cancel` 節と `return` 節や N の節が交互に並ぶ連鎖を数え漏らすので、1 本の経路に沿って数える。
+/// 節の入れ子はソース上の入れ子なので、辺は循環しない。
+/// それでも念のため、探索の途中にある節へ戻る辺は、経路の終わりとして扱う。
 pub fn clause_path(prog: &Program) -> (u32, u32) {
     let n = prog.funcs.len();
     let reach = reaches_recursion(prog);
-    // 分類 N の操作節の関数。handler_new の被演算子は本体、受け継ぐ継続、節の関数の値(書いた順)、return 節、cancel 節である。
+    // N の節の関数なら真。
+    // handler_new のオペランドは、本体、引き継ぐ継続、操作節の関数値(書いた順)、return 節、cancel 節の順に並ぶ。
     let mut never = vec![false; n];
-    // handler_new を持つ関数。
+    // handler_new を持つ関数なら真。
     let mut has_handler = vec![false; n];
     for (fi, f) in prog.funcs.iter().enumerate() {
         let mut made: HashMap<keleut_lir::Reg, FuncId> = HashMap::new();
@@ -256,7 +285,7 @@ pub fn clause_path(prog: &Program) -> (u32, u32) {
     let is_cancel = |i: usize| kind(i) == FuncKind::Kir(keleut_lir::FnKind::Cancelclause);
     let is_ret = |i: usize| kind(i) == FuncKind::Kir(keleut_lir::FnKind::Retclause);
     let in_set = |i: usize| is_cancel(i) || is_ret(i) || never[i];
-    // 節ごとの作る節。
+    // 対象の節ごとに、その節が closure_new で作る対象の節の並びを求める。
     let kids: Vec<Vec<usize>> = prog
         .funcs
         .iter()
@@ -275,9 +304,10 @@ pub fn clause_path(prog: &Program) -> (u32, u32) {
                 .collect()
         })
         .collect();
-    // 節から始まる道の最良を、道の種類ごとに持つ。
-    // p0 は return 節も N の節も無い道の k、p1 は N の節が 1 つだけで return 節の無い道の k、
-    // pc は r を数える道の (k, r) である(どれも重みが最大のもの。None はその種類の道が無い)。
+    // 節から始まる経路のうち重みが最大のものを、経路の種類ごとに持つ。
+    // p0 は return 節も N の節もない経路の k、p1 は N の節が 1 つだけで return 節のない経路の k、
+    // pc は r を数える経路の (k, r) である。
+    // None は、その種類の経路がないことを表す。
     #[derive(Clone, Copy, Default)]
     struct Best {
         p0: Option<u32>,
@@ -301,7 +331,8 @@ pub fn clause_path(prog: &Program) -> (u32, u32) {
         if !in_set(s) {
             continue;
         }
-        // 明示のスタックで深さ優先に求める(入れ子が深くても Rust のスタックを使い切らない)。
+        // 再帰を使わずに、明示的なスタックで深さ優先にたどる。
+        // 節の入れ子が深くても、Rust のスタックを使い切らないようにするためである。
         let mut stack = vec![(s, false)];
         while let Some((v, done)) = stack.pop() {
             if memo[v].is_some() {
@@ -328,7 +359,9 @@ pub fn clause_path(prog: &Program) -> (u32, u32) {
                 }
                 continue;
             }
-            // 子の道の最良(開いている途中の子は道の終わりと見る)。どの節でも道をそこで終えられる。
+            // 子から始まる経路のうち、重みが最大のものを種類ごとに求める。
+            // 探索の途中にある子は、経路の終わりとして扱う。
+            // 経路はどの節でも終えられるので、初期値は leaf にする。
             let mut c = leaf;
             for &g in &kids[v] {
                 let b = memo[g].unwrap_or(leaf);
@@ -344,7 +377,7 @@ pub fn clause_path(prog: &Program) -> (u32, u32) {
                 me.p1 = c.p1.map(|k| k + 1);
                 me.pc = c.pc.map(|(k, r)| (k + 1, r));
             } else {
-                // 2 つ目の return 節か N の節が加わると、1 つだけの N の節も数える。
+                // 経路に 2 つ目の return 節か N の節が加わると、1 つだけだった N の節も数える。
                 if let Some(k) = c.p1 {
                     me.pc = better(me.pc, (k, 2));
                 }
@@ -373,17 +406,19 @@ pub fn clause_path(prog: &Program) -> (u32, u32) {
     best
 }
 
-/// スタックの大きさの上限 `STACK_CAP`(KiB。16 GiB)。
+/// スタックサイズの上限 `STACK_CAP`。単位は KiB で、値は 16 GiB を表す。
 ///
-/// `B_prog` は `k` に比例して大きくなるので、`k` の大きいプログラムのスタックを上限で切る。
-/// 切らないと、`Worker` を作れずに浅い深さでも起動のときに 70 になる。
-/// この機械の Node 26.9.0 は `resourceLimits.stackSizeMb` が 16,448 と 32,000 の `Worker` を作れ、64,000 では作れなかった。
-/// 既定の L では、`k` が 10 までのプログラムは切らない。
-/// `k = 0` の大きさより小さくは切らない([`stack_size_kib`])。
-/// host の `STACK_CAP_KIB` と同じ値である。
+/// `B_prog` は `k` と `r` に応じて大きくなるので、`k` や `r` の大きいプログラムのスタックを、この上限で切り詰める。
+/// 切り詰めないと、ホストが `Worker` を作れず、再帰の浅いプログラムでも起動時に終了コード 70 で終了する。
+/// 1 台のマシンでの実測では、Node 26.9.0 は `resourceLimits.stackSizeMb` が 16,448 と 32,000 の `Worker` を作れ、64,000 の `Worker` を作れなかった。
+/// 既定の `L` では、`r = 0` なら `k` が 10 まで、`k = 0` なら `r` が 9 までのプログラムのスタックは切り詰めない。
+/// `B_prog = B_wasm` のときのサイズ(`k = 0` かつ `r = 0` のプログラムのサイズ)より小さくは切り詰めない([`stack_size_kib`])。
+/// ホストの `STACK_CAP_KIB` と同じ値である。
 pub const STACK_CAP_KIB: u64 = 16 << 20;
 
-/// 上限で切る前のスタックの大きさ(KiB。`(L + R) × B_prog + 32 MiB`、`R = max(1024, L / 64)`。M79 の 1.5 節)。
+/// 上限で切り詰める前のスタックサイズを、KiB 単位で返す。
+///
+/// 値は `(L + R) × B_prog + 32 MiB` で、`R = max(1024, L / 64)` は予備の深さである(IRSpec 11.5 節)。
 pub fn stack_need_kib(max_depth: u64, b_prog: u64) -> u64 {
     let r = (max_depth / 64).max(1024);
     (max_depth.saturating_add(r))
@@ -392,11 +427,12 @@ pub fn stack_need_kib(max_depth: u64, b_prog: u64) -> u64 {
         .div_ceil(1024)
 }
 
-/// `--stack-size` と `Worker` のスタックに使う KiB。
+/// `--stack-size` と `Worker` のスタックに使うサイズを、KiB 単位で返す。
 ///
-/// [`stack_need_kib`] が [`STACK_CAP_KIB`] を超えるときは `STACK_CAP_KIB` で切る。
-/// ただし `k = 0` の大きさ(`B_prog = B_wasm`)より小さくはしない。
-/// `k = 0` のプログラムの振る舞いを変えないためである(取れない大きさのスタックは、前と同じく起動のときに 70 になる)。
+/// [`stack_need_kib`] が [`STACK_CAP_KIB`] を超えるときは、`STACK_CAP_KIB` に切り詰める。
+/// ただし、`B_prog = B_wasm` のときのサイズ(`k = 0` かつ `r = 0` のプログラムのサイズ)より小さくはしない。
+/// `k = 0` かつ `r = 0` のプログラムの動作を、上限によって変えないためである。
+/// そのようなプログラムが確保できないサイズのスタックを必要とするときは、上限がない場合と同じく、起動時に終了コード 70 で終了する。
 pub fn stack_size_kib(max_depth: u64, b_prog: u64) -> u64 {
     let need = stack_need_kib(max_depth, b_prog);
     if need <= STACK_CAP_KIB {
@@ -406,10 +442,10 @@ pub fn stack_size_kib(max_depth: u64, b_prog: u64) -> u64 {
     }
 }
 
-/// V8 の `--stack-size` が受け付ける最大の KiB(M79 の 1.3 節)。
+/// V8 の `--stack-size` に渡せる最大の値(KiB)。
 pub const STACK_SIZE_MAX_KIB: u64 = 2_097_151;
 
-/// 状態語の種類(大域 `$p_kind`)。
+/// 状態ワードの種類。グローバル `$p_kind` に置く値である。
 pub mod pk {
     pub const NONE: i32 = 0;
     pub const YIELD: i32 = 1;
@@ -421,35 +457,37 @@ pub mod pk {
     pub const TAIL_RESUME: i32 = 7;
 }
 
-/// 操作節の分類の番号(ハンドラ記録の `classes`)。
+/// 操作節の分類の番号。ハンドラ記録の `classes` に置く値である。
 pub mod cls {
     pub const T: i32 = 0;
     pub const N: i32 = 1;
     pub const G: i32 = 2;
 }
 
-/// 関数の鍵。
+/// モジュールに置く Wasm の関数を区別するキー。
+///
+/// 同じキーの関数は 1 つだけ作る([`Cg::func`])。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum FKey {
-    /// LIR の関数。
+    /// LIR の関数。値は関数の番号である。
     Lir(u32),
-    /// 固定の実行時の関数。
+    /// 内容の決まっているランタイム関数。値は `rt::H` で、どの関数かを表す。
     H(rt::H),
-    /// 値を `n` 個の引数で呼ぶ。
+    /// 関数値を `n` 個の引数で呼ぶ関数。
     CallV(u32),
-    /// 辞書からメソッドを選んで呼ぶ(クラス、メソッド、メソッド自身の辞書の数、引数の数)。
+    /// 辞書からメソッドを選んで呼ぶ関数。値は(クラス、メソッド、メソッド自身の辞書の個数、引数の個数)である。
     CallM(u32, u32, u32, u32),
-    /// 辞書の抽象に `k` 個の辞書を渡す。
+    /// 辞書の抽象(種類 `dictabs` の関数のクロージャ)に、`k` 個の辞書を引数として渡して呼ぶ関数。
     DictApp(u32),
-    /// 退避した `DISCARD(NeverBody)` の節の本体を末尾で呼ぶ。
+    /// 退避した `DISCARD(NeverBody)` の節の本体を末尾呼び出しで呼ぶ関数。
     TailNever,
-    /// 継続の G の節の本体を、継続を引数に末尾で呼ぶ(`call_clause`)。
+    /// 継続が持つ G の節の本体を、継続を引数にして末尾呼び出しで呼ぶ関数(`call_clause`)。
     ClauseK,
-    /// 構造的な `Eq` の比べ方(クラス)。
+    /// 構造的な `Eq` の比較を行う関数。値はクラスである。
     EqStruct(u32),
 }
 
-/// 固定の大域の番号。
+/// どのプログラムでも作るグローバルの番号。
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Gl {
     pub depth: u32,
@@ -464,12 +502,12 @@ pub(crate) struct Gl {
     pub p_clause: u32,
     pub p_args: u32,
     pub p_msg: u32,
-    /// `YIELD` の連鎖の切り取りの先頭。
+    /// `YIELD` のときの、連鎖の切り出した部分の先頭。
     pub p_cut: u32,
-    /// 伝播の途中で積んだフレームの記録の列の先頭(最上段)と末尾(最下段)。
+    /// `YIELD` の伝播中に追加したフレームの記録を並べたリストの、先頭(最上段)と末尾(最下段)。
     pub yf_head: u32,
     pub yf_tail: u32,
-    /// 再開するフレームに渡す値と、部分をまたぐ呼び出しの結果。
+    /// 再開するフレームに渡す値と、分割関数をまたぐ呼び出しの結果を置く。
     pub rv: u32,
     pub unit: u32,
     pub true_: u32,
@@ -479,67 +517,72 @@ pub(crate) struct Gl {
     pub empty: u32,
 }
 
-/// 翻訳の文脈。
+/// コード生成のコンテキスト。
+///
+/// 組み立て中のモジュールと、LIR のプログラムの各項目に対応する Wasm の関数やグローバルの番号を持つ。
 pub(crate) struct Cg<'p> {
     pub prog: &'p Program,
     pub m: Mb,
     fmap: HashMap<FKey, u32>,
     pending: VecDeque<(FKey, u32)>,
     pub g: Gl,
-    /// 大域ごとの(値、初期化済みの印)。
+    /// LIR のグローバルごとの、(値、初期化済みのフラグ)を置く Wasm のグローバルの番号。
     pub pglobals: Vec<(u32, u32)>,
-    /// インスタンスごとの初期化済みの印。
+    /// インスタンスごとの、初期化済みのフラグを置く Wasm のグローバルの番号。
     pub inst_init: Vec<u32>,
-    /// インスタンスとメソッドごとの値。
+    /// インスタンスのメソッドごとの、値を置く Wasm のグローバルの番号。
     pub inst_vals: Vec<Vec<u32>>,
-    /// 文字列の定数(大域、データの位置、長さ)。
+    /// 文字列定数ごとの(Wasm のグローバルの番号、データの中のオフセット、長さ)。
     pub strs: Vec<(u32, u32, u32)>,
     ctor0: HashMap<(u32, u32), u32>,
     dictb: HashMap<(u32, u32), u32>,
     dicti0: HashMap<u32, u32>,
-    /// 診断の型紙。
+    /// 診断メッセージのテンプレートの表。
     pub tpl: Templates,
-    /// メソッドの値を作る箇所の(クラス、メソッド、メソッド自身の辞書の数)。
+    /// メソッドの値を作る命令に現れる(クラス、メソッド、メソッド自身の辞書の個数)の集合。
     pub method_vals: BTreeSet<(u32, u32, u32)>,
-    /// `extern` の本体の関数。
+    /// `extern` の本体になる LIR の関数の番号。
     pub extern_funcs: Vec<u32>,
-    /// 操作節の関数の引数の数。
+    /// 操作節の関数の引数の個数の集合。
     pub clause_arities: BTreeSet<u32>,
-    /// 実装の無い `extern` の大域。
+    /// 実装のない `extern` のグローバルの番号。
     pub extern_unimpl: Vec<u32>,
-    /// G の節を持つハンドラがプログラムのどこかにあるか。
+    /// G の節を持つハンドラがプログラムのどこかにあれば真。
     ///
-    /// 無ければ `YIELD` は立たない(立てるのは G の節を選んだ `perform` だけである)。
-    /// そこでどの関数も取り出しの区切り、フレームの記録、再開の入口を持たない。
+    /// なければ、状態ワードが `YIELD` になることはない。
+    /// `YIELD` を設定するのは、G の節を選んだ `perform` だけだからである。
+    /// その場合は、どの関数も、継続のキャプチャのための区切り、フレームの記録、再開用エントリを持たない。
     pub has_g: bool,
-    /// 統計。
+    /// コード生成の統計。
     pub stats: Stats,
 }
 
-/// 翻訳の統計(記録に書く値)。
+/// コード生成の統計。
+///
+/// 環境変数 `KELEUT_WASM_STATS` が設定されているときに、標準エラーに書く。
 #[derive(Clone, Debug, Default)]
 pub struct Stats {
-    /// LIR の関数の数。
+    /// LIR の関数の個数。
     pub funcs: usize,
-    /// 大きなフレームの形にした関数の数。
+    /// 大きなフレーム方式にした関数の個数。
     pub big_frames: usize,
-    /// 1 段のバイト数の推定の最大(大きなフレームの形にした後)。
+    /// 1 段の見積もりバイト数の最大値。大きなフレーム方式にした関数は、その方式にした後の見積もりを最大値の計算に使う。
     pub max_estimate: u64,
-    /// 引数の数の最大。
+    /// 引数の個数の最大値。
     pub max_params: usize,
-    /// 1 つの関数のブロックの数の最大。
+    /// 1 つの関数が持つブロックの個数の最大値。
     pub max_blocks: usize,
-    /// 呼び出しの引数の数の最大。
+    /// 呼び出しの引数の個数の最大値。
     pub max_args: u32,
-    /// いくつかの Wasm の関数に分けた LIR の関数の数。
+    /// 複数の Wasm の関数に分割した LIR の関数の個数。
     pub split_funcs: usize,
-    /// 1 つの LIR の関数を分けた部分の数の最大。
+    /// 1 つの LIR の関数を分割してできた分割関数の個数の最大値。
     pub max_parts: usize,
-    /// 重みが最大の節の道の `cancel` 節の数 `k`([`clause_path`])。
+    /// 重みが最大の節の経路にある、`cancel` 節の数 `k`([`clause_path`])。
     pub cancel_nest: u32,
-    /// 重みが最大の節の道の、数える `return` 節と N の節の数 `r`([`clause_path`])。
+    /// 重みが最大の節の経路で `r` に数えた、`return` 節と N の節の数([`clause_path`])。
     pub ret_chain: u32,
-    /// プログラムの 1 段に見込むバイト数 `B_prog`([`b_prog`])。
+    /// プログラムの 1 段に必要なバイト数 `B_prog`([`b_prog`])。
     pub b_prog: u64,
 }
 
@@ -726,7 +769,10 @@ impl<'p> Cg<'p> {
         }
     }
 
-    /// 関数の番号(無ければ型を決めて確保し、本体を後で作る)。
+    /// キー `k` の関数の番号を返す。
+    ///
+    /// まだなければ、型を決めて番号を確保する。
+    /// 本体は後で作る。
     pub fn func(&mut self, k: FKey) -> u32 {
         if let Some(&i) = self.fmap.get(&k) {
             return i;
@@ -745,7 +791,7 @@ impl<'p> Cg<'p> {
         idx
     }
 
-    /// 積んだ `n` 個の引数のうち、[`P_DIRECT`] 個を超える分を 1 つの配列にまとめる。
+    /// オペランドスタックに積んだ `n` 個の引数のうち、[`P_DIRECT`] 個を超える分を 1 つの配列にまとめる命令を生成する。
     pub fn pack_args(&mut self, fb: &mut emit::Fb, n: u32) {
         self.stats.max_args = self.stats.max_args.max(n);
         if n > P_DIRECT {
@@ -754,12 +800,12 @@ impl<'p> Cg<'p> {
         }
     }
 
-    /// LIR の関数の番号。
+    /// LIR の関数 `f` に対応する Wasm の関数の番号を返す。
     pub fn lir(&mut self, f: FuncId) -> u32 {
         self.func(FKey::Lir(f.0))
     }
 
-    /// LIR の関数の引数の数。
+    /// LIR の関数 `f` の引数の個数を返す。
     pub fn arity(&self, f: FuncId) -> u32 {
         self.prog.funcs[f.index()].params.len() as u32
     }
@@ -796,7 +842,8 @@ impl<'p> Cg<'p> {
         }
     }
 
-    /// 引数の無いコンストラクタの値の大域。
+    /// 引数のないコンストラクタの値を置くグローバルの番号を返す。
+    /// そのグローバルがまだなければ、ここで作る。
     pub fn ctor0(&mut self, ty: u32, c: u32) -> u32 {
         if let Some(&g) = self.ctor0.get(&(ty, c)) {
             return g;
@@ -820,7 +867,8 @@ impl<'p> Cg<'p> {
         g
     }
 
-    /// 組み込みのインスタンスの辞書の大域。
+    /// 組み込みのインスタンスの辞書を置くグローバルの番号を返す。
+    /// そのグローバルがまだなければ、ここで作る。
     pub fn dictb(&mut self, class: u32, ty: u32) -> u32 {
         if let Some(&g) = self.dictb.get(&(class, ty)) {
             return g;
@@ -840,7 +888,8 @@ impl<'p> Cg<'p> {
         g
     }
 
-    /// 前提を持たない利用者のインスタンスの辞書の大域。
+    /// 前提を持たないユーザ定義のインスタンスの辞書を置くグローバルの番号を返す。
+    /// そのグローバルがまだなければ、ここで作る。
     pub fn dicti0(&mut self, inst: u32) -> u32 {
         if let Some(&g) = self.dicti0.get(&inst) {
             return g;
@@ -864,24 +913,29 @@ impl<'p> Cg<'p> {
     }
 }
 
-/// 翻訳の選択肢。
+/// コード生成のオプション。
 #[derive(Clone, Debug)]
 pub struct Options {
-    /// 論理的な深さの限度 `L`(`keleut build` の出力が単独で走るときの既定)。
+    /// 論理的な深さの上限 `L`。
+    ///
+    /// ホストに渡す表に書くので、`keleut build` の出力を単独で実行するときの上限にもなる。
     pub max_depth: u64,
 }
 
-/// 翻訳の結果。
+/// コード生成の結果。
 pub struct Output {
-    /// `program.wasm`。
+    /// `program.wasm` の内容。
     pub program: Vec<u8>,
     /// ホストに渡す表(JSON)。
     pub meta: String,
-    /// 統計。
+    /// コード生成の統計。
     pub stats: Stats,
 }
 
-/// LIR のプログラムを WasmGC のモジュールにする。
+/// LIR のプログラムから WasmGC のモジュールを生成する。
+///
+/// パス 12 を済ませていない関数があるときと、引数が `P_DIRECT + PACKED_MAX` 個を超える呼び出しがあるときは、エラーを返す。
+/// 関数のコード生成が返すエラーも、そのまま返す。
 pub fn compile(prog: &Program, opts: &Options) -> Result<Output, String> {
     if prog.funcs.iter().any(|f| f.frame.is_none()) {
         return Err("パス 12 を済ませていない関数があります".into());
@@ -937,26 +991,37 @@ mod tests {
 
     #[test]
     fn スタックの大きさは_m79_の記録の値() {
-        // M79 の記録の 1.5 節: L = 2^20 で --stack-size = 1,630,208 KiB。
+        // 既定の L = 2^20 で B_prog = B_wasm なら、--stack-size は 1,630,208 KiB で、V8 の上限に収まる。
         assert_eq!(stack_size_kib(1 << 20, B_WASM), 1_630_208);
         assert!(stack_size_kib(1 << 20, B_WASM) <= STACK_SIZE_MAX_KIB);
         assert!(stack_size_kib(2_000_000, B_WASM) > STACK_SIZE_MAX_KIB);
-        // 局所 178 個、引数 2 個の関数がちょうど B_wasm に収まる(M79 の 1.5 節)。
+        // ローカル 178 個、引数 2 個の関数の見積もりは、ちょうど B_wasm になる。
         assert_eq!(frame_estimate(178, 2), 1536);
         assert!(frame_estimate(179, 2) > B_WASM);
     }
 
-    /// `tests/fixtures/cancel_nest/NAME.kir` を読んで LIR に下ろす。
+    /// `tests/fixtures/cancel_nest/NAME.kir` を読んで LIR に変換する。
     ///
-    /// `.kir` は同じ名前の `.kel` を `keleut emit-kir -o NAME.kir NAME.kel` で書いたものである。
-    /// `a`〜`f` は計画 261104-3 の探りの `gen.py MODE 2 3` の出力で、`a`〜`e` は `GADD=1` で書いた。
-    /// `r` は形 R(`return` 節が `go` を呼び返す)の小さな版、`r0` は `return` 節が `echoln` だけを呼ぶ形である。
-    /// `r3` は `return` 節の鎖 3 段、`nc3` と `nc1` は分類 N の操作節の鎖 3 段と 1 段で、
-    /// M106 の検証の探りの `rch.py 3 1 1 3`、`nch.py 3 1 1 3`、`nch.py 1 1 1 3` の出力である。
-    /// `nc2leaf` は内側の N の節が `echoln` だけを呼ぶ 2 段、`mix` は N の節の中の `return` 節が `go` を呼び返す形である。
-    /// `alt3` は M106 の再検証の探りの `gen3.py 3 0 3` の出力で、`cancel` 節と N の節が交互に 3 組重なる。
-    /// `alt3r` は同じく `KIND=r gen3.py 3 0 3` の出力で、N の節の代わりに `return` 節を使う。
-    /// `alt1n` は `gen3.py 1 0 3` の出力で、`cancel` 節、N の節、`cancel` 節の順に重なる。
+    /// `.kir` は、同じ名前の `.kel` から `keleut emit-kir -o NAME.kir NAME.kel` で書いたものである。
+    /// 各プログラムの構造は次のとおりである。
+    ///
+    /// - `a`、`c`: `cancel` 節の中に直接ハンドラ式を書く。
+    /// - `b`: `cancel` 節の中のハンドラ式の本体に、`cancel` 節を持つハンドラ式をもう 1 つ書く。
+    /// - `d`: `cancel` 節は関数を呼ぶだけで、ハンドラ式を持たない。
+    /// - `e`: `cancel` 節を持たない。
+    /// - `f`: `cancel` 節の中に直接書いたハンドラ式が G の節を持ち、その節が末尾 `resume` で再開する。
+    /// - `n0`: `cancel` 節は値を表示するだけで、ハンドラ式を持たない。
+    /// - `n2`: `cancel` 節の中に直接、`cancel` 節を持つハンドラ式を書き、その `cancel` 節の中にさらにハンドラ式を書く。
+    /// - `n2nc`: `n2` と同じ構造で、どちらの `cancel` 節も変数をキャプチャしない。
+    /// - `r`: `return` 節が `go` を再帰的に呼ぶ。
+    /// - `r0`: `return` 節が `echoln` だけを呼ぶ。
+    /// - `r3`: `return` 節の中に直接書いたハンドラ式の `return` 節を、3 段重ねる。
+    /// - `nc3`、`nc1`: 分類 N の操作節(N の節)を、それぞれ 3 段、1 段重ねる。
+    /// - `nc2leaf`: N の節を 2 段重ね、内側の N の節は `echoln` だけを呼ぶ。
+    /// - `mix`: N の節の中に直接書いたハンドラ式の `return` 節が、`go` を再帰的に呼ぶ。
+    /// - `alt3`: `cancel` 節と N の節が交互に 3 組重なり、その内側にもう 1 つ `cancel` 節がある。
+    /// - `alt3r`: `alt3` の N の節の代わりに `return` 節を使う。
+    /// - `alt1n`: `cancel` 節、N の節、`cancel` 節の順に重なる。
     fn lowered(name: &str) -> Program {
         let path = format!(
             "{}/tests/fixtures/cancel_nest/{name}.kir",
@@ -968,17 +1033,19 @@ mod tests {
 
     #[test]
     fn cancel_節の中のハンドラ式の入れ子の段の数() {
-        // cancel 節の中に直に書いたハンドラ式(a、c)、その中で G の節が末尾で resume する形(f)は 1。
-        // b は cancel 節の中のハンドラ式の本体にもう 1 つの cancel 節つきのハンドラ式を書くが、
-        // 本体は深さを 1 つ増やして走るので、どちらの cancel 節も 1 段である。
+        // cancel 節の中に直接ハンドラ式を書くプログラム(a、c)と、
+        // そのハンドラ式の G の節が末尾 resume で再開するプログラム(f)は、k = 1 である。
+        // b は、cancel 節の中のハンドラ式の本体に、cancel 節を持つハンドラ式をもう 1 つ書く。
+        // 本体は深さを 1 つ増やして実行されるので、どちらの cancel 節から始まる経路も k = 1 である。
         for name in ["a", "b", "c", "f"] {
             assert_eq!(clause_path(&lowered(name)), (1, 0), "{name}");
         }
-        // cancel 節の中に直に cancel 節つきのハンドラ式を書き、その cancel 節の中にさらにハンドラ式を書くと 2。
+        // cancel 節の中に直接、cancel 節を持つハンドラ式を書き、その cancel 節の中にさらにハンドラ式を書くと、k = 2 である。
         assert_eq!(clause_path(&lowered("n2")), (2, 0));
-        // どちらの cancel 節も何も捕獲しない形でも、cancel 節の関数の値はハンドラ式を書いた関数の中で作る。
+        // どちらの cancel 節も変数をキャプチャしないプログラムでも、cancel 節の関数値はハンドラ式を書いた関数の中で作るので、k = 2 である。
         assert_eq!(clause_path(&lowered("n2nc")), (2, 0));
-        // cancel 節がハンドラ式を持たない形(d は関数を呼ぶだけ、n0 は値を書くだけ)と、cancel 節の無い対照 e は 0。
+        // cancel 節がハンドラ式を持たないプログラム(d は関数を呼ぶだけ、n0 は値を表示するだけ)と、
+        // 比較のための cancel 節のないプログラム e は、k = 0 である。
         for name in ["d", "e", "n0"] {
             assert_eq!(clause_path(&lowered(name)), (0, 0), "{name}");
         }
@@ -986,30 +1053,33 @@ mod tests {
 
     #[test]
     fn 同じ深さに重なる節の鎖() {
-        // return 節が go を呼び返す形 R は r = 1、echoln だけを呼ぶ形 r0 と cancel 節の形は r = 0。
+        // return 節が go を再帰的に呼ぶプログラム r は r = 1 である。
+        // return 節が echoln だけを呼ぶプログラム r0 と、cancel 節だけを重ねるプログラムは r = 0 である。
         assert_eq!(clause_path(&lowered("r")), (0, 1));
         for name in ["r0", "a", "c", "e", "f", "n2"] {
             assert_eq!(clause_path(&lowered(name)).1, 0, "{name}");
         }
-        // return 節の中に直に書いたハンドラ式の return 節を 3 段重ねた形 r3 は r = 3。
+        // return 節の中に直接書いたハンドラ式の return 節を 3 段重ねたプログラム r3 は、r = 3 である。
         assert_eq!(clause_path(&lowered("r3")), (0, 3));
-        // 分類 N の操作節を 3 段重ねた形 nc3 は r = 3。
-        // 1 つだけの N の節(nc1)と、内側の N の節が葉の関数だけを呼ぶ 2 段(nc2leaf)は数えない。
+        // 分類 N の操作節(N の節)を 3 段重ねたプログラム nc3 は、r = 3 である。
+        // N の節が 1 つだけのプログラム(nc1)と、内側の N の節が葉の関数だけを呼ぶ 2 段のプログラム(nc2leaf)では、N の節を数えない。
         assert_eq!(clause_path(&lowered("nc3")), (0, 3));
         for name in ["nc1", "nc2leaf"] {
             assert_eq!(clause_path(&lowered(name)), (0, 0), "{name}");
         }
-        // N の節の中に直に書いたハンドラ式の return 節が go を呼び返す形 mix は r = 2。
+        // N の節の中に直接書いたハンドラ式の return 節が go を再帰的に呼ぶプログラム mix は、r = 2 である。
         assert_eq!(clause_path(&lowered("mix")), (0, 2));
-        // cancel 節と N の節が交互に並ぶ形 alt3(cancel 節 4 つと N の節 3 つ)は、1 本の道に沿って k = 4、r = 3。
-        // k と r を別々に数えると (1, 0) になり、B_prog が足りずに既定の L の内側で 70 になった。
+        // cancel 節と N の節が交互に並ぶプログラム alt3(cancel 節 4 つと N の節 3 つ)は、1 本の経路に沿って数えて k = 4、r = 3 である。
+        // k を cancel 節だけの入れ子で、r を return 節と N の節だけの連鎖で別々に数えると (1, 0) になる。
+        // その値では B_prog が足りず、深さが既定の L に達する前に終了コード 70 で終了する。
         assert_eq!(clause_path(&lowered("alt3")), (4, 3));
         assert_eq!(b_prog(4, 3), 1536 + 4 * 1360 + 3 * 1536 - 320);
-        // return 節を使う同じ形 alt3r も同じ。
+        // N の節の代わりに return 節を使うプログラム alt3r も、同じ値である。
         assert_eq!(clause_path(&lowered("alt3r")), (4, 3));
-        // cancel 節の中の N の節が 1 つだけの形 alt1n は、N の節を数えず k = 2(cancel 節 2 つ)。
+        // cancel 節の間にある N の節が 1 つだけのプログラム alt1n では、N の節を数えず、k = 2(cancel 節 2 つ)である。
         assert_eq!(clause_path(&lowered("alt1n")), (2, 0));
-        // r ≥ 1 では B_wasm に r × B_wasm − E_rth を足す(r = 1 は 1,040 + 1,536 + 176 = 2,752)。
+        // r ≥ 1 では、B_wasm に r × B_wasm − E_rth を足す。
+        // r = 1 なら 1,040 + 1,536 + 176 = 2,752 バイトである。
         assert_eq!(b_prog(0, 1), 2752);
         assert_eq!(b_prog(0, 2), 2752 + 1536);
         assert_eq!(b_prog(0, 6), 1536 + 6 * 1536 - 320);
@@ -1025,30 +1095,32 @@ mod tests {
             "{}",
             &out.meta[..80]
         );
-        // 既定の L では、k = 0 なら r が 9 まで、r = 0 なら k が 10 まで STACK_CAP で切らない。
+        // 既定の L では、k = 0 なら r が 9 まで、スタックを STACK_CAP で切り詰めない(r = 0 なら k が 10 までである)。
         assert!(stack_need_kib(1 << 20, b_prog(0, 9)) <= STACK_CAP_KIB);
         assert!(stack_need_kib(1 << 20, b_prog(0, 10)) > STACK_CAP_KIB);
     }
 
     #[test]
     fn b_prog_とスタックの大きさ() {
-        // k = 0 では B_prog = B_wasm で、スタックの大きさは前と同じ。
+        // k = 0 かつ r = 0 では B_prog = B_wasm で、スタックサイズは B_wasm で計算した値と同じである。
         assert_eq!(b_prog(0, 0), B_WASM);
         assert_eq!(stack_size_kib(1 << 20, b_prog(0, 0)), 1_630_208);
-        // k = 1 では 1,040 + 320 + 1,040 + 320 + 176 = 2,896 バイト。
+        // k = 1 では 1,040 + 320 + 1,040 + 320 + 176 = 2,896 バイトである。
         assert_eq!(b_prog(1, 0), 2896);
         assert_eq!(b_prog(2, 0), 2896 + 1360);
-        // L = 600,000、k = 1 のスタックは V8 の --stack-size の上限より小さい。
+        // L = 600,000、k = 1 のスタックサイズは、V8 の --stack-size の上限に収まる。
         assert_eq!(stack_size_kib(600_000, b_prog(1, 0)), 1_756_157);
         assert!(stack_size_kib(600_000, b_prog(1, 0)) <= STACK_SIZE_MAX_KIB);
-        // 既定の L では k = 1 で上限を超えるので Worker の経路になり、k = 10 までは STACK_CAP で切らない。
+        // 既定の L では、k = 1 で V8 の上限を超えるので Worker の経路になる。
+        // k = 10 までは STACK_CAP で切り詰めない。
         assert!(stack_size_kib(1 << 20, b_prog(1, 0)) > STACK_SIZE_MAX_KIB);
         assert!(stack_need_kib(1 << 20, b_prog(10, 0)) <= STACK_CAP_KIB);
         assert!(stack_need_kib(1 << 20, b_prog(11, 0)) > STACK_CAP_KIB);
-        // STACK_CAP で切る。
+        // それを超えると、STACK_CAP で切り詰める。
         assert_eq!(stack_size_kib(1 << 20, b_prog(11, 0)), STACK_CAP_KIB);
         assert_eq!(stack_size_kib(1 << 20, b_prog(u32::MAX, 0)), STACK_CAP_KIB);
-        // k = 0 の大きさより小さくは切らない(k = 0 のプログラムは前と同じ)。
+        // B_prog = B_wasm のときのサイズより小さくは切り詰めない。
+        // そのため、k = 0 かつ r = 0 のプログラムのスタックサイズは、STACK_CAP を超えていても変わらない。
         let l = 100_000_000;
         assert!(stack_need_kib(l, B_WASM) > STACK_CAP_KIB);
         assert_eq!(stack_size_kib(l, B_WASM), stack_need_kib(l, B_WASM));
@@ -1057,7 +1129,7 @@ mod tests {
             stack_size_kib(u64::MAX, b_prog(u32::MAX, 0)),
             stack_need_kib(u64::MAX, B_WASM)
         );
-        // host の Worker の経路も同じ上限と下限を使う。
+        // ホストの Worker の経路も、同じ上限 STACK_CAP_KIB と、下限の計算に使う同じ B_WASM を持つ。
         for line in [
             format!("const STACK_CAP_KIB = {STACK_CAP_KIB};"),
             format!("const B_WASM = {B_WASM};"),

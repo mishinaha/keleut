@@ -1,42 +1,68 @@
-//! `keleut run --backend wasm` と `keleut build` の出力、Node の起動(計画 6.10 節の「Node の起動」、D545)。
+//! `keleut run --backend wasm` と `keleut build` の出力の書き出しと、Node の起動。
+//!
+//! ## 出力
 //!
 //! 出力は `program.wasm`、`rt.wasm`、`main.mjs` の 3 つである。
-//! `main.mjs` は `host/keleut-host.mjs` の後ろに、表(JSON)を渡して起動する 1 行を足したものである。
-//! `keleut build` は、このほかに起動の台本 `run`([`RUN_SH`]、実行の許可付き)を書く。
-//! 台本は Node の前に標準出力が閉じているかを確かめ、`keleut run --backend wasm` と同じく `KELEUT_STDOUT_CLOSED` で host に伝える。
-//! Node は起動のときに閉じた fd 1 を `/dev/null` で開き直すので、`node DIR/main.mjs` を直に走らせると、
-//! 閉じた標準出力を `/dev/null` に向けた実行と見分けられず、書いても 0 で終わる。
+//! `main.mjs` は、`host/keleut-host.mjs` の後ろに、表(JSON)を渡して起動する 1 行を追加したものである。
+//! `keleut build` は、このほかに起動スクリプト `run`([`RUN_SH`])を、実行権限を付けて書く。
+//! 起動スクリプトは、Node を起動する前に標準出力が閉じているかを調べ、`keleut run --backend wasm` と同じく環境変数 `KELEUT_STDOUT_CLOSED` でホストに伝える。
+//! Node は起動時に、閉じたファイル記述子 1 を `/dev/null` で開き直す。
+//! そのため、`node DIR/main.mjs` を直接実行すると、ホストは閉じた標準出力を `/dev/null` に向けた実行と区別できず、プログラムが出力しても終了コード 0 で終了する。
 //!
-//! `keleut run --backend wasm` は 3 つを一時の場所(`$TMPDIR/keleut-wasm-PID-N-NANOS`、0700)に書き、`node` を子プロセスで起動する。
-//! 子の `RLIMIT_STACK` を `S = --stack-size + 64 MiB` にし(`pre_exec` の中の `setrlimit`)、
-//! `--stack-size` に `(L + R) × B_prog + 32 MiB`(KiB)を渡す(M79 の記録の 1.5 節で改めた式)。
-//! `B_prog` はプログラムの 1 段に見込むバイト数で、`cancel` 節の中にハンドラ式が無く、再帰の道になる `return` 節も無ければ `B_wasm` である(`crate::b_prog`)。
-//! そうでないプログラムは、既定の L でもスタックが V8 の上限を超えるので、`Worker` の経路で走る。
-//! スタックは [`crate::STACK_CAP_KIB`] で切る。
-//! 次のときは、`main.mjs` が `Worker` の `resourceLimits.stackSizeMb` で走らせる。
+//! ## スタック
 //!
-//! - `RLIMIT_STACK` の硬い限度が `S` より小さいとき。
-//! - `--stack-size` が V8 の上限を超えるとき。
-//! - `RLIMIT_AS` か `RLIMIT_DATA` の軟らかい限度が無限でないとき。
-//!   glibc は `RLIMIT_STACK` を新しいスレッドのスタックの既定の大きさに使うので、上げると Node のどのスレッドも `S` を予約する。
-//!   仮想メモリに上限があると、Node はスレッドを作れずに止まったまま戻らない。
+//! `keleut run --backend wasm` は、3 つのファイルを一時ディレクトリ(`$TMPDIR/keleut-wasm-PID-N-NANOS`、モード 0700)に書き、`node` を子プロセスとして起動する。
+//! 子プロセスには、`--stack-size` に `(L + R) × B_prog + 32 MiB` を KiB 単位で渡す([`crate::stack_size_kib`])。
+//! `L` は論理的な深さの上限、`R` は予備の深さである(IRSpec 11.5 節)。
+//! 子プロセスの `RLIMIT_STACK` は、`pre_exec` の中の `setrlimit` で `S = --stack-size + 64 MiB` に設定する。
+//! `B_prog` は、プログラムの 1 段に必要なバイト数である([`crate::b_prog`])。
+//! 同じ深さに重なる節の経路に、ハンドラ式を持つ `cancel` 節も、`r` に数える `return` 節や分類 N の操作節もなければ、`B_prog` は `B_wasm` に等しい(`k` と `r` の数え方は [`crate::clause_path`])。
+//! それ以外のプログラムは、既定の `L` でもスタックが V8 の `--stack-size` の上限を超えるので、`Worker` の経路で実行する。
+//! スタックサイズは [`crate::STACK_CAP_KIB`] で切り詰める。
 //!
-//! 標準入出力は子に引き継ぐ。
-//! 子の終了状態のうち、ホストが使う 0、3、4、70、74 はそのまま返し、ほかの終了状態とシグナルによる終わりは 70 にする。
-//! 子には `PR_SET_PDEATHSIG` で、`keleut` が終わったら SIGKILL が届くようにする。
-//! `keleut` が SIGINT、SIGTERM、SIGHUP を受けたら子に送り、子が終わるのを待ち、一時の場所を消してから、同じシグナルで終わる。
-//! ただし、`keleut` が起動したときに無視する扱い(`SIG_IGN`)だったシグナルは、無視したままにして子に送らない。
-//! Node は引き継いだ `SIG_IGN` を起動のときに既定の扱いに戻すので、無視するシグナルの名前を環境変数
-//! `KELEUT_IGNORED_SIGNALS`(`SIGHUP,SIGINT` のようにコンマで区切る)で渡し、`main.mjs` が何もしない処理を登録する。
-//! こうして、`nohup` の下の SIGHUP や、シェルの台本の中の後ろで走る仕事の SIGINT で、インタプリタと違って終わることがない。
+//! 次のどれかに当てはまるときは、`--stack-size` と `RLIMIT_STACK` を使わない。
+//! `main.mjs` が `Worker` を作り、その `resourceLimits.stackSizeMb` で確保したスタックで実行する(`Worker` の経路)。
 //!
-//! V8 のヒープそのものが尽きたときは、Node が SIGABRT で終わり、`keleut` は 70 で終わる(§15.5 からの既知の逸脱、P252、V215)。
-//! このとき `cancel` 節は走らず、ホストのバッファに残っていた標準出力は失われる。
-//! `ERROR(OutOfMemory)` と終了状態 3 になるのは、`N_alloc_max` を超える割り当て(`conformance/oom/` が確かめる)と、
-//! ホストが線形メモリを広げられずに形の表を作れないか広げられない場合(起動のときの最初の表と `META.shapes` の登録を含む)だけである。
-//! V8 のヒープが尽きて 70 で終わることは、既知の差として登録していない。
-//! `main.mjs` は 2 つの `.wasm` を読んだ後で一時の場所を自分で消す(環境変数 `KELEUT_WASM_RMDIR` がその場所を指すときだけ)。
-//! 前の実行が SIGKILL で終わって残した一時の場所は、次の実行が、作ったプロセスが無いことを確かめて消す。
+//! - `RLIMIT_STACK` のハードリミットが `S` より小さいとき。
+//! - `--stack-size` に渡す値が V8 の上限([`crate::STACK_SIZE_MAX_KIB`])を超えるとき。
+//! - `RLIMIT_AS` か `RLIMIT_DATA` のソフトリミットが無限でないとき。
+//!   glibc は `RLIMIT_STACK` を新しいスレッドのスタックの既定のサイズに使うので、`RLIMIT_STACK` を上げると Node のどのスレッドも `S` バイトを予約する。
+//!   仮想メモリを制限していると、Node はスレッドを作れず、止まったまま終了しない。
+//!
+//! ## 終了コードとシグナル
+//!
+//! 標準入出力は子プロセスに引き継ぐ。
+//! 子プロセスの終了コードのうち、ホストが使う 0、3、4、70、74 はそのまま返す。
+//! 子プロセスがそれ以外の終了コードで終了したときと、シグナルで終了したときは、内部エラーとして 70 を返す。
+//! 子プロセスには `PR_SET_PDEATHSIG` を設定し、`keleut` が終了したら SIGKILL が届くようにする。
+//!
+//! `keleut` は、SIGINT、SIGTERM、SIGHUP を受け取ると、同じシグナルを子プロセスに送る。
+//! その後、子プロセスの終了を待ち、一時ディレクトリを削除してから、同じシグナルで自分も終了する。
+//! ただし、`keleut` の起動時に無視する設定(`SIG_IGN`)だったシグナルは、無視したままにして子プロセスに送らない。
+//! Node は引き継いだ `SIG_IGN` を起動時に既定の動作に戻すので、無視するシグナルの名前を環境変数 `KELEUT_IGNORED_SIGNALS` で渡す。
+//! 名前は `SIGHUP,SIGINT` のようにコンマで区切る。
+//! `main.mjs` は、名前を渡されたシグナルに、何もしないシグナルハンドラを登録する。
+//! そのため、`nohup` で起動したときの SIGHUP や、シェルスクリプトの中のバックグラウンドジョブに送られた SIGINT では、インタプリタと同じく終了しない。
+//!
+//! ## メモリ不足
+//!
+//! V8 のヒープそのものを使い切ったときは、Node が SIGABRT で終了し、`keleut` は終了コード 70 で終了する。
+//! これは LangSpec §15.5 との既知の相違である。
+//! このとき `cancel` 節は実行されず、ホストのバッファに残っていた標準出力は失われる。
+//! `ERROR(OutOfMemory)` になって終了コード 3 で終了するのは、次の 2 つの場合だけである。
+//!
+//! - `N_alloc_max` を超える確保(`conformance/oom/` がテストする)。
+//! - ホストが線形メモリを拡張できないために、シェイプ表を作れないか拡張できない場合。
+//!   起動時に行う最初の表の確保と `META.shapes` の登録も、この場合に含む。
+//!
+//! V8 のヒープを使い切って 70 で終了することは、既知の差分として登録していない。
+//!
+//! ## 一時ディレクトリの削除
+//!
+//! `main.mjs` は、2 つの `.wasm` を読んだ後で、一時ディレクトリを自分で削除する。
+//! 削除するのは、環境変数 `KELEUT_WASM_RMDIR` がそのディレクトリを指すときだけである。
+//! `keleut` も、子プロセスの終了を待った後で同じディレクトリを削除する。
+//! 前の実行が SIGKILL で終了して残した一時ディレクトリは、次の実行が、作ったプロセスがもう存在しないことを確かめてから削除する。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -45,22 +71,23 @@ use keleut_lir::Program;
 
 use crate::{Options, STACK_SIZE_MAX_KIB, compile, stack_need_kib, stack_size_kib};
 
-/// Node 側の実行時。
+/// Node 側のランタイム `host/keleut-host.mjs` のソース。
 pub const HOST_JS: &str = include_str!("../../../host/keleut-host.mjs");
 
-/// `main.mjs` の中身。
+/// `main.mjs` の内容を返す。
+///
+/// ホストのソースの後ろに、表 `meta`(JSON)を渡して `start` を呼ぶ 1 行を追加する。
 pub fn main_mjs(meta: &str) -> String {
     format!("{HOST_JS}\nawait start({meta});\n")
 }
 
-/// `keleut build` が `DIR/run` に書く起動の台本。
+/// `keleut build` が `DIR/run` に書く起動スクリプト。
 ///
-/// fd 1 を fd 3 に複製できなければ、標準出力は閉じている。
-/// 閉じていれば `KELEUT_STDOUT_CLOSED=1` を渡し、開いていれば環境に残った `KELEUT_STDOUT_CLOSED` を除いて、
-/// `node` を `main.mjs` で起動する。
-/// 確かめるのは、`$(...)` のように記述子を開く処理より前である。
-/// `main.mjs` は `dirname "$0"` で探すので、`run` は自分の道筋か、`DIR` へのシンボリックリンクを通して起動する。
-/// `run` そのものへのシンボリックリンクから起動すると、Node が `MODULE_NOT_FOUND` を出して 1 で終わる。
+/// ファイル記述子 1 をファイル記述子 3 に複製できなければ、標準出力は閉じている。
+/// 閉じていれば `KELEUT_STDOUT_CLOSED=1` を設定し、開いていれば環境に残っている `KELEUT_STDOUT_CLOSED` を取り除いてから、`node` で `main.mjs` を起動する。
+/// この検査は、`$(...)` のようにファイル記述子を開く処理より前に行う。
+/// `main.mjs` は `dirname "$0"` で探すので、`run` は、`run` 自身のパスか、`DIR` へのシンボリックリンクを通したパスで起動する。
+/// `run` そのものへのシンボリックリンクから起動すると、Node が `MODULE_NOT_FOUND` のエラーを出して終了コード 1 で終了する。
 pub const RUN_SH: &str = r#"#!/bin/sh
 # keleut build の出力の起動の台本。node main.mjs を直に走らせると、閉じた標準出力を見分けられない。
 if { true 3>&1; } 2>/dev/null; then
@@ -72,17 +99,20 @@ fi
 exec node "$(dirname "$0")/main.mjs" "$@"
 "#;
 
-/// 翻訳し、検証と trap の検査をした出力(`program.wasm`、`main.mjs`、プログラムの 1 段のバイト数 `B_prog`)。
+/// コード生成を行い、結果を検証して trap の検査をし、出力を返す。
 ///
-/// 環境変数 `KELEUT_WASM_STATS` があれば、翻訳の統計を標準エラーに書く(測定用)。
-/// 統計の行の後ろには `k`、`B_prog`、`r`([`crate::clause_path`] の値)を書く。
-/// 切る前の大きさ [`crate::stack_need_kib`] より小さいスタックを使うときは、その切り方も書く。
-/// [`crate::STACK_CAP_KIB`] で切ったときは `、スタックを STACK_CAP で切った`、
-/// `STACK_CAP` が `k = 0` の大きさより小さく、`k = 0` の大きさで切ったときは `、スタックを k = 0 の大きさで切った` である。
+/// 返すのは、`program.wasm` の内容、`main.mjs` の内容、プログラムの 1 段に必要なバイト数 `B_prog` の組である。
+///
+/// 環境変数 `KELEUT_WASM_STATS` が設定されていれば、コード生成の統計を標準エラーに 1 行で書く。
+/// この行は測定に使う。
+/// 行の末尾には `k`、`B_prog`、`r`([`crate::clause_path`] の値)を書く。
+/// 切り詰める前のサイズ [`crate::stack_need_kib`] より小さいスタックを使うときは、どう切り詰めたかも書く。
+/// [`crate::STACK_CAP_KIB`] で切り詰めたときは `、スタックを STACK_CAP で切った` と書く。
+/// `STACK_CAP` が `B_prog = B_wasm` のときのサイズ(`k = 0` のサイズ)より小さく、そのサイズで切り詰めたときは `、スタックを k = 0 の大きさで切った` と書く。
 pub fn build_outputs(prog: &Program, max_depth: u64) -> Result<(Vec<u8>, String, u64), String> {
     let out = compile(prog, &Options { max_depth })?;
     crate::check::validate(&out.program)?;
-    // rt.wasm は C の線形メモリのコードなので、trap の検査器でなく検証だけを通す。
+    // rt.wasm は C で書いた、線形メモリを使うコードなので、trap の検査はせず、検証だけを行う。
     crate::check::validate(keleut_rtcore::RT_WASM).map_err(|e| format!("rt.wasm: {e}"))?;
     let rep = crate::check::trap_check(&out.program)?;
     if std::env::var_os("KELEUT_WASM_STATS").is_some() {
@@ -112,7 +142,7 @@ pub fn build_outputs(prog: &Program, max_depth: u64) -> Result<(Vec<u8>, String,
     Ok((out.program, main_mjs(&out.meta), b))
 }
 
-/// 3 つのファイルを `dir` に書く。
+/// 3 つのファイル(`program.wasm`、`rt.wasm`、`main.mjs`)を `dir` に書く。
 pub fn write_dir(dir: &Path, program: &[u8], main: &str) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     std::fs::write(dir.join("program.wasm"), program)?;
@@ -121,7 +151,7 @@ pub fn write_dir(dir: &Path, program: &[u8], main: &str) -> std::io::Result<()> 
     Ok(())
 }
 
-/// 起動の台本 [`RUN_SH`] を `dir/run` に、実行の許可(0755)を付けて書く。
+/// 起動スクリプト [`RUN_SH`] を `dir/run` に書き、実行権限(モード 0755)を付ける。
 pub fn write_run(dir: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let p = dir.join("run");
@@ -131,7 +161,7 @@ pub fn write_run(dir: &Path) -> std::io::Result<()> {
 
 /// `keleut build --target wasm -o DIR` の本体。
 ///
-/// 3 つのファイルと起動の台本 `run` を書く。
+/// 3 つのファイルと起動スクリプト `run` を `dir` に書く。
 pub fn build(prog: &Program, max_depth: u64, dir: &Path) -> Result<(), String> {
     let (program, main, _) = build_outputs(prog, max_depth)?;
     write_dir(dir, &program, &main)
@@ -139,15 +169,18 @@ pub fn build(prog: &Program, max_depth: u64, dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("{}: {e}", dir.display()))
 }
 
-/// 実行の選択肢。
+/// `keleut run --backend wasm` の実行オプション。
 #[derive(Clone, Debug)]
 pub struct RunOptions {
-    /// 論理的な深さの限度 `L`。
+    /// 論理的な深さの上限 `L`。
     pub max_depth: u64,
-    /// 起動のときに標準出力が閉じていたか(子の書き込みを EBADF で失敗させる)。
+    /// `keleut` の起動時に標準出力が閉じていたら真。
+    ///
+    /// 真なら、子プロセスに `KELEUT_STDOUT_CLOSED=1` を渡し、ホストが標準出力への書き込みを EBADF の出力エラーにする。
     pub stdout_closed: bool,
 }
 
+/// 一時ディレクトリ。ドロップするときにディレクトリを削除する。
 struct TempDir(PathBuf);
 
 impl Drop for TempDir {
@@ -158,7 +191,10 @@ impl Drop for TempDir {
 
 const TEMP_PREFIX: &str = "keleut-wasm-";
 
-/// 一時の場所を作る(0700。同じ名前があれば作り直さずに誤りにする)。
+/// 一時ディレクトリをモード 0700 で作る。
+///
+/// 同じ名前のものがすでにあれば、作り直さずにエラーを返す。
+/// 作る前に、残っている古い一時ディレクトリを削除する([`sweep_stale`])。
 fn temp_dir() -> std::io::Result<TempDir> {
     use std::os::unix::fs::DirBuilderExt;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -178,7 +214,10 @@ fn temp_dir() -> std::io::Result<TempDir> {
     Ok(TempDir(path))
 }
 
-/// 作ったプロセスがもう無い一時の場所(SIGKILL で終わった実行の残り)を消す。
+/// `base` の下にある一時ディレクトリのうち、作ったプロセスがもう存在しないものを削除する。
+///
+/// SIGKILL で終了した実行が残したディレクトリが、これに該当する。
+/// 作ったプロセスのプロセス ID は、ディレクトリの名前から読む。
 fn sweep_stale(base: &Path) {
     let Ok(rd) = std::fs::read_dir(base) else {
         return;
@@ -194,7 +233,7 @@ fn sweep_stale(base: &Path) {
         if pid <= 0 || pid == std::process::id() as i32 {
             continue;
         }
-        // SAFETY: シグナル 0 は送らずに、プロセスがあるかだけを調べる。
+        // SAFETY: シグナル 0 を指定した kill はシグナルを送らず、プロセスが存在するかどうかだけを調べる。
         let r = unsafe { kill(pid, 0) };
         if r != 0 && std::io::Error::last_os_error().raw_os_error() == Some(ESRCH) {
             let _ = std::fs::remove_dir_all(e.path());
@@ -235,26 +274,26 @@ const RLIMIT_DATA: i32 = 2;
 const RLIMIT_STACK: i32 = 3;
 /// Linux の `RLIMIT_AS`。
 const RLIMIT_AS: i32 = 9;
-/// `RLIM_INFINITY`。
+/// 制限がないことを表す `RLIM_INFINITY`。
 const RLIM_INFINITY: u64 = u64::MAX;
-/// `PR_SET_PDEATHSIG`。
+/// `prctl` の操作 `PR_SET_PDEATHSIG`。親プロセスが終了したときに届くシグナルを設定する。
 const PR_SET_PDEATHSIG: i32 = 1;
 const SIGHUP: i32 = 1;
 const SIGINT: i32 = 2;
 const SIGKILL: i32 = 9;
 const SIGTERM: i32 = 15;
 const ESRCH: i32 = 3;
-/// `SIG_DFL`。
+/// シグナルの既定の動作を表す `SIG_DFL`。
 const SIG_DFL: usize = 0;
-/// `SIG_IGN`。
+/// シグナルを無視する設定を表す `SIG_IGN`。
 const SIG_IGN: usize = 1;
-/// `signal` の失敗(`SIG_ERR`)。
+/// `signal` が失敗したときに返す `SIG_ERR`。
 const SIG_ERR: usize = usize::MAX;
 
-/// 今の限度(軟らかい限度、硬い限度)。
+/// 資源 `resource` の現在の制限を、(ソフトリミット、ハードリミット)の組で返す。
 fn limit(resource: i32) -> Option<(u64, u64)> {
     let mut r = RLimit { cur: 0, max: 0 };
-    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
+    // SAFETY: r は有効な領域で、getrlimit は呼び出しの間だけ r に書き込む。
     if unsafe { getrlimit(resource, &mut r) } == 0 {
         Some((r.cur, r.max))
     } else {
@@ -262,21 +301,25 @@ fn limit(resource: i32) -> Option<(u64, u64)> {
     }
 }
 
-/// 今の `RLIMIT_STACK` の硬い限度。
+/// 現在の `RLIMIT_STACK` のハードリミットを返す。
 fn hard_stack_limit() -> Option<u64> {
     limit(RLIMIT_STACK).map(|l| l.1)
 }
 
-/// 子の `RLIMIT_STACK` の軟らかい限度を上げてよいか(仮想メモリとデータの軟らかい限度がどちらも無限)。
+/// 子プロセスの `RLIMIT_STACK` のソフトリミットを上げてよければ真を返す。
+///
+/// 上げてよいのは、`RLIMIT_AS` と `RLIMIT_DATA` のソフトリミットがどちらも無限のときである。
 fn address_space_unlimited() -> bool {
     [RLIMIT_AS, RLIMIT_DATA]
         .iter()
         .all(|&r| matches!(limit(r), Some((RLIM_INFINITY, _))))
 }
 
-/// スタックの大きさの計画(`--stack-size` の KiB と RLIMIT_STACK のバイト数。使えなければ `None` で Worker の経路)。
+/// Node のメインスレッドのスタックで実行するときのスタックサイズを決める。
 ///
-/// `b_prog` はプログラムの 1 段に見込むバイト数 `B_prog` である。
+/// `--stack-size` に渡す KiB と、`RLIMIT_STACK` に設定するバイト数の組を返す。
+/// この方法を使えないときは `None` を返し、呼び出し元は `Worker` の経路を使う。
+/// `b_prog` は、プログラムの 1 段に必要なバイト数 `B_prog` である。
 pub fn stack_plan(max_depth: u64, b_prog: u64) -> Option<(u64, u64)> {
     let kib = stack_size_kib(max_depth, b_prog);
     let s = (kib + (64 << 10)).saturating_mul(1024);
@@ -290,11 +333,12 @@ pub fn stack_plan(max_depth: u64, b_prog: u64) -> Option<(u64, u64)> {
     }
 }
 
-/// 送られたシグナルを渡す子のプロセス番号(0 なら渡さない)。
+/// 受け取ったシグナルの転送先である、子プロセスのプロセス ID。0 なら転送しない。
 static CHILD: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
-/// 受けたシグナル(0 なら受けていない)。
+/// 受け取ったシグナルの番号。0 なら受け取っていない。
 static GOT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 
+/// シグナルハンドラ。受け取ったシグナルの番号を [`GOT`] に書き、同じシグナルを子プロセスに送る。
 extern "C" fn forward(sig: i32) {
     use std::sync::atomic::Ordering;
     GOT.store(sig, Ordering::SeqCst);
@@ -307,9 +351,10 @@ extern "C" fn forward(sig: i32) {
     }
 }
 
+/// 子プロセスに転送するシグナルの番号と名前。
 const FORWARDED: [(i32, &str); 3] = [(SIGINT, "SIGINT"), (SIGTERM, "SIGTERM"), (SIGHUP, "SIGHUP")];
 
-/// 今の扱いが無視する扱い(`SIG_IGN`)のシグナルか。
+/// シグナル `sig` の現在の設定が無視(`SIG_IGN`)なら真を返す。
 fn ignored(sig: i32) -> bool {
     let mut a = SigAction {
         handler: 0,
@@ -317,11 +362,15 @@ fn ignored(sig: i32) -> bool {
         flags: 0,
         restorer: 0,
     };
-    // SAFETY: 新しい扱いを渡さずに今の扱いを読むだけで、a は呼び出しの間だけ使う有効な領域である。
+    // SAFETY: 新しい設定を渡さず、現在の設定を読むだけである。
+    // a は有効な領域で、sigaction は呼び出しの間だけ a に書き込む。
     unsafe { sigaction(sig, std::ptr::null(), &mut a) == 0 && a.handler == SIG_IGN }
 }
 
-/// 子の終了状態を `keleut` の終了状態にする。
+/// 子プロセスの終了の種類から、`keleut` の終了コードを決める。
+///
+/// ホストが使う終了コード(0、3、4、70、74)はそのまま返す。
+/// それ以外の終了コードとシグナルによる終了は、内部エラーのメッセージを標準エラーに書いて 70 を返す。
 fn exit_status(status: std::process::ExitStatus) -> u8 {
     use std::os::unix::process::ExitStatusExt;
     match status.code() {
@@ -340,7 +389,7 @@ fn exit_status(status: std::process::ExitStatus) -> u8 {
     }
 }
 
-/// `keleut run --backend wasm` の本体。終了状態を返す。
+/// `keleut run --backend wasm` の本体。`keleut` の終了コードを返す。
 pub fn run(prog: &Program, o: &RunOptions) -> u8 {
     let (program, main, b_prog) = match build_outputs(prog, o.max_depth) {
         Ok(x) => x,
@@ -381,10 +430,11 @@ pub fn run(prog: &Program, o: &RunOptions) -> u8 {
     let parent = unsafe { getpid() };
     {
         use std::os::unix::process::CommandExt;
-        // SAFETY: prctl、getppid、setrlimit は async-signal-safe で、fork の後の子で呼んでよい。
+        // SAFETY: prctl、getppid、setrlimit は async-signal-safe で、fork の後の子プロセスで呼んでよい。
         unsafe {
             cmd.pre_exec(move || {
-                // keleut が終わったら(SIGKILL でも)子も終わる。
+                // keleut が終了したら、SIGKILL による終了でも、子プロセスに SIGKILL が届くようにする。
+                // 設定する前に keleut が終了していた場合は、getppid の値が変わるので、それを調べてエラーにする。
                 if prctl(PR_SET_PDEATHSIG, SIGKILL as u64, 0, 0, 0) != 0 {
                     return Err(std::io::Error::last_os_error());
                 }
@@ -436,16 +486,17 @@ pub fn run(prog: &Program, o: &RunOptions) -> u8 {
     use std::sync::atomic::Ordering;
     CHILD.store(child.id() as i32, Ordering::SeqCst);
     let mut old = Vec::new();
-    // 無視する扱いだったシグナルは無視したままにする(GOT に入らず、自分に送り直すこともない)。
+    // 無視する設定だったシグナルにはシグナルハンドラを登録せず、無視したままにする。
+    // そのシグナルの番号は GOT に入らないので、自分に送り直すこともない。
     for sig in forwarded {
-        // SAFETY: forward は async-signal-safe な操作(原子的な読み書きと kill)だけを行う。
+        // SAFETY: forward は async-signal-safe な操作(アトミックな読み書きと kill)だけを行う。
         old.push((sig, unsafe { signal(sig, forward as *const () as usize) }));
     }
     let waited = child.wait();
     CHILD.store(0, Ordering::SeqCst);
     for (sig, h) in old {
         if h != SIG_ERR {
-            // SAFETY: 前の扱いに戻す。
+            // SAFETY: signal が返した元の設定に戻すだけである。
             unsafe {
                 signal(sig, h);
             }
@@ -453,9 +504,9 @@ pub fn run(prog: &Program, o: &RunOptions) -> u8 {
     }
     let got = GOT.swap(0, Ordering::SeqCst);
     if got != 0 {
-        // 受けたシグナルで終わる(一時の場所を消してから)。
+        // 一時ディレクトリを削除してから、受け取ったシグナルで終了する。
         drop(dir);
-        // SAFETY: 既定の扱いに戻して同じシグナルを自分に送る。
+        // SAFETY: シグナルの設定を既定の動作に戻して、同じシグナルを自分に送るだけである。
         unsafe {
             signal(got, SIG_DFL);
             raise(got);
