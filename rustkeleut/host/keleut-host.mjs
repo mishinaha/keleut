@@ -1,55 +1,69 @@
-// RustKeleut の WasmGC の後段の、Node 側の実行時(計画 261024-1 の 6.10 節)。
+// RustKeleut の WasmGC バックエンドが Node の側で使うランタイムである。以下ではホストと呼ぶ。
 //
-// `keleut build` と `keleut run --backend wasm` は、このファイルの後ろに `await start(META)` を足して
-// `main.mjs` にし、`program.wasm` と `rt.wasm` の横に置く。
-// META は、診断の文面の型紙と、値の印字に要る名前の表である(crate keleut-wasm の meta.rs)。
+// `keleut build` と `keleut run --backend wasm` は、このファイルの後ろに `await start(META)` の 1 行を追加して
+// `main.mjs` を作り、`program.wasm` と `rt.wasm` と同じディレクトリに置く。
+// META は crate keleut-wasm の meta.rs が作る表で、診断メッセージのテンプレート、値の表示に必要な名前、
+// 深さの上限(maxDepth)、1 段に見積もるバイト数(bProg)、プログラムのシェイプ(shapes)を持つ。
 //
-// 閉じた標準出力: Node は起動のときに閉じた fd 1 を /dev/null で開き直すので、このファイルの中では
-// 閉じた標準出力を /dev/null に向けた実行と見分けられない。
-// そこで、Node の前に確かめた側が環境変数 KELEUT_STDOUT_CLOSED を 1 にして渡し、host は最初の書き込みで
-// `keleut: 標準出力に書き出せません: Bad file descriptor` を書いて 74 で終える。
-// 渡すのは `keleut run --backend wasm` と、`keleut build` が書く起動の台本 DIR/run である。
-// `node DIR/main.mjs` を直に走らせると閉じた標準出力を見分けられず、書いても 0 で終わる。
+// 閉じた標準出力の扱い: Node は起動時に、閉じているファイル記述子 1 を /dev/null で開き直す。
+// そのため、このファイルの中では、標準出力が閉じている実行と /dev/null に向けた実行を区別できない。
+// そこで、Node を起動する側が先に調べ、閉じていれば環境変数 KELEUT_STDOUT_CLOSED を 1 にして渡す。
+// このときホストは、ファイル記述子 1 への書き込みをすべて EBADF の失敗として扱う。
+// プログラムが出力すると出力エラーになり、ホストは `keleut: 標準出力に書き出せません: Bad file descriptor` を
+// 標準エラーに書いて、終了コード 74 で終了する。
+// この変数を渡すのは、`keleut run --backend wasm` と、`keleut build` が書く起動スクリプト DIR/run である。
+// `node DIR/main.mjs` を直接実行すると、閉じた標準出力を区別できないので、プログラムが出力しても終了コード 0 で終了する。
 //
-// 受け持つことは次のとおりである。
+// ホストは次の処理を行う。
 //
-// - 起動: `rt.wasm` を先に作り、その線形メモリと関数を `program.wasm` に渡す。
-//   環境変数 KELEUT_WASM_DIRECT が 1 なら、この Node のスタック(`keleut run` が RLIMIT_STACK と
-//   `--stack-size` を上げて起動する)で走らせる。
-//   そうでなければ、`Worker` の `resourceLimits.stackSizeMb` でスタックを取って走らせる(`node main.mjs` だけで走る形)。
-//   Worker のスタックは META.bProg(プログラムの 1 段に見込むバイト数)で決め、STACK_CAP_KIB で切る
-//   (k = 0 の大きさより小さくは切らない)。
-//   環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックの大きさを標準エラーに 1 行書く。
-//   環境変数 KELEUT_WASM_RMDIR がこのファイルの場所を指すとき(`keleut run` の一時の場所)は、
-//   2 つの `.wasm` を読んだ後でその場所を消す。
-//   起動と読み込みの失敗、捕まえなかった例外は、内部エラーの 70 で終わる。
-//   環境変数 KELEUT_IGNORED_SIGNALS に名前を挙げたシグナル(`keleut` が無視する扱いで起動されたもの)には、
-//   何もしない処理を登録する(Node は引き継いだ SIG_IGN を既定の扱いに戻すため)。
-//   V8 のヒープそのものが尽きたときは Node が SIGABRT で終わり、`keleut run` は 70 で終わる。
-//   このとき cancel 節は走らず、バッファに残っていた標準出力は失われる(§15.5 からの既知の逸脱、P252)。
-// - 標準出力: crate keleut-rt の out.rs と同じ規約(64 KiB のバッファ、満ちたときと終了の前の flush、
-//   短い書き込みの繰り返し、EAGAIN を待って再試行、EBADF・EPIPE・ECONNRESET ではバッファを捨て、
-//   ほかの誤りでは書けなかったバイトを残す)。
-// - 診断: 実行時エラーの文面(値の印字を含む)を作り、終了状態を決める。
-//   文面はインタプリタ(crate keleut-interp)と同じバイト列にする。
-// - 形の表: rtcore の形の表を線形メモリに置き、満ちたら広げる。
+// - 起動: `rt.wasm` を先にインスタンス化し、その線形メモリと関数を `program.wasm` に渡す。
+//   環境変数 KELEUT_WASM_DIRECT が 1 なら、この Node 自身のスタックで実行する。
+//   このスタックは、`keleut run` が RLIMIT_STACK と `--stack-size` を引き上げて用意したものである。
+//   1 でなければ、`Worker` の `resourceLimits.stackSizeMb` でスタックを確保して実行する。
+//   `node main.mjs` だけで実行するときは、この経路になる。
+//   Worker のスタックサイズは META.bProg(プログラムの 1 段に見積もるバイト数)から求め、
+//   STACK_CAP_KIB を超えたら STACK_CAP_KIB にする。
+//   ただし、1 段を B_WASM バイトとして求めたサイズより小さくはしない。
+//   環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックサイズを標準エラーに 1 行書く。
+//   環境変数 KELEUT_WASM_RMDIR がこのファイルのディレクトリを指すときは、2 つの `.wasm` を読んだ後で
+//   そのディレクトリを削除する。
+//   `keleut run` が、自分の作った一時ディレクトリをこの変数で渡す。
+//   モジュールの読み込みかインスタンス化に失敗したとき、Node のバージョンが古いとき、Worker を作れないとき、
+//   例外が捕捉されなかったときは、内部エラーとして終了コード 70 で終了する。
+//   ただし、起動の途中で線形メモリを拡張できないときは、メモリ不足の実行時エラーとして終了コード 3 で終了する。
+//   環境変数 KELEUT_IGNORED_SIGNALS に名前のあるシグナルのうち、SIGINT、SIGTERM、SIGHUP には、
+//   何もしないシグナルハンドラを登録する。
+//   `keleut` は、自分の起動時に無視する設定(SIG_IGN)だったシグナルの名前を、この変数で渡す。
+//   Node は引き継いだ SIG_IGN を既定の動作に戻すので、登録しなければシグナルを無視したままにできない。
+//   V8 のヒープそのものを使い切ったときは Node が SIGABRT で終了し、`keleut run` は終了コード 70 で終了する。
+//   このとき cancel 節は実行されず、バッファに残っていた標準出力は失われる。
+//   これは LangSpec §15.5 との既知の相違である。
+// - 標準出力: crate keleut-rt の out.rs と同じ規約に従う。
+//   出力は 64 KiB のバッファに追記し、バッファがいっぱいになったとき、標準エラーに書く直前、終了の前に flush する。
+//   1 回の書き込みで一部しか書けなかったときは、残りを書き終えるまで書き込みを繰り返す。
+//   EINTR ならすぐに、EAGAIN なら少し待ってから再試行する。
+//   EBADF、EPIPE、ECONNRESET で失敗したらバッファを捨て、それ以外のエラーなら書けなかったバイトをバッファに残す。
+// - 診断: 実行時エラーのメッセージ(値の表示を含む)を作り、終了コードを決める。
+//   メッセージは、インタプリタ(crate keleut-interp)とバイト単位で一致させる。
+// - シェイプ表: rtcore のシェイプ表を線形メモリに置き、いっぱいになったら拡張する。
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, workerData } from 'node:worker_threads';
 
 const NODE_MIN = [26, 9, 0];
-// k = 0 のプログラムの 1 段に見込むバイト数と、スタックの大きさの上限(KiB)。
-// crate keleut-wasm の B_WASM と STACK_CAP_KIB と同じ値である。
+// B_WASM は 1 段に見積もるバイト数の最小の値で、crate keleut-wasm の b_prog が k = 0 かつ r = 0 のプログラムに返す値である。
+// STACK_CAP_KIB はスタックサイズの上限(KiB)である。
+// どちらも crate keleut-wasm の同じ名前の定数と同じ値にする。
 const B_WASM = 1536;
 const STACK_CAP_KIB = 16777216;
 const BUFFER_BYTES = 65536;
 
-// 型紙の種類(meta.rs の kind)。
+// テンプレートの種類(meta.rs の kind)。
 const K_RT = 0, K_DEPTH = 1, K_OOM = 2, K_IO = 3, K_UNHANDLED = 4, K_UNIMPL = 5, K_INTERNAL = 6;
-// 型紙の後ろに足すもの(meta.rs の arg)。
+// テンプレートの後ろにつなぐ引数の種類(meta.rs の arg)。
 const A_NONE = 0, A_SHOW = 1, A_F64 = 2, A_STR = 3, A_ARGS = 4;
-// 状態語の種類(lib.rs の pk)。
+// 状態ワードの種類(lib.rs の pk)。
 const PK_ERROR = 4;
 // 値の種類(rt.rs の vk)。
 const VK = {
@@ -59,8 +73,8 @@ const VK = {
 
 const enc = new TextEncoder();
 
-// OS の誤りの文(glibc の strerror と同じ綴り。Rust の io::Error の印字に合わせる)。
-// x86_64 の Linux の glibc の表を、名前(Node の err.code)ごとに写したもの。
+// OS のエラーメッセージの表。glibc の strerror と同じ文字列にして、Rust の io::Error の表示に合わせる。
+// x86_64 の Linux の glibc の表を、エラー名(Node の err.code)ごとに書き写した。
 const STRERROR = {
   EPERM: 'Operation not permitted',
   ENOENT: 'No such file or directory',
@@ -198,7 +212,7 @@ const STRERROR = {
   EHWPOISON: 'Memory page has hardware error',
 };
 
-// 表に無い誤りは、glibc が知らない番号に返す文と同じにする(libuv の errno は負の数)。
+// 表にないエラーは、glibc が未知の番号に返すメッセージと同じにする。libuv の errno は負の数なので、絶対値を使う。
 function strerror(e) {
   const s = STRERROR[e.code];
   if (s !== undefined) return s;
@@ -225,7 +239,7 @@ function sleepMs(ms) {
   Atomics.wait(sleeper, 0, 0, ms);
 }
 
-// 記述子 fd に data を書く(標準エラー用。誤りは無視する)。
+// ファイル記述子 fd に data を書く。標準エラーへの出力に使い、エラーは無視する。
 function writeQuiet(fd, data) {
   let written = 0;
   while (written < data.length) {
@@ -244,7 +258,7 @@ function writeQuiet(fd, data) {
   }
 }
 
-// 標準出力(out.rs の Out と同じ規約)。
+// 標準出力。out.rs の Out と同じ規約に従う。
 class Out {
   constructor(closed) {
     this.closed = closed;
@@ -262,7 +276,9 @@ class Out {
     this.len += data.length;
   }
 
-  // data を書けるだけ書く。失敗したら { error, written, discard } を返す。
+  // data をファイル記述子 1 に書く。すべて書けたら null を返し、失敗したら { error, written, discard } を返す。
+  // error はエラーメッセージ、written は書けたバイト数である。
+  // discard は、バッファを捨てるエラー(EBADF、EPIPE、ECONNRESET)のときに真になる。
   writeAll(data) {
     let written = 0;
     let waits = 0;
@@ -292,7 +308,7 @@ class Out {
     return null;
   }
 
-  // バッファを書き出す。失敗したら文を返す。
+  // バッファを flush する。失敗したらエラーメッセージを返す。
   flush() {
     if (this.len === 0) return null;
     const data = this.buf.slice(0, this.len);
@@ -311,7 +327,8 @@ class Out {
     return f.error;
   }
 
-  // Console.write の文字列を足す。失敗したら文を返す。
+  // Console.write の文字列をバッファに追記し、バッファがいっぱいになったら flush する。
+  // 書き込みに失敗したらエラーメッセージを返す。
   write(data) {
     if (this.len + data.length < BUFFER_BYTES) {
       this.push(data);
@@ -341,7 +358,7 @@ class Out {
     return null;
   }
 
-  // 標準出力を flush してから(失敗は無視する)、msg を標準エラーに書く。
+  // 標準出力を flush してから、msg を標準エラーに書く。flush の失敗は無視する。
   eprint(msg) {
     this.flush();
     writeQuiet(2, msg);
@@ -357,7 +374,7 @@ function versionOk() {
   return true;
 }
 
-// OCaml の String.escaped と同じ規則でバイト列を書く(crate keleut-rt の escape_into)。
+// OCaml の String.escaped と同じ規則でバイト列をエスケープした文字列を返す(crate keleut-rt の escape_into と同じ)。
 function escapeBytes(b) {
   let s = '';
   for (const c of b) {
@@ -373,7 +390,8 @@ function escapeBytes(b) {
   return s;
 }
 
-// keleut run が作った一時の場所なら消す(2 つの .wasm を読んだ後。keleut が殺されても残らない)。
+// dir が keleut run の作った一時ディレクトリなら削除する。
+// 2 つの .wasm を読んだ後に呼ぶので、その後で keleut が強制終了されても一時ディレクトリは残らない。
 function removeTempDir(dir) {
   const want = process.env.KELEUT_WASM_RMDIR;
   if (want === undefined || want === '') return;
@@ -382,7 +400,7 @@ function removeTempDir(dir) {
   try {
     fs.rmSync(here, { recursive: true, force: true });
   } catch (e) {
-    // 消せなくても keleut が後で消す。
+    // 削除できなくても、keleut が後で削除する。
   }
 }
 
@@ -404,12 +422,14 @@ function runProgram(dir, META, exit) {
   }
   const mem = rt.memory;
   let top = (rt.__heap_base.value + 15) & ~15;
-  // 試験用: 環境変数 KELEUT_TEST_WASM_MEM_GROW(バイト数)があれば、線形メモリを起動を終えた時点の大きさから
-  // それ以上は広げず、メモリの不足として扱う。起動の途中では上限を置かない(起動を終えてから memCap を決める)。
+  // テスト用: 環境変数 KELEUT_TEST_WASM_MEM_GROW(バイト数)があれば、線形メモリの拡張を、
+  // 起動を終えた時点のサイズにそのバイト数を加えたところまでに制限する。それを超える拡張はメモリ不足として扱う。
+  // 起動の途中では制限しない(memCap は起動を終えてから決める)。
   let memCap = null;
 
-  // 線形メモリの上に n バイトの領域を取る(解放はしない)。
-  // 線形メモリを広げられなければ 0 を返す(メモリの不足。0 番地は heap_base より下なので、取った領域とは紛れない)。
+  // 線形メモリの上に n バイトの領域を確保する。解放はしない。
+  // 線形メモリを拡張できなければ、メモリ不足として 0 を返す。
+  // アドレス 0 は heap_base より下にあるので、確保した領域のアドレスが 0 になることはない。
   function alloc(n) {
     const p = top;
     const end = p + ((n + 15) & ~15);
@@ -426,8 +446,8 @@ function runProgram(dir, META, exit) {
     return p;
   }
 
-  // 起動の途中で線形メモリを広げられなければ、評価のための領域を用意できない場合として、
-  // 初期化を始めるときの実行時エラー(メモリの不足、3)で終える。
+  // 起動の途中で線形メモリを拡張できないときは、LangSpec §15.5 の「評価のための領域を用意できない場合」に相当する。
+  // §15.5 に従い、初期化を始めるときに起きた実行時エラーとして `実行時エラー: メモリ不足です` を書き、終了コード 3 で終了する。
   function startAlloc(n) {
     const p = alloc(n);
     if (p === 0) {
@@ -438,10 +458,10 @@ function runProgram(dir, META, exit) {
   }
 
   const scratch = rt.krt_scratch();
-  // 形の表。
+  // シェイプ表の容量である。capShapes は入れられるシェイプの個数、capLabels は入れられるラベルの個数を表す。
   let capShapes = 1024;
   let capLabels = 16384;
-  // 形の表を取る。線形メモリを広げられなければ 0 を返す。
+  // シェイプ表を確保する。線形メモリを拡張できなければ 0 を返す。
   function newTable(cs, cl) {
     const bytes = rt.krt_shapes_bytes(cs, cl);
     const p = alloc(bytes + 8);
@@ -479,9 +499,9 @@ function runProgram(dir, META, exit) {
   }
   const shapes = new WebAssembly.Global({ value: 'i32', mutable: true }, table);
 
-  // 文字列を受け渡す領域(rt.rs の STAGE と同じ大きさ)。
-  // 起動のときに 1 度だけ取り、広げない。
-  // 長い文字列は Wasm の側が一切れずつ写すので、形の表が線形メモリを使い切った後でも書き出せる。
+  // 文字列の受け渡し用のバッファ。サイズは rt.rs の STAGE と同じである。
+  // 起動時に 1 度だけ確保し、拡張しない。
+  // 長い文字列は Wasm の側が断片ごとにコピーするので、シェイプ表が線形メモリを使い切った後でも出力できる。
   const STAGE = 65536;
   const stage = startAlloc(STAGE);
   function buf(n) {
@@ -495,10 +515,10 @@ function runProgram(dir, META, exit) {
     const grow = process.env.KELEUT_TEST_WASM_MEM_GROW;
     if (grow !== undefined && grow !== '') memCap = mem.buffer.byteLength + Number(grow);
   }
-  // host.write の、最後の切れの前までに渡された切れ。
+  // Wasm の側が host.write に渡した断片のうち、最後の断片が来るまでためておくもの。
   let pending = [];
 
-  // 診断の文面(番号から)。
+  // 番号から診断メッセージを引く表。
   const msgs = new Map();
   let nextMsg = 1;
   let X = null;
@@ -525,9 +545,11 @@ function runProgram(dir, META, exit) {
     return Array.from(new Uint32Array(mem.buffer, p, n));
   }
 
-  // 値の印字(crate keleut-rt の Rt::show と同じ)。深い値でも JS のスタックを使わないよう、作業の列でたどる。
-  // レコードのフィールドは Rt::show と同じく正準の配置の順に書く。付録 B はラベルの違うフィールドどうしの順を読み手に任せるが、
-  // 後段の群の中では出力が一致しなければならない(D499)ので、この順を Rt::show と変えてはならない。
+  // 値を表示用のバイト列にする(crate keleut-rt の Rt::show と同じ)。
+  // 深い値でも JS のスタックを使わないように、再帰せずにワークリストでたどる。
+  // レコードのフィールドは、Rt::show と同じく正準なレイアウトの順に書く。
+  // IRSpec の付録 B は、ラベルの違うフィールドどうしの順序をリーダに任せている。
+  // しかし RustKeleut のバックエンドどうしは出力が一致しなければならないので、この順序を Rt::show と変えてはならない。
   function show(v0) {
     const parts = [];
     const work = [{ v: v0 }];
@@ -696,7 +718,7 @@ function runProgram(dir, META, exit) {
   }
 
   const host = {
-    // more が 0 でなければ、続きの切れがある。切れを溜め、最後の切れで 1 度に書く。
+    // more が 0 でなければ、続きの断片がある。断片をためておき、最後の断片が来たらまとめて 1 度に書く。
     write(ptr, len, more) {
       const part = new Uint8Array(mem.buffer, ptr, len).slice();
       if (more !== 0) {
@@ -753,9 +775,10 @@ function runProgram(dir, META, exit) {
       }
       writeQuiet(2, bytesOf(['cancel 節で例外が抑制されました: ', text, '\n']));
     },
-    // 形の表を 2 倍に広げる。
-    // 線形メモリを広げられなければ、表も容量も元のまま 1 を返し、rt.wasm がメモリの不足の ERROR を立てる。
-    // cancel 節の中で再び表が満ちても、同じ大きさをもう一度求めて同じく失敗する。
+    // シェイプ表を 2 倍に拡張する。
+    // 線形メモリを拡張できなければ、表も容量も元のまま 1 を返す。
+    // 1 を受け取った program.wasm のランタイム関数が、メモリ不足の ERROR を設定する。
+    // cancel 節の中で再び表がいっぱいになっても、同じサイズをもう一度要求して同じように失敗する。
     shapes_grow() {
       const t2 = newTable(capShapes * 2, capLabels * 2);
       if (t2 === 0) return 1;
@@ -804,11 +827,12 @@ function runProgram(dir, META, exit) {
   exit(70);
 }
 
-// 起動する。main.mjs の最後の行が呼ぶ。
+// プログラムを起動する。main.mjs の最後の行が呼ぶ。
 export async function start(META) {
   const dir = new URL('./', import.meta.url);
   const exit = (c) => process.exit(c);
-  // ホストの中で捕まえなかった例外は、Node の終了状態 1(型の誤りの番号)にせず、内部エラーの 70 にする。
+  // ホストの中で例外が捕捉されないと、Node は既定で終了コード 1 で終了するが、1 は型エラーの終了コードである。
+  // そこで、例外を内部エラーとして標準エラーに書き、終了コード 70 で終了する。
   const fail = (e) => {
     writeQuiet(2, enc.encode(`keleut: 内部エラー: ${e}\n`));
     exit(70);
@@ -819,7 +843,7 @@ export async function start(META) {
     runProgram(dir, workerData.META, exit);
     return;
   }
-  // keleut が無視する扱いで起動されたシグナルは、ここでも無視する。
+  // keleut の起動時に無視する設定(SIG_IGN)だったシグナルは、ここでも無視する。
   for (const sig of (process.env.KELEUT_IGNORED_SIGNALS ?? '').split(',')) {
     if (sig === 'SIGINT' || sig === 'SIGTERM' || sig === 'SIGHUP') process.on(sig, () => {});
   }
@@ -827,17 +851,18 @@ export async function start(META) {
     writeQuiet(2, enc.encode(`keleut: 内部エラー: Node ${NODE_MIN.join('.')} 以上が要ります(この Node は ${process.versions.node})\n`));
     exit(70);
   }
-  // 環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックの大きさを標準エラーに 1 行書く(測定と試験用)。
+  // 環境変数 KELEUT_WASM_STATS があれば、選んだ経路と Worker のスタックサイズを標準エラーに 1 行書く。測定とテストに使う。
   const stats = process.env.KELEUT_WASM_STATS !== undefined;
   if (process.env.KELEUT_WASM_DIRECT === '1') {
     if (stats) writeQuiet(2, enc.encode('keleut-host: path=direct\n'));
     runProgram(dir, META, exit);
     return;
   }
-  // RLIMIT_STACK と --stack-size を上げずに起動されたので、Worker のスタックで走らせる(D545)。
-  // 大きさは (L + R) × B_prog + 32 MiB で、keleut run の --stack-size と同じ式である(crate keleut-wasm の stack_size_kib)。
-  // B_prog はプログラムの 1 段に見込むバイト数で、META.bProg にある(crate keleut-wasm の b_prog)。
-  // STACK_CAP_KIB を超えたら切るが、B_WASM で求めた k = 0 の大きさより小さくはしない。
+  // KELEUT_WASM_DIRECT が 1 でないときは、Node を起動した側が RLIMIT_STACK と --stack-size を引き上げていないので、Worker のスタックで実行する。
+  // スタックサイズは (L + R) × B_prog + 32 MiB で、keleut run が --stack-size に渡す値と同じ式で求める(crate keleut-wasm の stack_size_kib)。
+  // B_prog はプログラムの 1 段に見積もるバイト数で、META.bProg に入っている(crate keleut-wasm の b_prog)。
+  // STACK_CAP_KIB を超えたら STACK_CAP_KIB にするが、1 段を B_WASM バイトとして求めたサイズより小さくはしない。
+  // resourceLimits.stackSizeMb には、MiB に切り上げてから 64 MiB を加えた値を渡す。
   const L = META.maxDepth;
   const R = Math.max(1024, Math.floor(L / 64));
   const need = (b) => Math.ceil(((L + R) * b + 32 * 1024 * 1024) / 1024);

@@ -1,13 +1,15 @@
-/* rtcore: レコードの形の表(rtcore.h の「レコードの形」を参照)。
+/* rtcore: レコードのシェイプ表(rtcore.h の「レコードのシェイプ」を参照)。
 
-   表は呼び出し側のメモリの上に、見出し、ハッシュの表、形の記録、ラベルの溜めの順に置く。
-   ハッシュの表は開番地法で、各枠に形の番号 + 1(0 は空き)を入れる。
-   枠の数は 2 の冪で、形の容量の 2 倍以上にするので、表の使用率は 1/2 を超えない。
-   形の記録は、ラベルの溜めの中の位置、長さ、ハッシュ値の 3 つである。
+   表は、呼び出し元が渡したメモリに、ヘッダ、ハッシュ表、シェイプの記録、ラベルのプールの順に置く。
+   ハッシュ表はオープンアドレス法で、各スロットにシェイプの番号 + 1 を入れる。
+   0 は空きのスロットを表す。
+   スロットの個数は 2 の冪で、シェイプの容量の 2 倍以上にするので、ハッシュ表の使用率は 1/2 を超えない。
+   シェイプの記録は、ラベルのプールの中のオフセット、長さ、ハッシュ値の 3 つである。
 
-   新しい形を作る操作は、まず候補の列をラベルの溜めの末尾に書く。
-   同じ列がすでにあれば、溜めの末尾を進めずに既存の番号を返す。
-   したがって、表を変えるのは新しい形を足すときだけである。 */
+   新しいシェイプを作る操作は、まず候補の並びをラベルのプールの末尾に書く。
+   同じ並びがすでにあれば、プールの末尾を進めずに既存の番号を返す。
+   表がいっぱいのときも、プールの末尾を進めない。
+   したがって、表が変わるのは新しいシェイプを追加するときだけである。 */
 #include "rtcore.h"
 
 typedef struct {
@@ -21,7 +23,7 @@ struct krt_shapes {
   uint32_t cap_labels;
   uint32_t nshapes;
   uint32_t nlabels;
-  uint32_t hmask; /* ハッシュの表の枠の数 - 1 */
+  uint32_t hmask; /* ハッシュ表のスロットの個数 - 1 */
   uint32_t pad;
 };
 
@@ -46,7 +48,8 @@ size_t krt_shapes_bytes(uint32_t cap_shapes, uint32_t cap_labels) {
   return (size_t)bytes;
 }
 
-/* 列の FNV-1a のハッシュ値。 */
+/* ラベルの並びのハッシュ値を返す。
+   各ラベルの 4 バイトを下位のバイトから順に FNV-1a で処理し、最後にハッシュ値に長さ n を XOR して FNV の素数を掛ける。 */
 static uint32_t hash_labels(const uint32_t *l, uint32_t n) {
   uint32_t h = 2166136261u;
   for (uint32_t i = 0; i < n; i++) {
@@ -62,7 +65,8 @@ static uint32_t hash_labels(const uint32_t *l, uint32_t n) {
   return h;
 }
 
-/* 溜めの末尾に置いた長さ n の候補の列を intern する。 */
+/* プールの末尾に置いた長さ n の候補の並びを intern し、シェイプの番号を返す。
+   同じ並びがなく、シェイプの容量も残っていなければ KRT_SHAPE_FULL を返す。 */
 static uint32_t commit(krt_shapes *t, uint32_t n) {
   uint32_t *p = pool(t);
   const uint32_t *cand = p + t->nlabels;
@@ -134,7 +138,8 @@ int krt_shapes_copy(krt_shapes *dst, const krt_shapes *src) {
   return 0;
 }
 
-/* 列 l(長さ n、昇順)で label が最初に現れる位置、または入るべき位置。 */
+/* 昇順に並んだ長さ n の並び l の中で、label が最初に現れる位置を返す。
+   label がなければ、label を入れるべき位置を返す。 */
 static uint32_t lower_bound(const uint32_t *l, uint32_t n, uint32_t label) {
   uint32_t lo = 0, hi = n;
   while (lo < hi) {
@@ -161,7 +166,8 @@ uint32_t krt_shape_intern(krt_shapes *t, const uint32_t *labels, uint32_t n, uin
   uint32_t *out;
   if (n > t->cap_labels - t->nlabels) return KRT_SHAPE_FULL;
   out = pool(t) + t->nlabels;
-  /* 安定な整列。書いた i 番目の位置は、より小さいラベルの数と、前に書いた同じラベルの数の和である。 */
+  /* 安定なソートを行う。
+     書いた i 番目のラベルの位置は、それより小さいラベルの個数と、それより前に書いた同じラベルの個数の和である。 */
   for (uint32_t i = 0; i < n; i++) {
     uint32_t at = 0;
     for (uint32_t j = 0; j < n; j++)

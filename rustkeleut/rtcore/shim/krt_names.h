@@ -1,8 +1,8 @@
-/* rtcore: musl から写した翻訳単位はすべて -include krt_names.h で組み、
-   定義または参照する外部の記号に krt_ を付ける。
+/* rtcore: musl からコピーしたソースは、どれも -include krt_names.h を付けてコンパイルする。
+   このヘッダは、ソースが定義または参照する外部シンボルの名前を、krt_ で始まる名前に置き換える。
    musl のソースは改変しない。
-   こうすると、x86_64 のオブジェクトが組み込み先の libc(glibc の sin、__sin など)とぶつからず、
-   LLVM もこれらの関数を標準の関数とみなさない。 */
+   こうすると、x86_64 では、オブジェクトファイルのシンボルが、リンクする libc のシンボル(glibc の sin、__sin など)と衝突しない。
+   LLVM も、これらの関数を標準ライブラリの関数とみなさない。 */
 #ifndef KRT_NAMES_H
 #define KRT_NAMES_H
 
@@ -25,10 +25,13 @@
 #define __math_divzero krt___math_divzero
 #define __math_invalid krt___math_invalid
 
-/* exp.c と log.c は、__FP_FAST_FMA が定義されたときだけ fma を使う。
-   2 つの対象は同じ分岐を通らなければならず、rtcore は融合積和の無い基準の x86_64 と wasm32 に向けて組む。
-   -march=native や -mfma で組むと __FMA__ だけが定義されることがあるので、それも止める。
-   その組み方では、-ffp-contract=off が上書きされたときに積和が融合されうる。 */
+/* log.c は __FP_FAST_FMA が 0 でない値に定義されているときだけ __builtin_fma を使い、log_data.h と log_data.c は同じ条件で表 tab2 を省く。
+   2 つのターゲットで結果を一致させるには、どちらも同じ分岐を通らなければならない。
+   そこで rtcore は、x86_64 も wasm32 も、拡張命令を有効にしない既定の設定でビルドする。
+   この設定では融合積和(FMA)の命令が使われない。
+   __FP_FAST_FMA が定義されていれば、ビルドをエラーにする。
+   -march=native や -mfma を付けてビルドすると __FMA__ だけが定義されることがあるので、__FMA__ が定義されているときもエラーにする。
+   これらのオプションを付けたビルドでは、-ffp-contract=off が上書きされたときに、乗算と加算が 1 つの FMA 命令にまとめられることがある。 */
 #if defined(__FP_FAST_FMA) || defined(__FMA__)
 #error "rtcore: __FP_FAST_FMA and __FMA__ must not be defined (build without -mfma or -march=native)"
 #endif

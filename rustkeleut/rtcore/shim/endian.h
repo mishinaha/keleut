@@ -1,5 +1,6 @@
-/* rtcore: musl の libm.h のための最小の <endian.h> である。
-   2 つの対象(x86_64 と wasm32)はどちらもリトルエンディアンである。 */
+/* rtcore: musl の libm.h が読む <endian.h> の代わりで、libm.h が使うマクロだけを定義する。
+   ターゲットの x86_64 と wasm32 はどちらもリトルエンディアンである。
+   それ以外のバイト順のターゲットでは、#error でコンパイルを止める。 */
 #ifndef _ENDIAN_H
 #define _ENDIAN_H
 
