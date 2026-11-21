@@ -1,11 +1,12 @@
-//! llvm-sys の薄い包み(計画 261024-1 の 6.8 節)。
+//! llvm-sys の薄いラッパ。
 //!
-//! LLJIT(ORCv2)を作り、Rust の関数の番地を絶対の記号として登録し、LLVM IR の文面のモジュールを足して翻訳する。
-//! モジュール 1 つに文脈 1 つを使う。
-//! 文脈は `LLVMContextCreate` で作り、`LLVMOrcCreateNewThreadSafeContextFromLLVMContext` で包む
-//! (LLVM 21 以降の C API には `LLVMOrcThreadSafeContextGetContext` が無い)。
+//! LLJIT(ORCv2)を作り、Rust の関数のアドレスを絶対シンボルとして登録し、LLVM IR のテキストで書いたモジュールを追加してコンパイルする。
+//! モジュール 1 つにつき、LLVM のコンテキストを 1 つ使う。
+//! コンテキストは `LLVMContextCreate` で作ってから、`LLVMOrcCreateNewThreadSafeContextFromLLVMContext` でスレッドセーフなコンテキストに包む。
+//! LLVM 21 以降の C API には `LLVMOrcThreadSafeContextGetContext` がないので、この順序で作る。
 //!
-//! この包みのどの値も、作ったスレッドの中だけで使う(JIT の翻訳のスレッド。[`crate`] の冒頭)。
+//! このラッパの値はどれも、作ったスレッドの中だけで使う。
+//! そのスレッドは JIT のコンパイルスレッドである([`crate`] の冒頭)。
 
 use std::ffi::{CStr, CString};
 use std::ptr::null_mut;
@@ -19,13 +20,15 @@ use llvm_sys::orc2::*;
 use llvm_sys::prelude::LLVMModuleRef;
 use llvm_sys::transforms::pass_builder::*;
 
-/// LLVM の誤りを文字列にして捨てる。
+/// LLVM のエラーからメッセージを取り出して文字列で返し、エラーを破棄する。
 ///
 /// # Safety
 ///
-/// `e` は空でない LLVM の誤りで、ここで所有権を受け取る。
+/// `e` は null でない LLVM のエラーでなければならない。
+/// この関数が所有権を受け取る。
 unsafe fn err_string(e: LLVMErrorRef) -> String {
-    // SAFETY: 呼び出し側の約束による。文面は LLVMDisposeErrorMessage で返す。
+    // SAFETY: e は、呼び出し元の事前条件から、null でない LLVM のエラーである。
+    // メッセージは LLVMDisposeErrorMessage で解放する。
     unsafe {
         let m = LLVMGetErrorMessage(e);
         let s = CStr::from_ptr(m).to_string_lossy().into_owned();
@@ -34,32 +37,35 @@ unsafe fn err_string(e: LLVMErrorRef) -> String {
     }
 }
 
-/// LLVM の誤りを `Result` にする。
+/// LLVM のエラーを `Result` に変換する。
 ///
 /// # Safety
 ///
-/// `e` は LLVM の関数が返した誤り(空なら成功)である。
+/// `e` は LLVM の関数が返したエラーでなければならない。
+/// null は成功を表す。
 unsafe fn check(e: LLVMErrorRef) -> Result<(), String> {
     if e.is_null() {
         Ok(())
     } else {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: e は null でなく、呼び出し元の事前条件から、LLVM の関数が返したエラーである。
         Err(unsafe { err_string(e) })
     }
 }
 
-/// LLJIT の 1 つの実体。
+/// LLJIT を 1 つ所有する。
+/// ドロップすると LLJIT を破棄する。
 pub struct Jit {
     j: LLVMOrcLLJITRef,
 }
 
 impl Jit {
-    /// 既定の設定で LLJIT を作る(対象はこの機械)。
+    /// 既定の設定で LLJIT を作る。
+    /// ターゲットはネイティブターゲット(実行しているマシン)である。
     pub fn new() -> Result<Jit, String> {
         static INIT: std::sync::Once = std::sync::Once::new();
         let mut failed = false;
         INIT.call_once(|| {
-            // SAFETY: この機械の対象と、機械語を書く部品を登録するだけである。
+            // SAFETY: ネイティブターゲットとアセンブリプリンタを登録するだけである。
             unsafe {
                 failed = llvm_sys::target::LLVM_InitializeNativeTarget() != 0
                     || llvm_sys::target::LLVM_InitializeNativeAsmPrinter() != 0;
@@ -69,14 +75,15 @@ impl Jit {
             return Err("LLVM のこの機械の対象を登録できません".into());
         }
         let mut j = null_mut();
-        // SAFETY: 設定を渡さずに作る。成功すれば j は LLJIT を指す。
+        // SAFETY: 設定のビルダには null を渡す。
+        // 成功すれば j は LLJIT を指す。
         unsafe { check(LLVMOrcCreateLLJIT(&mut j, null_mut()))? };
         Ok(Jit { j })
     }
 
-    /// 対象の三つ組。
+    /// ターゲットトリプルを返す。
     pub fn triple(&self) -> String {
-        // SAFETY: j は生きている LLJIT で、文字列は LLJIT が持つ。
+        // SAFETY: j は破棄していない LLJIT を指し、文字列は LLJIT が所有する。
         unsafe {
             CStr::from_ptr(LLVMOrcLLJITGetTripleString(self.j))
                 .to_string_lossy()
@@ -84,9 +91,9 @@ impl Jit {
         }
     }
 
-    /// データの配置の文字列。
+    /// データレイアウトの文字列を返す。
     pub fn data_layout(&self) -> String {
-        // SAFETY: j は生きている LLJIT で、文字列は LLJIT が持つ。
+        // SAFETY: j は破棄していない LLJIT を指し、文字列は LLJIT が所有する。
         unsafe {
             CStr::from_ptr(LLVMOrcLLJITGetDataLayoutStr(self.j))
                 .to_string_lossy()
@@ -95,17 +102,17 @@ impl Jit {
     }
 
     fn jd(&self) -> LLVMOrcJITDylibRef {
-        // SAFETY: j は生きている LLJIT である。
+        // SAFETY: j は破棄していない LLJIT を指す。
         unsafe { LLVMOrcLLJITGetMainJITDylib(self.j) }
     }
 
-    /// Rust の関数の番地を、呼べる絶対の記号として主の JITDylib に登録する。
+    /// Rust の関数のアドレスを、呼び出せる絶対シンボルとしてメインの JITDylib に登録する。
     pub fn define_absolute(&self, syms: &[(&str, usize)]) -> Result<(), String> {
         let names: Vec<CString> = syms
             .iter()
             .map(|(n, _)| CString::new(*n).map_err(|e| e.to_string()))
             .collect::<Result<_, _>>()?;
-        // SAFETY: j は生きている LLJIT で、名前は呼び出しの間生きている。
+        // SAFETY: j は破棄していない LLJIT を指し、名前の文字列はこの呼び出しの間は解放されない。
         unsafe {
             let flags = LLVMJITSymbolGenericFlags::LLVMJITSymbolGenericFlagsExported as u8
                 | LLVMJITSymbolGenericFlags::LLVMJITSymbolGenericFlagsCallable as u8;
@@ -125,7 +132,7 @@ impl Jit {
                 .collect();
             let mu = LLVMOrcAbsoluteSymbols(pairs.as_mut_ptr(), pairs.len());
             let e = LLVMOrcJITDylibDefine(self.jd(), mu);
-            // 失敗したときは、MaterializationUnit の所有権が呼ぶ側に残る。
+            // 失敗したときは、MaterializationUnit の所有権が呼び出し元に残るので、ここで破棄する。
             if !e.is_null() {
                 LLVMOrcDisposeMaterializationUnit(mu);
             }
@@ -133,12 +140,12 @@ impl Jit {
         }
     }
 
-    /// LLVM IR の文面 `src` のモジュールを読み、検証し、`passes` が空でなければその最適化の列をかけて JIT に足す。
+    /// LLVM IR のテキスト `src` をモジュールとして読み込んで検証し、`passes` が空でなければその最適化パイプラインを適用して、JIT に追加する。
     pub fn add_ir(&self, name: &str, src: &str, passes: &str) -> Result<(), String> {
         let cname = CString::new(name).map_err(|e| e.to_string())?;
-        // LLVM の資源を作る前に変換し、途中で戻っても何も漏らさないようにする。
+        // LLVM のリソースを作る前に変換し、ここでエラーを返しても何もリークしないようにする。
         let cpasses = CString::new(passes).map_err(|e| e.to_string())?;
-        // SAFETY: 文脈とモジュールはこの関数の中で作り、成功すれば所有権を LLJIT に渡す。
+        // SAFETY: コンテキストとモジュールはこの関数の中で作り、成功すれば所有権を LLJIT に渡す。
         unsafe {
             let ctx = LLVMContextCreate();
             let buf = LLVMCreateMemoryBufferWithMemoryRangeCopy(
@@ -148,7 +155,7 @@ impl Jit {
             );
             let mut m = null_mut();
             let mut msg = null_mut();
-            // LLVMParseIRInContext2 はバッファの所有権を取らない。
+            // LLVMParseIRInContext2 はバッファの所有権を受け取らないので、ここで破棄する。
             let failed = LLVMParseIRInContext2(ctx, buf, &mut m, &mut msg);
             LLVMDisposeMemoryBuffer(buf);
             if failed != 0 {
@@ -174,18 +181,19 @@ impl Jit {
             }
             let tsc = LLVMOrcCreateNewThreadSafeContextFromLLVMContext(ctx);
             let tsm = LLVMOrcCreateNewThreadSafeModule(m, tsc);
-            // モジュールが文脈を持ち続ける。
+            // モジュールがコンテキストを保持し続けるので、ここで持っている参照は破棄する。
             LLVMOrcDisposeThreadSafeContext(tsc);
-            // LLVMOrcLLJITAddLLVMIRModule は、失敗したときも tsm の所有権を取る。
+            // LLVMOrcLLJITAddLLVMIRModule は、失敗したときも tsm の所有権を受け取る。
             check(LLVMOrcLLJITAddLLVMIRModule(self.j, self.jd(), tsm))
         }
     }
 
-    /// 記号の番地を引く。最初に引くときに、その記号のモジュールを翻訳して結合する。
+    /// シンボルのアドレスを解決する。
+    /// あるシンボルを初めて解決するときに、そのシンボルを定義するモジュールをコンパイルしてリンクする。
     pub fn lookup(&self, name: &str) -> Result<usize, String> {
         let c = CString::new(name).map_err(|e| e.to_string())?;
         let mut addr: LLVMOrcExecutorAddress = 0;
-        // SAFETY: j は生きている LLJIT である。
+        // SAFETY: j は破棄していない LLJIT を指す。
         unsafe { check(LLVMOrcLLJITLookup(self.j, &mut addr, c.as_ptr()))? };
         Ok(addr as usize)
     }
@@ -193,16 +201,16 @@ impl Jit {
 
 impl Drop for Jit {
     fn drop(&mut self) {
-        // SAFETY: j は生きている LLJIT で、以後使わない。
+        // SAFETY: j は破棄していない LLJIT を指し、この後は使わない。
         if let Err(e) = unsafe { check(LLVMOrcDisposeLLJIT(self.j)) } {
             eprintln!("keleut: LLJIT を片付けられません: {e}");
         }
     }
 }
 
-/// モジュールを検証する。
+/// モジュールを LLVM の検証器で検証する。
 fn verify(m: LLVMModuleRef) -> Result<(), String> {
-    // SAFETY: m は生きているモジュールである。
+    // SAFETY: m は破棄していないモジュールを指す。
     unsafe {
         let mut msg = null_mut();
         let bad = LLVMVerifyModule(
@@ -226,10 +234,10 @@ fn verify(m: LLVMModuleRef) -> Result<(), String> {
     }
 }
 
-/// 結合した LLVM の版(`22.1.8` など)。
+/// リンクしている LLVM のバージョン(`22.1.8` など)を返す。
 pub fn llvm_version() -> String {
     let (mut a, mut b, mut c) = (0u32, 0u32, 0u32);
-    // SAFETY: 3 つの整数に版を書くだけである。
+    // SAFETY: 3 つの整数にバージョンを書き込むだけである。
     unsafe { LLVMGetVersion(&mut a, &mut b, &mut c) };
     format!("{a}.{b}.{c}")
 }

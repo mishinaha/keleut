@@ -1,7 +1,6 @@
-//! LIR から作った LLVM IR を LLVM が検証に通し、翻訳できることの試験。
+//! LIR から作った LLVM IR が LLVM の検証に通り、コンパイルできることを確かめるテスト。
 //!
-//! `keleut-cli` の `tests/fixtures/run/` の各 KIR を LIR に下ろし、JIT にできる関数をすべて 1 つずつ別のモジュールにして
-//! LLJIT に足し、引けることを確かめる(実行はしない)。
+//! `keleut-cli` の `tests/fixtures/run/` の各 KIR を LIR に変換し、JIT コンパイルできる関数をすべて、1 つずつ別のモジュールにして LLJIT に追加し、シンボルを解決できることを確かめる(実行はしない)。
 #![cfg(feature = "llvm")]
 
 use std::path::PathBuf;
@@ -35,11 +34,11 @@ fn fixture_の関数をすべて翻訳できる() {
                 continue;
             }
             let fid = FuncId(i as u32);
-            // 確保の速い道を作る形(既定)と作らない形(`--gc-stress`)の両方を翻訳する。
+            // 確保の高速経路を生成する場合(既定)と生成しない場合(`--gc-stress`)の両方をコンパイルする。
             for fast in [true, false] {
                 let src =
                     codegen::module(&lp, fid, 0x1000, 0x2000, fast, &triple, &layout).unwrap();
-                // 同じ LLJIT に足すので、名前を試験の入力ごとと形ごとに変える。
+                // 同じ LLJIT に追加するので、関数の名前を入力ファイルごと、場合ごとに変える。
                 let name = format!("{}_{k}_{}", codegen::func_name(fid), u8::from(fast));
                 let src = src
                     .replace(
@@ -66,7 +65,7 @@ fn llvm_の版は_22() {
     assert!(keleut_llvm::sys::llvm_version().starts_with("22."));
 }
 
-/// 同じ記号を 2 度足すと、2 度目は落ちずに誤りを返す(失敗した追加のモジュールを二重に片付けない)。
+/// 同じシンボルを定義するモジュールを 2 度追加すると、2 度目は異常終了せずにエラーを返す(追加に失敗したモジュールを二重に破棄しない)。
 #[test]
 fn 同じ記号を_2_度足すと誤りを返す() {
     let jit = Jit::new().unwrap();
@@ -77,7 +76,7 @@ fn 同じ記号を_2_度足すと誤りを返す() {
     assert_ne!(jit.lookup("f").unwrap(), 0);
 }
 
-/// 同じ絶対の記号を 2 度登録すると、2 度目は誤りを返す。
+/// 同じ絶対シンボルを 2 度登録すると、2 度目はエラーを返す。
 #[test]
 fn 同じ絶対の記号を_2_度登録すると誤りを返す() {
     extern "C" fn g() {}
@@ -87,7 +86,7 @@ fn 同じ絶対の記号を_2_度登録すると誤りを返す() {
     assert!(jit.define_absolute(&syms).is_err());
 }
 
-/// 最適化の列に NUL があれば、LLVM の資源を作る前に誤りを返す。
+/// 最適化パイプラインの文字列に NUL があれば、LLVM のリソースを作る前にエラーを返す。
 #[test]
 fn 最適化の列の_nul_は誤りになる() {
     let jit = Jit::new().unwrap();
@@ -97,11 +96,12 @@ fn 最適化の列の_nul_は誤りになる() {
     );
 }
 
-/// 確保の速い道は、どれも実行の役割の印を読んでからヒープに触れ、`fast_alloc` が偽なら作らない。
+/// 確保の高速経路は、どれも実行スレッドのフラグを読んでからヒープに触れる。
+/// `fast_alloc` が偽なら、高速経路を生成しない。
 ///
-/// 今ある `KELEUT_TEST_ALLOC_FAIL` の場所では、印を立てた確保と同じ操作の中で実行時の確保が印を下ろすので、
-/// `tests/oom_cmd.rs` は印の検査の抜けを見分けない。
-/// そのため、速い道の文面に印の読み込みがあることをここで確かめる。
+/// `KELEUT_TEST_ALLOC_FAIL` で指定できる確保箇所はどれも、フラグを立てる確保と、そのフラグを調べて下ろすランタイムの処理が、同じ操作の中にある。
+/// 高速経路がフラグを読む前にフラグが下りるので、`tests/oom_cmd.rs` は、高速経路からフラグの検査が抜けていても検出できない。
+/// そのため、高速経路の LLVM IR にフラグの読み込みがあることを、ここで確かめる。
 #[test]
 fn 確保の速い道は実行の役割の印を読む() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../keleut-cli/tests/fixtures/run");
@@ -130,7 +130,7 @@ fn 確保の速い道は実行の役割の印を読む() {
             for (k, l) in lines.iter().enumerate() {
                 if l.starts_with("ahave") {
                     fast_paths += 1;
-                    // 印の番地、印の読み込み、比べ、枝の 4 行がこのブロックの直前にある。
+                    // フラグのアドレスの計算、フラグの読み込み、比較、分岐の 4 行が、このブロックの直前にある。
                     assert!(k >= 4, "{}: {}", p.display(), f.sym);
                     assert!(lines[k - 4].contains(&flag), "{}: {}", p.display(), f.sym);
                     assert!(
@@ -139,7 +139,7 @@ fn 確保の速い道は実行の役割の印を読む() {
                         p.display(),
                         f.sym
                     );
-                    // 印が 0 でなければ遅い道へ移る。
+                    // フラグが 0 でなければ低速経路へ分岐する。
                     assert!(
                         lines[k - 2].contains("icmp ne i8") && lines[k - 2].ends_with(", 0"),
                         "{}: {}",

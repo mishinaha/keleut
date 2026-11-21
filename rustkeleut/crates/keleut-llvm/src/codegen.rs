@@ -1,36 +1,42 @@
-//! LIR の関数から LLVM IR の文面を作る(計画 261024-1 の 6.8 節)。
+//! LIR の関数から LLVM IR のテキストを作る。
 //!
-//! 1 つの LIR の関数を、レジスタの入口 `tailcc i64 @kfN.r(ptr %ctx, i64 %env, i64 ×4)` と
-//! 値スタックの入口 `tailcc i64 @kfN(ptr %ctx)` の 2 つの関数にする(`N` は関数の番号)。
-//! 値スタックの入口は、スロットと文脈から引数と環境を読んでレジスタの入口を `musttail` で呼ぶ。
+//! 1 つの LIR の関数から、レジスタ渡しのエントリ `tailcc i64 @kfN.r(ptr %ctx, i64 %env, i64 ×4)` と、値スタック渡しのエントリ `tailcc i64 @kfN(ptr %ctx)` の 2 つの関数を作る(`N` は関数の番号)。
+//! 値スタック渡しのエントリは、スロットとコンテキストから引数と環境を読み、レジスタ渡しのエントリを `musttail` で呼ぶ。
 //! 規約は `keleut_interp::native` の冒頭にある。
 //!
-//! - 入口で、ネイティブのスタックの番地を文脈の下限と比べる(予備の検査)。
-//!   次に、呼ぶ側が置いたフレームの位置と見出しへのポインタ、環境を文脈から読む。
-//! - LIR のレジスタは関数の入口の `alloca` に置き(最適化で SSA の値になる)。
-//!   前の 4 個の引数と環境はレジスタの入口の引数から、残りの引数はフレームのスロットから読む。
-//! - 呼ばれる側のフレームは、値スタックの使っている最後の塊に収まれば、`krt_prep` を呼ばずにその場で置く。
-//! - 末尾でない呼び出しの前には、再開点で生きているレジスタをスロットに書き、見出しの 0 番の語に再開点を書く。
-//!   yield を受け取らない再開点(`doc/lir.md` の 17 節)では、生の区画のレジスタを書かない(回収は `any` の区画だけを読む)。
-//!   呼ばれた側が番兵で戻ったら `krt_sentinel` を呼んで自分も番兵で戻る。
-//! - 確保する命令の前には、安全点で生きている `any` の区画のレジスタをスロットに書き、
-//!   実行時の関数に今のフレームの位置と安全点の番号を渡す(実行時の関数が `GcState::at_safepoint` を行う)。
-//! - 箱(`box`)、`ctor_new`、`rec_new` の小さな箱は、実行時の関数を呼ばずにヒープから 1 区画を取る(確保の速い道。[`Gen::alloc_small`])。
-//!   取れないときだけ、安全点のレジスタを書いて実行時の関数を呼ぶ。
-//!   `--gc-stress` のときは速い道を作らない([`function`] の `fast_alloc`)。
-//! - 末尾の呼び出しは、自分のフレームの位置に呼ばれた側のフレームを置き直してから `musttail` で呼ぶ。
-//! - 相手を実行時に決める呼び出しは `krt_dispatch` に任せる。
-//!   値の呼び出しは、相手がクロージャなら実行時の関数を通さずに呼ぶ。
+//! - 関数の入口で、ネイティブスタックのアドレスをコンテキストの下限 `stack_soft` と比べ、下回っていればインタプリタでの実行に切り替える。
+//!   スタック残量の検査そのものは、切り替えた先のインタプリタが行う。
+//!   次に、呼び出し元が置いたフレームの位置と、フレームヘッダへのポインタをコンテキストから読む。
+//! - LIR のレジスタは、関数の入口で `alloca` した領域に置く(最適化で SSA の値になる)。
+//!   先頭の 4 個の引数と環境はレジスタ渡しのエントリの引数から読み、残りの引数はフレームのスロットから読む。
+//! - 呼び出し先のフレームは、値スタックで使用中の最後のチャンクに収まれば、`krt_prep` を呼ばずにその場で置く。
+//! - 非末尾呼び出しの前に、再開点で生存しているレジスタをスロットに書き、フレームヘッダの 0 番のワードに再開点を書く。
+//!   yield を受け取らない再開点(`doc/lir.md` の 17 節)では、ボックス化していない値の領域のレジスタを書かない。
+//!   GC は `any` の領域だけを読むからである。
+//!   呼び出し先が番兵で戻ったら、`krt_sentinel` を呼んで自分も番兵で戻る。
+//! - メモリを確保する命令の前に、安全点で生存している `any` の領域のレジスタをスロットに書き、ランタイム関数に現在のフレームの位置と安全点の番号を渡す。
+//!   ランタイム関数が `GcState::at_safepoint` を呼ぶ。
+//! - `box` が作るボックスと、`ctor_new`、`rec_new` が作る小さなオブジェクトは、ランタイム関数を呼ばずに、ヒープからセルを 1 つ確保する。
+//!   これを確保の高速経路(fast path)と呼ぶ([`Gen::alloc_small`])。
+//!   確保できないときだけ、安全点のレジスタをスロットに書いてランタイム関数を呼ぶ(低速経路)。
+//!   `--gc-stress` のときは高速経路を生成しない([`function`] の `fast_alloc`)。
+//! - 末尾呼び出しは、自分のフレームの位置に呼び出し先のフレームを配置し直してから `musttail` で呼ぶ。
+//! - 呼び出し先が実行時に決まる呼び出しは `krt_dispatch` に任せる。
+//!   ただし関数値の呼び出しは、呼び出し先がクロージャなら、ランタイム関数を通さずに呼ぶ。
 //!
-//! - エフェクトの命令は、被演算子をスロットに書いてから実行時の関数 `krt_fx` を呼ぶ(`keleut_interp::native` の冒頭)。
-//!   呼び出しの一種は、`krt_fx` が置いたフレームの関数を入口の表から呼び、番兵を受け取る呼び出しなら番兵を結果にし、
-//!   `perform` なら戻りを `krt_perform_back` に渡す。
-//!   エフェクトのブロックの終わりは `krt_fx_term` を呼び、末尾で呼ぶ終わりは置いたフレームの関数を `musttail` で呼ぶ。
-//! - 入口では、`alternating` の擬似乱数の状態が文脈にあれば、それを進めて段を選ぶ(インタプリタに移るなら `interp_stub` を `musttail` で呼ぶ)。
+//! - エフェクトの命令は、オペランドをスロットに書いてからランタイム関数 `krt_fx` を呼ぶ(`keleut_interp::native` の冒頭)。
+//!   エフェクトの命令のうち呼び出しを行うものでは、`krt_fx` が置いたフレームの関数をエントリテーブルから呼ぶ。
+//!   番兵を受け取る呼び出しなら番兵を結果にし、`perform` なら返り値を `krt_perform_back` に渡す。
+//!   エフェクトの終端命令は、`Propagate`(番兵を返すだけの終端命令)を除いて `krt_fx_term` を呼ぶ。
+//!   そのうち末尾呼び出しの終端命令は、`krt_fx_term` が置いたフレームの関数を `musttail` で呼ぶ。
+//! - 関数の入口で、`alternating` の擬似乱数の状態がコンテキストにあれば、それを進めてティアを選ぶ。
+//!   インタプリタを選んだら `interp_stub` を `musttail` で呼ぶ。
 //!
-//! 整数の `+ - *` は `nsw` を付けずに折り返し、`sdiv` と `srem` の前に除数 0 と `MIN / -1` の場合を分ける。
-//! `Float64` から整数への変換は飽和する組み込み関数 `llvm.fptosi.sat` を使う(`doc/lir.md` の 6 節)。
-//! `sin cos exp log` は rtcore の不透明な記号 `krt_sin` などを呼び、`sqrt` は `llvm.sqrt` にする。
+//! 整数の `+ - *` は `nsw` を付けないので、オーバーフローすると折り返す。
+//! `sdiv` と `srem` の前に、除数が 0 の場合と `MIN / -1` の場合を分ける。
+//! `Float64` から整数への変換には、飽和する組み込み関数 `llvm.fptosi.sat` を使う(`doc/lir.md` の 6 節)。
+//! `sin`、`cos`、`exp`、`log` は、rtcore が定義するシンボル `krt_sin` などを呼ぶ(LLVM からは定義が見えない)。
+//! `sqrt` には組み込み関数 `llvm.sqrt` を使う。
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -44,15 +50,15 @@ use keleut_rt::Word;
 use keleut_rt::stack::HEADER_WORDS;
 use keleut_rt::value::{Kind, header};
 
-/// レジスタで渡す引数の数。
+/// レジスタで渡す引数の個数。
 const NREG: usize = keleut_interp::native::REG_ARGS;
 
-/// 関数の LLVM IR の名前。
+/// 関数 `f` の LLVM IR での名前(`kfN`)を返す。
 pub fn func_name(f: FuncId) -> String {
     format!("kf{}", f.0)
 }
 
-/// 生成した関数が呼ぶ実行時の関数と組み込み関数の宣言。
+/// 生成した関数が呼ぶ、ランタイム関数と組み込み関数の宣言。
 pub const DECLS: &str = "\
 declare ptr @krt_prep(ptr, i64, i64, i64, i64, i64) nounwind
 declare void @krt_sentinel(ptr, ptr, i64) nounwind
@@ -95,7 +101,8 @@ declare i64 @llvm.fptosi.sat.i64.f64(double)
 declare ptr @llvm.addressofreturnaddress.p0()
 ";
 
-/// 起動時に作るスタブのモジュール(`interp_stub` と `enter_tailcc`)の文面。`entry` は入口の表の番地。
+/// コンパイルスレッドが起動時に作るスタブのモジュール(`interp_stub_r`、`interp_stub`、`enter_tailcc`)のテキストを返す。
+/// `entry` はエントリテーブルのアドレスである。
 pub fn stubs(entry: usize) -> String {
     format!(
         "\
@@ -170,11 +177,12 @@ fn cmp_f(op: CmpOp) -> &'static str {
     }
 }
 
-/// 呼び出しの相手。
+/// 呼び出し先の決め方。
 enum Callee {
-    /// 関数の番号(定数)。
+    /// 関数の番号がコンパイル時に決まっている。
     Direct(FuncId),
-    /// 実行時に決める(`krt_dispatch` の操作、呼ぶ値か辞書のレジスタ、`クラス << 32 | メソッド`、メソッド自身の辞書)。
+    /// 実行時に `krt_dispatch` で決める。
+    /// `op` は `krt_dispatch` の操作、`x` は呼び出す関数値か辞書のどちらかを持つレジスタ、`cm` は `クラス << 32 | メソッド`、`own` はメソッド自身の辞書である。
     Dynamic {
         op: u64,
         x: Reg,
@@ -185,7 +193,7 @@ enum Callee {
 
 struct Gen<'a> {
     prog: &'a Program,
-    /// レジスタの入口の表の番地。
+    /// レジスタ渡しのエントリテーブルのアドレス。
     rentry: usize,
     f: &'a Func,
     fid: FuncId,
@@ -199,13 +207,15 @@ struct Gen<'a> {
     tail_row: HashMap<u32, u32>,
     /// エフェクトの命令の通し番号(`keleut_interp::bytecode::Code::fx_pc` の添字)。
     fx_idx: HashMap<(u32, u32), u32>,
-    /// エフェクトのブロックの終わりの通し番号(`Code::fx_term_pc` の添字)。
+    /// エフェクトの終端命令の通し番号(`Code::fx_term_pc` の添字)。
     fxt_idx: HashMap<u32, u32>,
-    /// 番兵を受け取るエフェクトの呼び出しの再開点(`cont_make` の失敗の後に戻り直す先)。
+    /// 番兵を受け取るエフェクトの呼び出しの再開点。
+    /// `cont_make` が失敗したときに、ここから実行を続ける。
     catch_rps: Vec<u32>,
-    /// 今のブロックの名前(phi の入り口に使う)。
+    /// 現在のブロックの名前。
+    /// phi の入力元のブロックとして使う。
     cur: String,
-    /// 小さな箱の確保の速い道を作るか(`--gc-stress` では作らない)。
+    /// 小さなオブジェクトの確保の高速経路を生成するなら真(`--gc-stress` では偽)。
     fast_alloc: bool,
 }
 
@@ -243,7 +253,8 @@ impl Gen<'_> {
         t
     }
 
-    /// レジスタの値を読み、一様な語の幅(`i64`)にする(生の値はスロットと同じ形)。
+    /// レジスタの値を読み、一様表現の値と同じ幅(`i64`)に広げる。
+    /// ボックス化していない値は、スロットに書くときと同じ表現(`i64` に広げたビット列)になる。
     fn get64(&mut self, r: Reg) -> String {
         let v = self.get(r);
         self.widen(self.rep(r), &v)
@@ -275,7 +286,7 @@ impl Gen<'_> {
         self.line(format!("store {ty} {v}, ptr %r{}", r.0));
     }
 
-    /// 一様な語の幅の値 `v` を、レジスタ `r` の Rep にして書く。
+    /// `i64` の幅の値 `v` を、レジスタ `r` の Rep に変換して書く。
     fn set64(&mut self, r: Reg, v: &str) {
         let v = match self.rep(r) {
             Rep::I64 | Rep::Str | Rep::Any => v.to_string(),
@@ -298,14 +309,15 @@ impl Gen<'_> {
         self.set(r, &v);
     }
 
-    /// フレームの語 `i`(見出しの 0〜3、スロットは 4 から)へのポインタ。
+    /// フレームの `i` 番のワードへのポインタ。
+    /// 0〜3 番はフレームヘッダで、スロットは 4 番から始まる。
     fn frame_word(&mut self, i: u64) -> String {
         let t = self.t();
         self.line(format!("{t} = getelementptr i64, ptr %fp, i64 {i}"));
         t
     }
 
-    /// レジスタをそのスロットに書く。
+    /// レジスタの値を、そのレジスタのスロットに書く。
     fn spill(&mut self, r: Reg) {
         let v = self.get64(r);
         let p = self.frame_word(HEADER_WORDS as u64 + u64::from(self.slot[r.index()]));
@@ -320,13 +332,13 @@ impl Gen<'_> {
         }
     }
 
-    /// 見出しの 0 番の語に再開点 `row` を書く。
+    /// フレームヘッダの 0 番のワードに、関数の番号と再開点 `row` を書く。
     fn set_row(&mut self, row: u32) {
         let w = u64::from(self.fid.0) | (u64::from(row) << 32);
         self.line(format!("store i64 {w}, ptr %fp"));
     }
 
-    /// 文脈の引数の領域の `i` 番目に `v` を書く。
+    /// コンテキストの引数の受け渡し領域の `i` 番目に `v` を書く。
     fn put_arg(&mut self, i: usize, v: &str) {
         let p = self.t();
         self.line(format!("{p} = getelementptr i64, ptr %argp, i64 {i}"));
@@ -340,7 +352,7 @@ impl Gen<'_> {
         }
     }
 
-    /// 箱 `w` の `i` 番の語を読む。
+    /// オブジェクト `w` の `i` 番のワードを読む。
     fn load_box(&mut self, w: &str, i: u64) -> String {
         let p = self.t();
         self.line(format!("{p} = inttoptr i64 {w} to ptr"));
@@ -364,7 +376,7 @@ impl Gen<'_> {
         self.line(format!("store i64 {v}, ptr {q}"));
     }
 
-    /// 文脈の欄 `o`(語)を読む。
+    /// コンテキストのオフセット `o` にあるフィールドを、型 `ty` で読む。
     fn ctx_load(&mut self, o: u64, ty: &str) -> String {
         let p = self.t();
         self.line(format!("{p} = getelementptr i8, ptr %ctx, i64 {o}"));
@@ -373,7 +385,8 @@ impl Gen<'_> {
         t
     }
 
-    /// 結果が 0 なら番兵で戻る(実行時の関数が状態語を立てた)。
+    /// 結果が 0 なら番兵で戻る。
+    /// 0 は、ランタイム関数が状態ワードを設定したことを表す。
     fn check_zero(&mut self, v: &str) {
         let c = self.t();
         self.line(format!("{c} = icmp eq i64 {v}, 0"));
@@ -382,7 +395,8 @@ impl Gen<'_> {
         self.start_block(&ok);
     }
 
-    /// 確保する命令の前の安全点。生きている `any` の区画のレジスタをスロットに書き、安全点の番号を返す。
+    /// メモリを確保する命令の前の安全点を処理する。
+    /// 生存している `any` の領域のレジスタをスロットに書き、安全点の番号を返す。
     fn safepoint(&mut self, bi: usize, ii: usize) -> Result<u32, String> {
         let sp = *self
             .sp_of
@@ -394,14 +408,21 @@ impl Gen<'_> {
         Ok(sp)
     }
 
-    /// 見出しを含めて `words` 語の箱を確保し、見出し `header` と、`fill` の(語の番号、値)を書いて、箱の語を返す。
+    /// ヘッダを含めて `words` ワードのオブジェクトを確保し、ヘッダ `header` と、`fill` の(ワードの番号、値)の組を書いて、オブジェクトを指すワードを返す。
     ///
-    /// 速い道は `keleut_rt::heap::Heap::try_alloc` の最初の 2 つの道と同じ手順で、文脈の `heap` のヒープから 1 区画を取る。
-    /// 実行の役割の印が立っているとき、前の回収の後に確保した量(`since_gc`)が回収の時機(`trigger`)に届いたとき、
-    /// 空きリストにも切り出し中のページにも区画が無いときは、`slow` で実行時の関数を呼ぶ。
-    /// 実行時の関数は印を下ろし、回収し、ページを足すので、速い道は印を読むだけで、回収の数えを区画の語の数だけ足す。
-    /// 速い道は回収を起こさないので、安全点のレジスタを書くのは遅い道だけである。
-    /// `slow` は安全点の番号を受け取り、実行時の関数を呼んでその結果を返す(0 の検査はここで行う)。
+    /// 高速経路は、`keleut_rt::heap::Heap::try_alloc` の最初の 2 つの経路(空きリストとバンプ割り当て)と同じ手順で、コンテキストの `heap` が指すヒープからセルを 1 つ確保する。
+    /// 次のどれかに当てはまるときは、`slow` でランタイム関数を呼ぶ(低速経路)。
+    ///
+    /// - 実行スレッドのフラグが立っている。
+    /// - 前の GC の後に確保した量(`since_gc`)が、GC のしきい値(`trigger`)に達した。
+    /// - 空きリストにも、バンプ割り当て中のページにも、セルがない。
+    ///
+    /// フラグを下ろすこと、GC の実行、ページの追加はランタイム関数が行う。
+    /// 高速経路は、フラグを読むことと、GC のカウンタ `since_gc` にセルのワード数を足すことだけを行う。
+    /// 高速経路は GC を起こさないので、安全点のレジスタをスロットに書くのは低速経路だけである。
+    /// `slow` は安全点の番号を受け取り、ランタイム関数を呼ぶコードを生成して、その結果を返す。
+    /// 結果が 0 かどうかの検査は、この関数が生成する。
+    /// `fast_alloc` が偽のときと、`words` がどのサイズクラスにも入らないときは、低速経路だけを生成する。
     fn alloc_small(
         &mut self,
         bi: usize,
@@ -431,7 +452,9 @@ impl Gen<'_> {
         let take = self.label("atake");
         let got = self.label("agot");
         let join = self.label("ajoin");
-        // 実行の役割の印。立っていれば実行時の関数が下ろしてメモリの不足にする。
+        // 実行スレッドのフラグを読む。
+        // 立っていれば低速経路へ分岐する。
+        // 低速経路で呼ぶランタイム関数がフラグを下ろし、メモリ不足の実行時エラーを起こす。
         let fa = self.t();
         self.line(format!(
             "{fa} = inttoptr i64 {} to ptr",
@@ -481,7 +504,7 @@ impl Gen<'_> {
         self.line(format!("{c2} = icmp eq ptr {fr}, null"));
         self.line(format!("br i1 {c2}, label %{bump}, label %{pop}"));
         self.start_block(&pop);
-        // 空きリストの区画の 1 番の語は次の空きの区画を指す。
+        // 空きリストのセルの 1 番のワードは、次の空きセルを指す。
         let np = self.t();
         self.line(format!("{np} = getelementptr i64, ptr {fr}, i64 1"));
         let nx = self.t();
@@ -519,7 +542,7 @@ impl Gen<'_> {
         let ns = self.t();
         self.line(format!("{ns} = add i64 {sg}, {cw}"));
         self.line(format!("store i64 {ns}, ptr {sgp}"));
-        // 取った区画には、次の回収の前に種類の入った見出しを書く(`keleut_rt::heap` の冒頭)。
+        // 確保したセルには、次の GC より前に、種類の入ったヘッダを書く(`keleut_rt::heap` の冒頭)。
         self.line(format!("store i64 {header}, ptr {p}"));
         for (i, v) in fill {
             let q = self.t();
@@ -543,7 +566,8 @@ impl Gen<'_> {
         Ok(v)
     }
 
-    /// 呼び出しの後に番兵を調べる。番兵なら深さを書き戻して番兵で戻り、そうでなければ値を返す。
+    /// 呼び出しの結果が番兵かを調べるコードを生成する。
+    /// 番兵なら `krt_sentinel` を呼んで(深さを書き戻して)番兵で戻り、そうでなければ後続のコードに進む。
     fn after_call(&mut self, r: &str, yields: bool) {
         let s = self.t();
         self.line(format!("{s} = icmp eq i64 {r}, 2"));
@@ -559,19 +583,19 @@ impl Gen<'_> {
         self.start_block(&ok);
     }
 
-    /// 入口の表の `fid` 番の番地。
+    /// エントリテーブルの `fid` 番の項目(関数のアドレス)を読む。
     fn entry_of(&mut self, fid: &str) -> String {
         let tab = self.t();
         self.line(format!("{tab} = inttoptr i64 {} to ptr", self.entry));
         let p = self.t();
         self.line(format!("{p} = getelementptr ptr, ptr {tab}, i64 {fid}"));
         let e = self.t();
-        // 翻訳の糸が入口を書き換えても競合にならないよう、獲得の原子的な読み込みにする(書く側は Release)。
+        // コンパイルスレッドがエントリを書き換えてもデータ競合にならないよう、acquire 順序のアトミックな読み込みにする(書く側は Release)。
         self.line(format!("{e} = load atomic ptr, ptr {p} acquire, align 8"));
         e
     }
 
-    /// レジスタの入口の表の `fid` 番の番地。
+    /// レジスタ渡しのエントリテーブルの `fid` 番の項目(関数のアドレス)を読む。
     fn rentry_of(&mut self, fid: &str) -> String {
         let tab = self.t();
         self.line(format!("{tab} = inttoptr i64 {} to ptr", self.rentry));
@@ -582,7 +606,8 @@ impl Gen<'_> {
         e
     }
 
-    /// レジスタで渡す引数の並び(`ptr %ctx` の後)。
+    /// レジスタ渡しのエントリに渡す引数の並び(`ptr %ctx`、環境 `env`、先頭の `NREG` 個の引数)を作る。
+    /// 引数が `NREG` 個より少なければ、残りを 0 で埋める。
     fn reg_args(&mut self, env: &str, args: &[Reg]) -> String {
         let mut v = format!("ptr %ctx, i64 {env}");
         for i in 0..NREG {
@@ -595,7 +620,8 @@ impl Gen<'_> {
         v
     }
 
-    /// 置いたフレーム(見出しは `np`)のスロットに、`from` 番目からの引数を書く(前の引数はレジスタで渡す)。
+    /// 置いたフレーム(フレームヘッダは `np`)のスロットに、`from` 番目以降の引数を書く。
+    /// それより前の引数はレジスタで渡す。
     fn store_args_from(&mut self, np: &str, args: &[Reg], from: usize) {
         for (i, &r) in args.iter().enumerate().skip(from) {
             let v = self.get64(r);
@@ -608,7 +634,7 @@ impl Gen<'_> {
         }
     }
 
-    /// 関数 `f` のフレームの語の数と見出しの 2 番の語(`keleut_interp::native` の `frames` と同じ式)。
+    /// 関数 `f` のフレームのワード数と、フレームヘッダの 2 番のワードを返す(`keleut_interp::native` の `frames` と同じ式)。
     fn frame_of(&self, f: FuncId) -> Option<(u64, u64)> {
         let fr = self.prog.funcs[f.index()].frame.as_ref()?;
         Some((
@@ -617,17 +643,18 @@ impl Gen<'_> {
         ))
     }
 
-    /// 関数 `fid`(値)のフレームを置く。末尾なら自分の位置に、そうでなければ自分の上に。
+    /// 関数 `fid`(関数の番号を表す LLVM IR の値)のフレームを置く。
+    /// 末尾呼び出しなら自分のフレームの位置に、そうでなければ自分のフレームのすぐ上に置く。
     ///
-    /// `frame` は呼ばれる側のフレームの語の数と見出しの 2 番の語で、翻訳のときに分かれば渡す。
-    /// そのときは、置く場所が値スタックの使っている最後の塊(文脈の `win`)に収まれば、
-    /// `krt_prep` を呼ばずにその場で見出しと文脈の欄を書く(速い道)。
-    /// 自分のフレームも同じ塊にあるので、`krt_prep` の `ValueStack::place` と同じ位置に置くことになる。
+    /// `frame` は呼び出し先のフレームのワード数とフレームヘッダの 2 番のワードで、コンパイル時に分かっていれば渡す。
+    /// 分からなければ、コンテキストの `frames` の配列から実行時に読む。
+    /// 置く位置が値スタックで使用中の最後のチャンク(コンテキストの `win`)に収まれば、`krt_prep` を呼ばずに、その場でフレームヘッダとコンテキストのフィールドを書く(高速経路)。
+    /// 自分のフレームも同じチャンクにあることを確かめるので、`krt_prep` が呼ぶ `ValueStack::place` と同じ位置に置くことになる。
     fn prep(&mut self, fid: &str, env: &str, tail: bool, frame: Option<(u64, u64)>) -> String {
         let (cfw, sizes) = match frame {
             Some((a, b)) => (a.to_string(), b.to_string()),
             None => {
-                // 相手を実行時に知る呼び出しは、文脈の `frames` の列から読む。
+                // 呼び出し先が実行時に決まる呼び出しでは、コンテキストの `frames` の配列から読む。
                 let i = self.t();
                 self.line(format!("{i} = shl i64 {fid}, 1"));
                 let p = self.t();
@@ -699,7 +726,7 @@ impl Gen<'_> {
         np
     }
 
-    /// `krt_prep` でフレームを置く([`Gen::prep`] の遅い道)。
+    /// `krt_prep` を呼んでフレームを置く([`Gen::prep`] の低速経路)。
     fn prep_slow(&mut self, fid: &str, env: &str, tail: bool) -> String {
         let np = self.t();
         if tail {
@@ -719,9 +746,13 @@ impl Gen<'_> {
         np
     }
 
-    /// 呼び出し(末尾でないなら結果を `dst` に書く。末尾なら `musttail` で戻る)。
+    /// 呼び出しのコードを生成する。
+    /// 非末尾呼び出し(`dst` が `Some`)なら結果を `dst` に書き、末尾呼び出しなら `musttail` で呼んで戻る。
     ///
-    /// `row` は見出しに書く再開点(末尾の形では末尾の形の行)、`live` は再開点で生きているレジスタ。
+    /// `row` はフレームヘッダに書く再開点の番号である。
+    /// 呼び出し先が実行時に決まる末尾呼び出しでは、末尾呼び出し用に割り当てた番号(`tail_row`)を渡す。
+    /// `live` は再開点で生存しているレジスタである。
+    /// `operands` は呼び出しの命令のオペランドで、`krt_dispatch` を呼ぶ経路でスロットに書く。
     #[allow(clippy::too_many_arguments)]
     fn call(
         &mut self,
@@ -754,7 +785,7 @@ impl Gen<'_> {
             Callee::Dynamic { op, x, cm, own } => {
                 let slow = self.label("slow");
                 if op == dispatch::OP_VALUE {
-                    // 相手がクロージャなら実行時の関数を通さずに呼ぶ。
+                    // 呼び出し先がクロージャなら、ランタイム関数を通さずに呼ぶ。
                     let fv = self.get(x);
                     let lo = self.t();
                     self.line(format!("{lo} = and i64 {fv}, 7"));
@@ -787,7 +818,8 @@ impl Gen<'_> {
                 } else {
                     self.line(format!("br label %{slow}"));
                 }
-                // 実行時に決める道。実装の関数を評価する間(印 PHASE)は、呼び出しの命令の被演算子がスロットから根になる。
+                // 実行時に決める経路。
+                // 実装の関数を評価している間(`PHASE` フラグ)は、スロットに書いた呼び出しの命令のオペランドがルートになる。
                 self.start_block(&slow);
                 for &r in operands {
                     self.spill(r);
@@ -826,12 +858,12 @@ impl Gen<'_> {
                     dispatch::PHASE,
                     dispatch::VALUE
                 ));
-                // CALL: 実行時の関数がフレームを置いた。
+                // CALL: ランタイム関数がフレームを置いた。
                 self.start_block(&call_l);
                 let cid = self.ctx_load(off::CALLEE, "i64");
                 let e = self.entry_of(&cid);
                 self.finish_call(&e, dst, yields, &done);
-                // PHASE: 実装の関数を末尾でなく呼び、戻った値を相手として選び直す。
+                // PHASE: 実装の関数を非末尾呼び出しで呼び、返った値を呼び出し先として選び直す。
                 self.start_block(&phase_lbl);
                 let cid = self.ctx_load(off::CALLEE, "i64");
                 let e = self.entry_of(&cid);
@@ -841,7 +873,7 @@ impl Gen<'_> {
                 self.line(format!("br label %{back}"));
                 self.start_block(&back);
                 self.line(format!("br label %{disp}"));
-                // VALUE: 結果は文脈にある。
+                // VALUE: 結果はコンテキストにある。
                 self.start_block(&val_l);
                 let v = self.ctx_load(off::RESULT, "i64");
                 match dst {
@@ -858,7 +890,8 @@ impl Gen<'_> {
         }
     }
 
-    /// レジスタの入口 `e` を引数の並び `ra` で呼ぶ。ほかは [`Gen::finish_call`] と同じ。
+    /// レジスタ渡しのエントリ `e` を引数の並び `ra` で呼ぶ。
+    /// それ以外は [`Gen::finish_call`] と同じである。
     fn finish_call_r(&mut self, e: &str, ra: &str, dst: Option<Reg>, yields: bool, done: &str) {
         match dst {
             Some(d) => {
@@ -876,7 +909,9 @@ impl Gen<'_> {
         }
     }
 
-    /// 入口 `e` を呼ぶ。末尾でなければ番兵を調べて `dst` に書き、`done` へ移る。末尾なら `musttail`。
+    /// 値スタック渡しのエントリ `e` を呼ぶ。
+    /// 非末尾呼び出しなら番兵を調べて結果を `dst` に書き、`done` へ分岐する。
+    /// 末尾呼び出しなら `musttail` で呼ぶ。
     fn finish_call(&mut self, e: &str, dst: Option<Reg>, yields: bool, done: &str) {
         match dst {
             Some(d) => {
@@ -1233,7 +1268,8 @@ impl Gen<'_> {
                     r
                 };
                 let r = if n == 0 {
-                    // フィールドの無いコンストラクタは即値で、確保しない(`Rt::ctor_new`)。
+                    // フィールドのないコンストラクタは即値で、メモリを確保しない(`Rt::ctor_new`)。
+                    // 高速経路は作らず、ランタイム関数を呼ぶ。
                     let sp = self.safepoint(bi, ii)?;
                     let r = slow(self, sp);
                     self.check_zero(&r);
@@ -1335,7 +1371,8 @@ impl Gen<'_> {
                     r
                 };
                 let r = if n == 0 {
-                    // フィールドの無いレコードは Unit で、確保しない(`Rt::rec_new`)。
+                    // フィールドのないレコードは Unit で、メモリを確保しない(`Rt::rec_new`)。
+                    // 高速経路は作らず、ランタイム関数を呼ぶ。
                     let sp = self.safepoint(bi, ii)?;
                     let r = slow(self, sp);
                     self.check_zero(&r);
@@ -1714,7 +1751,7 @@ impl Gen<'_> {
         Ok(())
     }
 
-    /// スロットの語をレジスタ `r` に読む。
+    /// レジスタ `r` のスロットのワードを読み、`r` に書く。
     fn load_slot(&mut self, r: Reg) {
         let p = self.frame_word(HEADER_WORDS as u64 + u64::from(self.slot[r.index()]));
         let v = self.t();
@@ -1722,7 +1759,7 @@ impl Gen<'_> {
         self.set64(r, &v);
     }
 
-    /// エフェクトの命令(`krt_fx`)。
+    /// エフェクトの命令のコードを生成する(`krt_fx` を呼ぶ)。
     fn fx_inst(
         &mut self,
         bi: usize,
@@ -1753,7 +1790,9 @@ impl Gen<'_> {
                     fx::NEXT,
                     fx::REDELIVER
                 ));
-                // 継続を作れず、区間の最上段から巻き戻した。見出しの再開点(本体の呼び出し)の結果として受け取り直す。
+                // `krt_fx` が `REDELIVER` を返した。
+                // 継続を作れなかったので、ランタイムは区間の最上段から巻き戻している。
+                // コンテキストの結果を、フレームヘッダにある再開点(本体の呼び出し)の結果として受け取り直す。
                 self.start_block(&redo);
                 let v = self.ctx_load(off::RESULT, "i64");
                 self.line(format!("store i64 {v}, ptr %catchr"));
@@ -1819,7 +1858,7 @@ impl Gen<'_> {
             self.set64(d, &r);
             return Ok(());
         }
-        // 番兵を受け取る呼び出し。
+        // 番兵を受け取る呼び出しである。
         let lval = self.label("fxval");
         let lnext = self.label("fxnext");
         self.line(format!(
@@ -1828,7 +1867,8 @@ impl Gen<'_> {
             fx::CALL,
             fx::VALUE
         ));
-        // 呼ばずに番兵を結果に書いた(`call_clause` が深さの限度を超えた)。深さは変えない。
+        // NEXT: `call_clause` で深さが上限を超えたので、ランタイム関数は呼び出しを行わず、結果のスロットに番兵を書いた。
+        // 深さは変えない。
         self.start_block(&lnext);
         let p = self.frame_word(HEADER_WORDS as u64 + u64::from(self.slot[d.index()]));
         let v = self.t();
@@ -1846,7 +1886,8 @@ impl Gen<'_> {
         let v = self.ctx_load(off::RESULT, "i64");
         self.line(format!("store i64 {v}, ptr %catchr"));
         self.line(format!("br label %cin{rp}"));
-        // 戻った。番兵なら深さをこのフレームの深さに書き戻す。
+        // 呼び出しから戻った。
+        // 結果が番兵なら、深さをこのフレームの深さに書き戻す。
         self.start_block(&format!("cin{rp}"));
         let v = self.t();
         self.line(format!("{v} = load i64, ptr %catchr"));
@@ -1866,7 +1907,8 @@ impl Gen<'_> {
         Ok(())
     }
 
-    /// エフェクトのブロックの終わり(`krt_fx_term`)。
+    /// エフェクトの終端命令のコードを生成する。
+    /// `Propagate` は番兵を返すだけで、それ以外の終端命令は `krt_fx_term` を呼ぶ。
     fn fx_term(&mut self, bi: usize, op: &FxTermOp, args: &[Reg]) {
         if matches!(op, FxTermOp::Propagate) {
             self.line("ret i64 2");
@@ -1899,7 +1941,8 @@ impl Gen<'_> {
         }
     }
 
-    /// 語 `w` が即値なら `imm`、箱なら `boxed` の値を選ぶ(どちらも i64 の値を作る)。
+    /// ワード `w` が即値なら `imm` の値を、オブジェクトを指すなら `boxed` の値を選ぶコードを生成する。
+    /// `imm` と `boxed` はどちらも `i64` の値を作る。
     fn imm_or_box(
         &mut self,
         w: &str,
@@ -1928,7 +1971,7 @@ impl Gen<'_> {
         p
     }
 
-    /// 命令の再開点の番号、そこで生きているレジスタ、yield を受け取りうるか。
+    /// 命令の再開点の番号、そこで生存しているレジスタ、その再開点が yield を受け取ることがあるかを返す。
     fn resume(&self, bi: usize, ii: usize) -> Result<(u32, Vec<Reg>, bool), String> {
         let rp = *self
             .rp_of
@@ -2025,10 +2068,12 @@ impl Gen<'_> {
     }
 }
 
-/// 関数 `fid` の LLVM IR の関数の定義を作る。`entry` と `rentry` は入口の表とレジスタの入口の表の番地。
+/// 関数 `fid` の LLVM IR の定義(2 つのエントリ)を作る。
+/// `entry` はエントリテーブルのアドレス、`rentry` はレジスタ渡しのエントリテーブルのアドレスである。
 ///
-/// `fast_alloc` が偽なら、小さな箱の確保の速い道を作らず、どの確保も実行時の関数を呼ぶ(`--gc-stress`)。
-/// 関数は `keleut_interp::native::jit_eligible` を満たし、パス 12 を済ませていなければならない。
+/// `fast_alloc` が偽なら、小さなオブジェクトの確保の高速経路を生成せず、どの確保もランタイム関数を呼ぶ(`--gc-stress`)。
+/// 関数は `keleut_interp::native::jit_eligible` を満たし、パス 12(フレームのレイアウトを決めるパス。`doc/lir.md` の 1.8 節)を済ませていなければならない。
+/// そうでなければエラーを返す。
 pub fn function(
     prog: &Program,
     fid: FuncId,
@@ -2121,9 +2166,9 @@ pub fn function(
     }
     g.line("%fdepth = alloca i64");
     g.line("%catchr = alloca i64");
-    // ネイティブのスタックが下限(予備の検査の余裕と SOFT_MARGIN)に近ければ、
-    // 置いたフレームのままインタプリタの起動に移る(`keleut_interp::native::SOFT_MARGIN`)。
-    // 予備の検査そのもの(計画 6.8 節)は、インタプリタの起動の入口が行う。
+    // ネイティブスタックが下限に近ければ、呼び出し元が置いたフレームのまま、インタプリタでの実行に切り替える。
+    // ここで比べる `stack_soft` は、スタック残量の検査の下限に `keleut_interp::native::SOFT_MARGIN` を足したアドレスである。
+    // スタック残量の検査そのものは、切り替えた先のインタプリタが行う。
     g.line("%ra = call ptr @llvm.addressofreturnaddress.p0()");
     g.line("%rai = ptrtoint ptr %ra to i64");
     g.line(format!(
@@ -2133,7 +2178,7 @@ pub fn function(
     g.line("%low = load i64, ptr %lowp");
     g.line("%sov = icmp ult i64 %rai, %low");
     g.line("br i1 %sov, label %lowstack, label %altchk");
-    // alternating の擬似乱数(xorshift64)を進め、32 番のビットが立てばインタプリタに移る。
+    // `alternating` の擬似乱数(xorshift64)を進め、32 番のビットが立っていればインタプリタでの実行に切り替える。
     g.start_block("altchk");
     g.line(format!(
         "%altp = getelementptr i8, ptr %ctx, i64 {}",
@@ -2212,7 +2257,8 @@ pub fn function(
     for (i, &p) in f.params.iter().enumerate() {
         if i < NREG {
             if handler {
-                // `$rt_handle` のフレームは、どの点でも 0 番のスロットを根にする(`doc/lir.md` の 1.8 節)。
+                // `$rt_handle` のフレームは、どの点でも 0 番のスロットをルートにする(`doc/lir.md` の 1.8 節)。
+                // そのため、レジスタで受け取った引数をスロットにも書く。
                 let sp = g.frame_word((HEADER_WORDS + i) as u64);
                 g.line(format!("store i64 %ra{i}, ptr {sp}"));
             }
@@ -2238,7 +2284,8 @@ pub fn function(
     g.line("call void @krt_depth_error(ptr %ctx)");
     g.line("ret i64 2");
     g.out.push_str("}\n");
-    // 値スタックで引数を受け取る入口(入口の表の番地)。スロットから読んでレジスタの入口へ移る。
+    // 値スタック渡しのエントリ(エントリテーブルに登録するアドレス)。
+    // 引数をスロットから読み、レジスタ渡しのエントリを `musttail` で呼ぶ。
     let name = func_name(fid);
     let _ = writeln!(
         g.out,
@@ -2277,7 +2324,8 @@ pub fn function(
     Ok(g.out)
 }
 
-/// 関数 `fid` の 1 つのモジュールの文面(宣言を含む)。`fast_alloc` は [`function`] と同じ。
+/// 関数 `fid` だけを含むモジュールのテキスト(宣言を含む)を作る。
+/// `fast_alloc` は [`function`] と同じである。
 pub fn module(
     prog: &Program,
     fid: FuncId,

@@ -1,4 +1,5 @@
-//! 翻訳のスレッドと、ネイティブの後段を付けた実行(crate の冒頭)。
+//! コンパイルスレッドの本体と、ネイティブコードのバックエンドを取り付けた実行。
+//! 全体の説明は crate の冒頭にある。
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -11,23 +12,26 @@ use keleut_rt::Stop;
 use crate::codegen;
 use crate::sys::Jit;
 
-/// 段の設定(計画 6.9 節の `--tier`)。
+/// ティアの設定(`--tier` の値)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tier {
-    /// JIT にできる関数をすべて JIT で走らせる(初めて呼ぶときに翻訳する)。
+    /// JIT コンパイルできる関数をすべて JIT のコードで実行する。
+    /// 関数は、初めて呼ぶときにコンパイルする。
     JitOnly,
-    /// どの関数もインタプリタで走らせる。
+    /// どの関数もインタプリタで実行する。
     InterpOnly,
-    /// インタプリタで `N` 回呼んだ関数を、翻訳のスレッドで翻訳する(待たない)。
+    /// インタプリタで `N` 回呼んだ関数を、コンパイルスレッドでコンパイルする。
+    /// ミューテータは完了を待たない。
     Threshold(u64),
-    /// JIT の関数の入口ごとに、種から決まる擬似乱数で段を選ぶ。
+    /// JIT の関数に入るたびに、シードから決まる擬似乱数でティアを選ぶ。
     Alternating(u64),
-    /// 種で決まる半分の関数だけを JIT で走らせる。
+    /// シードで決まる半分の関数だけを JIT のコードで実行する。
     Mixed(u64),
 }
 
 impl Tier {
-    /// `--tier` の綴り(`interp-only`、`jit-only`、`threshold=N`、`alternating=SEED`、`mixed=SEED`)を読む。
+    /// `--tier` の値(`interp-only`、`jit-only`、`threshold=N`、`alternating=SEED`、`mixed=SEED`)を読む。
+    /// どれでもなければ `None` を返す。
     pub fn parse(s: &str) -> Option<Tier> {
         match s {
             "interp-only" => return Some(Tier::InterpOnly),
@@ -55,17 +59,18 @@ impl Tier {
     }
 }
 
-/// 段の既定(計画 6.2 節。しきい値の既定は M93 で決める。P249)。
+/// ティアの既定値(`threshold=1000`)。
+/// `keleut run` は、`--tier` を指定しないときにこれを使う。
 pub const DEFAULT_TIER: Tier = Tier::Threshold(1000);
 
-/// 実行の選択肢。
+/// ネイティブコードのバックエンドを取り付けた実行のオプション。
 #[derive(Clone, Debug)]
 pub struct RunOptions {
-    /// インタプリタの選択肢(深さの限度、ネイティブのスタック、`--gc-stress`)。
+    /// インタプリタのオプション(深さの上限、ネイティブスタックのサイズ、`--gc-stress` など)。
     pub base: keleut_interp::RunOptions,
-    /// 段の設定。
+    /// ティアの設定。
     pub tier: Tier,
-    /// LLVM の最適化の列(既定は `default<O2>`)。
+    /// LLVM の最適化パイプライン(既定は `default<O2>`)。
     pub passes: String,
 }
 
@@ -79,34 +84,38 @@ impl Default for RunOptions {
     }
 }
 
-/// 翻訳のスレッドが起動時に返すもの。
+/// コンパイルスレッドが起動処理の結果として返す、スタブ `interp_stub` と `enter_tailcc` のアドレス。
 struct Init {
     stub: usize,
     enter: usize,
 }
 
-/// 翻訳のスレッドのスタックの大きさ。
+/// コンパイルスレッドのスタックサイズ。
 ///
-/// 予約した大きさは仮想メモリの上限(`ulimit -v`)に数えられるので、小さく保つ。
-/// 翻訳は関数ごとの小さなモジュールで行い、LLVM の再帰の深さは関数の大きさに縛られるので、16 MiB で足りる。
-/// 256 MiB にすると、`conformance/gc/gc.t` の上限 512 MiB の下で JIT の段だけがメモリ不足(3)やスレッドを作れない誤り(70)で終わった。
+/// 予約したサイズは仮想メモリの上限(`ulimit -v`)に数えられるので、小さく保つ。
+/// コンパイルは関数ごとの小さなモジュールで行い、LLVM の再帰の深さは関数の大きさで抑えられるので、16 MiB で足りる。
+/// 256 MiB にすると、仮想メモリを 512 MiB に制限する `conformance/gc/gc.t` で、JIT を使う実行だけがメモリ不足(終了コード 3)か、スレッドを作れない内部エラー(終了コード 70)で終了する。
 const JIT_STACK: usize = 16 << 20;
 
-/// 待たない頼みの翻訳の失敗の印と文面。
+/// 完了を待たない依頼のコンパイルが失敗したことを表すフラグと、そのエラーメッセージ。
+///
+/// コンパイルスレッドの起動処理が失敗したときも、ここに書く。
 type Failure = Arc<(AtomicBool, Mutex<Option<String>>)>;
 
-/// 翻訳のスレッドの本体。起動の結果を `init` に送り、関数の番号を受け取るたびに翻訳する。
+/// コンパイルスレッドの本体。
+/// 起動処理の結果を `init` に送り、`req` から関数の番号を受け取るたびに、その関数をコンパイルする。
 ///
-/// `fast_alloc` は確保の速い道を作るか(`--gc-stress` では偽。`codegen::function`)。
+/// `fast_alloc` が真なら、確保の高速経路を生成する(`--gc-stress` では偽。`codegen::function`)。
 ///
-/// 実行が終わったら(`stop`)、残りの頼みを捨てて終わる。
-/// 頼みを受け取ってから翻訳を終えるまで `busy` を真にする。
-/// `busy` を真にしてから `stop` を読むので(どちらも SeqCst)、実行の終わりに `busy` が偽なら、このスレッドは新しい翻訳を始めない。
-/// LLVM の最適化の列に入る前にも `stop` を読み直し、立っていれば翻訳を捨てる。
+/// プログラムの実行が終わると `stop` が真になり、このスレッドは残りの依頼を捨てて終了する。
+/// 依頼を受け取ってからコンパイルを終えるまで、`busy` を真にする。
+/// `busy` を真にしてから `stop` を読むので(どちらも SeqCst)、実行が終わった時点で `busy` が偽なら、このスレッドは新しいコンパイルを始めない。
+/// LLVM の最適化に入る前にも `stop` を読み直し、真ならコンパイルを捨てる。
 ///
-/// 翻訳を終えたら入口の表の項目を書き換える(Release)。
-/// 待つ頼み(組の 2 番目が真)には、結果を `rep` に送る。
-/// 待たない頼みの失敗は `failure` に書き、ミューテータが次に入口を調べるときに内部の誤りにする。
+/// コンパイルを終えたら、エントリテーブルの項目を書き換える(Release)。
+/// 完了を待つ依頼(`req` から受け取るタプルの 2 番目の要素が真)には、結果を `rep` に送る。
+/// 完了を待たない依頼が失敗したときは `failure` に書く。
+/// ミューテータは、依頼した関数のエントリを次に調べるときに `failure` を読み、失敗が書かれていれば内部エラーとして実行を終了する。
 #[allow(clippy::too_many_arguments)]
 fn jit_thread(
     prog: &Program,
@@ -150,7 +159,7 @@ fn jit_thread(
             (jit, entry, rentry, table, triple, layout)
         }
         Err(e) => {
-            // 起動を待たずに走り始めたミューテータ(`threshold=N`)は、頼んだ関数を調べるときにこの印を見る。
+            // 起動処理を待たずに実行を始めたミューテータ(`threshold=N`)は、依頼した関数を調べるときにこのフラグを読む。
             if let Ok(mut m) = failure.1.lock() {
                 m.get_or_insert_with(|| format!("LLVM の JIT を始められません: {e}"));
             }
@@ -159,14 +168,17 @@ fn jit_thread(
             return;
         }
     };
-    // 翻訳の役割が大域の確保器の予備を使ったら、翻訳をやめる(`keleut_rt::alloc`)。
+    // コンパイルスレッドでメモリの確保が失敗すると、グローバルアロケータは予備領域を解放して、コンパイルスレッドのフラグを立てる(`keleut_rt::alloc`)。
+    // このフラグが立ったら、以後のコンパイルをやめる。
     let mut gave_up = false;
-    // 仮想メモリの上限は起動のときに 1 回だけ読む。上限が無ければ翻訳の前に残りを調べない。
+    // 仮想メモリの上限は起動時に 1 回だけ読む。
+    // 上限がなければ、コンパイルの前に残りを調べない。
     let as_limit = address_space_limit();
     while let Ok((f, wait)) = req.recv() {
         busy.store(true, Ordering::SeqCst);
         if stop.load(Ordering::SeqCst) {
-            // 実行が終わった。残りの待たない頼みは翻訳しない。
+            // 実行が終わった。
+            // 残っている依頼(完了を待たない依頼)はコンパイルしない。
             break;
         }
         if gave_up {
@@ -177,9 +189,9 @@ fn jit_thread(
             continue;
         }
         if !keleut_rt::alloc::has_reserve() && !keleut_rt::alloc::reacquire() {
-            // 大域の予備が無く(実行の役割が使った)、取り直せない。
-            // 予備なしで翻訳すると、Rust の確保の失敗がプロセスを止める(134)ので、
-            // 印が立ったときと同じく、以後の翻訳をやめてインタプリタで続ける。
+            // グローバルアロケータの予備領域がなく(実行スレッドが使った)、確保し直すこともできない。
+            // 予備領域なしでコンパイルすると、Rust のメモリ確保が失敗したときにプロセスが異常終了する(終了コード 134)。
+            // そこで、コンパイルスレッドのフラグが立ったときと同じように、以後のコンパイルをやめてインタプリタで実行を続ける。
             gave_up = true;
             busy.store(false, Ordering::SeqCst);
             if wait && rep.send(Ok(0)).is_err() {
@@ -190,8 +202,9 @@ fn jit_thread(
         if let Some(limit) = as_limit
             && !room_for_translation(limit, virtual_size())
         {
-            // 仮想メモリの残りが少ない。LLVM の中の確保の失敗は捕まえられないので、この関数は翻訳せずにインタプリタで続ける。
-            // 次の頼みでまた調べる。
+            // 仮想メモリの残りが少ない。
+            // LLVM の中でのメモリ確保の失敗は捕捉できないので、この関数はコンパイルせずにインタプリタで実行を続ける。
+            // 次の依頼でもう一度調べる。
             busy.store(false, Ordering::SeqCst);
             if wait && rep.send(Ok(0)).is_err() {
                 break;
@@ -209,18 +222,20 @@ fn jit_thread(
             jit.add_ir(&name, &src, passes)?;
             let ra = jit.lookup(&format!("{name}.r"))?;
             if keleut_rt::alloc::flagged(keleut_rt::alloc::Role::Jit) {
-                // 入口を書く前に印を見る。翻訳は捨てる(LLJIT に足したコードは使わない)。
+                // エントリを書く前に、コンパイルスレッドのフラグを調べる。
+                // 立っていればコンパイルを捨てる(LLJIT に追加したコードは使わない)。
                 return Ok(0);
             }
-            // レジスタの入口を先に書く(入口の表の項目を見て翻訳済みと知った呼び出しは、どちらの入口も使える)。
+            // レジスタ渡しのエントリを先に書く。
+            // エントリテーブルの項目を読んでコンパイル済みと判断した呼び出しが、どちらのエントリも使えるようにするためである。
             rentry[f.index()].store(ra, Ordering::Release);
             jit.lookup(&name)
         });
         drop(jit_site);
         let r = if keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Jit) {
-            // 翻訳の失敗をプログラムのメモリの不足と取り違えない。
-            // この関数の翻訳を捨て、以後の翻訳をやめてインタプリタで続け、大域の予備を取り直す。
-            // 取れなければ予備なしで続ける。
+            // コンパイル中のメモリ確保の失敗を、プログラムのメモリ不足と取り違えないようにする。
+            // この関数のコンパイルを捨て、以後のコンパイルをやめてインタプリタで実行を続け、グローバルアロケータの予備領域を確保し直す。
+            // 確保できなければ、予備領域なしで続ける。
             gave_up = true;
             keleut_rt::alloc::reacquire();
             Ok(0)
@@ -245,33 +260,38 @@ fn jit_thread(
     }
 }
 
-/// ネイティブの後段を付けてプログラムを実行し、終了状態を返す。
+/// ネイティブコードのバックエンドを取り付けてプログラムを実行し、終了コードを返す。
 ///
-/// `threshold=N` では、実行が終わると、翻訳のスレッドを待たずにいつも終了状態 `code` でプロセスを終える(戻らない)。
-/// 翻訳のスレッドは、翻訳の途中か、まだ LLJIT とスタブを作る起動の途中でありうるからである。
-/// ほかの段の設定では、実行が終わったとき翻訳のスレッドがまだ翻訳しているときだけ、その翻訳を待たずに同じように終える。
-/// 待たない頼み(`threshold=N`)の翻訳は大きな関数では数分かかることがあり、結果を変えない翻訳のために終了を遅らせないためである。
-/// このとき標準出力と標準エラーを flush してから `_exit` を呼ぶ。
-/// `exit` を使わないのは、翻訳のスレッドが LLVM の中にいる間に LLVM の静的な破棄子を走らせないためである。
+/// `threshold=N` では、実行が終わると、コンパイルスレッドを待たずに、その終了コードで必ずプロセスを終了する。
+/// このとき、この関数は戻らない。
+/// コンパイルスレッドが、コンパイルの途中か、LLJIT とスタブを作る起動処理の途中であることがあるからである。
+/// ほかのティアの設定では、実行が終わった時点でコンパイルスレッドがコンパイルの途中であるときだけ、同じように待たずに終了する。
+/// 完了を待たない依頼(`threshold=N`)のコンパイルは、大きな関数では数分かかることがある。
+/// 結果に影響しないコンパイルのために終了を遅らせないよう、待たずに終了する。
+/// プロセスを終了するときは、標準出力と標準エラーを flush してから `_exit` を呼ぶ。
+/// `exit` を使わないのは、コンパイルスレッドが LLVM の中を実行している間に、LLVM の静的オブジェクトのデストラクタを実行しないためである。
 pub fn run_program(prog: &Program, opts: &RunOptions) -> u8 {
     run_with(prog, opts, true, |prog, opts, setup| {
         keleut_interp::run_program_with(prog, opts, setup)
     })
 }
 
-/// [`run_program`] と同じで、プロセスを終えない(試験用)。
+/// [`run_program`] と同じように実行するが、プロセスを終了しない。
+/// テスト用である。
 ///
-/// 実行の後、翻訳のスレッドが終わるのを待ってから終了状態を返す。
-/// ミューテータのスレッドは [`run_program`] と同じく `native_stack` の大きさで作る。
+/// 実行の後、コンパイルスレッドが終了するのを待ってから終了コードを返す。
+/// ミューテータのスレッドは、[`run_program`] と同じく `native_stack` のサイズで作る。
 pub fn run_program_wait(prog: &Program, opts: &RunOptions) -> u8 {
     run_with(prog, opts, false, |prog, opts, setup| {
         keleut_interp::run_program_with(prog, opts, setup)
     })
 }
 
-/// [`run_program`] と同じで、今のスレッドで実行する(試験用。`margin` は予備の検査の余裕)。
+/// [`run_program`] と同じように実行するが、ミューテータ用のスレッドを作らず、プログラムを現在のスレッドで実行する。
+/// テスト用である。
 ///
-/// こちらはプロセスを終えず、翻訳のスレッドが終わるのを待ってから戻る。
+/// `margin` はスタック残量の検査の余裕(バイト)である。
+/// プロセスを終了せず、コンパイルスレッドが終了するのを待ってから戻る。
 pub fn run_program_here(prog: &Program, opts: &RunOptions, margin: usize) -> u8 {
     run_with(prog, opts, false, |prog, opts, setup| {
         keleut_interp::run_program_here(prog, opts, margin, Some(setup))
@@ -282,19 +302,21 @@ unsafe extern "C" {
     fn _exit(status: i32) -> !;
 }
 
-/// 翻訳のスレッドの起動を受け取る前の入口の関数。
+/// コンパイルスレッドの起動処理の結果を受け取るまで、`enter_tailcc` の代わりに置く関数。
 ///
-/// 起動を受け取るまでは翻訳済みの関数が無いので、呼ばれない。
+/// 起動処理の結果を受け取るまではコンパイル済みの関数がないので、呼ばれることはない。
+/// 呼ばれたら abort する。
 unsafe extern "C" fn no_enter(_: *mut keleut_interp::native::NativeCtx, _: usize) -> u64 {
     std::process::abort()
 }
 
-/// 標準出力と標準エラーを flush し、終了の処理を走らせずにプロセスを終える。
+/// 標準出力と標準エラーを flush し、終了処理を実行せずにプロセスを終了する。
 fn exit_now(code: u8) -> ! {
     use std::io::Write;
     let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();
-    // SAFETY: _exit は libc の関数で、引数は終了状態である。どのスレッドから呼んでもよい。
+    // SAFETY: _exit は libc の関数で、引数は終了コードである。
+    // どのスレッドから呼んでもよい。
     unsafe { _exit(i32::from(code)) }
 }
 
@@ -320,7 +342,8 @@ fn run_with(
         let stop2 = stop.clone();
         let busy = Arc::new(AtomicBool::new(false));
         let busy2 = busy.clone();
-        // 入口の表。翻訳のスレッドが起動を終えるまで、どの項目も 0 である。
+        // エントリテーブル。
+        // コンパイルスレッドが起動処理を終えるまで、どの項目も 0 である。
         let entry: Arc<[AtomicUsize]> =
             (0..prog.funcs.len()).map(|_| AtomicUsize::new(0)).collect();
         let entry2 = entry.clone();
@@ -333,14 +356,15 @@ fn run_with(
                 )
             });
         if spawned.is_err() {
-            // 翻訳のスレッドを作れない(仮想メモリの上限の下など)。翻訳の失敗をプログラムの失敗にせず、
-            // 翻訳せずにインタプリタで走る(翻訳の役割の印が立ったときと同じ)。
+            // コンパイルスレッドを作れない(仮想メモリを制限しているときなど)。
+            // これをプログラムの失敗にはせず、コンパイルなしでインタプリタで実行する(コンパイル中にメモリの確保が失敗したときと同じ)。
             let mut setup = |_: &mut Interp<'_>| Ok(());
             return go(prog, &opts.base, &mut setup);
         }
-        // `threshold=N` では、LLJIT の作成とスタブの翻訳(数ミリ秒)を待たずにインタプリタで走り始める。
-        // 頼んだ関数の翻訳が済んで入口の表の項目が 0 でなくなったときに、起動の結果を受け取る。
-        // ほかの段の設定は、最初の呼び出しで翻訳を待つので、ここで起動を待つ。
+        // `threshold=N` では、LLJIT の作成とスタブのコンパイル(数ミリ秒)を待たずに、インタプリタで実行を始める。
+        // ミューテータは、コンパイルを依頼した関数のエントリテーブルの項目が 0 でなくなったときに、起動処理の結果を受け取る。
+        // 項目が 0 でなくなるのは、起動処理が済んで、項目が `interp_stub` かコンパイル済みの関数を指すようになったときである。
+        // ほかのティアの設定では、最初の呼び出しでコンパイルを待つので、ここで起動処理を待つ。
         let lazy = matches!(mode, TierMode::Threshold(_));
         let recv_init = move || -> Result<(u64, EnterFn), String> {
             let init = match init_rx.recv() {
@@ -348,7 +372,7 @@ fn run_with(
                 Ok(Err(e)) => return Err(e),
                 Err(_) => return Err("JIT のスレッドが落ちました".to_string()),
             };
-            // SAFETY: enter は翻訳した enter_tailcc の番地で、型は EnterFn と同じである。
+            // SAFETY: enter はコンパイルした enter_tailcc のアドレスで、その関数の型は EnterFn と同じである。
             let enter: EnterFn = unsafe { std::mem::transmute::<usize, EnterFn>(init.enter) };
             Ok((init.stub as u64, enter))
         };
@@ -394,16 +418,19 @@ fn run_with(
         let code = go(prog, &opts.base, &mut setup);
         stop.store(true, Ordering::SeqCst);
         if exit_busy && (lazy || busy.load(Ordering::SeqCst)) {
-            // 翻訳の途中か、翻訳のスレッドがまだ起動の途中でありうる。結果は出し終えたので、待たずに終える。
+            // コンパイルスレッドが、コンパイルの途中か起動処理の途中であることがある。
+            // プログラムの実行は終わっているので、待たずに終了する。
             exit_now(code);
         }
         code
     })
 }
 
-/// JIT にできる関数の LLVM IR の文面を並べる(`keleut dump llvm`)。
+/// JIT コンパイルできる関数の LLVM IR のテキストを並べて返す(`keleut dump llvm`)。
 ///
-/// 入口の表の番地は 0 として書く(調べるための出力で、互換性を約束しない)。
+/// JIT コンパイルできない関数については、LLVM IR の代わりに、`インタプリタに残す` と書いたコメント行(`;` で始まる行)を 1 行出力する。
+/// エントリテーブルのアドレスは 0 として書く。
+/// 調査用の出力で、形式の互換性は保証しない。
 pub fn dump_ir(prog: &Program) -> Result<String, String> {
     let mut s = String::new();
     s.push_str(codegen::DECLS);
@@ -422,12 +449,13 @@ pub fn dump_ir(prog: &Program) -> Result<String, String> {
     Ok(s)
 }
 
-/// 翻訳の前に残しておく仮想メモリの余裕(64 MiB)である。
+/// コンパイルの前に残しておく仮想メモリの余裕(64 MiB)。
 ///
-/// `RLIMIT_AS` の上限と今の仮想の大きさの差がこれを下回れば、翻訳しない。
+/// `RLIMIT_AS` の上限と現在の仮想メモリのサイズの差がこれを下回れば、コンパイルしない。
 const JIT_AS_ROOM: u64 = 64 << 20;
 
-/// 仮想メモリの軟らかい上限(`RLIMIT_AS`。バイト)を返す。上限が無ければ `None` である。
+/// 仮想メモリのソフトリミット(`RLIMIT_AS`)をバイト数で返す。
+/// 上限がなければ `None` を返す。
 fn address_space_limit() -> Option<u64> {
     #[repr(C)]
     struct RLimit {
@@ -437,25 +465,26 @@ fn address_space_limit() -> Option<u64> {
     unsafe extern "C" {
         fn getrlimit(resource: i32, rlim: *mut RLimit) -> i32;
     }
-    /// Linux の `RLIMIT_AS`。
+    /// Linux での `RLIMIT_AS` の値。
     const RLIMIT_AS: i32 = 9;
     let mut r = RLimit { cur: 0, max: 0 };
-    // SAFETY: r は呼び出しの間だけ使う有効な領域である。
+    // SAFETY: r は、この呼び出しの間だけ使う有効な書き込み先である。
     if unsafe { getrlimit(RLIMIT_AS, &mut r) } != 0 || r.cur == u64::MAX {
         return None;
     }
     Some(r.cur)
 }
 
-/// `/proc/self/statm` の最初の欄(仮想の大きさ。ページ)をバイトにして返す。読めなければ `None` である。
+/// `/proc/self/statm` の最初のフィールド(仮想メモリのサイズ。単位はページ)をバイト数にして返す。
+/// 読めなければ `None` を返す。
 ///
-/// 残りが少ないときに呼ぶので、ヒープに確保せず、スタックの領域に読む。
+/// 仮想メモリの残りが少ないときに呼ぶので、ヒープに確保せず、スタック上のバッファに読み込む。
 fn virtual_size() -> Option<u64> {
     use std::io::Read;
     unsafe extern "C" {
         fn sysconf(name: i32) -> i64;
     }
-    /// Linux の `_SC_PAGESIZE`。
+    /// Linux での `_SC_PAGESIZE` の値。
     const SC_PAGESIZE: i32 = 30;
     let mut buf = [0u8; 128];
     let n = std::fs::File::open("/proc/self/statm")
@@ -467,16 +496,16 @@ fn virtual_size() -> Option<u64> {
     pages.checked_mul(u64::try_from(page).ok().filter(|&p| p > 0)?)
 }
 
-/// `/proc/self/statm` の文面から最初の欄(ページの数)を読む。
+/// `/proc/self/statm` の内容から、最初のフィールド(ページ数)を読む。
 fn parse_statm_size(s: &[u8]) -> Option<u64> {
     let end = s.iter().position(|&b| b == b' ').unwrap_or(s.len());
     std::str::from_utf8(&s[..end]).ok()?.trim().parse().ok()
 }
 
-/// 上限 `limit` と仮想の大きさ `size`(どちらもバイト)から、翻訳してよいかを決める。
+/// 上限 `limit` と仮想メモリのサイズ `size`(どちらもバイト数)から、コンパイルしてよいかを決める。
 ///
-/// 差が [`JIT_AS_ROOM`] 以上なら真である。
-/// 大きさを読めなかったとき(`None`)は真にし、今までどおり翻訳する。
+/// 差が [`JIT_AS_ROOM`] 以上なら真を返す。
+/// サイズを読めなかったとき(`None`)も真を返し、残りを調べずにコンパイルする。
 fn room_for_translation(limit: u64, size: Option<u64>) -> bool {
     match size {
         Some(size) => limit.saturating_sub(size) >= JIT_AS_ROOM,
@@ -507,7 +536,7 @@ mod tests {
 
     #[test]
     fn reads_own_virtual_size() {
-        // 試験のプロセスの仮想の大きさは 0 より大きく、ページの倍数である。
+        // テストのプロセスの仮想メモリのサイズは 0 より大きく、4096 バイトの倍数である。
         let size = virtual_size().expect("/proc/self/statm を読めない");
         assert!(size > 0);
         assert_eq!(size % 4096, 0);
