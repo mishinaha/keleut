@@ -69,7 +69,7 @@ module の中のグローバルは、単位のキーを除いた修飾名で報�
   > echoln("after")
   > EOF
   $ keleut run somefail.kel
-  ⚠ match が非網羅的です。例えば None が漏れています
+  ⚠ match が非網羅的です。たとえば None が漏れています
   before
   実行時エラー: パターンに値が一致しません: None
   [3]

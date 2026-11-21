@@ -46,8 +46,8 @@ run_exit.t にある 2 万段の 1 + (...) の式は、既定の上限で型検�
 同じ式に --native-stack 4m を指定すると、構文解析の深さの上限が下がり、構文解析の上限の診断を出して終了コード 2 で終了する。
 下がった上限の値はデバッグビルドとリリースビルドで異なるので、数字を伏せて比較する:
 
-  $ keleut check --native-stack 4m deep.kel 2>&1 | sed 's/限度 [0-9]* を/限度 N を/'
-  deep.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 N を超えました)
+  $ keleut check --native-stack 4m deep.kel 2>&1 | sed 's/上限 [0-9]* を/上限 N を/'
+  deep.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 N を超えました)
   $ keleut check --native-stack 4m deep.kel 2> /dev/null; echo "exit: $?"
   exit: 2
 
@@ -56,8 +56,8 @@ run_exit.t にある 2 万段の 1 + (...) の式は、既定の上限で型検�
 既定のスタックでは型検査に通る:
 
   $ awk 'BEGIN { print "let r = {"; for (i = 0; i < 20000; i++) print "  let x" i " = " i; print "  0"; print "}" }' > block.kel
-  $ keleut check --native-stack 4m block.kel 2>&1 | sed 's/限度 [0-9]* を/限度 N を/'
-  block.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 N を超えました)
+  $ keleut check --native-stack 4m block.kel 2>&1 | sed 's/上限 [0-9]* を/上限 N を/'
+  block.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 N を超えました)
   $ keleut check --native-stack 4m block.kel 2> /dev/null; echo "exit: $?"
   exit: 2
   $ keleut check block.kel; echo "exit: $?"
@@ -109,7 +109,7 @@ Diktor は 10 万段の式も型検査に通す(終了コード 0 で終了す�
   exit: 0
   $ awk 'BEGIN { print "let id(x: Int32): Int32 = x"; s = "1"; for (i = 0; i < 100000; i++) s = "id(" s ")"; print "let x = " s }' > ids10.kel
   $ keleut check ids10.kel; echo "exit: $?"
-  ids10.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+  ids10.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 200000 を超えました)
   exit: 2
 
 else if の連鎖も、ソースの入れ子 1 段につき木が 2 段深くなる。
@@ -119,5 +119,5 @@ Diktor は 10 万段の連鎖も型検査に通す(終了コード 0 で終了�
 
   $ awk 'BEGIN { printf "let f(n: Int32): Int32 = "; for (i = 0; i < 100000; i++) printf "if n == %d then %d else ", i, i; print "0" }' > elif10.kel
   $ keleut check elif10.kel; echo "exit: $?"
-  elif10.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+  elif10.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 200000 を超えました)
   exit: 2

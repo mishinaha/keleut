@@ -97,31 +97,31 @@ f64 まで 16 進の数字として読んだ値が Int32 の範囲を超える�
 
   $ printf 'echoln(show(1_0e1_0))\n' > e_sep.kel
   $ keleut run e_sep.kel
-  e_sep.kel:1:13: 構文エラー: 数値リテラル 1_0e1 の直後に _0 が続いています(数値リテラルの綴りを確認してください)
+  e_sep.kel:1:13: 構文エラー: 数値リテラル 1_0e1 の直後に _0 が続いています(数値リテラルの表記を確認してください)
   [2]
   $ printf 'echoln(show(0b101f64))\n' > e_bin.kel
   $ keleut run e_bin.kel
-  e_bin.kel:1:13: 構文エラー: 数値リテラル 0b101 の直後に f64 が続いています(数値リテラルの綴りを確認してください)
+  e_bin.kel:1:13: 構文エラー: 数値リテラル 0b101 の直後に f64 が続いています(数値リテラルの表記を確認してください)
   [2]
   $ printf 'echoln(show(0o17f64))\n' > e_oct.kel
   $ keleut run e_oct.kel
-  e_oct.kel:1:13: 構文エラー: 数値リテラル 0o17 の直後に f64 が続いています(数値リテラルの綴りを確認してください)
+  e_oct.kel:1:13: 構文エラー: 数値リテラル 0o17 の直後に f64 が続いています(数値リテラルの表記を確認してください)
   [2]
   $ printf 'echoln(show(0x1p3))\n' > e_hexp.kel
   $ keleut run e_hexp.kel
-  e_hexp.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に p3 が続いています(数値リテラルの綴りを確認してください)
+  e_hexp.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に p3 が続いています(数値リテラルの表記を確認してください)
   [2]
   $ printf 'echoln(show(0x1.8))\n' > e_hexdot.kel
   $ keleut run e_hexdot.kel
-  e_hexdot.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に .8 が続いています(数値リテラルの綴りを確認してください)
+  e_hexdot.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に .8 が続いています(数値リテラルの表記を確認してください)
   [2]
   $ printf 'echoln(show(0x1.8f64))\n' > e_hexdotf.kel
   $ keleut run e_hexdotf.kel
-  e_hexdotf.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に .8f64 が続いています(数値リテラルの綴りを確認してください)
+  e_hexdotf.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に .8f64 が続いています(数値リテラルの表記を確認してください)
   [2]
   $ printf 'echoln(show(0x1p3f64))\n' > e_hexpf.kel
   $ keleut run e_hexpf.kel
-  e_hexpf.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に p3f64 が続いています(数値リテラルの綴りを確認してください)
+  e_hexpf.kel:1:13: 構文エラー: 数値リテラル 0x1 の直後に p3f64 が続いています(数値リテラルの表記を確認してください)
   [2]
 
 a * b + c を、関数の引数として受け取った値と、同じ値の定数式で計算する。

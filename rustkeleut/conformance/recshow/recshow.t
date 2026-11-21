@@ -19,7 +19,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk({a = 1, b = 2})
   > EOF
   $ keleut run t1.kel
-  ⚠ match が非網羅的です。例えば {b = 0, a = _} が漏れています
+  ⚠ match が非網羅的です。たとえば {b = 0, a = _} が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: {b = 2, a = 1}
   実行時エラー: match のどの節にも一致しません: {b = 2, a = 1}
   [3]
@@ -35,7 +35,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk({c = 3 extends base})
   > EOF
   $ keleut run t2.kel
-  ⚠ match が非網羅的です。例えば {c = 0, a = _, b = _} が漏れています
+  ⚠ match が非網羅的です。たとえば {c = 0, a = _, b = _} が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: {a = 1, b = 2, c = 3}
   実行時エラー: match のどの節にも一致しません: {a = 1, b = 2, c = 3}
   [3]
@@ -51,7 +51,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk({b = 1, a = 2, c = 3})
   > EOF
   $ keleut run t3.kel
-  ⚠ match が非網羅的です。例えば {b = 0, a = _, c = _} が漏れています
+  ⚠ match が非網羅的です。たとえば {b = 0, a = _, c = _} が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: {a = 2, b = 1, c = 3}
   実行時エラー: match のどの節にも一致しません: {a = 2, b = 1, c = 3}
   [3]
@@ -67,7 +67,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk(#P({a = 2, b = 1}))
   > EOF
   $ keleut run t5.kel
-  ⚠ match が非網羅的です。例えば #P({b = 0, a = _}) が漏れています
+  ⚠ match が非網羅的です。たとえば #P({b = 0, a = _}) が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: #P({b = 1, a = 2})
   実行時エラー: match のどの節にも一致しません: #P({b = 1, a = 2})
   [3]
@@ -83,7 +83,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk()
   > EOF
   $ keleut run t7.kel
-  ⚠ match が非網羅的です。例えば {x = 0, x = _, y = _} が漏れています
+  ⚠ match が非網羅的です。たとえば {x = 0, x = _, y = _} が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: {x = 1, x = 2, y = 3}
   実行時エラー: match のどの節にも一致しません: {x = 1, x = 2, y = 3}
   [3]
@@ -98,7 +98,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk(({a = 1, b = 2}, 3))
   > EOF
   $ keleut run t10.kel
-  ⚠ match が非網羅的です。例えば ({b = 0, a = _}, _) が漏れています
+  ⚠ match が非網羅的です。たとえば ({b = 0, a = _}, _) が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: ({b = 2, a = 1}, 3)
   実行時エラー: match のどの節にも一致しません: ({b = 2, a = 1}, 3)
   [3]
@@ -115,7 +115,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk()
   > EOF
   $ keleut run t11.kel
-  ⚠ match が非網羅的です。例えば {z = 0, _item = _, _item = _} が漏れています
+  ⚠ match が非網羅的です。たとえば {z = 0, _item = _, _item = _} が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: {_item = 1, _item = 2, z = 3}
   実行時エラー: match のどの節にも一致しません: {_item = 1, _item = 2, z = 3}
   [3]
@@ -133,7 +133,7 @@ Diktor は値を作った順に書き、RustKeleut は正準なレイアウト�
   > let main = chk()
   > EOF
   $ keleut run t12.kel
-  ⚠ match が非網羅的です。例えば {b = 0, a = _} が漏れています
+  ⚠ match が非網羅的です。たとえば {b = 0, a = _} が漏れています
   cancel 節で例外が抑制されました: match のどの節にも一致しません: {a = 2, b = 0}
   実行時エラー: match のどの節にも一致しません: {a = 2, b = 0}
   [3]

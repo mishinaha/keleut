@@ -315,7 +315,7 @@ __panic は、引数のメッセージをそのまま書く:
   > let y = f(None)
   > EOF
   $ keleut run matchfail.kel
-  ⚠ match が非網羅的です。例えば None が漏れています
+  ⚠ match が非網羅的です。たとえば None が漏れています
   w
   実行時エラー: match のどの節にも一致しません: None
   [3]
@@ -325,6 +325,6 @@ __panic は、引数のメッセージをそのまま書く:
   > let y = f((2, "a\"\n\té", Some(3i64)))
   > EOF
   $ keleut run matchfail2.kel
-  ⚠ match が非網羅的です。例えば (0, _, None) が漏れています
+  ⚠ match が非網羅的です。たとえば (0, _, None) が漏れています
   実行時エラー: match のどの節にも一致しません: (2, "a\"\n\t\195\169", Some(3))
   [3]

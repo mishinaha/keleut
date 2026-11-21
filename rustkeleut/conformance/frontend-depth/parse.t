@@ -50,14 +50,14 @@ run_exit.t にある 2 万段の 1 + (...) の式も受理する:
   $ keleut dump ast plus.kel 2> /dev/null; echo "exit: $?"
   exit: 2
   $ keleut dump ast plus.kel > /dev/null; echo "exit: $?"
-  plus.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+  plus.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 200000 を超えました)
   exit: 2
 
 タプルの要素の選択 t._N は N 段の木になるので、N が上限を超えれば同じ診断になる:
 
   $ echo 'let x = t._300000' > strip.kel
   $ keleut dump ast strip.kel; echo "exit: $?"
-  strip.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 200000 を超えました)
+  strip.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 200000 を超えました)
   exit: 2
 
 --max-nest で上限を変えられる。
@@ -67,7 +67,7 @@ run_exit.t にある 2 万段の 1 + (...) の式も受理する:
   $ awk 'BEGIN { print "let x = {"; for (i = 0; i < 1200; i++) print "  let a" i " = 1"; print "  1"; print "}" }' > seq1200.kel
   $ keleut dump ast --max-nest 1000 ok.kel seq1200.kel; echo "exit: $?"
   (dlet (binding a = 1))
-  seq1200.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 1000 を超えました)
+  seq1200.kel: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 1000 を超えました)
   exit: 2
   $ keleut dump ast --max-nest 2000 seq1200.kel > seq1200.out; echo "exit: $?"; wc -l < seq1200.out
   exit: 0

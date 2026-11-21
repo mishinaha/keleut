@@ -11,9 +11,9 @@ keleut repl の --native-stack は、フロントエンドのスレッドのス�
 下がった上限の値はデバッグビルドとリリースビルドで異なるので、数字を伏せて比較する:
 
   $ awk 'BEGIN { print "let y = 1"; s = "let x = {"; for (i = 0; i < 20000; i++) s = s " let a" i " = 1;"; print s " 1 }"; print "echoln(show(y))" }' > seqrepl.txt
-  $ { keleut repl --native-stack 4m < seqrepl.txt; echo "exit: $?"; } | sed 's/限度 [0-9]* を/限度 N を/'
+  $ { keleut repl --native-stack 4m < seqrepl.txt; echo "exit: $?"; } | sed 's/上限 [0-9]* を/上限 N を/'
   y : Int32 = 1
-  <stdin>: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 N を超えました)
+  <stdin>: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 N を超えました)
   1
   exit: 0
 
@@ -31,7 +31,7 @@ keleut repl の --native-stack は、フロントエンドのスレッドのス�
   $ awk 'BEGIN { print "let y = 1"; s = "1"; for (i = 0; i < 200; i++) s = "1 + (" s ")"; print "let x = " s; print "let z = 2"; print "echoln(show(y + z))" }' > nestrepl.txt
   $ keleut repl --max-nest 100 < nestrepl.txt; echo "exit: $?"
   y : Int32 = 1
-  <stdin>: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の限度 100 を超えました)
+  <stdin>: 処理系の限度: 構文解析で再帰が深すぎます(入れ子の上限 100 を超えました)
   z : Int32 = 2
   3
   exit: 0

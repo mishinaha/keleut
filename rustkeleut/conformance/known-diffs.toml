@@ -2,7 +2,6 @@
 # kconform は、登録のない差分が 1 件でもあれば失敗する。
 # 各項目は、テストのパスの末尾、`  $ ` の行の番号、ペア、理由、台帳の番号を持つ。
 # キー when と against は省略できる(conformance/README.md と crates/kconform/src/known_diffs.rs を参照)。
-# reason の値は kconform が表示する文字列で、上限を「限度」、構文木の評価器を「木の評価器」、メモリ不足を「メモリの不足」、シェイプ表を「形の表」と書いている。
 #
 # V213: OCAMLRUNPARAM=l=... で OCaml のスタックの上限を下げるブロックは、Diktor の構文木の評価器が使うスタックの上限を確かめるもので、そのワード数はほかの処理系の上限に対応しない。
 # 同じ意図のテストは、conformance/depth/ と conformance/frontend-depth/ に別に置いてある。
@@ -13,245 +12,245 @@
 file = "diktor/test/if.t"
 line = 259
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/if.t"
 line = 280
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/if.t"
 line = 298
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 168
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 170
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 176
 pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 180
 pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 185
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 195
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 206
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 208
 pairs = ["dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/run_exit.t"
 line = 215
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 12
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 23
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 33
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 46
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 60
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 71
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 82
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 97
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 124
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 138
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 149
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 163
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 180
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 191
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 219
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 221
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で実行した前のコマンドの出力を読む"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 243
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 245
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で実行した前のコマンドの出力を読む"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 260
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 262
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で実行した前のコマンドの出力を読む"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 285
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 287
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で走らせた前のコマンドの出力を読む"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で実行した前のコマンドの出力を読む"
 ledger = "V213"
 
 [[diff]]
 file = "diktor/test/tail_calls.t"
 line = 307
 pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
+reason = "上限は I(§15.5)。OCAMLRUNPARAM で構文木の評価器のスタックを絞る"
 ledger = "V213"
 
 # ペア kf は型検査の呼び出しを keleut check で実行するので、標準出力に書けないときの診断の接頭辞が keleut: になる。
@@ -564,7 +563,7 @@ ledger = "V217"
 file = "conformance/oom/oom.t"
 line = 15
 pairs = ["dk", "dk-ir", "kf", "x-ir"]
-reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+reason = "上限は I(§15.5)。Diktor には 1 回の確保の上限がない"
 ledger = "V215"
 against = "record"
 
@@ -572,7 +571,7 @@ against = "record"
 file = "conformance/oom/oom.t"
 line = 15
 pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+reason = "上限は I(§15.5)。Diktor には 1 回の確保の上限がない"
 ledger = "V215"
 against = "pair"
 
@@ -580,7 +579,7 @@ against = "pair"
 file = "conformance/oom/oom.t"
 line = 31
 pairs = ["dk", "dk-ir", "kf", "x-ir"]
-reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+reason = "上限は I(§15.5)。Diktor には 1 回の確保の上限がない"
 ledger = "V215"
 against = "record"
 
@@ -588,7 +587,7 @@ against = "record"
 file = "conformance/oom/oom.t"
 line = 31
 pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
+reason = "上限は I(§15.5)。Diktor には 1 回の確保の上限がない"
 ledger = "V215"
 against = "pair"
 
@@ -600,7 +599,7 @@ against = "pair"
 file = "conformance/oom/shape.t"
 line = 31
 pairs = ["dk", "dk-ir", "kf", "x-ir"]
-reason = "RustKeleut の形の表が 2 乗で大きくなり、Diktor より先にメモリの不足になる"
+reason = "RustKeleut のシェイプ表が 2 乗で大きくなり、Diktor より先にメモリ不足になる"
 ledger = "V240"
 against = "record"
 
@@ -608,11 +607,11 @@ against = "record"
 file = "conformance/oom/shape.t"
 line = 31
 pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "RustKeleut の形の表が 2 乗で大きくなり、Diktor より先にメモリの不足になる"
+reason = "RustKeleut のシェイプ表が 2 乗で大きくなり、Diktor より先にメモリ不足になる"
 ledger = "V240"
 against = "pair"
 
-# V213(conformance/depth/limit.t): LangSpec §15.5 は、評価に必要なメモリの上限の大きさを定めていないので、上限は処理系が決める(reason の `限度は I` はこのことを指す)。
+# V213(conformance/depth/limit.t): LangSpec §15.5 は、評価に必要なメモリの上限の大きさを定めていないので、上限は処理系が決める(reason の `上限は I` はこのことを指す)。
 # 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックの上限を下げると、Diktor の KIR の評価器は、論理的な深さが上限に達する前に、スタックオーバーフローの実行時エラー(終了コード 3)で終了する(IRSpec 11.5 節)。
 # conformance/depth/limit.t の期待出力は keleut run の結果である。
 
@@ -620,7 +619,7 @@ against = "pair"
 file = "conformance/depth/limit.t"
 line = 23
 pairs = ["dk-ir", "x-ir"]
-reason = "限度は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
+reason = "上限は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
 ledger = "V213"
 against = "record"
 
@@ -628,6 +627,6 @@ against = "record"
 file = "conformance/depth/limit.t"
 line = 23
 pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
-reason = "限度は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
+reason = "上限は I(§15.5)。Diktor の KIR の評価器は 4096 段ごとのファイバーのスタックの上限で止まる"
 ledger = "V213"
 against = "pair"
