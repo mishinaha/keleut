@@ -1,19 +1,18 @@
-//! rtcore を x86_64 の静的ライブラリと `rt.wasm` に組む。
+//! rtcore を x86_64 の静的ライブラリと `rt.wasm` にビルドする。
 //!
-//! 旗は計画 261024-1 の 6.5 節のもの(`-std=c99 -O2 -ffreestanding -fno-builtin
-//! -ffp-contract=off -fno-math-errno`)に、M79 の試作で要ると分かったものを足す。
-//! 両方の対象とも clang を直に呼び、ここに書いた旗だけを渡す。
-//! `CFLAGS` などの環境変数は読まないので、cargo の profile にも環境にも依らず、常に同じ旗で組む。
+//! コンパイルオプションは、`-std=c99 -O2 -ffreestanding -fno-builtin -ffp-contract=off -fno-math-errno` に、`-nostdlibinc`、警告の設定、ターゲットごとのオプションを追加したものである。
+//! どちらのターゲットでも clang を直接呼び出し、ここに書いたオプションだけを渡す。
+//! `CFLAGS` などの環境変数は読まないので、cargo の profile や環境によらず、同じオプションでビルドする。
 //!
-//! 道具は環境変数 `KELEUT_CLANG`、`KELEUT_AR`、`KELEUT_WASM_LD` で替えられる
-//! (既定は `clang`、`llvm-ar`、`wasm-ld`)。
+//! ツールは環境変数 `KELEUT_CLANG`、`KELEUT_AR`、`KELEUT_WASM_LD` で変更できる。
+//! 既定は `clang`、`llvm-ar`、`wasm-ld` である。
 
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// rtcore のソース(rtcore/ からの相対パス)。
+/// rtcore のソースファイル。`rtcore/` からの相対パスで書く。
 const SOURCES: &[&str] = &[
     "f64show.c",
     "shape.c",
@@ -37,7 +36,7 @@ const SOURCES: &[&str] = &[
     "musl/src/math/__math_invalid.c",
 ];
 
-/// `rt.wasm` が export する記号。`src/lib.rs` の `RT_WASM_EXPORTS` と同じ。
+/// `rt.wasm` が export するシンボル。`src/lib.rs` の `RT_WASM_EXPORTS` と同じ内容にする。
 const WASM_EXPORTS: &[&str] = &[
     "krt_sin",
     "krt_cos",
@@ -61,7 +60,7 @@ const WASM_EXPORTS: &[&str] = &[
     "__heap_base",
 ];
 
-/// 両方の対象に共通の旗(`-I` と `-include` を除く)。
+/// 両方のターゲットに共通のコンパイルオプション。`-I` と `-include` は `main` で追加する。
 const COMMON_FLAGS: &[&str] = &[
     "-std=c99",
     "-O2",
@@ -107,10 +106,10 @@ fn main() {
         names.display().to_string(),
     ];
 
-    // x86_64: 1 ファイルずつ組み、ar で静的ライブラリにする。
-    // clang が既定でスタックの保護を有効にしていると(M79 で測った clang 22.1.8 がそうだった)、
-    // sin.c などが __stack_chk_fail を参照するので、-fno-stack-protector を渡す。
-    // Rust の試験の実行ファイルは PIE なので、-fPIC で組む。
+    // x86_64: 1 ファイルずつコンパイルし、ar で静的ライブラリにまとめる。
+    // clang は、配布物によっては既定でスタック保護を有効にしている(開発に使っている clang 22.1.8 の配布物は有効にしている)。
+    // そのときは sin.c などが rtcore の外のシンボル __stack_chk_fail を参照するので、-fno-stack-protector を渡す。
+    // Rust のテストの実行ファイルは PIE なので、-fPIC でコンパイルする。
     let x86_flags: Vec<String> = [
         format!("--target={target}"),
         "-fPIC".to_string(),
@@ -133,7 +132,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=keleut_rtcore");
     println!("cargo:rustc-env=KRT_STATIC_LIB={}", archive.display());
 
-    // wasm32: 1 ファイルずつ組み、wasm-ld で rt.wasm にする。
+    // wasm32: 1 ファイルずつコンパイルし、wasm-ld でリンクして rt.wasm にする。
     let wasm_flags: Vec<String> = ["--target=wasm32".to_string(), "-nostdlib".to_string()]
         .into_iter()
         .chain(include_flags.iter().cloned())
@@ -150,12 +149,12 @@ fn main() {
         .args(&wasm_objs);
     run(&mut cmd);
 
-    // 試験が node の確認(tests/wasm_check.mjs)へ渡すファイルに、どの組み方の結果かを書けるようにする。
+    // テストが Node での検査(tests/wasm_check.mjs)に渡すファイルに、どのビルドの結果かを書けるようにする。
     let profile = env::var("PROFILE").expect("PROFILE");
     println!("cargo:rustc-env=KRT_PROFILE={profile}");
     println!("cargo:rustc-env=KRT_TARGET={target}");
 
-    // node の試験が引数なしで見つけられるよう、<target>/rtcore/ にも写す。
+    // Node での検査が引数なしで rt.wasm を見つけられるように、<target>/rtcore/ にもコピーする。
     let stage = stage_dir();
     fs::create_dir_all(&stage).expect("create stage dir");
     let tmp = stage.join(format!("rt.wasm.{}.tmp", std::process::id()));
@@ -164,9 +163,9 @@ fn main() {
     println!("cargo:rustc-env=KRT_STAGE_DIR={}", stage.display());
 }
 
-/// `SOURCES` を `clang` で 1 ファイルずつ並行に組み、`dir` に置いたオブジェクトのパスを返す。
+/// `SOURCES` を `clang` で 1 ファイルずつ並行にコンパイルし、`dir` に置いたオブジェクトファイルのパスを返す。
 ///
-/// 旗は `COMMON_FLAGS` と `extra` だけで、環境変数からは足さない。
+/// 渡すコンパイルオプションは `COMMON_FLAGS` と `extra` だけで、環境変数からは追加しない。
 fn compile_all(clang: &str, extra: &[String], rtcore: &Path, dir: &Path) -> Vec<PathBuf> {
     fs::create_dir_all(dir).expect("create object dir");
     let jobs: Vec<(Command, std::process::Child, PathBuf)> = SOURCES
@@ -198,19 +197,21 @@ fn compile_all(clang: &str, extra: &[String], rtcore: &Path, dir: &Path) -> Vec<
         .collect()
 }
 
-/// `<target>/rtcore` を求める。
+/// `<target>/rtcore` のパスを返す。
 ///
-/// `<target>` は `CARGO_TARGET_DIR` があればそれ、無ければ workspace の根の `target` である。
-/// `--target` や profile に依らず同じ場所になるので、`tests/wasm_check.mjs` の既定と一致する。
+/// `<target>` は、`CARGO_TARGET_DIR` があればその値、なければ workspace のルートの `target` である。
+/// `--target` や profile によらず同じパスになるので、`tests/wasm_check.mjs` が既定で読むディレクトリと一致する。
+/// ただし、相対パスの `CARGO_TARGET_DIR` を使うときに一致するのは、`tests/wasm_check.mjs` を workspace のルート(`rustkeleut/`)で実行した場合だけである。
+/// `tests/wasm_check.mjs` は、相対パスを作業ディレクトリから解決するからである。
 fn stage_dir() -> PathBuf {
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
     let dir = match env::var_os("CARGO_TARGET_DIR") {
-        // 相対パスは workspace の根からのものとみなす。
+        // 相対パスは workspace のルートからの相対パスとみなす。
         Some(dir) => root.join(dir),
         None => root.join("target"),
     };
     let dir = dir.join("rtcore");
-    // 写しの先はまだ無いこともあるので、親だけを正規化する。
+    // コピー先のディレクトリはまだないことがあるので、親ディレクトリだけを正規化する。
     match dir.parent().and_then(|p| p.canonicalize().ok()) {
         Some(p) => p.join("rtcore"),
         None => dir,

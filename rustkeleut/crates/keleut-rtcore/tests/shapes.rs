@@ -1,7 +1,7 @@
-//! 形の表を、Rust で書いた素朴な模型と乱数の操作列で比べる。
+//! シェイプ表を、Rust で書いた単純なモデルと比較する。操作の並びは乱数で作る。
 //!
-//! 模型は形を昇順のラベルの列で持ち、同じ列に同じ番号を振る。
-//! 小さな容量から始めて、表を写して広げる経路も通す。
+//! モデルはシェイプを昇順のラベルの並びとして持ち、同じ並びに同じ番号を振る。
+//! 表は小さな容量から始めるので、表をコピーして拡張する経路も通る。
 
 use std::collections::HashMap;
 
@@ -45,14 +45,14 @@ fn shapes_match_model() {
         let label = rnd(12) as u32;
         match rnd(4) {
             0 => {
-                // 書いた順のラベル(重なりを含む)から作る。
+                // 書いた順のラベル(重複を含む)からシェイプを作る。
                 let k = rnd(8) as usize;
                 let written: Vec<u32> = (0..k).map(|_| rnd(12) as u32).collect();
                 let got = t.intern(&written, &mut pos).unwrap();
                 let mut sorted = written.clone();
                 sorted.sort();
                 assert_eq!(got.0, m.intern(sorted.clone()));
-                // 書いた i 番目の位置は、同じラベルの中で書いた順(先が外側)になる。
+                // i 番目に書いたフィールドの位置は、同じラベルの中では書いた順(先に書いたものが外側)になる。
                 for (i, &l) in written.iter().enumerate() {
                     let before = written[..i].iter().filter(|&&x| x == l).count();
                     let lb = sorted.partition_point(|&x| x < l);

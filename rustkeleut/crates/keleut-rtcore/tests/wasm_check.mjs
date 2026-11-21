@@ -1,20 +1,24 @@
-// rtcore の wasm32 版(rt.wasm)を Node で確かめる(計画 261024-1 の 8.3 節)。
+// rtcore の wasm32 版(rt.wasm)を Node で検査する。
 //
-// 使い方: rustkeleut/ で cargo test -p keleut-rtcore を走らせた後、
+// 使い方: rustkeleut/ で cargo test -p keleut-rtcore を実行した後に、次のコマンドを実行する。
 //   node crates/keleut-rtcore/tests/wasm_check.mjs
-// cargo の試験が <target>/rtcore/ に書いた入力と基準を読む。
-// <target> は CARGO_TARGET_DIR か、このスクリプトから見た ../../../target である。
+// cargo のテストが <target>/rtcore/ に書いた入力と期待値を読む。
+// <target> は、CARGO_TARGET_DIR があればその値、なければこのスクリプトから見た ../../../target である。
+// 相対パスの CARGO_TARGET_DIR は、作業ディレクトリからの相対パスとして解決する。
 // KRT_STAGE_DIR でディレクトリを直接指定してもよい。
-// 読んだディレクトリと、試験が書いた組み方の記録(rt.wasm の FNV-1a、profile、対象)を毎回表示する。
-// 置き場の rt.wasm の FNV-1a が記録と違えば、古い入力を読んでいるので失敗とする。
+// 読んだディレクトリと、テストが書いたビルドの情報(rt.wasm の FNV-1a、profile、ターゲットトリプル)を毎回表示する。
+// ディレクトリにある rt.wasm の FNV-1a がビルドの情報と違えば、別のビルドのテストが書いた入力を読んでいるので、FAIL の行を表示して検査の失敗に数える。
 //
-// 確かめること:
+// 検査する内容:
 // 1. rt.wasm の import が 0 個で、必要な export がそろっている。
-// 2. show(Float64): fltcmp の 1,998,964 件と境界の値で、glibc の基準(NaN は nan)との差が 0 件。
-//    ビット列を i64 で渡す入口(NaN の符号と積載がそのまま届く)と、f64 で渡す入口の両方を使う。
-// 3. libm: 1,000,000 件の入力で、x86_64 版の結果とビット列が一致する(NaN どうしは一致とみなす)。
-// 4. バイト列の比較と形の表: 乱数の入力で、JS の模型と一致する。
-// 差が 1 件でもあれば、終了状態 1 で終わる。
+// 2. show(Float64): fltcmp の 1,998,964 件と境界値で、glibc で作った期待値(NaN は nan)との差分が 0 件である。
+//    ビット列を i64 で渡す関数 krt_f64_show_bits と、f64 で渡す関数 krt_f64_show の両方を呼ぶ。
+//    krt_f64_show_bits には、NaN の符号とペイロードがそのまま渡る。
+// 3. libm: 1,000,000 件の入力で、x86_64 版の結果とビット列が一致する。
+//    NaN どうしは一致とみなす。
+// 4. バイト列の比較とシェイプ表: 乱数で作った入力で、バイト列の比較は Buffer.compare と、シェイプ表は JS で書いたモデルと一致する。
+// 失敗した検査が 1 つでもあれば、残りの検査も行った後に終了コード 1 で終了する。
+// 必要なファイル(rt.wasm、入力、期待値、ビルドの情報)がそろっていなければ、検査をせずに終了コード 2 で終了する。
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,7 +40,7 @@ const ab = (b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 let failures = 0;
 const fail = (msg) => { console.log(`FAIL: ${msg}`); failures++; };
 
-// ---- 0. 組み方の記録 ----
+// ---- 0. ビルドの情報 ----
 const fnv1a64 = (b) => {
   let h = 0xcbf29ce484222325n;
   for (const x of b) h = ((h ^ BigInt(x)) * 0x100000001b3n) & 0xffffffffffffffffn;
@@ -87,7 +91,7 @@ const scratch = ex.krt_scratch();
       off = end + 1;
       const isNaN = (bits[i] & 0x7fffffffffffffffn) > 0x7ff0000000000000n;
       if (isNaN) nans++;
-      // ビット列の入口。
+      // ビット列で渡す関数。
       let n = ex.krt_f64_show_bits(bits[i], scratch);
       let m = mem();
       let same = n === e.length && m[scratch + n] === 0;
@@ -96,7 +100,8 @@ const scratch = ex.krt_scratch();
         diffBits++;
         if (shown++ < 10) console.log(`  ${label} 0x${bits[i].toString(16)}: glibc ${dec.decode(e)} wasm32 ${dec.decode(m.subarray(scratch, scratch + n))}`);
       }
-      // f64 の入口(NaN は JS の Number を通るので積載は保たれないが、どの NaN も nan になる)。
+      // f64 で渡す関数。
+      // NaN は JS の Number を経由するのでペイロードは保たれないが、どの NaN も nan になる。
       n = ex.krt_f64_show(f64[i], scratch);
       m = mem();
       same = n === e.length;
@@ -160,7 +165,7 @@ const rnd = (n) => {
   if (diff !== 0) fail("bytes_compare");
 }
 
-// ---- 4b. 形の表 ----
+// ---- 4b. シェイプ表 ----
 {
   const NONE = 0xffffffff, FULL = 0xfffffffe;
   const heap = (ex.__heap_base.value + 7) & ~7;

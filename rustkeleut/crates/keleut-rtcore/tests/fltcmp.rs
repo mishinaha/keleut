@@ -1,11 +1,12 @@
-//! `show(Float64)` を glibc の `%.*g` の探索と比べる(計画 261024-1 の 8.3 節)。
+//! `show(Float64)` の結果を、glibc の `%.*g` で最短の桁数を探して作った期待値と比較する。
 //!
-//! 入力は `doc/log/261024-1-spike/probe/fltcmp/src/main.rs` の候補の生成を移したもの(1,998,964 件)と、
-//! 境界の値の集合である。
-//! 基準は Diktor の `float_repr`(diktor/lib/value.ml)と同じ手順を glibc の `snprintf` で行ったものである。
-//! NaN は glibc に渡さず、LangSpec 16.2 節の `nan` と比べる。
+//! 入力は 2 組ある。
+//! 1 つは、乱数と 2 の冪から作る 1,998,964 件の候補(`fltcmp_candidates`)で、ファイル名と出力では fltcmp と呼ぶ。
+//! もう 1 つは境界値の集合(`boundary_values`)である。
+//! 期待値は、Diktor の `float_repr`(`diktor/lib/value.ml`)と同じ手順を glibc の `snprintf` で行って作る。
+//! NaN は glibc に渡さず、LangSpec 16.2 節の `nan` と比較する。
 //!
-//! 入力と基準は `<target>/rtcore/` に書き、`tests/wasm_check.mjs` が wasm32 版の確認に使う。
+//! 入力と期待値は `<target>/rtcore/` に書き、`tests/wasm_check.mjs` が wasm32 版の検査に使う。
 
 mod common;
 
@@ -15,7 +16,8 @@ unsafe extern "C" {
     fn snprintf(buf: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 }
 
-/// fltcmp が生成する件数(計画 8.3 節)。
+/// fltcmp の候補の件数。
+/// このテストと `tests/wasm_check.mjs` が、候補がこの件数であることを検査する。
 const FLTCMP_COUNT: usize = 1_998_964;
 
 fn pow2(k: i32) -> f64 {
@@ -23,11 +25,14 @@ fn pow2(k: i32) -> f64 {
     f64::from_bits(((k + 1023) as u64) << 52)
 }
 
-/// fltcmp の候補(同じ xorshift と種、同じ 2 の冪と境界の値、同じ除外)。
+/// fltcmp の候補を作る。
 ///
-/// fltcmp は `2f64.powi(k)` で 2 の冪を作る。
-/// `2f64.powi(-1074)` は、release で組むと定数畳み込みで `5e-324` になり、debug では実行時の計算で `0.0` になる。
-/// fltcmp の 1,998,964 件は release の値なので、ここではビット列から作った正確な値を使う。
+/// まず、次の 3 種類の値を集める。
+/// 固定の値、2^54 から 2^1023 までの 2 の冪とその 1.5 倍、シードを固定した xorshift で作る 2,000,000 個のビット列のうち有限の値を表すものである。
+/// 集めた候補から、絶対値が 1e16 未満の整数値を取り除く。
+/// 2 の冪は `2f64.powi(k)` で計算せず、ビット列から正確な値を作る(`pow2` と `f64::from_bits(1)`)。
+/// `2f64.powi(-1074)` は、リリースビルドでは定数畳み込みで `5e-324` になり、デバッグビルドでは実行時の計算で `0.0` になるからである。
+/// 件数 1,998,964 は、2^-1074 を `5e-324` として数えた値である。
 fn fltcmp_candidates() -> Vec<f64> {
     let mut st: u64 = 0x9E3779B97F4A7C15;
     let mut cands: Vec<f64> = vec![
@@ -59,12 +64,14 @@ fn fltcmp_candidates() -> Vec<f64> {
     cands
 }
 
-/// 計画 8.3 節の境界の値(ビット列)。
+/// 境界値をビット列で返す。
+///
+/// 0、NaN、無限大、表記が切り替わる値の付近、非正規化数、2 の冪とその付近、最大の有限値の付近、いくつかの小数(0.1 など)の付近の値を集め、それぞれの符号を反転した値も追加する。
 fn boundary_values() -> Vec<u64> {
     let mut v: Vec<u64> = vec![
         0x0000_0000_0000_0000,
         0x8000_0000_0000_0000,
-        // NaN: 静かな NaN、信号の NaN、符号の立ったもの、積載の違うもの。
+        // NaN: quiet NaN、signaling NaN、符号ビットが立ったもの、ペイロードが違うもの。
         0x7ff8_0000_0000_0000,
         0xfff8_0000_0000_0000,
         0x7ff0_0000_0000_0001,
@@ -87,7 +94,8 @@ fn boundary_values() -> Vec<u64> {
             }
         }
     };
-    // ±1e16 と ±1e17 の境目(整数の分岐と指数表記の境)と、2^53、2^54 の付近。
+    // 1e16 と 1e17 の付近(整数値を %.1f で文字列にするかどうかの分岐と、指数表記に切り替わる境界)、2^53 と 2^54 の付近、1e15、1e21、1e22 の付近。
+    // 負の値は、最後に符号を反転して追加する。
     for x in [
         1e16,
         1e17,
@@ -99,7 +107,7 @@ fn boundary_values() -> Vec<u64> {
     ] {
         push_nb(&mut v, x, 4);
     }
-    // 非正規化数: 最小から 16 個、最大とその下、ビット列の乱数。
+    // 非正規化数: 小さいほうから 16 個、最大の非正規化数とその前後、乱数で作ったビット列。
     for i in 1..=16 {
         v.push(i);
     }
@@ -111,19 +119,21 @@ fn boundary_values() -> Vec<u64> {
         st ^= st << 17;
         v.push(st & 0x000f_ffff_ffff_ffff);
     }
-    // k ≤ -1022 のすべての 2^k と、2^k の前後の値(2^-1074 から 2^1023 まで)。
+    // 2^-1074 から 2^1023 までのすべての 2 の冪。
+    // 2^-1022 以上の冪には、ビット列で前後 2 個ずつの値も追加する。
     for k in 0..52 {
         v.push(1u64 << k);
     }
     for k in -1022..=1023 {
         push_nb(&mut v, pow2(k), 2);
     }
-    // 最大の有限値と、指数表記と小数点表記の境(1e-4、1e-5 の付近)。
+    // 最大の有限値の付近と、指数表記と小数点表記の境界(1e-4、1e-5)の付近。
+    // 0.1、0.5、1.5、123456.789 の付近も追加する。
     push_nb(&mut v, f64::MAX, 2);
     for x in [1e-4, 1e-5, 0.1, 0.5, 1.5, 123456.789] {
         push_nb(&mut v, x, 2);
     }
-    // 以上の値の符号を反転したもの。
+    // ここまでの値の符号を反転したもの。
     let n = v.len();
     for i in 0..n {
         v.push(v[i] ^ 0x8000_0000_0000_0000);
@@ -141,14 +151,14 @@ fn c_fmt(fmt: &CStr, p: Option<i32>, x: f64) -> String {
         }
     };
     assert!(n > 0 && (n as usize) < buf.len());
-    // SAFETY: snprintf は NUL で終わる文字列を書いた。
+    // SAFETY: snprintf が NUL で終わる文字列を buf に書いている。
     unsafe { CStr::from_ptr(buf.as_ptr()) }
         .to_str()
         .unwrap()
         .to_string()
 }
 
-/// Diktor の `float_repr` と同じ手順を glibc で行う。
+/// Diktor の `float_repr` と同じ手順を glibc の `snprintf` で行い、期待値の文字列を作る。
 fn glibc_show(x: f64) -> String {
     if x.is_nan() {
         return "nan".to_string();
@@ -199,7 +209,8 @@ fn rtcore_show_bits(bits: u64) -> String {
     String::from_utf8(buf[..n].to_vec()).unwrap()
 }
 
-/// 入力の集合を比べ、違う件数を返す(最初の数件を印字する)。
+/// `bits` の各入力について、rtcore の結果を `expected` と比較し、違った件数を返す。
+/// 違った入力は、最初の 10 件までを表示する。
 fn compare(label: &str, bits: &[u64], expected: &[String]) -> usize {
     let got = common::par_map(bits, |&b| rtcore_show_bits(b));
     let mut diff = 0;
@@ -231,7 +242,7 @@ fn fltcmp_and_boundary_match_glibc() {
     let fl_exp = common::par_map(&fl_bits, |&b| glibc_show(f64::from_bits(b)));
     let bd_exp = common::par_map(&bd_bits, |&b| glibc_show(f64::from_bits(b)));
 
-    // wasm32 版の確認(tests/wasm_check.mjs)のための入力と基準。
+    // wasm32 版の検査(tests/wasm_check.mjs)に渡す入力と期待値。
     let all_bits: Vec<u64> = fl_bits.iter().chain(&bd_bits).copied().collect();
     let mut text = String::new();
     for s in fl_exp.iter().chain(&bd_exp) {

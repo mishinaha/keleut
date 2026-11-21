@@ -1,7 +1,8 @@
-//! rtcore の `sin cos exp log` の x86_64 版の結果を作り、wasm32 版の確認に渡す(計画 261024-1 の 8.3 節)。
+//! rtcore の `sin`、`cos`、`exp`、`log` の x86_64 版の結果を作り、wasm32 版の検査(`tests/wasm_check.mjs`)に渡す。
 //!
-//! 入力は M79 の試作 `doc/log/261024-1-spike/rtcore/test/native.c` の生成を移した、決定的な 1,000,000 個である。
-//! glibc との差は参考として印字するだけで、試験の合否には使わない(LangSpec 17 節は 1 ulp の差を処理系に任せる)。
+//! 入力は、特別な値の表とシードを固定した乱数から作る 1,000,000 個で、実行のたびに同じ値になる。
+//! glibc との差分は参考として表示するだけで、テストの合否には使わない。
+//! LangSpec 17 節は、これらの関数が正しい値に最も近い 2 つの `Float64` のどちらを返すかを処理系に任せているからである。
 
 mod common;
 
@@ -31,7 +32,8 @@ impl Gen {
             self.v.push(x);
         }
     }
-    /// x と、ビット列で前後 k 個の値を足す(符号の境は越えない)。
+    /// `x` と、ビット列で前後 `k` 個までの値を追加する。
+    /// 符号の境界を越える値と、無限大のビット列を上回る値は追加しない。
     fn add_nb(&mut self, x: f64, k: u64) {
         let u = x.to_bits();
         self.add(x);
@@ -55,9 +57,9 @@ impl Gen {
     }
 }
 
-/// `ldexp(x, n)`(-1022 ≤ n ≤ 1023)。
-/// 2^n をビット列から作るので、この範囲の外の n は渡せない。
-/// 1 回の乗算なので、丸めも溢れも ldexp と同じである。
+/// `ldexp(x, n)` を計算する。
+/// 2^n をビット列から作るので、`n` は -1022 以上 1023 以下でなければならない。
+/// 乗算は 1 回だけなので、丸めもオーバーフローも `ldexp` と同じである。
 fn ldexp(x: f64, n: i32) -> f64 {
     x * f64::from_bits(((n + 1023) as u64) << 52)
 }
@@ -177,7 +179,7 @@ fn libm_results_for_wasm_check() {
         keleut_rtcore::exp,
         keleut_rtcore::log,
     ];
-    // SAFETY: glibc の libm の純粋な関数である。
+    // SAFETY: glibc の libm にある純粋な関数である。
     let glibc: [fn(f64) -> f64; 4] = [
         |x| unsafe { sin(x) },
         |x| unsafe { cos(x) },
