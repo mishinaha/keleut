@@ -10,7 +10,7 @@ KIR から LIR を作る処理を **LIR への変換**(lowering)と呼び、そ�
 エフェクトを変換するパス 8 の命令、ハンドラのフレームになる関数 `$rt_handle`、防壁(`cancel` 節の実行中に、伝播中の状態を退避して守る手順)は 16 節に書く。
 yield の枝刈り(パス 11)は 17 節に書く。
 
-本書は、言語仕様 `doc/LangSpec.md` の節を「LangSpec §5.7」、KIR の仕様 `doc/IRSpec.md` の節を「IRSpec 8 節」のように書く。
+本書は、言語仕様(リポジトリの根の `doc/LangSpec.md`)の節を「LangSpec §5.7」、KIR の仕様(リポジトリの根の `doc/IRSpec.md`)の節を「IRSpec 8 節」のように書く。
 
 ## 1. 全体の構成
 
@@ -87,7 +87,7 @@ Diktor はこのプログラムで `a` を出力し、値を調べた箇所で�
 ### 1.4 論理的な深さ
 
 深さは IRSpec 11.2 節の規則で数える。
-ランタイムはコンテキストの深さ `ctx.depth` と上限 `L` を持ち、各フレームは自分の深さを持つ。
+ランタイムはコンテキストの深さ `ctx.depth`(IRSpec 11 節の、評価の文脈の深さを持つ)と上限 `L` を持ち、各フレームは自分の深さを持つ。
 LIR の深さの命令は次の 4 つである(パス 10)。
 
 | 命令 | 置く位置 |
@@ -349,7 +349,7 @@ GC はルートの集合のスロットのワードだけを読むので、ボ�
 
 関数の命令に通し番号を振る。
 引数は 0 とし、ブロックをトポロジカル順に並べて、各ブロックの命令と終端命令に 1 から順に振る。
-レジスタの**生存区間**は、最初に書く位置から最後に読む位置までである。
+レジスタの**生存区間**は、そのレジスタを読むか書く位置のうち、最初の位置から最後の位置までである。
 ブロックはトポロジカル順に並ぶので、ある経路でレジスタが生存している位置は必ずこの生存区間に入る。
 したがって、生存区間の重ならない 2 つのレジスタが同時に生存することはない。
 
@@ -364,7 +364,7 @@ GC はルートの集合のスロットのワードだけを読むので、ボ�
 | 5 辞書の定数化 | プリミティブの命令(整数、浮動小数点数、文字列、`show`)、`move`(`Show[String]`)、`inst_is_init`、`bool.not`(初期化の検査)、`inst_get_value`、`call_method`、`tail_call_method`、`method_new`、`dict_inst`、`dict_record`、`dict_variant` |
 | 6 レコードのシェイプ | `rec_new`、`rec_get`、`rec_extend`、`rec_field`、`rec_restrict`、`rec_update` |
 | 7 数値の検査 | `f64.is_nan`、`f64.trunc`、比較、`bool.eq`、`bool.not`、`str.len`、`i32.sub`、`branch`、`error`(10〜13 番、15 番、16 番) |
-| 8 エフェクト | エフェクトの命令(`handler_new`、`handler_find`、`handlers_get`、`perform`、`cont_check`、`cont_hr`)、`$rt_handle` を呼ぶ `call_direct` と `tail_call_direct`、操作節の関数の入口の `unbox`、`i32.lt`、`branch`、エフェクトの終端命令(`clause_value`、`clause_matched`、`tail_resume`、`tail_call_clause`)。`$rt_handle` の本体(16 節) |
+| 8 エフェクト | エフェクトの命令(`handler_new`、`handler_find`、`handlers_get`、`perform`、`cont_check`、`cont_hr`)、ハンドラ式の本体と各節の関数の値を作る `closure_new`、`$rt_handle` を呼ぶ `call_direct` と `tail_call_direct`、操作節の関数の入口の `unbox`、`i32.lt`、`branch`、エフェクトの終端命令(`clause_value`、`clause_matched`、`tail_resume`、`tail_call_clause`)。`$rt_handle` の本体(16 節) |
 | 9 初期化の検査の省略 | `global_is_init`、`bool.not`、`error`(2 番) |
 | 10 深さの命令 | `depth_enter`、`depth_check`、`depth_push`、`depth_restore` |
 | 11 yield の枝刈り | 命令を生成せず、再開点に `yield` か `noyield` の印を付ける(17 節) |
@@ -595,7 +595,8 @@ trap しない。
 - 意味:全域で、範囲外の部分は切り詰める(`pos` と `len` を `[0, 長さ]` に収めてから取り出す)。
 - 生成するパス:5(`__string_sub`)。
   パス 7 が、前に `pos < 0`、`len < 0`、`pos > 長さ - len` の検査(どれかが真なら `error 13`)を置く。
-  `0 ≦ len ≦ 長さ < 2^31` なので、`長さ - len` はオーバーフローしない。
+  `pos < 0` と `len < 0` を先に検査するので、`pos > 長さ - len` を調べるときは `0 ≦ len < 2^31` である。
+  長さも `0 ≦ 長さ < 2^31` なので、`長さ - len` はオーバーフローしない。
 - trap しない条件:確保の失敗を除いて、常に成り立つ。
 
 ### `show.i32`、`show.i64`、`show.f64`、`show.bool`
@@ -705,7 +706,8 @@ KIR 1.0 は型を持たないので、変換器がシェイプを知ることが
 全域で、そのフィールドがなければ Unit を返す。
 生成するパスは 6(シェイプの分からないレコードの `rec_select`。`n` は 0)と 2(`open` と `rest` のレコードのパターン)である。
 `open` のパターンでは、パターンに書いたラベルがあることを型検査が保証するので、前に `rec_has` を置かない。
-照合対象がシェイプの分かるレコードなら、どちらのパターンでもこの命令を使わず、フィールドの値のレジスタをそのまま使う。
+照合対象がシェイプの分かるレコードなら、`open` のパターンはこの命令を使わず、フィールドの値のレジスタをそのまま使う。
+`rest` のパターンは、シェイプが分かっていても `rec_has` と `rec_field` を使う。
 `v` はレコードか Unit でなければならない。
 
 ### `rec_has`
@@ -737,9 +739,10 @@ KIR の `rec_update` は、レコードを先に、値を後に評価する。
 
 ### `closure_new`
 
-`r = closure_new F (c…)` は、関数 `F`(種類は `lambda` か `dictabs`)とキャプチャ `c…`(一様表現の値)からクロージャを作る。
+`r = closure_new F (c…)` は、関数 `F`(種類は `lambda`、`dictabs`、`opclause`、`retclause`、`cancelclause`、`handlebody` のどれか)とキャプチャ `c…`(一様表現の値)からクロージャを作る。
 `c…` の個数は `F` のキャプチャの個数に等しい。
 生成するパスは 1(KIR の `closure` と `dictabs`)である。
+パス 8 も、ハンドラ式の本体と各節の関数の値をこの命令で作る(16.2 節)。
 メモリを確保するので、失敗しうる命令である。
 
 ### `closure_set_cap`
@@ -961,7 +964,8 @@ trap しない。
   構造的な `Eq` の比較の間は、ランタイム関数が両辺と辞書を `Root` で保持する(1.8 節)。
 - 失敗しうる命令である。
   構造的な `Eq` の比較は、LIR の関数にせず、ランタイム関数が行う。
-  ランタイム関数は、ユーザのインスタンスの `eq` を、入れ子にしたインタプリタで呼ぶ。
+  ランタイム関数は、ユーザのインスタンスの `eq` を呼ぶときに、バックエンドを入れ子に呼ぶ(16.1 節)。
+  インタプリタでは、`Interp::run` を入れ子に呼ぶ。
   `Eq` のメソッドの型はエフェクト行を持たないので、`eq` の中で起こした操作は、その中のハンドラが処理する。
   入れ子の境界は、`DISCARD` と `ERROR` を外へ通す。
   境界の外へ `YIELD` が届いたら、内部エラーとして終了コード 70 で終了する。
