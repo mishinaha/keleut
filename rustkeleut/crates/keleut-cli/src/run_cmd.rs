@@ -1,48 +1,62 @@
-//! サブコマンド `keleut run` である(計画 261024-1 の 6.2 節)。
+//! サブコマンド `keleut run` を実装する。
 //!
 //! `keleut run [OPTIONS] FILE.kel… | FILE.kir` は、プログラムを実行する。
 //!
 //! - `.kir`(バイナリ)か `.kirt`(テキスト)の 1 ファイルは、そのまま読む。
-//! - `.kel` のファイルは、フロントエンドで KIR にする。
+//! - `.kel` のファイルは、フロントエンドで KIR に変換する。
 //!   フロントエンドは `--frontend diktor|rust` で選ぶ。
-//!   既定は `rust` である(M99。速さの関門を通ったので切り替えた。計画 7 節)。
-//!   - `--frontend diktor` は、`$KELEUT_DIKTOR`(無ければ PATH の `diktor`)を `--emit-ir` で子プロセスとして呼ぶ。
-//!     Diktor が 0 で終わらなければ、その終了状態で終わる(診断は Diktor が標準エラーに書いたものである)。
-//!   - `--frontend rust` は、keleut-front でプロセスの中で型検査して KIR を書く
+//!   既定は `rust` である。
+//!   - `--frontend diktor` は、`$KELEUT_DIKTOR`(なければ PATH の `diktor`)を `--emit-ir` 付きで子プロセスとして実行する。
+//!     Diktor の終了コードが 0 でなければ、その終了コードで終了する(診断は Diktor が標準エラーに書いている)。
+//!   - `--frontend rust` は、keleut-front を使い、同じプロセスの中で型検査して KIR を作る
 //!     ([`crate::emit_kir_cmd::program_for_run`])。
-//!     診断と終了状態は `diktor --emit-ir` と同じである。
-//!     `--native-stack` は、インタプリタと JIT のスタックとともに、フロントエンドのスレッドのスタックも決める(計画 6.11 節)。
-//!     フロントエンドは、構文解析の限度をそのスタックに収まる深さまで下げる(`keleut check --native-stack` と同じ)。
-//!     フロントエンドが構文解析の限度の下限(64 段)に要るスタックより小さい値は、その大きさまで上げて使う
+//!     診断と終了コードは `diktor --emit-ir` と同じである。
+//!     `--native-stack` は、インタプリタと JIT のスタックサイズに加えて、フロントエンドのスレッドのスタックサイズも決める。
+//!     フロントエンドは、構文解析の入れ子の上限を、そのスタックに収まる深さまで下げる(`keleut check --native-stack` と同じ)。
+//!     構文解析の上限の最小値(64 段)に必要なスタックより小さい値を指定したときは、その大きさまで引き上げて使う
 //!     ([`crate::emit_kir_cmd::front_stack_for_run`])。
-//!     `--native-stack` を与えなければ、フロントエンドは既定の 8 GiB のスタックで走り、
-//!     仮想メモリの上限があれば、スタックをそれに合わせて小さくし、入れ子の限度を下げる。
+//!     `--native-stack` を指定しなければ、フロントエンドは既定の 8 GiB のスタックで動く。
+//!     仮想メモリを制限しているとき(`ulimit -v`)は、スタックをその上限に合わせて小さくし、入れ子の上限を下げる。
 //!
 //!   `--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive` は、どちらのフロントエンドにもそのまま渡す。
 //!
-//! 読み込んだ KIR を検証し、LIR に下ろして、後段で実行する。
-//! `--native-stack` を与えたときは、KIR の読み込みと検証のスタックもフロントエンドと同じ大きさにし、
-//! 入れ子の限度をそれに収まる深さまで下げる(計画 6.11 節。[`kir_limits`])。
-//! 後段はインタプリタ(`--backend interp`)、WasmGC(`--backend wasm`。M94。crate keleut-wasm が Node を起動する)、
-//! LLVM の JIT(`--backend jit`。M91。crate keleut-llvm)である。
-//! JIT は feature `llvm`(既定で有効。計画 6.1 節、P241)で組んだときだけ使え、`--no-default-features` で外して組めば未実装の 4 である。
-//! 既定の後段は、feature `llvm` で組んだときは `jit`、外して組んだときは `interp` である(計画 6.2 節)。
-//! `--backend jit` の段の設定(`--tier`。M92)は `interp-only`、`jit-only`、`threshold=N`、`alternating=SEED`、`mixed=SEED` で、
-//! 既定は `threshold=1000` である(しきい値の既定は M93 で決める。P249)。
-//! `--backend` を省いて `interp-only` 以外の `--tier` を与えたときは `jit` で走る。
-//! `--backend interp` と `--backend wasm` は `--tier` を受け付けて使わない
-//! (組 `kt` などの選択肢を足しても、`--backend interp` を書いたコマンドはインタプリタで走る)。
+//! 読み込んだ KIR を検証し、LIR に変換(lowering)して、バックエンドで実行する。
+//! `--native-stack` を指定したときは、KIR の読み込みと検証に使うスタックもフロントエンドと同じ大きさにし、
+//! 入れ子の上限をそれに収まる深さまで下げる([`kir_limits`])。
+//! バックエンドは次の 3 つである。
 //!
-//! 内部の旗 `--source-only`(使い方には載せない)を与えると、名前が `.kir` や `.kirt` で終わる入力も
+//! - インタプリタ(`--backend interp`)。
+//! - WasmGC(`--backend wasm`)。
+//!   crate keleut-wasm が Node を起動する。
+//! - LLVM の JIT(`--backend jit`)。
+//!   crate keleut-llvm が実装する。
+//!
+//! JIT は、feature `llvm`(既定で有効)を付けてビルドしたときだけ使える。
+//! `--no-default-features` で外してビルドした `keleut` では、`--backend jit` は未実装として終了コード 4 で終了する。
+//! 既定のバックエンドは、feature `llvm` を付けてビルドしたときは `jit`、外してビルドしたときは `interp` である。
+//! `--backend jit` のティアの設定(`--tier`)は `interp-only`、`jit-only`、`threshold=N`、`alternating=SEED`、`mixed=SEED` のどれかで、
+//! 既定は `threshold=1000` である。
+//! `--backend` を省いて `interp-only` 以外の `--tier` を指定したときは、`jit` で実行する。
+//! `--backend interp` と `--backend wasm` は、`--tier` を受け付けて無視する。
+//! kconform のペア `kt` などのオプションを追加しても、`--backend interp` と書いたコマンドはインタプリタで実行される。
+//!
+//! 内部用のオプション `--source-only`(使い方の説明には載せない)を指定すると、名前が `.kir` や `.kirt` で終わる入力も
 //! Keleut のソースとしてフロントエンドに渡す。
-//! `keleut compat-diktor` が、すべての入力をソースとして読む Diktor と同じにするために使う。
+//! `keleut compat-diktor` が、すべての入力をソースとして読む Diktor と同じ動作にするために使う。
 //!
-//! `keleut dump bytecode` も同じ読み方で入力を LIR にし、インタプリタのバイトコードを印字する([`dump_bytecode`])。
+//! `keleut dump bytecode` も同じ方法で入力を読んで LIR に変換し、インタプリタのバイトコードを出力する([`dump_bytecode`])。
 //!
-//! 終了状態は、プログラムの結果(0、3、4、74)、KIR の読み込みと検証の失敗が 65、
-//! 下ろしと内部の誤りが 70、使い方の誤りと入力を読めないときが 64 である。
-//! ただし `.kel` の入力では、KIR の読み込み、検証、下ろしの処理系の限度(スタックに合わせて下げた入れ子の限度と、
-//! 処理のスレッドを作れないこと)と、変換の役割の確保の失敗(`keleut_rt::alloc`)は 1 である(LangSpec §15.5)。
+//! 終了コードは次のとおりである。
+//!
+//! - プログラムの結果:0、3、4、74
+//! - KIR の読み込みと検証の失敗:65
+//! - LIR への変換の失敗と内部エラー:70
+//! - 使い方のエラーと、入力を読めないとき:64
+//!
+//! ただし `.kel` の入力では、次の 2 つの場合の終了コードは 1 である(LangSpec §15.5)。
+//! 1 つは、KIR の読み込み、検証、LIR への変換が処理系の限度で止まった場合である
+//! (スタックに合わせて下げた入れ子の上限を超えたときと、処理用のスレッドを作れないとき)。
+//! もう 1 つは、変換スレッドがメモリの確保に失敗した場合である(`keleut_rt::alloc`)。
 //! `.kir` の入力では、どちらも 65 である(IRSpec 13.9 節)。
 
 use crate::exit;
@@ -50,7 +64,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// `keleut run` の使い方である。
+/// `keleut run` の使い方の説明(usage)。
 pub const USAGE: &str = "\
 usage: keleut run [OPTIONS] FILE.kel... | FILE.kir
 
@@ -76,7 +90,7 @@ options:
                               passed to the front end
 ";
 
-/// 解釈したコマンド行である。
+/// `keleut run` のコマンド行を解釈した結果。
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Options {
     backend: Option<String>,
@@ -88,11 +102,11 @@ pub(crate) struct Options {
     frontend: String,
     front_args: Vec<String>,
     files: Vec<PathBuf>,
-    /// 名前によらず、すべての入力をソースとして読む(内部の旗 `--source-only`)。
+    /// 真なら、名前によらず、すべての入力をソースとして読む(内部用のオプション `--source-only`)。
     source_only: bool,
 }
 
-/// 大きさの綴り(`512k`、`64m`、`1g`、バイトの数)を読む。
+/// サイズの表記(`512k`、`64m`、`1g`、または接尾辞のないバイト数)を読んで、バイト数を返す。
 pub(crate) fn parse_size(s: &str) -> Option<u64> {
     let (num, mul) = match s.as_bytes().last()? {
         b'k' | b'K' => (&s[..s.len() - 1], 1u64 << 10),
@@ -201,7 +215,8 @@ fn is_kir(p: &Path) -> bool {
     matches!(p.extension().and_then(|e| e.to_str()), Some("kir" | "kirt"))
 }
 
-/// 一時の KIR のファイル。落としたときに消す。
+/// KIR の一時ファイル。
+/// ドロップしたときに削除する。
 struct TempFile(PathBuf);
 
 impl Drop for TempFile {
@@ -225,7 +240,8 @@ fn temp_kir() -> TempFile {
     TempFile(std::env::temp_dir().join(name))
 }
 
-/// `.kel` を Diktor で KIR にする。成功すればバイト列、失敗すれば終了状態を返す。
+/// `.kel` を Diktor で KIR に変換する。
+/// 成功すれば KIR のバイト列を、失敗すれば終了コードを返す。
 fn emit_with_diktor(o: &Options) -> Result<Vec<u8>, u8> {
     let diktor = std::env::var_os("KELEUT_DIKTOR").unwrap_or_else(|| "diktor".into());
     let tmp = temp_kir();
@@ -260,12 +276,14 @@ fn emit_with_diktor(o: &Options) -> Result<Vec<u8>, u8> {
 }
 
 impl Options {
-    /// `p` を KIR のファイルとして読むか(`--source-only` のときは読まない)。
+    /// `p` を KIR のファイルとして読むなら真を返す。
+    /// `--source-only` のときは、どのファイルも KIR として読まない。
     fn kir_input(&self, p: &Path) -> bool {
         !self.source_only && is_kir(p)
     }
 
-    /// 後段の名前(`--backend` を省いたときの既定を当てたもの)。
+    /// バックエンドの名前を返す。
+    /// `--backend` を省いたときは、`--tier` とビルドの feature から決まる既定の名前を返す。
     fn backend(&self) -> &str {
         match (self.backend.as_deref(), self.tier.as_deref()) {
             (Some(b), _) => b,
@@ -278,7 +296,7 @@ impl Options {
 
 fn run(o: &Options) -> u8 {
     if o.backend() == "wasm" {
-        // WasmGC の後段(M94)。Node を子プロセスで起動する(crate keleut-wasm の launch)。
+        // WasmGC バックエンド。Node を子プロセスとして起動する(crate keleut-wasm の `launch`)。
         let lp = match load(o) {
             Ok(p) => p,
             Err(c) => return c,
@@ -313,7 +331,7 @@ fn interp_options(o: &Options) -> keleut_interp::RunOptions {
     }
 }
 
-/// LLVM の後段(M91、M92)で走らせる。
+/// LLVM バックエンド(JIT)でプログラムを実行する。
 #[cfg(feature = "llvm")]
 fn run_jit(o: &Options) -> u8 {
     let tier = match o.tier.as_deref() {
@@ -344,10 +362,11 @@ fn run_jit(_: &Options) -> u8 {
     exit::UNIMPLEMENTED
 }
 
-/// 入力を読み(`.kel` ならフロントエンドを通し)、KIR を検証して LIR に下ろす。
-/// 失敗すれば、診断を標準エラーに書いて終了状態を返す。
+/// 入力を読み(`.kel` ならフロントエンドを通し)、KIR を検証して LIR に変換する。
+/// 失敗すれば、診断を標準エラーに書いて終了コードを返す。
 ///
-/// 入力の種類(`.kel` か KIR か)を、変換の役割の終え方のために先に書く(`keleut_rt::alloc`)。
+/// 初めに、入力の種類(`.kel` か KIR か)を設定する。
+/// 変換スレッドがメモリの確保に失敗して `処理系の限度` の行を書いてプロセスを終了するときに、この種類で終了コードが決まる(`keleut_rt::alloc`)。
 pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
     let direct = o.kir_input(&o.files[0]);
     keleut_rt::alloc::set_input(if direct {
@@ -399,13 +418,13 @@ pub(crate) fn load(o: &Options) -> Result<keleut_lir::Program, u8> {
     verify_and_lower(o, &prog, &limits)
 }
 
-/// KIR の読み込み、検証、LIR への下ろしの限度を返す(計画 6.11 節)。
+/// KIR の読み込み、検証、LIR への変換に使う上限を返す。
 ///
-/// `--native-stack` を与えたときは、フロントエンドと同じ大きさ([`crate::emit_kir_cmd::front_stack_for_run`])の
-/// スタックで読み込みと検証を走らせ、入れ子の限度をそのスタックに収まる深さまで下げる。
-/// 下ろしの入れ子の限度も同じ値にする(下ろしのスタックは、その限度から決まる)。
-/// 与えなければ、限度は `N_nest` で、スタックはそれに足りる大きさである。
-/// 仮想メモリの上限(`ulimit -v`)があれば、どちらもスタックを上限の 4 分の 1 までにし、収まる深さまで限度を下げる
+/// `--native-stack` を指定したときは、フロントエンドと同じ大きさ([`crate::emit_kir_cmd::front_stack_for_run`])の
+/// スタックで読み込みと検証を実行し、入れ子の上限をそのスタックに収まる深さまで下げる。
+/// LIR への変換の入れ子の上限も同じ値にする(変換に使うスタックは、その上限から決まる)。
+/// 指定しなければ、入れ子の上限は `N_nest` で、スタックはそれに足りる大きさである。
+/// 仮想メモリを制限しているとき(`ulimit -v`)は、どちらの場合も、スタックを仮想メモリの上限の 4 分の 1 以下にし、収まる深さまで入れ子の上限を下げる
 /// ([`kir::Limits::fit_address_space`])。
 fn kir_limits(o: &Options) -> kir::Limits {
     match o.native_stack {
@@ -417,11 +436,13 @@ fn kir_limits(o: &Options) -> kir::Limits {
     .fit_address_space()
 }
 
-/// KIR の読み込み、検証、下ろしの誤りの終了状態を返す。
+/// KIR の読み込み、検証、LIR への変換のエラーに対する終了コードを返す。
 ///
-/// 処理系の限度(下げた入れ子の限度と、処理のスレッドを作れないこと)は、`.kir` の入力では 65(IRSpec 13.9 節)、
-/// `.kel` の入力では、同じプロセスか Diktor が書いた KIR を実行の前に変換する段の限度なので 1(LangSpec §15.5)にする。
-/// ほかの誤りは `code` のままである。
+/// 処理系の限度(下げた入れ子の上限を超えたときと、処理用のスレッドを作れないとき)は、`.kir` の入力では 65 を返す(IRSpec 13.9 節)。
+/// `.kel` の入力では 1 を返す(LangSpec §15.5)。
+/// この場合の KIR はフロントエンド(同じプロセスの keleut-front か Diktor)が書いたものであり、
+/// それを実行の前に変換する段階で上限を超えるのは、KIR の不正ではなく処理系の限度だからである。
+/// それ以外のエラーでは `code` をそのまま返す。
 fn kir_exit(o: &Options, code: i32, limit: bool) -> u8 {
     if limit && !o.kir_input(&o.files[0]) {
         1
@@ -430,10 +451,12 @@ fn kir_exit(o: &Options, code: i32, limit: bool) -> u8 {
     }
 }
 
-/// KIR を検証して LIR に下ろす。失敗すれば、診断を標準エラーに書いて終了状態を返す。
+/// KIR を検証して LIR に変換する。
+/// 失敗すれば、診断を標準エラーに書いて終了コードを返す。
 ///
-/// 検証と下ろしの後に、変換の役割の印を見る(`keleut_rt::alloc`)。
-/// 下ろしのスレッドを作れなければ、スタックを半分ずつ小さくし、収まる深さの限度で検証から作り直す
+/// 検証の後と変換の後に、変換スレッドがメモリの確保に失敗したことを表すフラグを調べ、
+/// 立っていれば `処理系の限度` の行を書いてプロセスを終了する(`keleut_rt::alloc::conv_checkpoint`)。
+/// LIR への変換のスレッドを作れなければ、スタックを半分ずつ小さくし、それに収まる深さの上限で検証からやり直す
 /// ([`verify_then_lower`])。
 fn verify_and_lower(
     o: &Options,
@@ -465,27 +488,31 @@ fn verify_and_lower(
     }
 }
 
-/// 仮想メモリの上限の下で、下ろしのスレッドを作り直すときのスタックの下限(1 MiB)。
+/// LIR への変換のスレッドを作り直すときは、KIR の処理に使うスタックサイズ([`kir::Limits`] の設定)を半分ずつ小さくしていく。
+/// この定数は、その下限(1 MiB)である。
+/// 仮想メモリを制限しているとき(`ulimit -v`)に使う。
 ///
-/// 下ろしのスタックは、検証した深さの上限から [`keleut_lir::stack_for`] で決まり、固定の 16 MiB を含む。
-/// KIR の処理のスレッドの下限 [`kir::MIN_THREAD_STACK`] で止めると、下ろしのスタックは約 28 MiB(リリースの構築)より小さくならない。
-/// KIR の限度のスタックを 1 MiB まで下げれば、下ろしのスタックは約 17 MiB まで下がる。
+/// LIR への変換に使うスタックは、検証した深さの上限から [`keleut_lir::stack_for`] で決まり、固定の 16 MiB を含む。
+/// スタックを小さくするのを、KIR を処理するスレッドのスタックサイズの下限 [`kir::MIN_THREAD_STACK`] でやめると、LIR への変換に使うスタックは約 28 MiB(リリースビルド)より小さくならない。
+/// KIR の処理に使うスタックサイズを 1 MiB まで下げれば、LIR への変換に使うスタックは約 17 MiB まで下がる。
 const MIN_LOWER_RETRY_STACK: usize = 1 << 20;
 
-/// [`verify_then_lower`] の誤り。
+/// [`verify_then_lower`] が返すエラー。
 pub(crate) enum VerifyLowerError {
-    /// KIR の検証の誤り(KIR の処理のスレッドを作れない処理系の限度を含む)。
+    /// KIR の検証のエラー。
+    /// KIR を処理するスレッドを作れないとき(処理系の限度)を含む。
     Verify(kir::Error),
-    /// LIR への下ろしの誤り(下ろしのスレッドを作れない処理系の限度を含む)。
+    /// LIR への変換のエラー。
+    /// 変換のスレッドを作れないとき(処理系の限度)を含む。
     Lower(keleut_lir::Error),
 }
 
-/// KIR を限度 `limits` で検証し、検証した深さの上限を `lower` に渡して下ろす。
+/// KIR を上限 `limits` で検証し、検証した深さの上限を `lower` に渡して LIR に変換する。
 ///
-/// 仮想メモリの上限の下で下ろしのスレッドを作れなければ(`keleut_lir::ErrorKind::Limit`)、
-/// KIR の限度のスタックを半分にし(下限は [`MIN_LOWER_RETRY_STACK`])、その深さで検証し直してから下ろし直す。
-/// 下ろしには、検証が確かめた深さに見合うスタックが要るからである。
-/// 検証と下ろしの後に、変換の役割の印を見る(`keleut_rt::alloc::conv_checkpoint`)。
+/// 仮想メモリを制限しているとき(`ulimit -v`)に LIR への変換のスレッドを作れなければ(`keleut_lir::ErrorKind::Limit`)、
+/// KIR の処理に使うスタックサイズを半分にし(下限は [`MIN_LOWER_RETRY_STACK`])、それに収まる深さで検証し直してから、もう一度変換する。
+/// 検証からやり直すのは、LIR への変換には、検証した深さに必要なスタックを使うからである。
+/// 検証の後と変換の後に、変換スレッドがメモリの確保に失敗したことを表すフラグを調べる(`keleut_rt::alloc::conv_checkpoint`)。
 pub(crate) fn verify_then_lower<T>(
     prog: &kir::Program,
     limits: &kir::Limits,
@@ -514,7 +541,7 @@ pub(crate) fn verify_then_lower<T>(
     }
 }
 
-/// `keleut dump bytecode` の使い方である。
+/// `keleut dump bytecode` の使い方の説明(usage)。
 pub const DUMP_USAGE: &str = "\
 usage: keleut dump bytecode [--frontend diktor|rust] [--prelude FILE | --no-prelude] [--import-path DIR]
        FILE.kel... | FILE.kir
@@ -522,10 +549,11 @@ usage: keleut dump bytecode [--frontend diktor|rust] [--prelude FILE | --no-prel
 prints the interpreter's bytecode of every function (the format is for inspection only)
 ";
 
-/// `keleut dump bytecode …` の入口である。引数の先頭は `bytecode` である。
+/// `keleut dump bytecode …` のエントリポイントである。
+/// 引数の先頭は `bytecode` である。
 ///
-/// 入力の読み方は `keleut run` と同じで、LIR に下ろした後、各関数をバイトコードにして逆アセンブルを印字する。
-/// 印字の形は調べるためのもので、互換性を約束しない。
+/// 入力は `keleut run` と同じ方法で読み、LIR に変換した後、各関数をバイトコードにして、逆アセンブルした結果を出力する。
+/// 出力の形式は調査用で、互換性を保証しない。
 pub fn dump_bytecode(args: &[String]) -> u8 {
     let rest = &args[1..];
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {
@@ -570,7 +598,7 @@ pub fn dump_bytecode(args: &[String]) -> u8 {
     }
 }
 
-/// `keleut dump llvm` の使い方である。
+/// `keleut dump llvm` の使い方の説明(usage)。
 pub const DUMP_LLVM_USAGE: &str = "\
 usage: keleut dump llvm [--frontend diktor|rust] [--prelude FILE | --no-prelude] [--import-path DIR]
        FILE.kel... | FILE.kir
@@ -579,9 +607,10 @@ prints the LLVM IR that the jit back end makes for every function it can compile
 (the format is for inspection only; needs the llvm feature, which is on by default)
 ";
 
-/// `keleut dump llvm …` の入口である。引数の先頭は `llvm` である。
+/// `keleut dump llvm …` のエントリポイントである。
+/// 引数の先頭は `llvm` である。
 ///
-/// 入力の読み方は `keleut run` と同じで、LIR に下ろした後、JIT にできる各関数の LLVM IR の文面を印字する。
+/// 入力は `keleut run` と同じ方法で読み、LIR に変換した後、JIT コンパイルできる各関数の LLVM IR のテキストを出力する。
 pub fn dump_llvm(args: &[String]) -> u8 {
     let rest = &args[1..];
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {
@@ -627,7 +656,8 @@ fn dump_llvm_of(_: &Options) -> u8 {
     exit::UNIMPLEMENTED
 }
 
-/// `keleut run …` の入口である。引数の先頭は `run` である。
+/// `keleut run …` のエントリポイントである。
+/// 引数の先頭は `run` である。
 pub fn main(args: &[String]) -> u8 {
     let rest = &args[1..];
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {

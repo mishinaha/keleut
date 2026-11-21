@@ -1,7 +1,7 @@
-//! `keleut compat-diktor` の試験(計画 261024-1 の 6.2 節、8.1 節、M101)。
+//! `keleut compat-diktor` のテスト。
 //!
-//! Diktor の旗を Diktor と同じに解釈し、対応する keleut のサブコマンドと同じ出力と終了状態を返すことを確かめる。
-//! Diktor を呼ばないので、Diktor の無い環境でも走る。
+//! Diktor のオプションを Diktor と同じように解釈し、対応する keleut のサブコマンドと同じ出力と終了コードを返すことを確かめる。
+//! Diktor を呼ばないので、Diktor のない環境でも実行できる。
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -43,7 +43,7 @@ fn diktor_の旗を対応するサブコマンドに写す() {
     std::fs::write(d.join("p.kel"), "let y = 5\n").unwrap();
     std::fs::create_dir_all(d.join("lib")).unwrap();
     let cases: &[(&[&str], &[&str])] = &[
-        // 実行。組の選択肢(後段の旗)を Diktor の旗と混ぜて並べてよい。
+        // 実行。ペアのオプション(`--backend`、`--tier`、`--frontend` などの実行オプション)は、Diktor のオプションと混ぜて並べてよい。
         (
             &["compat-diktor", "--backend", "interp", "a.kel"],
             &["run", "--backend", "interp", "a.kel"],
@@ -74,7 +74,8 @@ fn diktor_の旗を対応するサブコマンドに写す() {
                 "a.kel",
             ],
         ),
-        // 網羅漏れの警告は実行の前に出る。`--strict-exhaustive` だけの呼び出しも実行で、警告が残れば 1 である。
+        // 網羅漏れの警告は、実行の前に表示される。
+        // `--strict-exhaustive` だけを付けた呼び出しも実行であり、警告があれば終了コード 1 で終了する。
         (
             &["compat-diktor", "--backend", "interp", "w.kel"],
             &["run", "--backend", "interp", "w.kel"],
@@ -83,7 +84,7 @@ fn diktor_の旗を対応するサブコマンドに写す() {
             &["compat-diktor", "--strict-exhaustive", "w.kel"],
             &["run", "--strict-exhaustive", "w.kel"],
         ),
-        // 型検査とダンプ。モードは後に書いたものが効き、後段の旗は使わない。
+        // 型検査とダンプ。モードは後に書いたものが優先され、バックエンドのオプションは無視される。
         (
             &[
                 "compat-diktor",
@@ -132,7 +133,7 @@ fn diktor_の旗を対応するサブコマンドに写す() {
     );
     let r = keleut_in(&d, &["compat-diktor", "--strict-exhaustive", "w.kel"], b"");
     assert_eq!(r.status.code(), Some(1), "{r:?}");
-    // `--repl` は `keleut repl` に移り、標準入力から読む。
+    // `--repl` は `keleut repl` を実行し、標準入力から読む。
     let input = b"let z = 40 + 2\nz\n";
     let a = keleut_in(
         &d,
@@ -142,7 +143,8 @@ fn diktor_の旗を対応するサブコマンドに写す() {
     let b = keleut_in(&d, &["repl"], input);
     assert!(same(&a, &b), "{a:?}\n{b:?}");
     assert_eq!(a.status.code(), Some(0));
-    // `--frontend diktor` は `keleut run` と同じく Diktor を呼ぶ(ここでは呼べずに 64)。
+    // `--frontend diktor` は `keleut run` と同じく Diktor を呼ぶ。
+    // このテストでは Diktor を起動できないので、終了コード 64 で終了する。
     let r = keleut_in(&d, &["compat-diktor", "--frontend", "diktor", "a.kel"], b"");
     assert_eq!(r.status.code(), Some(64), "{r:?}");
     let _ = std::fs::remove_dir_all(&d);
@@ -164,7 +166,7 @@ fn 使い方の誤りは_64_で終わる() {
         &["compat-diktor", "--run-ir", "o.kir"],
         &["compat-diktor", "--via-ir", "a.kel"],
         &["compat-diktor", "--dump-ir-tables"],
-        // Diktor の `--max-depth` は IR の旗である(木の評価器には効かない)。
+        // Diktor の `--max-depth` は IR のオプションである(構文木の評価器には影響しない)。
         &["compat-diktor", "--max-depth", "5", "a.kel"],
         &[
             "compat-diktor",
@@ -175,9 +177,9 @@ fn 使い方の誤りは_64_で終わる() {
             "5",
             "a.kel",
         ],
-        // `--` の後に後段の選択肢は書けない。
+        // `--` の後には、バックエンドのオプションを書けない。
         &["compat-diktor", "--", "--backend", "interp", "a.kel"],
-        // `--help` と `-h` は、Diktor と同じく知らない旗である。
+        // `--help` と `-h` は、Diktor と同じく未知のオプションとして扱う。
         &["compat-diktor", "--help"],
         &["compat-diktor", "-h", "a.kel"],
     ] {
@@ -189,15 +191,15 @@ fn 使い方の誤りは_64_で終わる() {
             "{args:?}: {r:?}"
         );
     }
-    // IR の旗の呼び出しは何も書かない。
+    // IR のオプションを付けた呼び出しは、ファイルを書かない。
     assert!(!d.join("o.kir").exists() && !d.join("o.kirt").exists());
-    // 後段の旗の誤りは `keleut run` が報告する。
+    // バックエンドのオプションのエラーは、`keleut run` が報告する。
     let r = keleut_in(&d, &["compat-diktor", "--backend", "x", "a.kel"], b"");
     assert_eq!(r.status.code(), Some(64));
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 深さ `n` の `1 + (…)` の式を持つプログラムである。
+/// `1 + (…)` を深さ `n` まで入れ子にした式を表示する、プログラムのソースを返す。
 fn nested(n: usize) -> String {
     format!(
         "let x = {}1{}\necholn(show(x))\n",
@@ -214,7 +216,7 @@ fn 区切りの前の選択肢を後段に渡す() {
         "let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)\necholn(show(f(100)))\n",
     )
     .unwrap();
-    // `--` の前の `--max-depth` は `keleut run` の論理的な深さの限度である。
+    // `--` の前の `--max-depth` は、`keleut run` の論理的な深さの上限である。
     let a = keleut_in(
         &d,
         &[
@@ -245,7 +247,7 @@ fn 区切りの前の選択肢を後段に渡す() {
         (Some(0), &b"100\n"[..]),
         "{r:?}"
     );
-    // 型検査にも `--native-stack` を渡すので、構文解析の限度は実行と同じである。
+    // 型検査にも `--native-stack` を渡すので、構文解析の上限は実行のときと同じである。
     std::fs::write(d.join("d200.kel"), nested(200)).unwrap();
     for mode in [&[][..], &["--type-check"]] {
         let mut args = vec!["compat-diktor", "--native-stack", "512k", "--"];

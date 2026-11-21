@@ -1,24 +1,24 @@
-//! サブコマンド `keleut dump lir` である(計画 261024-1 の 6.2 節、6.4 節)。
+//! サブコマンド `keleut dump lir` である。
 //!
-//! `keleut dump lir [OPTIONS] FILE` は、KIR を読んで検証し、LIR に下ろして検証し、LIR を印字する。
-//! `FILE` の読み方(拡張子とマジック)は `keleut kir` と同じである。
-//! 印字の形は調べるためのもので、互換性を約束しない。
+//! `keleut dump lir [OPTIONS] FILE` は、KIR を読み込んで検証し、LIR に変換(lowering)して検証し、LIR をテキストで出力する。
+//! `FILE` の読み方は `keleut kir` と同じで、拡張子とマジックナンバーで形式を決める。
+//! 出力の形式は調査用で、互換性を保証しない。
 //!
 //! `OPTIONS` は次のとおりである。
 //!
-//! - `--check`: 下ろしと検証だけを行い、何も印字しない(コーパスの全件の確認に使う)。
-//! - `--unassigned`: パス 12(生存区間とスロット)の前の LIR を印字する。
-//! - `--max-nest N`: 入れ子の限度(既定は IRSpec 13.9 節の `N_nest = 100,000`)。
-//! - `-o OUT`: 印字の出力先(省けば標準出力)。
+//! - `--check`: LIR への変換と検証だけを行い、何も出力しない(コーパスのすべてのプログラムを LIR に変換できることを確かめるときに使う)。
+//! - `--unassigned`: パス 12(生存区間とスロット)の前の LIR を出力する。
+//! - `--max-nest N`: 入れ子の上限(既定は IRSpec 13.9 節の `N_nest = 100,000`)。
+//! - `-o OUT`: 出力先のファイル(省略すると標準出力)。
 //!
-//! 終了状態は、KIR の読み込みと検証の失敗が 65、下ろしと LIR の検証の失敗(処理系の不具合)が 70、
-//! 使い方の誤りと入力を読めないときが 64、出力に書けないときが 74 である。
+//! 終了コードは、KIR の読み込みと検証の失敗が 65、LIR への変換と LIR の検証の失敗(処理系のバグ)が 70、使い方のエラーと入力を読めないときが 64、出力先に書けないときが 74 である。
+//! 仮想メモリを制限しているとき(`ulimit -v`)に、スタックを小さくしても KIR を処理するスレッドか LIR に変換するスレッドを作れなければ、`処理系の限度` の行を書いて 65 で終了する。
 
 use crate::exit;
 use std::io::Write;
 use std::path::PathBuf;
 
-/// `keleut dump lir` の使い方である。
+/// `keleut dump lir` の使い方の説明(usage)である。
 pub const USAGE: &str = "\
 usage: keleut dump lir [OPTIONS] FILE
 
@@ -30,7 +30,7 @@ options:
   -o FILE          output file (default standard output)
 ";
 
-/// 解釈したコマンド行である。
+/// コマンド行を解釈した結果である。
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     input: PathBuf,
@@ -94,7 +94,8 @@ fn run(o: &Options) -> u8 {
             return exit::USAGE;
         }
     };
-    // 仮想メモリの上限があれば、スタックを上限の 4 分の 1 までにし、入れ子の限度を下げる(下ろしも同じ限度にする)。
+    // 仮想メモリを制限しているとき(`ulimit -v`)は、スタックを仮想メモリの上限の 4 分の 1 以下にし、そのスタックに収まる深さまで入れ子の上限を下げる。
+    // LIR への変換にも同じ上限を使う。
     let limits = kir::Limits::for_nest(o.max_nest).fit_address_space();
     let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
     let read = match o.input.extension().and_then(|e| e.to_str()) {
@@ -110,7 +111,7 @@ fn run(o: &Options) -> u8 {
         }
     };
     keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::KirRead);
-    // 下ろしのスレッドを作れなければ、`keleut run` と同じく限度を下げて検証からやり直す。
+    // LIR に変換するスレッドを作れなければ、`keleut run` と同じく、スタックと入れ子の上限を下げて検証からやり直す。
     let lowered = crate::run_cmd::verify_then_lower(&prog, &limits, |n| {
         if o.unassigned {
             keleut_lir::lower_unassigned(&prog, n)
@@ -152,7 +153,7 @@ fn run(o: &Options) -> u8 {
     }
 }
 
-/// `keleut dump lir …` の入口である。引数の先頭は `lir` である。
+/// `keleut dump lir …` のエントリポイントである。引数の先頭は `lir` である。
 pub fn main(args: &[String]) -> u8 {
     let rest = &args[1..];
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {

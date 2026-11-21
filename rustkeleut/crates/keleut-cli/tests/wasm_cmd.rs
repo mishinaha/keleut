@@ -1,17 +1,18 @@
-//! `keleut run --backend wasm` と `keleut build` の試験(計画 261024-1 の 6.10 節、M94)。
+//! `keleut run --backend wasm` と `keleut build` のテスト。
 //!
-//! Node(環境変数 `KELEUT_NODE`、無ければ PATH の `node`)が無ければ、何もせずに通る。
+//! Node(環境変数 `KELEUT_NODE`、なければ PATH の `node`)がなければ、何もせずに成功する。
 //!
-//! - `tests/fixtures/run/` の各 `.kir` を WasmGC の後段で走らせ、記録した標準出力、標準エラー、終了状態と比べる
-//!   (記録は `diktor --run-ir` の結果で、インタプリタの試験と同じものである)。
-//! - `keleut build` の出力を `node DIR/main.mjs` だけで走らせる(`Worker` のスタックの経路)。
-//! - 起動のときに閉じていた標準出力は、インタプリタと同じく 74 になる。
-//!   `keleut build` の起動の台本 `DIR/run` も、閉じた標準出力で `keleut run --backend wasm` と同じ終わり方をする。
-//! - 環境変数 `KELEUT_DIKTOR` を与えると、大きなフレームの形になる関数、ブロックの多い関数、引数の多い関数を、
-//!   インタプリタと WasmGC の後段で走らせて比べる。
-//!   何度も呼ぶ大きな関数(部分に分ける関数)と、多くの型のクロージャを呼ぶ関数も比べる。
-//! - 取れないスタックの深さの限度、仮想メモリの上限、シグナルの下でも、型の誤りの 1 で終わったり、
-//!   止まったままになったり、一時の場所や Node のプロセスを残したりしない。
+//! - `tests/fixtures/run/` の各 `.kir` を WasmGC バックエンドで実行し、標準出力、標準エラー、終了コードを期待出力と比較する。
+//!   期待出力は `diktor --run-ir` の結果で、インタプリタのテストと同じものである。
+//! - `keleut build` の出力を `node DIR/main.mjs` だけで実行する(`Worker` でスタックを確保する経路)。
+//! - 起動時に標準出力が閉じていると、プログラムが出力したときに、インタプリタと同じく終了コード 74 になる。
+//!   `keleut build` が書く起動スクリプト `DIR/run` も、標準出力が閉じているときに、
+//!   `keleut run --backend wasm` と同じ終了コードと標準エラーになる。
+//! - 環境変数 `KELEUT_DIKTOR` を指定すると、大きなフレーム方式になる関数、ブロックの多い関数、引数の多い関数を、
+//!   インタプリタと WasmGC バックエンドで実行して比較する。
+//!   何度も呼ぶ大きな関数(分割関数に分ける関数)と、多くの型のクロージャを呼ぶ関数も比較する。
+//! - スタックを確保できない深さの上限を指定したとき、仮想メモリを制限しているとき、シグナルを受けたときに、
+//!   型エラーの終了コード 1 で終了したり、止まったままになったり、一時ディレクトリや Node のプロセスを残したりしない。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -148,7 +149,7 @@ fn build_の出力は_node_だけで走る() {
             "{n}"
         );
     }
-    // 使い方の誤り。
+    // `--target wasm` を指定しない `keleut build` は、使い方のエラー(終了コード 64)で終了する。
     assert_eq!(keleut_in(&d, &["build"]).status.code(), Some(64));
     let num = fx.join("num.kir");
     assert_eq!(
@@ -181,9 +182,9 @@ fn 閉じた標準出力は_74_になる() {
     assert_eq!(w.stderr, i.stderr);
 }
 
-/// `sh -c` で `CMD` を走らせる。
+/// `sh -c` で `cmd` を実行する。
 ///
-/// `KELEUT_NODE` があれば、その場所を `PATH` の先頭に置く(`DIR/run` は `PATH` の `node` を起動する)。
+/// `DIR/run` は `PATH` の `node` を起動するので、`KELEUT_NODE` があれば、そのディレクトリを `PATH` の先頭に置く。
 fn sh_out(cmd: &str, envs: &[(&str, &str)]) -> Output {
     let mut c = Command::new("sh");
     c.arg("-c").arg(cmd).stdin(Stdio::null());
@@ -211,7 +212,7 @@ fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
     }
     let d = scratch("launcher");
     let k = env!("CARGO_BIN_EXE_keleut");
-    // 書くプログラム、書かないプログラム、書く前に実行時エラーで止まるプログラム。
+    // 出力するプログラム、出力しないプログラム、出力する前に実行時エラーで終了するプログラム。
     let progs = [
         (
             "writes",
@@ -251,7 +252,7 @@ fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
         }
         let run = run.display();
         let kel = kel.display();
-        // 閉じた標準出力。
+        // 標準出力を閉じた場合。
         let a = sh_out(&format!("'{run}' >&-"), &[]);
         let b = sh_out(&format!("'{k}' run --backend wasm '{kel}' >&-"), &[]);
         assert_eq!(a.status.code(), Some(closed), "{name}: DIR/run >&-");
@@ -260,7 +261,7 @@ fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
             (b.status.code(), &b.stderr),
             "{name}: DIR/run >&- と keleut run --backend wasm >&-"
         );
-        // 開いた標準出力。
+        // 標準出力を開いた場合。
         let n = sh_out(&format!("'{run}' >/dev/null"), &[]);
         let ok = if closed == 74 { 0 } else { closed };
         assert_eq!(n.status.code(), Some(ok), "{name}: DIR/run >/dev/null");
@@ -278,7 +279,7 @@ fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
             (&m.stdout, &m.stderr, m.status.code()),
             "{name}: DIR/run と node DIR/main.mjs"
         );
-        // 環境に残った KELEUT_STDOUT_CLOSED は、開いた標準出力では除く。
+        // 環境に残っていた KELEUT_STDOUT_CLOSED は、標準出力が開いていれば `DIR/run` が取り除く。
         let e = sh_out(&format!("'{run}'"), &[("KELEUT_STDOUT_CLOSED", "1")]);
         assert_eq!(
             (e.status.code(), &e.stdout),
@@ -289,7 +290,7 @@ fn build_の起動の台本は閉じた標準出力で_run_と同じ() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// `.kel` を Diktor で KIR にし、両方の後段で走らせて結果を比べる。
+/// `.kel` を Diktor で KIR にし、インタプリタと WasmGC バックエンドで実行して結果を比較する。
 fn same_on_both(diktor: &str, d: &Path, name: &str, src: &str, extra: &[&str]) {
     let kel = d.join(format!("{name}.kel"));
     let kir = d.join(format!("{name}.kir"));
@@ -329,7 +330,7 @@ fn 大きなフレームとブロックの多い関数を_interp_と比べる() 
         return;
     }
     let d = scratch("big");
-    // 400 個の値を生かしたまま呼び出しを重ねる関数を、深さ 10 万まで再帰させる(大きなフレームの形)。
+    // 400 個の値を生存させたまま呼び出しを重ねる関数を、深さ 10 万まで再帰させる(大きなフレーム方式になる)。
     let mut src = String::from(
         "let id(x: Int32): Int32 = x\nlet rec f(n: Int32): Int32 = if n == 0 then 0 else {\n",
     );
@@ -346,9 +347,9 @@ fn 大きなフレームとブロックの多い関数を_interp_と比べる() 
     }
     src.push_str(")\n}\necholn(show(f(100000)))\n");
     same_on_both(&diktor, &d, "bigframe", &src, &[]);
-    // 同じ関数が限度で 3 になる。
+    // 同じ関数が、深さの上限に達して終了コード 3 で終了する。
     same_on_both(&diktor, &d, "bigframe", &src, &["--max-depth", "5000"]);
-    // 5,000 段の if の鎖(1 万個を超えるブロック)。
+    // 5,000 段の if の連鎖(ブロックは 1 万個を超える)。
     let mut src = String::from("let f(x: Int32): Int32 = ");
     for k in 0..5000 {
         src.push_str(&format!("if x == {k} then {} else ", k * 2));
@@ -358,7 +359,9 @@ fn 大きなフレームとブロックの多い関数を_interp_と比べる() 
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// `big` の本体を `body` の行にした関数を、`loop` から `calls` 回呼ぶ `.kel`(`header` は先頭の宣言)。
+/// `body` の各行と結果の式 `result` を本体とする関数 `big` を、`loop` から `calls` 回呼ぶ `.kel`。
+///
+/// `header` は先頭に置く宣言で、`handle` は `loop` の呼び出しの後ろに付けるハンドラである(空文字列なら付けない)。
 fn hot_src(header: &str, body: &[String], result: &str, calls: u32, handle: &str) -> String {
     let row = if handle.is_empty() { "" } else { " @ {Ask}" };
     let mut s = format!("{header}let big(n: Int32): Int32{row} = {{\n");
@@ -382,9 +385,10 @@ fn 何度も呼ぶ大きな関数を_interp_と比べる() {
         return;
     }
     let d = scratch("hot");
-    // V8 は何度も呼ぶ関数を最適化の翻訳にかける。1 つの Wasm の関数が大きいと、その翻訳が記憶を使い尽くして
-    // Node が SIGTRAP で落ちた(出力の後でも 70 になった)。重い関数は部分に分けるので、どれも 0 で終わる。
-    // 1 万段の if の鎖を 2 万回呼ぶ。
+    // V8 は、何度も呼ばれる関数を最適化コンパイルする。
+    // 1 つの Wasm 関数が大きいと、そのコンパイルがメモリを使い尽くし、Node が SIGTRAP で異常終了する(出力の後でも終了コード 70 になる)。
+    // 重い関数は分割関数に分けるので、どのプログラムも終了コード 0 で終了する。
+    // 1 万段の if の連鎖を 2 万回呼ぶ。
     let mut src = String::from("let f(x: Int32): Int32 = ");
     for k in 0..10_000 {
         src.push_str(&format!("if x == {k} then {} else ", k * 2));
@@ -394,7 +398,7 @@ fn 何度も呼ぶ大きな関数を_interp_と比べる() {
          echoln(show(loop(20000, 0)))\n",
     );
     same_on_both(&diktor, &d, "hotif", &src, &[]);
-    // 6,000 個の値を生かす直線の関数を 2,000 回呼ぶ(大きなフレームの形)。
+    // 6,000 個の値を生存させる、分岐のない関数を 2,000 回呼ぶ(大きなフレーム方式になる)。
     let lets: Vec<String> = (0..6000)
         .map(|i| format!("let v{i} = n * {i} + 1"))
         .collect();
@@ -406,7 +410,7 @@ fn 何度も呼ぶ大きな関数を_interp_と比べる() {
         &hot_src("", &lets, &sum.join(" + "), 2000, ""),
         &[],
     );
-    // 1,400 個の perform を持つ関数を、T の節の下で 3,000 回呼ぶ。
+    // 1,400 個の perform を持つ関数を、分類 T の操作節を持つハンドラの中で 3,000 回呼ぶ。
     let lets: Vec<String> = (0..1400)
         .map(|i| format!("let v{i} = perform ask({i}) + n"))
         .collect();
@@ -424,7 +428,8 @@ fn 何度も呼ぶ大きな関数を_interp_と比べる() {
         ),
         &[],
     );
-    // 部分に分けた関数の末尾でない再帰。論理的な 1 段は部分の 1 つのフレームなので、深さの限度は変わらない。
+    // 分割関数に分けた関数の非末尾の再帰。
+    // 論理的な 1 段は分割関数 1 つのフレームなので、深さの上限は変わらない。
     let mut src = String::from("let rec f(n: Int32): Int32 = if n == 0 then 0 else {\n");
     for k in 0..800 {
         src.push_str(&format!("  let a{k} = n * {k} + 1\n"));
@@ -450,11 +455,12 @@ fn g_の節の取り出しと再開を_interp_と比べる() {
     let d = scratch("gres");
     let gen_src = "effect Gen = { yield: (Int32) => Unit }\n\
                let rec count(i: Int32, n: Int32): Unit @ {Gen} = if i == n then () else { perform yield(i); count(i + 1, n) }\n";
-    // 300 個の値を生かしたまま、既定の L の近くまで末尾でない resume を重ねる節。
-    // 論理的な 1 段に節とハンドラと rt_resume のフレームが重なるので、節は予算(B_wasm からその 2 つを引いたもの)に収め、
-    // 大きなフレームの形の節は小さな部分に分ける。
-    // 予算を B_wasm のままにすると 150 個の値で、部分に分けずに大きなフレームの形にすると 180 個の値で、
-    // 限度の近くで V8 の RangeError の 70 になった(interp は 0)。
+    // 300 個の値を生存させたまま、既定の L の近くまで非末尾の resume を重ねる操作節。
+    // 論理的な 1 段に、節とハンドラと rt_resume のフレームが重なる。
+    // そこで、節の 1 段の見積もりは、B_wasm からハンドラと rt_resume の分を引いた上限に収める。
+    // 大きなフレーム方式になる節は、小さな分割関数に分ける。
+    // 上限を B_wasm のままにすれば 150 個の値で、分割関数に分けずに大きなフレーム方式にすれば 180 個の値で、
+    // 深さの上限の近くで V8 の RangeError になり、終了コード 70 で終了する(インタプリタでは 0)。
     let lets: Vec<String> = (0..300)
         .map(|k| format!("let a{k} = x * {}", k + 3))
         .collect();
@@ -467,8 +473,8 @@ fn g_の節の取り出しと再開を_interp_と比べる() {
         sum.join(" + ")
     );
     same_on_both(&diktor, &d, "bigclause", &src, &[]);
-    // 1,400 個の perform を持つ関数(部分に分ける)を G の節の下で 200 回呼ぶ。
-    // どの perform も継続を取り出し、部分の再開の入口から続ける。
+    // 1,400 個の perform を持つ関数(分割関数に分ける)を、分類 G の操作節を持つハンドラの中で 200 回呼ぶ。
+    // どの perform も継続をキャプチャし、分割関数の再開用エントリから実行を続ける。
     let lets: Vec<String> = (0..1400)
         .map(|i| format!("let v{i} = perform ask({i}) + n"))
         .collect();
@@ -486,8 +492,9 @@ fn g_の節の取り出しと再開を_interp_と比べる() {
         ),
         &[],
     );
-    // 800 個の値を生かす部分に分けた関数と、170 個の値を生かす大きなフレームの形の関数を 1,000 段重ね、
-    // その上で 50 回 yield する。どの継続も 1,000 段のフレームを持ち、再開のたびにすべてを再開の入口から続ける。
+    // 800 個の値を生存させる、分割関数に分けた関数と、170 個の値を生存させる、大きなフレーム方式の関数を、
+    // それぞれ 1,000 段重ね、その上で 50 回 yield する。
+    // どの継続も 1,000 段のフレームを持ち、再開のたびに、すべてのフレームの実行を再開用エントリから続ける。
     for (name, nv) in [("splitg", 800), ("bigg", 170)] {
         let mut src = String::from(
             "effect Ask = { ask: (Int32) => Int32 }\n\
@@ -506,7 +513,8 @@ fn g_の節の取り出しと再開を_interp_と比べる() {
         );
         same_on_both(&diktor, &d, name, &src, &[]);
     }
-    // 限度を超える再開(depth_limit)。継続を使っていないので、cancel 節が走る。
+    // 深さの上限を超える再開(depth_limit)。
+    // 継続を使っていないので、cancel 節が実行される。
     let src = format!(
         "{gen_src}let t(n: Int32): Int32 = count(0, n) handle {{ case yield(x) => {{ let r = resume(()); r + 1 }} case return(u) => 0 case cancel => echoln(\"cancel\") }}\n\
          echoln(show(t(4000)))\necholn(show(t(6000)))\n"
@@ -515,13 +523,13 @@ fn g_の節の取り出しと再開を_interp_と比べる() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 引数の数が 1〜`nk` のクロージャを値として呼びながら、`nv` 個の値を生かして `depth` 段まで再帰する `.kel`。
+/// 引数の個数が 1〜`nk` のクロージャを関数値として呼びながら、`nv` 個の値を生存させて `depth` 段まで再帰する `.kel`。
 fn closures_src(nv: usize, nk: usize, depth: u64) -> String {
     let mut s = String::new();
     for k in 1..=nk {
         let ps: Vec<String> = (0..k).map(|i| format!("x{i}: Int32")).collect();
         let ps = ps.join(", ");
-        // if の値にして、直の呼び出しでなく値の呼び出しにする。
+        // if の値にすることで、直接呼び出しではなく関数値の呼び出しにする。
         s.push_str(&format!(
             "let k{k} = if true then fn({ps}) => x0 else fn({ps}) => x0\n"
         ));
@@ -555,16 +563,17 @@ fn 多くの型のクロージャを呼ぶ関数の_1_段は_b_wasm_に収まる
         return;
     }
     let d = scratch("clo");
-    // 値を呼ぶ一時の局所をクロージャの型ごとに足していたときは、この関数の局所が 229 個になり、
-    // 1 段が B_wasm を超えて、既定の L で L − 10 段の再帰が V8 の RangeError の 70 になった。
-    // 翻訳は書き終えた関数の推定が B_wasm を超えたら 70 にするので、翻訳が通ることが 1 段の上限を確かめる。
-    // 直した後の L − 10 段の実行は 36 秒かかる(記録の M94 の節)ので、ここでは深さ 10 万で比べる。
+    // 関数値を呼ぶための一時ローカルをクロージャの型ごとに追加すると、この関数のローカルは 229 個になって 1 段が B_wasm を超え、
+    // 既定の L で L − 10 段の再帰が V8 の RangeError になり、終了コード 70 で終了する。
+    // コード生成は、書き終えた関数の見積もりが B_wasm を超えると終了コード 70 で終了する。
+    // そのため、コード生成が成功すれば、1 段が B_wasm に収まっているとわかる。
+    // L − 10 段の実行は 36 秒かかるので、ここでは深さ 10 万で比較する。
     same_on_both(&diktor, &d, "clo60", &closures_src(100, 60, 100_000), &[]);
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 引数が `n` 個の関数を、直の呼び出し、クロージャの呼び出し、メソッドの呼び出しで使う `.kel`。
-/// 直の呼び出しとクロージャの呼び出しは、末尾でない再帰で `depth` 段まで降りる。
+/// 引数が `n` 個の関数を、直接呼び出し、クロージャの呼び出し、メソッドの呼び出しで使う `.kel`。
+/// 直接呼び出しとクロージャの呼び出しは、非末尾の再帰で `depth` 段まで深くなる。
 fn many_params_src(n: usize, depth: u64) -> String {
     let ps: Vec<String> = (0..n).map(|i| format!("a{i}: Int32")).collect();
     let ty = format!("({}) => Int32", vec!["Int32"; n].join(", "));
@@ -620,9 +629,11 @@ fn 引数の多い関数を限度の近くまで再帰させる() {
         return;
     }
     let d = scratch("params");
-    // 既定の L(2^20)で L − 10 段。引数が 32 個を超える分は配列にまとめて渡す。
-    // まとめる前は、引数が 60 個を超えると V8 のスタックが L より前に尽きた。
-    // 深い再帰の間の確保は V8 の回収に深いスタックを走査させて遅い(64 個で約 15 秒)ので、ほかの数は浅く確かめる。
+    // 既定の L(2^20)で L − 10 段まで再帰する。
+    // 32 個を超える分の引数は、配列にまとめて渡す。
+    // まとめずに渡すと、引数が 60 個を超えたときに、V8 のスタックが L 段より前に足りなくなる。
+    // 深い再帰の途中でメモリを確保すると、V8 の GC が深いスタックを走査するので遅い(64 個で約 15 秒)。
+    // そこで、64 個以外の個数は浅い再帰で確かめる。
     same_on_both(
         &diktor,
         &d,
@@ -639,7 +650,7 @@ fn 引数の多い関数を限度の近くまで再帰させる() {
             &[],
         );
     }
-    // Wasm の関数の引数の数の上限(1,000)を超える関数。
+    // Wasm の関数に書ける引数の個数の上限(1,000)を超える関数。
     same_on_both(&diktor, &d, "params1001", &many_params_src(1001, 10), &[]);
     let _ = std::fs::remove_dir_all(&d);
 }
@@ -673,9 +684,9 @@ fn 仮想メモリの上限の下でも止まったままにならない() {
     }
     let num = root().join("tests/fixtures/run/num.kir");
     let k = env!("CARGO_BIN_EXE_keleut");
-    // 2 GiB では Worker のスタックを取れずに 70 になる。
-    // 8 GiB では走り切るはずだが(この機械で 0)、V8 の予約の量に依るので 70 も許す。
-    // どちらも型の誤りの 1 や、時間切れ(124)にはならない。
+    // 2 GiB では Worker のスタックを確保できず、終了コード 70 になる。
+    // 8 GiB では最後まで実行できるはずだが(測定したマシンでは 0)、V8 が予約するメモリの量によるので 70 も許す。
+    // どちらも、型エラーの終了コード 1 や、タイムアウト(124)にはならない。
     for (v, want) in [(2_097_152, &[70][..]), (8_388_608, &[0, 70][..])] {
         let o = Command::new("sh")
             .arg("-c")
@@ -778,7 +789,8 @@ fn 無視する扱いで起動されたシグナルでは_interp_と同じく終
         .status()
         .unwrap();
     assert!(st.success());
-    // nohup の下の SIGHUP と、シェルの台本の中の後ろで走る仕事の SIGINT。
+    // シグナルを無視する設定で起動する。
+    // nohup で起動したときの SIGHUP と、シェルスクリプトの中のバックグラウンドジョブの SIGINT が、この状態に相当する。
     for sig in ["HUP", "INT"] {
         let run = |backend: &str| {
             Command::new("sh")
@@ -814,7 +826,8 @@ fn 無視する扱いで起動されたシグナルでは_interp_と同じく終
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// `let a0 = V * 3; …` を `nv` 個と、それらを使う式(値は 0)。
+/// `let a0 = V * 3; …` の形の束縛 `nv` 個と、それらをすべて使う式(値は 0)を返す。
+/// `V` は変数名 `var` である。
 fn live_lets(var: &str, nv: usize) -> (String, String) {
     if nv == 0 {
         return (String::new(), "0".into());
@@ -829,14 +842,17 @@ fn live_lets(var: &str, nv: usize) -> (String, String) {
     (ls, format!("({s}) - ({s})"))
 }
 
-/// `cancel` 節の中に直に書いたハンドラ式を重ねるプログラム(計画 261104-3 の探りの `gen.py` の形 c と形 f)。
+/// `cancel` 節の中に直接書いたハンドラ式を重ねるプログラム(`shape` が `'c'` なら形 c、それ以外なら形 f)。
 ///
-/// 形 c(`GADD=1`)では、`go` が値を生かしてハンドラ式を末尾でなく書き、その `cancel` 節が値を生かして
-/// ハンドラ式を直に書き、その本体が値を生かして `go` を末尾でなく呼ぶ。
-/// 論理的な同じ深さに `go`、`$rt_handle`、`cancel` 節、内側の `$rt_handle` が重なる。
-/// 形 f では、内側のハンドラ式に G の節 `ask` を足し、本体が `ask` を `perform` してから `go` を呼ぶ。
-/// G の節は末尾で `resume` するので、内側の `$rt_handle` は `rt_resume` として本体を写し戻す。
-/// どちらも 1 つの `n` が論理的な 2 段で、出力は形 c が `2`、`bottom`、`7`、形 f が `bottom`、`7` である。
+/// 形 c では、プログラムの先頭に、分類 G の操作節を持つハンドラ式を 1 つ書く。
+/// このハンドラ式の値が、出力の 1 行目の `2` である。
+/// `go` は、値を生存させたまま、末尾位置でないところにハンドラ式を書く。
+/// その `cancel` 節は、値を生存させたままハンドラ式を直接書き、その本体は、値を生存させたまま `go` を非末尾呼び出しで呼ぶ。
+/// 論理的に同じ深さに、`go`、`$rt_handle`、`cancel` 節、内側の `$rt_handle` が重なる。
+/// 形 f では、内側のハンドラ式に分類 G の操作節 `ask` を追加し、本体が `ask` を `perform` してから `go` を呼ぶ。
+/// この節は実行時には末尾位置で `resume` するので、内側の `$rt_handle` は `rt_resume` として本体のフレームを復元する。
+/// どちらの形でも、`n` が 1 増えると論理的な深さが 2 段増える。
+/// 出力は、形 c が `2`、`bottom`、`7`、形 f が `bottom`、`7` である。
 fn cancel_nest_src(shape: char, nv: usize, n: u32) -> String {
     let (lm, cm) = live_lets("m", nv);
     let (lk, ck) = live_lets("k", nv);
@@ -874,7 +890,7 @@ fn cancel_nest_src(shape: char, nv: usize, n: u32) -> String {
     s
 }
 
-/// `cancel` 節の中のハンドラ式を `--max-depth 600000` の限度の近く(論理的な深さ約 598,000)まで重ねる。
+/// `cancel` 節の中のハンドラ式を、`--max-depth 600000` の上限の近く(論理的な深さ約 598,000)まで重ねる `.kel` を書く。
 fn deep_cancel_nest(d: &Path) -> PathBuf {
     let kel = d.join("c92.kel");
     std::fs::write(&kel, cancel_nest_src('c', 92, 299_000)).unwrap();
@@ -894,7 +910,8 @@ fn cancel_節の中のハンドラ式を重ねても_interp_と同じ() {
     if !have_node() {
         return;
     }
-    // 1 段が B_wasm を超える形(V234)。スタックは B_prog で決まり、--stack-size の直の経路で走る。
+    // 1 段が B_wasm を超えるプログラム。
+    // スタックは B_prog で決まり、--stack-size を使う直接の経路(`path=direct`)で実行される。
     let d = scratch("cancel-nest");
     let kel = deep_cancel_nest(&d);
     let w = run_depth(&d, &["--backend", "wasm"], &kel);
@@ -906,8 +923,8 @@ fn cancel_節の中のハンドラ式を重ねても_interp_と同じ() {
         String::from_utf8_lossy(&i.1)
     );
     assert_eq!(w, i, "{}", String::from_utf8_lossy(&w.1));
-    // 直す前の keleut は Worker の経路でなら host の 64 MiB の余裕で通るので、直の経路を通ったことを確かめる。
-    // 仮想メモリの上限などで直の経路を取れない環境では、この試験は直したことを見分けられない。
+    // スタックを B_wasm で決めても、Worker の経路ではホストが足す 64 MiB の余裕で通ってしまうので、直接の経路を通ったことを確かめる。
+    // 仮想メモリの制限などで直接の経路を使えない環境では、このテストは、スタックを B_prog で決めていることを検出できない。
     let stats = wasm_stats_stderr(&d, &kel);
     assert!(
         stats.contains("keleut-host: path=direct\n"),
@@ -916,7 +933,7 @@ fn cancel_節の中のハンドラ式を重ねても_interp_と同じ() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// `KELEUT_WASM_STATS=1` で `keleut run --backend wasm --max-depth 600000` を走らせた標準エラー。
+/// `KELEUT_WASM_STATS=1` を付けて `keleut run --backend wasm --max-depth 600000` を実行し、その標準エラーを返す。
 fn wasm_stats_stderr(d: &Path, kel: &Path) -> String {
     let o = Command::new(env!("CARGO_BIN_EXE_keleut"))
         .args([
@@ -961,12 +978,12 @@ fn cancel_節の中のハンドラ式を重ねても_jit_only_と同じ() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// `keleut build --target wasm --max-depth 600000` で書く。
+/// `keleut build --target wasm --max-depth 600000` で `out` に書く。
 fn build_600000(d: &Path, kel: &Path, out: &Path) {
     build_at(d, kel, out, "600000");
 }
 
-/// `KELEUT_WASM_STATS=1 keleut build --target wasm --max-depth DEPTH` で書き、標準エラーを返す。
+/// `KELEUT_WASM_STATS=1 keleut build --target wasm --max-depth DEPTH` で `out` に書き、標準エラーを返す。
 fn build_at(d: &Path, kel: &Path, out: &Path, depth: &str) -> String {
     let r = Command::new(env!("CARGO_BIN_EXE_keleut"))
         .args([
@@ -1000,7 +1017,7 @@ fn worker_の経路のスタックは_b_prog_で決まる() {
     let out = d.join("out");
     build_600000(&d, &kel, &out);
     let main = std::fs::read_to_string(out.join("main.mjs")).unwrap();
-    // k = 1 なので B_prog = 1,040 + 320 + 1,040 + 320 + 176 = 2,896。
+    // k = 1 なので B_prog = 1,040 + 320 + 1,040 + 320 + 176 = 2,896 である。
     assert!(
         main.contains("\"bProg\":2896,\"cancelNest\":1,"),
         "META に bProg と cancelNest が無い"
@@ -1031,7 +1048,7 @@ fn worker_の経路で_g_の節の再開を重ねても_interp_と同じ() {
     if !have_node() {
         return;
     }
-    // 形 f: 内側の $rt_handle が rt_resume として本体を写し戻す。
+    // 形 f では、内側の $rt_handle が rt_resume として本体のフレームを復元する。
     let d = scratch("cancel-nest-worker");
     let kel = d.join("f92.kel");
     std::fs::write(&kel, cancel_nest_src('f', 92, 299_000)).unwrap();
@@ -1081,7 +1098,7 @@ fn worker_のスタックは_stack_cap_で切る() {
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    // 16 GiB に host の 64 MiB を足した値。
+    // 16 GiB にホストの 64 MiB を足した値。
     assert_eq!(
         String::from_utf8_lossy(&r.stderr),
         "keleut-host: path=worker stackSizeMb=16448\n"
@@ -1102,7 +1119,8 @@ fn worker_のスタックは_stack_cap_で切る() {
         (&b"2\nbottom\n7\n"[..], Some(0))
     );
     assert_eq!((r.stdout, r.status.code()), (i.stdout, i.status.code()));
-    // STACK_CAP が k = 0 の大きさより小さい深さでは、k = 0 の大きさで切る(書くだけで走らせない)。
+    // STACK_CAP が k = 0 のスタックサイズより小さくなる深さでは、スタックを STACK_CAP まで下げず、k = 0 のスタックサイズにする(統計の行では `スタックを k = 0 の大きさで切った`)。
+    // ここではビルドするだけで、実行はしない。
     let out2 = d.join("out2");
     let err = build_at(&d, &kel, &out2, "2000000000");
     assert!(
@@ -1112,11 +1130,13 @@ fn worker_のスタックは_stack_cap_で切る() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// `return` 節が値を生かして `go` を末尾でなく呼ぶプログラム(実施記録 261104-4 の M106 の形 R)。
+/// `return` 節が値を生存させたまま `go` を非末尾呼び出しで呼ぶプログラム。
 ///
-/// `go` は値を `nv` 個生かしてハンドラ式を末尾でなく書き、その `return` 節は値を `nv2` 個生かして `go` を呼ぶ。
-/// `$rt_handle` が `return` 節を末尾で呼んで置き換えるので、論理的な同じ深さに `go` と `return` 節が重なる。
-/// 1 つの `n` が論理的な 1 段で、出力は `2`、`bottom`、`0` である。
+/// `go` は、値を `nv` 個生存させたまま、末尾位置でないところにハンドラ式を書く。
+/// その `return` 節は、値を `nv2` 個生存させたまま `go` を呼ぶ。
+/// `$rt_handle` は `return` 節を末尾呼び出しで呼んで自分のフレームを置き換えるので、論理的に同じ深さに `go` と `return` 節が重なる。
+/// `n` が 1 増えると論理的な深さが 1 段増える。
+/// 出力は `2`、`bottom`、`0` である。
 fn ret_clause_src(nv: usize, nv2: usize, n: u32) -> String {
     let (lm, cm) = live_lets("m", nv);
     let (lx, cx) = live_lets("x", nv2);
@@ -1140,7 +1160,8 @@ fn return_節が重なっても既定の限度の内側で_interp_と同じ() {
     if !have_node() {
         return;
     }
-    // 1 段が約 1,801 バイトで B_wasm を超える形。直す前の keleut は既定の L の内側の深さ 1,000,000 で 70 になった。
+    // 1 段が約 1,801 バイトで B_wasm を超えるプログラム。
+    // スタックを B_wasm で決めると、既定の L より浅い深さ 1,000,000 で終了コード 70 になる。
     let d = scratch("ret-overlap");
     let kel = d.join("r.kel");
     std::fs::write(&kel, ret_clause_src(92, 155, 1_000_000)).unwrap();
@@ -1160,13 +1181,13 @@ fn return_節が重なっても既定の限度の内側で_interp_と同じ() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 同じ深さに重なる節の鎖のプログラム(M106 の検証の探りの `rch.py` と `nch.py`)。
+/// 同じ深さに重なる節の連鎖を持つプログラム。
 ///
-/// `never` が偽なら、`go` の書くハンドラ式の `return` 節が、値を生かしてハンドラ式を直に書き、
-/// その `return` 節がさらにハンドラ式を書くことを `chain` 段まで重ね、最後の `return` 節が `go` を呼ぶ。
+/// `never` が偽なら、`go` が書くハンドラ式の `return` 節が、値を生存させたままハンドラ式を直接書く。
+/// その `return` 節がさらにハンドラ式を書くことを `chain` 段まで繰り返し、最後の `return` 節が `go` を呼ぶ。
 /// `never` が真なら、`return` 節の代わりに分類 N の操作節 `q` を重ねる。
-/// どちらの節も `$rt_handle` が末尾で呼んで自分を置き換えるので、鎖の節はすべて同じ深さに重なる。
-/// `gadd` が真なら、先頭に G の節を持つハンドラ式を 1 つ書く。
+/// どちらの節も、`$rt_handle` が末尾呼び出しで呼んで自分のフレームを置き換えるので、連鎖の節はすべて同じ深さに重なる。
+/// `gadd` が真なら、先頭に分類 G の操作節を持つハンドラ式を 1 つ書く。
 fn clause_chain_src(
     never: bool,
     gadd: bool,
@@ -1200,7 +1221,7 @@ fn clause_chain_src(
                 .into(),
         );
     }
-    // 節の頭(`x{j}` を受け取る節を持つハンドラ式の、節の本体の前まで)。
+    // 節の先頭部分(`x{j}` を受け取る節を持つハンドラ式の、節の本体の直前まで)。
     let head = |subject: &str, j: usize| {
         if never {
             format!("(perform q({subject})) handle {{ case q(x{j}) => ")
@@ -1231,9 +1252,9 @@ fn clause_chain_src(
     s
 }
 
-/// 節の鎖のプログラムを `--backend wasm` と `--backend interp` で走らせ、同じであることを確かめる。
+/// 節の連鎖のプログラムを `--backend wasm` と `--backend interp` で実行し、結果が同じであることを確かめる。
 ///
-/// `max_depth` が `None` なら既定の L で走らせる。
+/// `max_depth` が `None` なら既定の L で実行する。
 fn clause_chain_same(tag: &str, src: String, max_depth: Option<&str>, expect: &[u8]) {
     let d = scratch(tag);
     let kel = d.join("c.kel");
@@ -1264,7 +1285,8 @@ fn return_節の鎖が重なっても既定の限度の内側で_interp_と同�
     if !have_node() {
         return;
     }
-    // return 節の鎖 6 段(r = 6)。直す前の keleut と、r を真偽で数えた版(B_prog = 2,752)は、深さ約 1,000,000 で 70 になった。
+    // return 節の連鎖 6 段(r = 6)。
+    // r を数えない場合と、r を 0 か 1 でしか数えない場合(B_prog = 2,752)は、深さ約 1,000,000 で終了コード 70 になる。
     clause_chain_same(
         "ret-chain",
         clause_chain_src(false, false, 6, 60, 60, 1_000_000),
@@ -1278,9 +1300,10 @@ fn n_の節の鎖が重なっても既定の限度の内側で_interp_と同じ(
     if !have_node() {
         return;
     }
-    // 分類 N の操作節の鎖 6 段(r = 6)。1 段は約 4,194 バイトである。
-    // 直す前の keleut は B_prog = B_wasm のまま直の経路で走り、L = 400,000 で深さ約 399,000 の入力が 70 になった。
-    // 既定の L と深さ 1,000,000 でも同じく 70 になるが、kw で 60 秒かかるので L を下げた。
+    // 分類 N の操作節の連鎖 6 段(r = 6)。
+    // 1 段は約 4,194 バイトである。
+    // B_prog を B_wasm のままにして直接の経路で実行すると、L = 400,000 で深さ約 399,000 の入力が終了コード 70 になる。
+    // 既定の L と深さ 1,000,000 でも同じことを確かめられるが、WasmGC バックエンドで 60 秒かかるので L を下げている。
     clause_chain_same(
         "never-chain",
         clause_chain_src(true, true, 6, 60, 60, 399_000),
@@ -1289,13 +1312,16 @@ fn n_の節の鎖が重なっても既定の限度の内側で_interp_と同じ(
     );
 }
 
-/// `cancel` 節と、分類 N の操作節(`never` が偽なら `return` 節)が交互に重なるプログラム(M106 の再検証の探りの `gen3.py`)。
+/// `cancel` 節と、分類 N の操作節(`never` が偽なら `return` 節)が交互に重なるプログラム。
 ///
-/// `go` の書くハンドラ式の `cancel` 節が、N の節を持つハンドラ式を直に書く。
-/// その N の節は、`cancel` 節を持つハンドラ式を直に書き、その `cancel` 節がさらに N の節を持つハンドラ式を書く。
-/// これを `d` 組重ね、最後の `cancel` 節の中のハンドラ式の本体が `go` を末尾でなく呼ぶ。
-/// 道の節はすべて同じ深さに重なる。
-/// 1 つの `n` が論理的な 2 段で、出力は `2`、`bottom`、`7` である(`cancel` 節の中の `perform` の抑制を標準エラーに書く)。
+/// 以下では、分類 N の操作節(`never` が偽のときは `return` 節)を「N の節」と書く。
+/// `go` が書くハンドラ式の `cancel` 節が、N の節を持つハンドラ式を直接書く。
+/// その N の節は、`cancel` 節を持つハンドラ式を直接書き、その `cancel` 節がさらに N の節を持つハンドラ式を書く。
+/// これを `d` 組重ね、最後の `cancel` 節の中のハンドラ式の本体が `go` を非末尾呼び出しで呼ぶ。
+/// この連鎖の節はすべて同じ深さに重なる。
+/// `n` が 1 増えると論理的な深さが 2 段増える。
+/// 出力は `2`、`bottom`、`7` である。
+/// `cancel` 節の中の `perform` が抑制されたことは、標準エラーに書かれる。
 fn alt_chain_src(never: bool, d: usize, nv: usize, n: u32) -> String {
     let lets = |var: &str, p: &str| -> (String, String) {
         if nv == 0 {
@@ -1355,8 +1381,9 @@ fn cancel_節と_n_の節が交互に重なっても_interp_と同じ() {
     if !have_node() {
         return;
     }
-    // cancel 節と N の節を交互に 4 組重ねる(k = 5、r = 4、B_prog = 14,160 バイト)。1 段は約 3,543 バイトである。
-    // k と r を別々に数えた版は B_prog = 2,896 のままで、L = 300,000 で深さ約 298,000 の入力が 70 になった。
+    // cancel 節と分類 N の操作節を交互に 4 組重ねる(k = 5、r = 4、B_prog = 14,160 バイト)。
+    // 1 段は約 3,543 バイトである。
+    // k と r を別々に数えると B_prog = 2,896 にしかならず、L = 300,000 で深さ約 298,000 の入力が終了コード 70 になる。
     clause_chain_same(
         "alt-chain",
         alt_chain_src(true, 4, 40, 149_000),
@@ -1365,9 +1392,8 @@ fn cancel_節と_n_の節が交互に重なっても_interp_と同じ() {
     );
 }
 
-/// 関数 `nm` の中で、`{a = i, b{i % 7} = 1 extends s{i-1}}` の拡張を `n` 段重ねる(計画 261104-3 の探りの
-/// `gen_chain.py` の `fun` の形)。
-/// 長さ i の形を i 個作るので、形の表のラベルの合計は約 n² になる(V240)。
+/// 関数 `nm` の中で、`{a = i, b{i % 7} = 1 extends s{i-1}}` の形の拡張を `n` 段重ねる。
+/// 段ごとにラベルが 2 個多いシェイプを作るので、シェイプ表のラベルの合計は約 n² になる。
 fn shape_chain_fn(nm: &str, a: &str, b: &str, n: u32) -> String {
     let mut s = format!("let {nm}(): Int32 = {{\n  let s0 = {{{a} = 0}}\n");
     for i in 1..=n {
@@ -1381,19 +1407,19 @@ fn shape_chain_fn(nm: &str, a: &str, b: &str, n: u32) -> String {
     s
 }
 
-/// `cancel` 節の中で何をするか(`shape_oom_src`)。
+/// [`shape_oom_src`] が作るプログラムの `cancel` 節が行う処理。
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum InCancel {
-    /// `cancel` を書くだけ。
+    /// `cancel` と出力するだけ。
     Light,
-    /// 別のラベルの鎖を作り、もう一度形の表を広げようとする。
+    /// 別のラベルで拡張の連鎖を作り、シェイプ表をもう一度拡張させようとする。
     Again,
-    /// 2 MiB の文字列を書く(host の受け渡しの領域の 64 KiB より長い)。
+    /// 2 MiB の文字列を出力する(ホストの受け渡し用のバッファの 64 KiB より長い)。
     Big,
 }
 
-/// 形の表の鎖を `cancel` 節を持つハンドラの中で呼ぶプログラム。
-/// その外側にも `cancel` 節を持つハンドラを置き、巻き戻しが続くことを見る。
+/// シェイプ表を大きくする拡張の連鎖を、`cancel` 節を持つハンドラの中で呼ぶプログラム。
+/// その外側にも `cancel` 節を持つハンドラを置き、巻き戻しが続くことを確かめる。
 fn shape_oom_src(c: InCancel) -> String {
     let mut s = String::from("effect Res = { use: () => Unit }\n");
     s.push_str(&shape_chain_fn("f", "a", "b", 1000));
@@ -1421,12 +1447,13 @@ fn 線形メモリを広げられず形の表が満ちたらメモリの不足�
     if !have_node() {
         return;
     }
-    // 試験用の KELEUT_TEST_WASM_MEM_GROW で、線形メモリを起動の後に 1 MiB までしか広げさせない。
-    // host の受け渡しの領域の 64 KiB は起動のときに取るので上限に数えず、形の表を 2 倍に広げるところで尽きる。
-    // 直す前は、host の alloc が「線形メモリを広げられません」の内部エラー(70)で終わっていた。
-    // cancel 節の中でもう一度表が満ちたときは、cancel 節からの脱出として抑制の行を書き、巻き戻しを続ける。
-    // 形の表が線形メモリを使い切った後でも、cancel 節は受け渡しの領域を広げずに 2 MiB の文字列を書ける。
-    // 前は受け渡しの領域を広げられず、「線形メモリを広げられません」の内部エラー(70)で cancel 節の出力が失われていた。
+    // テスト用の環境変数 KELEUT_TEST_WASM_MEM_GROW で、線形メモリを起動後に 1 MiB までしか拡張できないようにする。
+    // ホストの受け渡し用のバッファ(64 KiB)は起動時に確保するので、この 1 MiB には数えない。
+    // シェイプ表を 2 倍に拡張するところで、線形メモリが足りなくなる。
+    // このときホストは、内部エラー(終了コード 70)で終了せず、メモリ不足の実行時エラーを起こす。
+    // cancel 節の中でもう一度シェイプ表がいっぱいになったときは、cancel 節からの脱出として抑制の記録を書き、巻き戻しを続ける。
+    // シェイプ表が線形メモリを使い切った後でも、cancel 節は受け渡し用のバッファを拡張せずに 2 MiB の文字列を出力できる。
+    // そのため、cancel 節の出力は失われない。
     let d = scratch("shape-oom");
     for c in [InCancel::Light, InCancel::Again, InCancel::Big] {
         let kel = d.join(format!("s{c:?}.kel"));

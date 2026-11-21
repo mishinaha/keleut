@@ -1,10 +1,12 @@
-//! `keleut run --backend jit` の試験(M91、M92。feature `llvm` で組んだときだけ走る。`llvm` は既定の feature である)。
+//! `keleut run --backend jit` のテスト。
+//! feature `llvm`(既定で有効)を付けてビルドしたときだけ実行される。
 //!
-//! `tests/fixtures/run/` の各 KIR を `--backend jit --tier jit-only` で走らせ、
-//! 標準出力、標準エラー、終了状態が記録(インタプリタの結果)と一致することを確かめる。
-//! `--gc-stress` を足した実行も同じ記録と比べる(JIT のスロットへの書き出しと安全点の漏れを捉える)。
-//! 段の設定 `threshold`、`alternating`、`mixed`(M92)と、`--backend` を省いた既定でも同じ記録と比べる。
-//! 翻訳の重い関数を JIT にしないことと、翻訳の途中で実行が終われば翻訳を待たずに終わることも確かめる(`tests/fixtures/heavy/`)。
+//! `tests/fixtures/run/` の各 KIR を `--backend jit --tier jit-only` で実行し、
+//! 標準出力、標準エラー、終了コードが期待出力(インタプリタの結果)と一致することを確かめる。
+//! `--gc-stress` を追加した実行も、同じ期待出力と比較する(JIT コードが値をスロットに書き出し忘れている箇所と、安全点の漏れを検出する)。
+//! ティアの設定 `threshold`、`alternating`、`mixed` と、`--backend` を省いた既定の設定でも、同じ期待出力と比較する。
+//! コンパイルのコストが大きい関数を JIT コンパイルしないことと、
+//! コンパイルの途中で実行が終わればコンパイルの完了を待たずに終了することも確かめる(`tests/fixtures/heavy/`)。
 #![cfg(feature = "llvm")]
 
 use std::path::PathBuf;
@@ -90,15 +92,15 @@ fn 段の設定のどれでも記録どおりに走らせる() {
         check_with(&["--tier", t], &[]);
     }
     check_with(&["--tier", "alternating=7"], &["--gc-stress"]);
-    // `--backend` も `--tier` も省くと、jit の後段の threshold=1000 で走る。
+    // `--backend` も `--tier` も省くと、バックエンド `jit` の `threshold=1000` で実行する。
     check_with(&[], &[]);
 }
 
-/// 仮想メモリの上限 512 MiB の下でも、JIT の段がインタプリタと同じに完走する。
+/// 仮想メモリを 512 MiB に制限しても(`ulimit -v`)、JIT のティアの各設定がインタプリタと同じ結果で完走する。
 ///
-/// 翻訳のスレッドのスタックの予約は上限に数えられるので、大きすぎると JIT の段だけが 3 か 70 で終わる。
-/// kconform の組では `conformance/gc/gc.t` の上限のコマンドが同じことを確かめるが、ここでは `--backend` を省いた既定も確かめる。
-/// 最適化なしの組みでは KIR の処理のスレッドのスタック(入れ子の 1 段に 8 KiB)が上限に収まらないので、`--release` でだけ走らせる。
+/// コンパイルスレッドのスタックの予約は仮想メモリの上限に数えられるので、大きすぎると JIT を使う設定だけが終了コード 3 か 70 で終了する。
+/// kconform のペアでは `conformance/gc/gc.t` の `ulimit -v` を付けたコマンドが同じことを確かめるが、ここでは `--backend` を省いた既定の設定も確かめる。
+/// デバッグビルドでは、KIR を処理するスレッドのスタック(入れ子 1 段あたり 8 KiB)が上限に収まらないので、リリースビルド(`--release`)でだけ実行する。
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -136,7 +138,7 @@ fn 仮想メモリの上限の下で既定と段の設定のどれでも完走�
     assert!(fails.is_empty(), "{}", fails.join("\n"));
 }
 
-/// `tests/fixtures/heavy/` の KIR を走らせ、標準出力と終了状態を確かめて、標準エラーとかかった時間を返す。
+/// `tests/fixtures/heavy/` の KIR を実行し、標準出力と終了コードを確かめて、標準エラーの内容と実行時間を返す。
 fn run_heavy(name: &str, args: &[&str]) -> (String, Duration) {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/heavy");
     let t = Instant::now();
@@ -155,9 +157,9 @@ fn run_heavy(name: &str, args: &[&str]) -> (String, Duration) {
     (err, el)
 }
 
-/// 翻訳の重さが上限を超える関数は、`--tier jit-only` でもインタプリタに残す。
+/// コンパイルのコストの見積もりが上限を超える関数は、`--tier jit-only` でも JIT コンパイルせず、インタプリタで実行する。
 ///
-/// 上限を入れる前は、この実行の翻訳に 110 秒ほどかかった。
+/// 上限がない場合の実測では、この実行のコンパイルに 110 秒ほどかかった。
 #[test]
 fn 翻訳の重い関数はインタプリタに残す() {
     for t in ["jit-only", "threshold=1", "alternating=1"] {
@@ -167,10 +169,10 @@ fn 翻訳の重い関数はインタプリタに残す() {
     }
 }
 
-/// 待たない頼みの翻訳の途中で実行が終われば、翻訳を待たずに終わる。
+/// 完了を待たずに依頼したコンパイルの途中でプログラムの実行が終われば、`keleut run` はそのコンパイルが終わるのを待たずに終了する。
 ///
-/// `--tier jit-only` は `f` の翻訳(0.6 秒ほど)を待ってから走るので、その時間は翻訳の時間を含む。
-/// `--tier threshold=1` は `f` を 2 回目の呼び出しで翻訳に出し、翻訳の途中でプログラムが終わるので、それより十分に短く終わる。
+/// `--tier jit-only` は `f` のコンパイル(0.6 秒ほど)の完了を待ってから `f` を実行するので、実行時間はコンパイルの時間を含む。
+/// `--tier threshold=1` は `f` のコンパイルを 2 回目の呼び出しで依頼し、コンパイルの途中でプログラムが終わるので、それより十分に短い時間で終了する。
 #[test]
 #[cfg_attr(
     debug_assertions,

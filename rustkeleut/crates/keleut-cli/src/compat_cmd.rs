@@ -1,49 +1,52 @@
-//! サブコマンド `keleut compat-diktor` である(計画 261024-1 の 6.2 節と 8.1 節)。
+//! サブコマンド `keleut compat-diktor` である。
 //!
-//! `keleut compat-diktor [RUN-OPTIONS --] DIKTOR-ARGS…` は、Diktor の旗を Diktor と同じに解釈し、
-//! 対応する keleut のサブコマンドをプロセスの中で呼ぶ。
-//! kconform の shim が、Diktor の実行の呼び出しにいまの組の選択肢を足して渡すためのものである。
+//! `keleut compat-diktor [RUN-OPTIONS --] DIKTOR-ARGS…` は、Diktor のオプションを Diktor と同じ規則で解釈し、対応する keleut のサブコマンドを同じプロセスの中で呼ぶ。
+//! kconform の shim が、Diktor を実行する呼び出しに現在のペアのオプションを付けて渡すために使う。
 //!
-//! 旗の読み方は Diktor の引数解析(driver.ml の `parse_args`)と同じである。
+//! オプションの読み方は、Diktor の引数解析(driver.ml の `parse_args`)と同じである。
 //!
-//! - モードの旗 `--type-check`、`--repl`、`--dump-tokens`、`--dump-ast` は、後に書いたものが効く。
-//!   モードの旗が無ければ実行である(`--strict-exhaustive` だけの呼び出しも実行である)。
-//! - `--no-prelude`、`--prelude PATH`、`--import-path DIR`(繰り返せる)、`--strict-exhaustive` を受ける。
-//! - ハイフンで始まる知らない引数(`--help` と `-h` を含む)、値の無い `--prelude` と `--import-path`、
-//!   入力の無い実行と型検査とダンプ、入力のある `--repl` は、使い方の誤り(64)にする。
-//! - Diktor の IR の旗(`--emit-ir`、`--emit-ir-text`、`--run-ir`、`--via-ir`、`--dump-ir-tables`、`--max-depth`)は解釈せず、
-//!   使い方の誤りにする(計画 8.1 節。これらは Diktor 自身の IR の経路を試す旗である)。
-//!   環境変数 `DIKTOR_VIA_IR` も見ない。
-//! - 入力のファイルは、名前が `.kir` や `.kirt` で終わっても、Diktor と同じく Keleut のソースとして読む
-//!   (`keleut run` の内部の旗 `--source-only` を渡す)。
+//! - モードのオプション `--type-check`、`--repl`、`--dump-tokens`、`--dump-ast` は、後に書いたものが優先される。
+//!   モードのオプションがなければ、プログラムを実行する(`--strict-exhaustive` だけを書いた呼び出しも実行になる)。
+//! - `--no-prelude`、`--prelude PATH`、`--import-path DIR`(繰り返せる)、`--strict-exhaustive` を受理する。
+//! - 次の呼び出しは、使い方のエラー(終了コード 64)になる。
+//!   - ハイフンで始まる未知の引数(`--help` と `-h` を含む)を書いた呼び出し。
+//!   - `--prelude` か `--import-path` に値を書かなかった呼び出し。
+//!   - 実行、型検査、ダンプのどれかで、入力ファイルを 1 つも書かなかった呼び出し。
+//!   - `--repl` に入力ファイルを書いた呼び出し。
+//! - Diktor の IR のオプション(`--emit-ir`、`--emit-ir-text`、`--run-ir`、`--via-ir`、`--dump-ir-tables`、`--max-depth`)は解釈せず、使い方のエラーにする。
+//!   これらは Diktor 自身の IR の経路をテストするためのオプションだからである。
+//!   環境変数 `DIKTOR_VIA_IR` も読まない。
+//! - 入力ファイルは、名前が `.kir` や `.kirt` で終わっていても、Diktor と同じく Keleut のソースとして読む。
+//!   そのために、`keleut run` の内部オプション `--source-only` を渡す。
 //!
-//! `RUN-OPTIONS` は `keleut run` の後段の選択肢(`--backend`、`--tier`、`--max-depth`、`--native-stack`、
-//! `--frontend`、`--gc-stress`、`--no-yield-prune`)である。
+//! `RUN-OPTIONS` は `keleut run` の実行オプション(`--backend`、`--tier`、`--max-depth`、`--native-stack`、`--frontend`、`--gc-stress`、`--no-yield-prune`)である。
 //! 引数の先頭に `RUN-OPTIONS` だけを並べて `--` で区切ると、`--` より後が Diktor の引数になる。
-//! `--` は「Diktor の引数がここから始まる」という印で、POSIX の「旗の終わり」ではない(後の `--no-prelude` なども旗として読む)。
-//! `--` より後に後段の選択肢を書くと、Diktor と同じく知らない旗(`--max-depth` は IR の旗)として断る。
-//! `--` が無ければ、`--max-depth` のほかの後段の選択肢を Diktor の旗と混ぜて並べてよい。
-//! `--max-depth` は Diktor では `--run-ir` と `--via-ir` の旗で、木の評価器には効かないので、
-//! `keleut run` の論理的な深さの限度として渡すのは `--` の前に書いたときだけである。
+//! `--` は Diktor の引数の始まりを表す区切りで、POSIX の「オプションの終わり」ではない。
+//! `--` より後の `--no-prelude` なども、オプションとして読む。
+//! `--` より後に実行オプションを書くと、Diktor と同じく未知のオプションとして拒否する(`--max-depth` は IR のオプションとして拒否する)。
+//! `--` がなければ、`--max-depth` 以外の実行オプションを Diktor のオプションと混ぜて並べてよい。
+//! `--max-depth` は、Diktor では `--run-ir` と `--via-ir` のためのオプションで、構文木の評価器には影響しない。
+//! そのため、`keleut run` に論理的な深さの上限として渡すのは、`--` の前に書いたときだけである。
 //!
-//! モードごとの行き先は次のとおりである。
+//! モードごとの転送先は次のとおりである。
+//! 表の `OPTIONS` は、呼び出しに書かれた `--no-prelude`、`--prelude PATH`、`--import-path DIR`、`--strict-exhaustive` である。
 //!
-//! | モード | 行き先 |
+//! | モード | 転送先 |
 //! |---|---|
-//! | 実行 | `keleut run --source-only RUN-OPTIONS 旗 FILE…` |
-//! | `--type-check` | `keleut check [--native-stack N] 旗 FILE…`(`RUN-OPTIONS` からは `--native-stack` だけを使い、`keleut run` がフロントエンドに使う大きさにして渡す) |
-//! | `--dump-tokens`、`--dump-ast` | `keleut dump tokens|ast FILE…`(Diktor と同じく、プレリュードと import の旗は使わない) |
+//! | 実行 | `keleut run --source-only RUN-OPTIONS OPTIONS FILE…` |
+//! | `--type-check` | `keleut check [--native-stack N] OPTIONS FILE…`(`RUN-OPTIONS` からは `--native-stack` だけを使い、`keleut run` がフロントエンドに使うスタックサイズに換算して渡す) |
+//! | `--dump-tokens`、`--dump-ast` | `keleut dump tokens|ast FILE…`(Diktor と同じく、プレリュードと import のオプションは使わない) |
 //! | `--repl` | `keleut repl RUN-OPTIONS --no-prelude --prelude PATH`(`--import-path` と `--strict-exhaustive` は使わない) |
 //!
-//! `--native-stack` を型検査にも渡すのは、実行と型検査で構文解析の限度を同じにするためである
-//! (`keleut run` も `--native-stack` でフロントエンドのスタックを決める。計画 6.11 節)。
+//! `--native-stack` を型検査にも渡すのは、実行と型検査で構文解析の上限を同じにするためである。
+//! `keleut run` も、`--native-stack` からフロントエンドのスタックを決める。
 //!
-//! 終了状態は行き先のサブコマンドのものである。
-//! 使い方の誤りの文面は keleut の形(`keleut compat-diktor: 理由` と使い方)で、Diktor の文面とは違う。
+//! 終了コードは、転送先のサブコマンドのものである。
+//! 使い方のエラーのメッセージは keleut の形式(`keleut compat-diktor: 理由` と使い方の説明)で、Diktor のメッセージとは違う。
 
 use crate::exit;
 
-/// 使い方である。
+/// `keleut compat-diktor` の使い方の説明(usage)である。
 pub const USAGE: &str = "\
 usage: keleut compat-diktor [RUN-OPTIONS --] [DIKTOR-OPTIONS] FILE.kel...
 interprets Diktor's options the same way and runs the matching keleut command:
@@ -59,7 +62,7 @@ RUN-OPTIONS: --backend, --tier, --max-depth, --native-stack, --frontend (one val
   without --, all but --max-depth may be mixed with DIKTOR-OPTIONS
 ";
 
-/// Diktor のモードである。
+/// Diktor のモードである。モードのオプションで決まり、どれも書かれていなければ `Run` になる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Run,
@@ -69,7 +72,7 @@ enum Mode {
     Repl,
 }
 
-/// `keleut run` の後段の選択肢と、その値の数である。
+/// `keleut run` の実行オプションと、それぞれが取る値の個数である。
 const RUN_OPTIONS: &[(&str, usize)] = &[
     ("--backend", 1),
     ("--tier", 1),
@@ -80,7 +83,7 @@ const RUN_OPTIONS: &[(&str, usize)] = &[
     ("--no-yield-prune", 0),
 ];
 
-/// Diktor の IR の旗である(解釈しない)。
+/// Diktor の IR のオプションである。解釈せず、使い方のエラーにする。
 const IR_FLAGS: &[&str] = &[
     "--emit-ir",
     "--emit-ir-text",
@@ -90,11 +93,11 @@ const IR_FLAGS: &[&str] = &[
     "--max-depth",
 ];
 
-/// 解釈した呼び出しである。
+/// 呼び出しを解釈した結果である。
 #[derive(Debug, PartialEq, Eq)]
 struct Call {
     mode: Mode,
-    /// `keleut run` の後段の選択肢(書いた順)。
+    /// `keleut run` の実行オプション(書いた順)。
     run: Vec<String>,
     no_prelude: bool,
     prelude: Option<String>,
@@ -103,9 +106,9 @@ struct Call {
     files: Vec<String>,
 }
 
-/// 引数の先頭の `RUN-OPTIONS --` の長さ(`--` を含む)を返す。
+/// 引数の先頭にある `RUN-OPTIONS --` の長さ(`--` を含む引数の個数)を返す。
 ///
-/// 先頭から後段の選択肢だけが並び、その直後が `--` のときだけ、区切りがあるとみなす。
+/// 先頭から実行オプションだけが並び、その直後が `--` のときだけ、区切りがあるとみなす。
 fn separator(args: &[String]) -> Option<usize> {
     let mut i = 0;
     while i < args.len() {
@@ -128,7 +131,7 @@ fn parse(args: &[String]) -> Result<Call, String> {
         strict: false,
         files: Vec::new(),
     };
-    // 区切りがあれば、その前は後段の選択肢だけで、後は Diktor の引数だけである。
+    // 区切りがあれば、その前は実行オプションだけで、後は Diktor の引数だけである。
     let (mixed, start) = match separator(args) {
         Some(k) => {
             c.run.extend_from_slice(&args[..k - 1]);
@@ -174,7 +177,7 @@ fn parse(args: &[String]) -> Result<Call, String> {
         }
         i += 1;
     }
-    // 型検査に渡す `--native-stack` の値は、実行と同じ規則で確かめる(実行では `keleut run` が確かめる)。
+    // 型検査に渡す `--native-stack` の値は、実行と同じ規則で検査する(実行では `keleut run` が検査する)。
     if c.mode == Mode::TypeCheck {
         for w in c.run.windows(2).filter(|w| w[0] == "--native-stack") {
             match crate::run_cmd::parse_size(&w[1]) {
@@ -192,7 +195,7 @@ fn parse(args: &[String]) -> Result<Call, String> {
 }
 
 impl Call {
-    /// プレリュードの旗(`--no-prelude`、`--prelude PATH`)である。
+    /// プレリュードのオプション(`--no-prelude`、`--prelude PATH`)を、引数の並びにして返す。
     fn prelude_args(&self) -> Vec<String> {
         let mut v = Vec::new();
         if self.no_prelude {
@@ -205,7 +208,7 @@ impl Call {
         v
     }
 
-    /// フロントエンドの旗(プレリュード、import、網羅性)である。
+    /// フロントエンドのオプション(プレリュード、import の検索パス、`--strict-exhaustive`)を、引数の並びにして返す。
     fn front_args(&self) -> Vec<String> {
         let mut v = self.prelude_args();
         for d in &self.import_path {
@@ -218,11 +221,11 @@ impl Call {
         v
     }
 
-    /// 型検査に渡す `--native-stack` の引数である(無ければ空)。
+    /// 型検査に渡す `--native-stack` の引数を返す。実行オプションに `--native-stack` がなければ空である。
     ///
-    /// 後段の選択肢の最後の `--native-stack N` を、`keleut run` がフロントエンドに使う大きさ
-    /// ([`crate::emit_kir_cmd::front_stack_for_run`]。下限より小さい値は下限に上げる)のバイト数にして渡す。
-    /// 値は [`parse`] が `keleut run` と同じ規則で確かめてある。
+    /// 実行オプションの最後の `--native-stack N` を、`keleut run` がフロントエンドに使うスタックサイズのバイト数に換算して渡す。
+    /// 換算の規則は [`crate::emit_kir_cmd::front_stack_for_run`] にあり、下限より小さい値は下限に引き上げる。
+    /// 値は [`parse`] が `keleut run` と同じ規則で検査してある。
     fn native_stack(&self) -> Vec<String> {
         let mut found = Vec::new();
         let mut i = 0;
@@ -242,7 +245,7 @@ impl Call {
         found
     }
 
-    /// 行き先のサブコマンドの引数の列(先頭はサブコマンドの名前)である。
+    /// 転送先のサブコマンドに渡す引数の並び(先頭はサブコマンドの名前)を返す。
     fn target(&self) -> Vec<String> {
         let mut v = Vec::new();
         match self.mode {
@@ -254,7 +257,7 @@ impl Call {
             }
             Mode::TypeCheck => {
                 v.push("check".to_string());
-                // 後段の選択肢のうち、`keleut check` が受けるのは `--native-stack` だけである。
+                // 実行オプションのうち、`keleut check` が受理するのは `--native-stack` だけである。
                 v.extend(self.native_stack());
                 v.extend(self.front_args());
             }
@@ -275,16 +278,16 @@ impl Call {
                 v.extend(self.prelude_args());
             }
         }
-        // `-` で始まるファイルの名前は、Diktor では知らない旗として断られるのでここには来ない。
+        // `-` で始まるファイル名は、Diktor と同じく未知のオプションとして `parse` が拒否するので、ここには来ない。
         v.extend(self.files.iter().cloned());
         v
     }
 }
 
-/// `keleut compat-diktor …` の入口である。引数の先頭は `compat-diktor` である。
+/// `keleut compat-diktor …` のエントリポイントである。引数の先頭は `compat-diktor` である。
 pub fn main(args: &[String]) -> u8 {
     let rest = &args[1..];
-    // `--help` と `-h` も、Diktor と同じく知らない旗として使い方の誤りにする。
+    // `--help` と `-h` も、Diktor と同じく未知のオプションとして使い方のエラーにする。
     let call = match parse(rest) {
         Ok(c) => c,
         Err(msg) => {
@@ -348,7 +351,7 @@ mod tests {
             target(&["--strict-exhaustive", "x.kel"]),
             argv(&["run", "--source-only", "--strict-exhaustive", "x.kel"])
         );
-        // 両方を書くと `--no-prelude` と `--prelude` の両方を渡す(どちらが勝つかはフロントエンドが Diktor と同じに決める)。
+        // 両方を書くと `--no-prelude` と `--prelude` の両方を渡す(どちらが優先されるかは、フロントエンドが Diktor と同じ規則で決める)。
         assert_eq!(
             target(&["--prelude", "p.kel", "--no-prelude", "x.kel"]),
             argv(&[
@@ -423,7 +426,7 @@ mod tests {
             assert!(parse(&argv(a)).is_err(), "{a:?}");
         }
         assert!(parse(&argv(&["--repl"])).is_ok());
-        // 旗の値は旗として読まない。
+        // オプションの値は、オプションとして読まない。
         assert_eq!(
             target(&["--prelude", "--repl", "x.kel"]),
             argv(&["run", "--source-only", "--prelude", "--repl", "x.kel"])

@@ -1,8 +1,10 @@
-//! `keleut kir` の試験。
+//! `keleut kir` のテスト。
 //!
-//! kir crate の fixture(Diktor の書き出した `.kir` と `.kirt` の組)で、`dis` と `asm` が
-//! Diktor の出力とバイト単位で一致することと、`conformance/kir-bad/` の試料がどれも 65 で拒否されることを確かめる。
-//! 環境変数 `KELEUT_DIKTOR` に Diktor の実行ファイルを与えると、`tables` を `diktor --dump-ir-tables` とも比べる。
+//! kir crate のフィクスチャ(Diktor が書き出した `.kir` と `.kirt` の組)で、`dis` と `asm` の出力が
+//! Diktor の出力とバイト単位で一致することを確かめる。
+//! `conformance/kir-bad/` の不正な入力ファイルが、どれも終了コード 65 で拒否されることも確かめる。
+//! 同じディレクトリの `deep-base.kirt` は、深い入力を作る元にする正しいファイルなので、検証に通ることを確かめる。
+//! 環境変数 `KELEUT_DIKTOR` に Diktor の実行ファイルを指定すると、`tables` の出力を `diktor --dump-ir-tables` とも比較する。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -116,7 +118,8 @@ fn 読めない入力と書けない出力() {
     std::fs::remove_dir_all(&out).unwrap();
 }
 
-/// `deep-base.kirt` の main/total の本体を、深さ `n` の `not` の鎖にしたテキスト(`deep.t` と同じ作り方)。
+/// `deep-base.kirt` の main/total の本体を、深さ `n` の `not` の連鎖に置き換えたテキストを返す。
+/// 作り方は `deep.t` と同じである。
 fn not_chain(n: usize) -> Vec<u8> {
     let base = std::fs::read_to_string(root().join("conformance/kir-bad/deep-base.kirt")).unwrap();
     let mut t = String::new();
@@ -135,7 +138,7 @@ fn not_chain(n: usize) -> Vec<u8> {
     t.into_bytes()
 }
 
-/// `ulimit -v`(KiB)の下で keleut を走らせる。
+/// 仮想メモリを `ulimit -v` で `kib` KiB に制限して keleut を実行する。
 fn keleut_limited(kib: u64, args: &str, cwd: &Path) -> Output {
     Command::new("sh")
         .arg("-c")
@@ -150,7 +153,8 @@ fn keleut_limited(kib: u64, args: &str, cwd: &Path) -> Output {
 
 #[test]
 fn dis_はテキストを流しながら書く() {
-    // 深さ 60,000 の正準のテキストは約 3.6 GB になる。全体をメモリに置くと 3 GB の上限で落ちる。
+    // 深さ 60,000 の正準なテキストは約 3.6 GB になる。
+    // テキストの全体をメモリに置くと、仮想メモリの上限が 3 GB のときは失敗する。
     let out = scratch("stream");
     std::fs::write(out.join("d.kirt"), not_chain(60_000)).unwrap();
     let r = keleut(&["kir", "asm", "d.kirt", "-o", "d.kir"], &out);
@@ -159,7 +163,7 @@ fn dis_はテキストを流しながら書く() {
     assert_eq!(r.status.code(), Some(0), "{r:?}");
     let r = keleut_limited(3_000_000, "kir dis d.kir > /dev/null", &out);
     assert_eq!(r.status.code(), Some(0), "{r:?}");
-    // 書き込みの途中で場所が尽きたら 74 である。
+    // 書き込みの途中で出力先の空き容量がなくなれば、出力エラーとして終了コード 74 で終了する。
     let r = keleut(&["kir", "dis", "-o", "/dev/full", "d.kir"], &out);
     assert_eq!(r.status.code(), Some(74), "{r:?}");
     let msg = String::from_utf8(r.stderr).unwrap();
@@ -172,8 +176,9 @@ fn dis_はテキストを流しながら書く() {
 
 #[test]
 fn 小さなスタックでも深い入力で落ちない() {
-    // 深さ N_nest の入力は、既定のスタックでは通る。
-    // スタックを小さくすると限度が下がり、スタックがあふれる前に入れ子の限度で 65 になる。
+    // 深さ `N_nest` の入力は、既定のスタックでは検証に通る。
+    // スタックを小さくすると入れ子の上限が下がるので、スタックオーバーフローになる前に、
+    // 入れ子の上限を超えたエラーとして終了コード 65 で終了する。
     let out = scratch("stack");
     std::fs::write(out.join("d.kirt"), not_chain(100_000)).unwrap();
     let r = keleut(&["kir", "asm", "d.kirt", "-o", "d.kir"], &out);

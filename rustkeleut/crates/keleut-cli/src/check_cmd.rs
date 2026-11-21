@@ -1,24 +1,27 @@
-//! `keleut check` である(計画 261024-1 の 6.2 節。M97 で型検査の核を移した)。
+//! サブコマンド `keleut check` である。
 //!
-//! | 形 | 働き |
+//! | 書式 | 動作 |
 //! |---|---|
-//! | `keleut check [OPTIONS] FILE...` | 型検査し、トップレベルの束縛の型を `名前 : 型` の行で印字する(`diktor --type-check` と同じ形) |
+//! | `keleut check [OPTIONS] FILE...` | 型検査し、トップレベルの束縛の型を `名前 : 型` の行で出力する(`diktor --type-check` と同じ形式) |
 //!
 //! `OPTIONS` は次のとおりである。
 //!
-//! - `--no-prelude`、`--prelude PATH`、`--strict-exhaustive`:Diktor の同名の旗と同じ。
-//! - `--quiet`:Diktor の実行の前段の型検査と同じく、型の行を出さず、警告と誤りを標準エラーに出す。
-//! - `--max-nest N`:構文解析で作る木の深さの限度(既定は 200,000)。
-//!   1 段あたり [`CHECK_STACK_BYTES_PER_LEVEL`](keleut_front::types::check::CHECK_STACK_BYTES_PER_LEVEL) と 64 MiB の見込みが 8 GiB を超える値は、使い方の誤りにする。
-//! - `--native-stack BYTES`:型検査を走らせる専用のスレッドのスタックの大きさ(既定は 8 GiB)。
+//! - `--no-prelude`、`--prelude PATH`、`--strict-exhaustive`: Diktor の同名のオプションと同じ。
+//! - `--quiet`: Diktor が実行の前に行う型検査と同じく、型を表示する行を出力せず、警告とエラーを標準エラーに出力する。
+//! - `--max-nest N`: 構文解析で作る木の深さの上限(既定は 200,000)。
+//!   `--native-stack` を指定しないときは、深さ `N` の木を型検査するのに必要なスタックの見積もりが 8 GiB を超えると、使い方のエラーになる。
+//!   見積もりは、1 段あたり [`CHECK_STACK_BYTES_PER_LEVEL`](keleut_front::types::check::CHECK_STACK_BYTES_PER_LEVEL) バイトと、深さによらない 64 MiB の和である。
+//!   `--native-stack` を指定したときは、見積もりが大きくてもエラーにせず、そのスタックに収まる深さまで上限を下げる。
+//! - `--native-stack BYTES`: 型検査を実行する専用のスレッドのスタックサイズ(既定は 8 GiB)。
 //!   `k`、`m`、`g` の接尾辞を使える。
-//!   与えたスタックで型検査を終えられる深さまで `--max-nest` を下げ、
-//!   その深さが [`MIN_CHECK_NEST`](keleut_front::types::check::MIN_CHECK_NEST) に満たない小さい値と、8 GiB を超える値は使い方の誤りにする。
+//!   指定したスタックで型検査を終えられる深さまで、`--max-nest` を下げる。
+//!   その深さが [`MIN_CHECK_NEST`](keleut_front::types::check::MIN_CHECK_NEST) に満たない小さい値と、8 GiB を超える値は、使い方のエラーになる。
 //!   計算の規則は [`check_limits`] にある。
-//! - `--import-path DIR`:import の検索パスに `DIR` を足す。繰り返して書け、書いた順に探す(Diktor の同名の旗と同じ)。
+//! - `--import-path DIR`: import の検索パスに `DIR` を追加する。繰り返して書くことができ、書いた順に探す(Diktor の同名のオプションと同じ)。
 //!
-//! 終了状態は Diktor と同じで、型エラーと import エラーは 1、字句と構文の誤りは 2、内部の誤りは 3、未実装は 4、
-//! 入力や import 先を開けないときと使い方の誤りは 64、標準出力に書けないときは 74 である。
+//! 終了コードは Diktor と同じで、型エラーと import エラーは 1、字句エラーと構文エラーは 2、内部エラーは 3、未実装は 4、入力や import 先を開けないときと使い方のエラーは 64、標準出力に書けないときは 74 である。
+//! `--strict-exhaustive` を指定して警告が残ったときも 1 である。
+//! 型検査のスレッドを作れないときと、そのスレッドがパニックしたときは 70 である。
 
 use crate::exit;
 use crate::front_cmd::{MAX_STACK_BYTES, io_msg, parse_bytes, stdout_closed};
@@ -30,7 +33,7 @@ use keleut_front::types::check::{
 use keleut_front::types::load::StdFs;
 use std::io::Write;
 
-/// 使い方である。
+/// `keleut check` の使い方の説明(usage)である。
 pub const USAGE: &str = "\
 usage: keleut check [OPTIONS] FILE...
 options:
@@ -119,23 +122,23 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
     })
 }
 
-/// 標準エラーに 1 行を書き出す(OCaml の `prerr_endline`)。
+/// 標準エラーに 1 行を書き、すぐに flush する(OCaml の `prerr_endline` と同じ)。
 fn eprintln_now(s: &str) {
     let mut e = std::io::stderr().lock();
     let _ = writeln!(e, "{s}");
     let _ = e.flush();
 }
 
-/// 型検査の本体である。終了状態を返す。
+/// 型検査を行って結果を出力し、終了コードを返す。
 fn run_check(o: &Options) -> u8 {
-    // 型検査の文脈と木は捨てずに、プロセスの終わりまで残す。
-    // 大きい入力では、何十万もの節点と表を解放する時間が型検査の時間の 1 割近くになるからである。
+    // 型検査を済ませたプログラム(型検査の文脈と木)は解放せずに、プロセスが終了するまで残す。
+    // 大きい入力では、数十万個のノードと表の解放にかかる時間が、型検査の時間の 1 割近くになるからである。
     let r = check_program(&o.check, &mut StdFs).map(|mut c| {
         let out = std::mem::take(&mut c.output);
         std::mem::forget(c);
         out
     });
-    // 型検査の間に確保が大域の確保器の予備を使ったら、型の行を書く前に限度の行で終える(`keleut_rt::alloc`)。
+    // 型検査の間に確保に失敗してグローバルアロケータが予備領域を使っていたら、型を表示する行を書く前に、`処理系の限度` の行を書いて終了する(`keleut_rt::alloc::conv_checkpoint`)。
     keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Check);
     let out = match r {
         Ok(out) => out,
@@ -204,7 +207,7 @@ fn run_check(o: &Options) -> u8 {
     code
 }
 
-/// `keleut check …`(引数の先頭は `check`)。
+/// `keleut check …` のエントリポイントである。引数の先頭は `check` である。
 pub fn main(args: &[String]) -> u8 {
     let o = match parse_options(&args[1..]) {
         Ok(o) => o,
@@ -263,11 +266,11 @@ mod tests {
         assert_eq!(o.limits.max_nest, keleut_front::DEFAULT_MAX_NEST);
         assert_eq!(o.limits.stack_bytes, 8 << 30);
         assert_eq!(o.check.max_nest, o.limits.max_nest);
-        // 小さいスタックでは、収まる深さまで限度を下げる。
+        // 小さいスタックでは、収まる深さまで上限を下げる。
         let o = opts(&["--native-stack", "4m", "a.kel"]).unwrap();
         assert!(o.limits.max_nest >= 64 && o.limits.max_nest < 2000);
         assert_eq!(o.check.max_nest, o.limits.max_nest);
-        // 型検査の余白とプレリュードの深さに満たないスタックと、8 GiB に収まらない深さは使い方の誤りである。
+        // 余裕を除くとプレリュードの深さ(`MIN_CHECK_NEST` 段)も収まらない小さいスタックと、必要なスタックが 8 GiB を超える深さは、使い方のエラーになる。
         assert!(opts(&["--native-stack", "256k", "a.kel"]).is_err());
         assert!(opts(&["--native-stack", "300k", "a.kel"]).is_err());
         assert!(opts(&["--max-nest", "4000000000", "a.kel"]).is_err());

@@ -1,10 +1,10 @@
-//! `keleut run` の試験(計画 261024-1 の 6.2 節、M87)。
+//! `keleut run` のテスト。
 //!
-//! - `tests/fixtures/run/` の各 `.kir` を走らせ、記録した標準出力、標準エラー、終了状態と比べる。
-//!   記録は `diktor --run-ir` の結果である(作り方は同じ場所の `README.md`)。
-//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行形を与えると、`.kel` を Diktor で KIR にする経路(`--frontend diktor`)と、
-//!   `conformance/corpus/` の全件を Diktor の木の評価器と比べる試験も走らせる。
-//! - `.kel` の既定のフロントエンドが Rust(crate keleut-front)であることを、Diktor の無い環境で確かめる(M99)。
+//! - `tests/fixtures/run/` の各 `.kir` を実行し、標準出力、標準エラー、終了コードを期待出力と比較する。
+//!   期待出力は `diktor --run-ir` の結果である(作り方は同じディレクトリの `README.md` にある)。
+//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行ファイルを指定すると、`.kel` を Diktor で KIR にする経路(`--frontend diktor`)のテストと、
+//!   `conformance/corpus/` の全件を Diktor の構文木の評価器と比較するテストも実行する。
+//! - `.kel` の既定のフロントエンドが Rust(crate keleut-front)であることを、Diktor のない環境で確かめる。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -22,7 +22,8 @@ fn keleut_in(dir: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 
-/// 試験ごとの作業の場所。捨てるときに中身ごと消す(試験が落ちたときも残さない)。
+/// テストごとの作業ディレクトリ。
+/// ドロップするときに内容ごと削除する(テストが失敗したときも残さない)。
 struct Scratch(PathBuf);
 
 impl std::ops::Deref for Scratch {
@@ -50,7 +51,7 @@ fn scratch(tag: &str) -> Scratch {
     Scratch(d)
 }
 
-/// fixture ごとに足す選択肢。
+/// フィクスチャごとに追加するオプション。
 fn extra_args(name: &str) -> &'static [&'static str] {
     match name {
         "deep" => &["--max-depth", "100"],
@@ -119,7 +120,8 @@ fn 使い方の誤りと不正な_kir_と未実装の後段() {
     );
     let num = root().join("tests/fixtures/run/num.kir");
     let num = num.to_str().unwrap();
-    // `--backend jit` は feature `llvm`(既定で有効)で組んだときだけ使え(M91)、外して組めば未実装の 4 である。
+    // `--backend jit` は、feature `llvm`(既定で有効)を付けてビルドした `keleut` でだけ使える。
+    // feature を外してビルドした `keleut` は、未実装として終了コード 4 で終了する。
     let r = keleut_in(&d, &["run", "--backend", "jit", num]);
     if cfg!(feature = "llvm") {
         assert_eq!(r.status.code(), Some(0));
@@ -127,7 +129,8 @@ fn 使い方の誤りと不正な_kir_と未実装の後段() {
         assert_eq!(r.status.code(), Some(4));
         assert!(r.stdout.is_empty());
     }
-    // 小さいネイティブのスタックでも、インタプリタの呼び出しはネイティブのスタックを使わない。
+    // インタプリタは Keleut の関数呼び出しにネイティブスタックを使わない。
+    // そのため、ネイティブスタックが 512 KiB でも、深さの上限(`--max-depth 100`)に達するまで実行し、終了コード 3 で終了する。
     let deep = root().join("tests/fixtures/run/deep.kir");
     let r = keleut_in(
         &d,
@@ -175,7 +178,7 @@ fn 深い非末尾の再帰は限度の手前まで走り限度で止まる() {
 fn 既定のフロントエンドは_rust_で_diktor_も選べる() {
     let d = scratch("frontend");
     std::fs::write(d.join("a.kel"), "echoln(show(1 + 2))\n").unwrap();
-    // Diktor を呼べない環境(`KELEUT_DIKTOR` が無いファイルを指し、PATH に diktor が無い)。
+    // Diktor を起動できない環境にする(`KELEUT_DIKTOR` は存在しないファイルを指し、PATH に diktor がない)。
     let run = |args: &[&str]| {
         Command::new(env!("CARGO_BIN_EXE_keleut"))
             .args(args)
@@ -199,16 +202,17 @@ fn 既定のフロントエンドは_rust_で_diktor_も選べる() {
             String::from_utf8_lossy(&r.stderr)
         );
     }
-    // `--frontend diktor` は Diktor を起動しようとし、起動できなければ使い方の誤り(64)で終わる。
+    // `--frontend diktor` は Diktor を起動しようとし、起動できなければ使い方のエラー(終了コード 64)で終了する。
     let r = run(&["run", "--frontend", "diktor", "a.kel"]);
     assert_eq!(r.status.code(), Some(64));
     assert!(String::from_utf8_lossy(&r.stderr).contains("を起動できません"));
-    // 仮想メモリの上限の下では、`--native-stack` を与えなければ、フロントエンドのスレッドのスタックを上限に合わせて小さくする
-    // (`--max-depth 1000` はインタプリタのスタックを上限に収めるためである)。
-    // `--native-stack` を与えれば、フロントエンドもそのスタックで走る(V227)。
-    // LLVM を付けない構築では、スタックを小さくしなくても深さの限度に見込むスタックで作り直せて通る。
-    // feature `llvm` の構築では `libLLVM.so` が仮想メモリの大部分を使うので、この確かめは小さくすることに頼る。
-    // 最適化なしの構築では、KIR の符号化と検証のスレッド(約 797 MiB)が上限に収まらないので確かめない。
+    // 仮想メモリを制限しているとき(`ulimit -v`)は、`--native-stack` を指定しなければ、
+    // フロントエンドのスレッドのスタックを仮想メモリの上限に合わせて小さくする。
+    // `--max-depth 1000` を付けるのは、インタプリタのスタックを仮想メモリの上限に収めるためである。
+    // `--native-stack` を指定すれば、フロントエンドもそのサイズのスタックで動く。
+    // LLVM バックエンドを含まないビルドでは、スタックを小さくしなくても、深さの上限に必要なスタックでスレッドを作り直せるので通る。
+    // feature `llvm` を有効にしたビルドでは `libLLVM.so` が仮想メモリの大部分を使うので、スタックを小さくしなければ通らない。
+    // デバッグビルドでは、KIR の符号化と検証のスレッド(約 797 MiB)が仮想メモリの上限に収まらないので確かめない。
     if !cfg!(debug_assertions) {
         for opts in ["--native-stack 512k", "--max-depth 1000"] {
             let r = Command::new("sh")
@@ -229,7 +233,8 @@ fn 既定のフロントエンドは_rust_で_diktor_も選べる() {
             );
         }
     }
-    // `keleut build` も既定で Rust のフロントエンドを使い、`--frontend diktor` を受け付ける。
+    // `keleut build` も既定で Rust のフロントエンドを使う(終了コード 0)。
+    // 続けて `--frontend diktor` を指定すると、オプションは受け付けるが、ここでは Diktor を起動できないので、使い方のエラー(終了コード 64)になる。
     let out = d.join("out");
     let r = run(&[
         "build",
@@ -260,7 +265,7 @@ fn 既定のフロントエンドは_rust_で_diktor_も選べる() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// コーパスの 1 件の比べた結果。
+/// コーパスの 1 件を比較した結果。
 #[derive(Debug, PartialEq, Eq)]
 enum Verdict {
     Same,
@@ -301,7 +306,8 @@ fn compare_one(diktor: &str, corpus: &Path, rel: &str, flags: &str) -> Verdict {
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    // 標準エラーの `<値>` のレコードの順は付録 B が読み手に任せるので、並べ替えてから比べる(D561)。
+    // 標準エラーの `<値>` に現れるレコードは、フィールドの順序を IRSpec の付録 B がリーダに任せている。
+    // そこで、フィールドを並べ替えてから比較する。
     if d.status.code() == k.status.code()
         && d.stdout == k.stdout
         && kconform::fieldsort::same_output(&d.stderr, &k.stderr)
@@ -420,7 +426,7 @@ fn 小さすぎるネイティブのスタックは使い方の誤りになる()
 
 #[test]
 fn native_stack_はフロントエンドのスタックも決める() {
-    // V227: `keleut run` の `--native-stack` は、インタプリタのスタックとともに Rust のフロントエンドのスタックも決める。
+    // `keleut run` の `--native-stack` は、インタプリタのスタックに加えて、Rust のフロントエンドのスタックのサイズも決める。
     let d = scratch("front-stack");
     let mut e = String::from("1");
     for _ in 0..20000 {
@@ -432,7 +438,7 @@ fn native_stack_はフロントエンドのスタックも決める() {
     )
     .unwrap();
     std::fs::write(d.join("a.kel"), "echoln(show(1 + 2))\n").unwrap();
-    // 既定のスタックでは 2 万段の式が型検査に通り、実行して 0 で終わる。
+    // 既定のスタックでは 2 万段の式が型検査に通り、実行して終了コード 0 で終了する。
     let r = keleut_in(&d, &["run", "--backend", "interp", "deep.kel"]);
     assert_eq!(
         (r.status.code(), r.stdout.as_slice()),
@@ -440,7 +446,8 @@ fn native_stack_はフロントエンドのスタックも決める() {
         "{}",
         String::from_utf8_lossy(&r.stderr)
     );
-    // 4 MiB では構文解析の限度が下がり、`keleut check --native-stack 4m` と同じく構文解析の限度の 2 で終わる。
+    // 4 MiB では構文解析の入れ子の上限が下がる。
+    // `keleut check --native-stack 4m` と同じく、構文解析の `処理系の限度` の行を書いて終了コード 2 で終了する。
     let r = keleut_in(
         &d,
         &[
@@ -458,7 +465,7 @@ fn native_stack_はフロントエンドのスタックも決める() {
         "{r:?}"
     );
     assert!(r.stdout.is_empty());
-    // フロントエンドの下限より小さい値(最適化なしの構築の 512 KiB)は、下限まで上げて使い、使い方の誤りにしない。
+    // フロントエンドの下限より小さい値(デバッグビルドでの 512 KiB)は、下限まで引き上げて使い、使い方のエラーにはしない。
     let r = keleut_in(
         &d,
         &[
@@ -481,7 +488,7 @@ fn native_stack_はフロントエンドのスタックも決める() {
 
 #[test]
 fn native_stack_は_kir_の読み込みのスタックも決める() {
-    // 計画 6.11 節: `--native-stack` は KIR の読み込みと検証のスタックも決め、入れ子の限度をそれに収まる深さまで下げる。
+    // `--native-stack` は KIR の読み込みと検証のスタックのサイズも決め、入れ子の上限をそのスタックに収まる深さまで下げる。
     let d = scratch("kir-stack");
     let mut e = String::from("1");
     for _ in 0..3000 {
@@ -494,7 +501,7 @@ fn native_stack_は_kir_の読み込みのスタックも決める() {
     .unwrap();
     let r = keleut_in(&d, &["emit-kir", "-o", "deep.kir", "deep.kel"]);
     assert_eq!(r.status.code(), Some(0), "{r:?}");
-    // 既定のスタックでは読めて、実行して 0 で終わる。
+    // 既定のスタックでは読み込めて、実行して終了コード 0 で終了する。
     let r = keleut_in(&d, &["run", "--backend", "interp", "deep.kir"]);
     assert_eq!(
         (r.status.code(), r.stdout.as_slice()),
@@ -502,7 +509,7 @@ fn native_stack_は_kir_の読み込みのスタックも決める() {
         "{}",
         String::from_utf8_lossy(&r.stderr)
     );
-    // 4 MiB では入れ子の限度が下がり、スタックあふれで落ちずに 65 で終わる。
+    // 4 MiB では入れ子の上限が下がり、スタックオーバーフローで異常終了せずに、終了コード 65 で終了する。
     let r = keleut_in(
         &d,
         &[
@@ -529,7 +536,8 @@ fn source_only_は名前が_kir_で終わる入力もソースとして読む() 
     let d = scratch("source-only");
     std::fs::write(d.join("x.kir"), "echoln(\"hi\")\n").unwrap();
     std::fs::write(d.join("a.kel"), "echoln(\"a\")\n").unwrap();
-    // 内部の旗が無ければ、`.kir` は KIR として読み(65)、`.kel` と混ぜれば使い方の誤り(64)である。
+    // 内部用のオプション `--source-only` を付けなければ、`.kir` は KIR として読んで終了コード 65 になり、
+    // `.kel` と混ぜれば使い方のエラー(終了コード 64)になる。
     let r = keleut_in(&d, &["run", "--backend", "interp", "x.kir"]);
     assert_eq!(r.status.code(), Some(65), "{r:?}");
     let r = keleut_in(&d, &["run", "--backend", "interp", "a.kel", "x.kir"]);
@@ -561,9 +569,9 @@ fn source_only_は名前が_kir_で終わる入力もソースとして読む() 
     let _ = std::fs::remove_dir_all(&d);
 }
 
-// ---- 仮想メモリの上限の下のフロントエンドとスレッドの確保(計画 261104-3 の 4.4 節、M110) ----
+// ---- 仮想メモリを制限しているときの、フロントエンドとスレッドの確保 ----
 
-/// `sh -c 'ulimit -v KIB; exec keleut ARGS'` を `dir` で走らせる。
+/// `sh -c 'ulimit -v KIB; exec keleut ARGS'` を `dir` で実行する。
 fn keleut_ulimit(dir: &Path, kib: u64, args: &[&str]) -> Output {
     Command::new("sh")
         .arg("-c")
@@ -588,7 +596,7 @@ fn describe(r: &Output) -> String {
     )
 }
 
-/// `src` を `dir/name.kel` に書き、上限なしの `keleut emit-kir` で `dir/name.kir` を作る。
+/// `src` を `dir/name.kel` に書き、仮想メモリを制限しない `keleut emit-kir` で `dir/name.kir` を作る。
 fn write_kel_and_kir(dir: &Path, name: &str, src: &str) {
     std::fs::write(dir.join(format!("{name}.kel")), src).unwrap();
     let r = keleut_in(
@@ -603,7 +611,7 @@ fn write_kel_and_kir(dir: &Path, name: &str, src: &str) {
     assert_eq!(r.status.code(), Some(0), "{name}: {}", describe(&r));
 }
 
-/// 宣言 `n` 個と、200 万要素のリストを作って長さを数える末尾(`probe/small/gen_decls.py N list` と同じ)。
+/// `n` 個の宣言の後で、200 万要素のリストを作って長さを数え、最後の宣言の値を出力するプログラム。
 fn decls_source(n: usize) -> String {
     let mut s = String::new();
     for i in 0..n {
@@ -618,11 +626,12 @@ fn decls_source(n: usize) -> String {
     s
 }
 
-/// 深さ 100 万の末尾でない再帰。
+/// 深さ 100 万の非末尾の再帰。
 const DEEP_REC: &str = "let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)\n\
                         echoln(show(f(1000000)))\n";
 
-/// 深さ `n` の構造的な `Eq`(`conformance/stack/eq.t` の形)。
+/// 深さ `n` の値を構造的な `Eq` で比較するプログラム。
+/// 型 `T`、`Eq` のインスタンス、`mk` の定義は `conformance/stack/eq.t` のプログラムと同じである。
 fn eq_source(n: u32) -> String {
     format!(
         "newtype T = Leaf | Node({{k: T}})\n\
@@ -632,7 +641,7 @@ fn eq_source(n: u32) -> String {
     )
 }
 
-/// [`eq_source`] の比べ方を、`cancel` 節を持つハンドラの中で行う形。
+/// [`eq_source`] の比較を、`cancel` 節を持つハンドラの中で行うプログラム。
 fn eq_cancel_source(n: u32) -> String {
     format!(
         "effect Res = {{ use: () => Unit }}\n\
@@ -645,10 +654,11 @@ fn eq_cancel_source(n: u32) -> String {
     )
 }
 
-/// `ulimit -v 1000000` の下で走らせる構造的な `Eq` の深さ。
+/// `ulimit -v 1000000` で仮想メモリを制限して実行する、構造的な `Eq` の比較の深さ。
 ///
-/// 最適化なしの構築は、比べ方の 1 段にネイティブのスタックを約 10 倍使う。
-/// 深さ 20 万は `ulimit -v 4000000` でも足りず(`ulimit -v 6000000` で足りる)、`ulimit -v 1000000` では 25,000 段と 30,000 段の間でメモリが足りなくなる。
+/// デバッグビルドは、比較の 1 段にネイティブスタックをリリースビルドの約 10 倍使う。
+/// デバッグビルドでは、深さ 20 万は `ulimit -v 4000000` でも足りず(`ulimit -v 6000000` で足りる)、
+/// `ulimit -v 1000000` では 25,000 段と 30,000 段の間でメモリが足りなくなる。
 const EQ_DEPTH: u32 = if cfg!(debug_assertions) {
     20_000
 } else {
@@ -657,16 +667,18 @@ const EQ_DEPTH: u32 = if cfg!(debug_assertions) {
 
 #[test]
 fn 仮想メモリの上限の下でも_kir_の入力は実行のスレッドを縮めて走る() {
-    // 直す前は、実行のスレッド(既定で約 1.1 GB)を作れずに 70 だった(V235)。
+    // 仮想メモリを制限していて、実行スレッドを既定のスタック(約 1.1 GB)で作れないときは、
+    // 内部エラー(終了コード 70)にせず、スタックを小さくしてスレッドを作る。
     let d = scratch("as-kir");
     write_kel_and_kir(&d, "decls", &decls_source(160_000));
     write_kel_and_kir(&d, "rec", DEEP_REC);
     write_kel_and_kir(&d, "eq", &eq_source(EQ_DEPTH));
-    // 宣言 16 万個の `.kir` は、既定の後段では LLVM の分でヒープが本当に尽きることがあるので、インタプリタで走らせる。
-    // 上限は、宣言 16 万個の `.kir` だけ 1,100,000 KiB にし、ほかは 1,000,000 KiB にする。
-    // 宣言 16 万個の `.kir` は、リリースの構築で 930,000 KiB から 0 で 920,000 KiB では 3、最適化なしの構築で約 940,000 KiB から 0 なので、
-    // 1,000,000 KiB では境から 1 割の余裕が無い。
-    // 直す前の構築は、1,100,000 KiB でも実行のスレッドを作れずに 70 だった。
+    // 宣言 16 万個の `.kir` は、既定のバックエンドでは LLVM が使うメモリのためにヒープを実際に確保できなくなることがあるので、
+    // インタプリタで実行する。
+    // 仮想メモリの上限は、宣言 16 万個の `.kir` だけ 1,100,000 KiB にし、それ以外は 1,000,000 KiB にする。
+    // 宣言 16 万個の `.kir` は、リリースビルドでは 930,000 KiB 以上で終了コード 0、920,000 KiB では 3 になり、
+    // デバッグビルドでは約 940,000 KiB 以上で 0 になる。
+    // 1,000,000 KiB では、この境界から 1 割の余裕がない。
     let cases: &[(&[&str], &[u8], u64)] = &[
         (
             &["run", "--backend", "interp", "decls.kir"],
@@ -719,13 +731,14 @@ fn 仮想メモリの上限の下でも_jit_only_の深い再帰と構造的な_
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 構造的な `Eq` が移るスレッドを作れなくなるまで比べ、`cancel` 節が走ってメモリの不足の 3 で終わることを確かめる。
+/// 構造的な `Eq` の比較が実行を切り替える先のスレッドを作れなくなると、`cancel` 節が実行され、
+/// メモリ不足の実行時エラー(終了コード 3)で終了することを確かめる。
 ///
-/// `--native-stack 200m` と深さ 20 万は `verify/findings.md` の feasible-5 の形である。
-/// 上限は 650,000 KiB にする。
-/// 直す前は、650,000 KiB と 700,000 KiB で `新しいスタックのスレッドを作れません` の 70 だった。
-/// 直した後のリリースの構築は、`--backend interp` が 725,000 KiB まで 3 で 750,000 KiB で 0、
-/// `--tier jit-only` が 750,000 KiB まで 3 で 900,000 KiB で 0 である(移る先のスレッドを作れて最後まで比べる)。
+/// `--native-stack 200m` と深さ 20 万で実行し、仮想メモリの上限は 650,000 KiB にする。
+/// スレッドを作れないことを、内部エラー(終了コード 70)にはしない。
+/// リリースビルドでは、`--backend interp` は 725,000 KiB まで終了コード 3 で、750,000 KiB では 0 になる。
+/// `--tier jit-only` は 750,000 KiB まで 3 で、900,000 KiB では 0 になる。
+/// 0 になるのは、切り替える先のスレッドを作れて、最後まで比較できるからである。
 fn expect_eq_hop_out_of_memory(tag: &str, backend: &[&str]) {
     let d = scratch(tag);
     std::fs::write(d.join("eqc.kel"), eq_cancel_source(200_000)).unwrap();
@@ -754,12 +767,12 @@ fn 構造的な_eq_が移るスレッドを作れなければ_cancel_節が走�
     expect_eq_hop_out_of_memory("eq-hop-jit", &["--tier", "jit-only"]);
 }
 
-/// 変換の役割の限度の行(段の名前を付けた行)。
+/// 変換スレッドでメモリを確保できなかったときの `処理系の限度` の行(段階の名前 `stage` が入る)。
 fn stage_limit_line(stage: &str) -> String {
     format!("keleut: 処理系の限度: {stage}でメモリが足りません\n")
 }
 
-/// 予備を使い切った後に包みが書く固定の行。
+/// グローバルアロケータの予備領域を使い切った後に、アロケータのラッパが書く固定の行。
 const CONV_LIMIT_LINE: &str = "keleut: 処理系の限度: 型検査か実行の前の変換でメモリが足りません\n";
 
 fn alloc_test_line(site: &str) -> String {
@@ -817,7 +830,7 @@ fn 変換の役割の確保の失敗は_kel_で_1_kir_で_65_になる() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 関数の中で拡張の鎖を `n` 段作り、`cancel` 節を持つハンドラの中で呼ぶ(`probe/alloc/gen_chain.py func N`)。
+/// 関数の中でレコードの拡張を `n` 段連ね、その関数を `cancel` 節を持つハンドラの中で呼ぶプログラム。
 fn func_chain_source(n: usize) -> String {
     let mut s =
         String::from("effect Res = { use: () => Unit }\nlet f(): Int32 = {\n  let s0 = {a = 0}\n");
@@ -838,7 +851,9 @@ fn func_chain_source(n: usize) -> String {
 
 #[test]
 fn 仮想メモリの上限の下で型検査の確保が尽きれば限度の行と_1_になる() {
-    // 実際の `ulimit -v` の下で予備を使い切る道を見張る(直す前は `memory allocation of … failed` の 134 だった。V236)。
+    // 実際に `ulimit -v` で仮想メモリを制限し、グローバルアロケータの予備領域を使い切る経路を検査する。
+    // この経路でも、`memory allocation of … failed` と書いて異常終了(134)することはなく、
+    // `処理系の限度` の行を書いて終了コード 1 で終了する。
     let d = scratch("as-front");
     std::fs::write(d.join("f.kel"), func_chain_source(3000)).unwrap();
     for args in [
@@ -867,7 +882,7 @@ fn 下げた_kir_の入れ子の限度は_kel_で_1_kir_で_65_になる() {
         ")".repeat(n)
     );
     write_kel_and_kir(&d, "add", &src);
-    // `.kir` の入力は、いまと同じく 65 である。
+    // `.kir` の入力では、終了コード 65 で終了する。
     let r = keleut_in(
         &d,
         &[
@@ -887,9 +902,9 @@ fn 下げた_kir_の入れ子の限度は_kel_で_1_kir_で_65_になる() {
         "{}",
         describe(&r)
     );
-    // `.kel` の入力では、同じプロセスの中で書いた KIR を検証が拒否すれば、限度の行と 1 である。
-    // 最適化なしの構築では、フロントエンドの限度(16 MiB で約 440 段)が KIR の限度(約 1,500 段)より低く、
-    // フロントエンドが受け付けて KIR の検証が拒否する深さが無いので、最適化ありの構築でだけ確かめる。
+    // `.kel` の入力では、同じプロセスの中で書いた KIR を検証が拒否すると、`処理系の限度` の行を書いて終了コード 1 で終了する。
+    // デバッグビルドでは、フロントエンドの上限(16 MiB で約 440 段)が KIR の上限(約 1,500 段)より低く、
+    // フロントエンドが受理して KIR の検証が拒否する深さがないので、リリースビルドでだけ確かめる。
     if !cfg!(debug_assertions) {
         let r = keleut_in(
             &d,
@@ -911,8 +926,8 @@ fn 下げた_kir_の入れ子の限度は_kel_で_1_kir_で_65_になる() {
             describe(&r)
         );
     }
-    // Diktor が書いた KIR を同じプロセスの中で読む `--frontend diktor` でも、`.kel` の入力なら 1 である。
-    // Diktor の構文解析は `--native-stack` に縛られないので、最適化なしの構築でも KIR の読み込みの限度に当たる。
+    // 子プロセスの Diktor が書いた KIR を keleut が読み込む `--frontend diktor` でも、入力が `.kel` なら終了コード 1 で終了する。
+    // Diktor の構文解析は `--native-stack` の制約を受けないので、デバッグビルドでも KIR の読み込みの上限に達する。
     if let Ok(diktor) = std::env::var("KELEUT_DIKTOR") {
         let r = Command::new(env!("CARGO_BIN_EXE_keleut"))
             .args([
@@ -942,7 +957,9 @@ fn 下げた_kir_の入れ子の限度は_kel_で_1_kir_で_65_になる() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// 入れ子の形 `shape` の深さ `n` のプログラム(critic.md 6 節の 6 つの形)。
+/// `shape` で選んだ構文を深さ `n` まで入れ子にしたプログラム。
+///
+/// `shape` は `block`、`add`、`fn`、`pattern`、`type`、`match` の 6 種類である。
 fn nest_source(shape: &str, n: usize) -> String {
     match shape {
         "block" => format!(
@@ -973,10 +990,11 @@ fn nest_source(shape: &str, n: usize) -> String {
 
 #[test]
 fn 受け付ける最大の深さの木を捨てても落ちない() {
-    // `keleut run` はフロントエンドのスレッドの中で型検査の文脈と木を `drop` で捨てる(D570)。
-    // 小さい `--native-stack` で、フロントエンドの限度の行が出ない最大の深さを二分探索で求め、
-    // 探索で走らせたどの深さもシグナルで落ちないこと、最大の深さが 0 か KIR の検証の限度の 1 で終わることを確かめる。
-    // 最適化なしの構築は 2.3 MiB より小さい値を上げるので、4m、8m、16m を使う(512k と 1m は記録に手で確かめた値がある)。
+    // `keleut run` は、フロントエンドのスレッドの中で、型検査のコンテキストと構文木を `drop` で解放する。
+    // 小さい `--native-stack` で、フロントエンドの `処理系の限度` の行が出ない最大の深さを二分探索で求める。
+    // 探索で実行したどの深さでも、シグナルで異常終了しないことを確かめる。
+    // 最大の深さでは、終了コード 0 で終了するか、KIR の検証の上限に達して終了コード 1 で終了することを確かめる。
+    // デバッグビルドは 2.3 MiB より小さい値を下限まで引き上げるので、4m、8m、16m を使う。
     const FRONT_LIMITS: [&str; 2] = ["構文解析で再帰が深すぎます", "型検査で再帰が深すぎます"];
     const KIR_LIMIT: &str = "処理系の限度: KIR の検証で入れ子が深すぎます";
     let shapes = ["block", "add", "fn", "pattern", "type", "match"];
@@ -989,7 +1007,7 @@ fn 受け付ける最大の深さの木を捨てても落ちない() {
                 s.spawn(move || {
                     let d = scratch(&format!("deepdrop-{shape}-{stack}"));
                     let mut fails = Vec::new();
-                    // 深さ n を走らせ、フロントエンドの限度に当たったかを返す。
+                    // 深さ n のプログラムを実行し、フロントエンドの上限に達したかどうかを返す。
                     let mut probe = |n: usize| -> (bool, Output) {
                         std::fs::write(d.join("d.kel"), nest_source(shape, n)).unwrap();
                         let r = keleut_in(

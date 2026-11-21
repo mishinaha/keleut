@@ -1,39 +1,49 @@
-//! `keleut repl` である(計画 261024-1 の 6.2 節。M100)。
+//! サブコマンド `keleut repl` を実装する。
 //!
-//! | 形 | 働き |
+//! | 書式 | 動作 |
 //! |---|---|
 //! | `keleut repl [OPTIONS]` | 標準入力から入力を読み、入力ごとに型検査して実行し、結果を表示する(`diktor --repl` と同じ出力) |
 //!
-//! 入力の区切り、コマンド(`:quit`、`:q`、`:reset`、`:type 式`)、結果の表示、診断の文面は、
-//! Diktor の driver.ml の §16.6b と同じである。
-//! 結果、診断、プログラムの出力は、すべて標準出力に出す。
-//! プロンプトは、標準入力が端末のときだけ出す。
-//! 入力の終わりか `:quit` で 0 で終わり、型エラーや実行時エラーではセッションを終えない。
+//! 入力の区切り方、コマンド(`:quit`、`:q`、`:reset`、`:type 式`)、結果の表示、診断メッセージは、
+//! Diktor の `driver.ml` の §16.6b と同じである。
+//! 結果、診断、プログラムの出力は、すべて標準出力に書く。
+//! プロンプトは、標準入力が端末のときだけ表示する。
+//! 入力の終わりか `:quit` で、終了コード 0 で終了する。
+//! 型エラーや実行時エラーでは、セッションを終了しない。
 //!
 //! 型検査は keleut-front の [`Session`] が行い、型検査に通った入力ごとに KIR の単位を 1 つ、
-//! セッションのプログラムの後ろに足す。
-//! 実行はインタプリタで行い、実行時の状態(ヒープ、大域、インスタンス、形の表)はセッションの間ずっと持つ。
-//! 入力ごとに、足した単位だけを検証し(`kir::verify_extension`)、LIR に下ろして LIR のプログラムの後ろに足し
-//! (`keleut_lir::Extender`)、実行時の表を伸ばして([`Rt::grow`])、その単位の初期化だけを実行する。
-//! 前の入力の大域は、足した単位から同じ添字で読む。
-//! 1 つの入力の手間は、その入力の大きさにほぼ比例し、前の入力の数にはほぼ依らない
-//! (宣言したクラスの数と、module の中の値の数に比例する部分が残る。Diktor も同じである)。
-//! 実行は専用のスレッド(`keleut-mutator`)で行い、型検査のスレッドとは依頼と返事でやりとりする。
-//! 始めるとき(と `:reset` の後)に、プレリュードの初期化を 1 回実行する。
-//! 止まれば、Diktor と同じく診断を標準エラーに書いて、その誤りの終了状態(実行時エラーなら 3)で終わる。
-//! 実行時エラーで止まった入力が止まるまでに書いた出力は残す(LangSpec §6.6、§18.5)。
-//! その入力は捨てる(後の入力から名前が見えない)。
-//! その入力の単位はプログラムに残すが、単位が足した大域とインスタンスの値は捨て、回収の根から外す。
+//! セッションのプログラムの末尾に追加する。
+//! 実行にはインタプリタを使い、ランタイムの状態(ヒープ、グローバル、インスタンス、シェイプ表)はセッションの間ずっと保持する。
+//! 入力ごとに、次の順に処理する。
+//!
+//! 1. 追加した単位だけを検証する(`kir::verify_extension`)。
+//! 2. その単位を LIR に変換(lowering)し、LIR のプログラムの末尾に追加する(`keleut_lir::Extender`)。
+//! 3. ランタイムの表を拡張する([`Rt::grow`])。
+//! 4. その単位の初期化コードだけを実行する。
+//!
+//! 追加した単位は、前の入力のグローバルを同じ添字で読む。
+//! 入力 1 つの処理時間は、その入力の大きさにほぼ比例し、それまでの入力の個数にはほとんどよらない。
+//! ただし、宣言したクラスの数と、module の中の値の数に比例する処理が残る(Diktor も同じである)。
+//! 実行は専用のスレッド(`keleut-mutator`)で行い、型検査のスレッドとは要求(`Job`)と応答(`Reply`)をやりとりする。
+//!
+//! セッションの開始時と `:reset` の後に、プレリュードの初期化コードを 1 回実行する。
+//! この初期化がエラーで止まれば、Diktor と同じく診断を標準エラーに書き、そのエラーの終了コード(実行時エラーなら 3)で終了する。
+//!
+//! 入力が実行時エラーで止まったときは、止まるまでに書いた出力を残す(LangSpec §6.6、§18.5)。
+//! その入力は受理せず、その入力が束縛した名前は後の入力から見えない。
+//! その入力の単位はプログラムに残すが、単位が追加したグローバルとインスタンスの値は捨てて、GC ルートから外す。
 //!
 //! `OPTIONS` は次のとおりである。
 //!
-//! - `--no-prelude`、`--prelude PATH`:`keleut check` の同名の旗と同じ。
-//! - `--max-nest N`、`--native-stack BYTES`:構文解析の深さの限度と、フロントエンドのスレッドのスタック(`keleut check` と同じ)。
-//! - `--max-depth N`、`--gc-stress`、`--no-yield-prune`:`keleut run` の同名の旗と同じ(インタプリタのスタックは `--max-depth` から決める)。
-//! - `--backend B`、`--tier MODE`、`--frontend F`、`--strict-exhaustive`:kconform の組の選択肢と `diktor --repl` の旗を受けるためのもので、効果は無い
-//!   (入力は後段に関係なくインタプリタで実行する)。
+//! - `--no-prelude`、`--prelude PATH`:`keleut check` の同名のオプションと同じである。
+//! - `--max-nest N`、`--native-stack BYTES`:構文解析の深さの上限と、フロントエンドのスレッドのスタックサイズを指定する(`keleut check` と同じ)。
+//! - `--max-depth N`、`--gc-stress`、`--no-yield-prune`:`keleut run` の同名のオプションと同じである。
+//!   インタプリタのスタックサイズは `--max-depth` から決める。
+//! - `--backend B`、`--tier MODE`、`--frontend F`、`--strict-exhaustive`:kconform のペアのオプションと `diktor --repl` のオプションを受け付けるためのもので、
+//!   指定しても動作は変わらない(入力は、バックエンドの指定によらずインタプリタで実行する)。
 //!
-//! 標準入力が閉じていれば(Rust の実行時が `/dev/null` で開き直す前に調べる)、診断を標準エラーに書いて 74 で終わる。
+//! 標準入力が閉じていれば、診断を標準エラーに書いて終了コード 74 で終了する。
+//! 閉じているかどうかは、Rust のランタイムが fd 0 を `/dev/null` で開き直す前に調べておく。
 
 use crate::exit;
 use crate::front_cmd::{MAX_STACK_BYTES, parse_bytes};
@@ -49,7 +59,7 @@ use keleut_rt::{Rt, Stop, Word};
 use std::io::{BufRead, IsTerminal, Write};
 use std::sync::mpsc;
 
-/// 使い方である。
+/// `keleut repl` の使い方の説明(usage)。
 pub const USAGE: &str = "\
 usage: keleut repl [OPTIONS]
 options:
@@ -66,13 +76,13 @@ options:
                          (inputs always run on the interpreter)
 ";
 
-/// プロセスが始まったときに標準入力(fd 0)が閉じていたかどうかである。
+/// プロセスの開始時に標準入力(fd 0)が閉じていたかどうかを表す。
 ///
 /// Rust の標準ライブラリは `main` の前に、閉じている fd 0〜2 を `/dev/null` で開き直すので、
-/// `main` の中から読むと入力の終わりになる。
-/// Diktor(OCaml)は同じとき `Bad file descriptor` で 74 で終わるので、
-/// 標準ライブラリの初期化より前に走る `.init_array` の関数で fd 0 を調べておく
-/// (`front_cmd` の標準出力の調べと同じ)。
+/// `main` の中から読むと、閉じていた標準入力は入力の終わりに見える。
+/// Diktor(OCaml)は、同じ状況で `Bad file descriptor` を報告して終了コード 74 で終了する。
+/// 同じ動作にするために、標準ライブラリの初期化より前に実行される `.init_array` の関数で fd 0 を調べておく
+/// (`front_cmd` が標準出力を調べるのと同じ方法である)。
 static STDIN_CLOSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(target_os = "linux")]
@@ -81,11 +91,11 @@ mod stdin_probe {
         fn fcntl(fd: i32, cmd: i32, ...) -> i32;
     }
 
-    /// `F_GETFD` である。
+    /// `fcntl` のコマンド `F_GETFD`(ファイル記述子フラグを読む)の値。
     const F_GETFD: i32 = 1;
 
     extern "C" fn probe() {
-        // SAFETY: fd 0 の記述子の旗を読むだけで、何も変えない。
+        // SAFETY: fd 0 のファイル記述子フラグを読むだけで、何も変えない。
         if unsafe { fcntl(0, F_GETFD) } == -1 {
             super::STDIN_CLOSED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -150,7 +160,7 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
             }
             "--gc-stress" => gc_stress = true,
             "--no-yield-prune" => yield_prune = false,
-            // kconform の組の選択肢と `diktor --repl` の旗。受けて捨てる。
+            // kconform のペアのオプションと `diktor --repl` のオプションは、受け付けて無視する。
             "--backend" | "--frontend" | "--tier" => {
                 value(a)?;
             }
@@ -177,7 +187,9 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
     })
 }
 
-/// 標準出力。書けなくなったら、その誤りを持つ(Diktor の `flush_stdout_or_die`)。
+/// 標準出力に書く内容をためるバッファ。
+///
+/// `flush` で標準出力に書き、書けなければ終了コード 74 を返す(Diktor の `flush_stdout_or_die` に相当する)。
 struct Output {
     buf: Vec<u8>,
 }
@@ -192,7 +204,8 @@ impl Output {
         self.buf.extend_from_slice(s);
     }
 
-    /// 溜めた出力を書き出す。書けなければ診断を標準エラーに書いて 74 を返す。
+    /// ためた出力を標準出力に書いて flush する。
+    /// 書けなければ、診断を標準エラーに書いて終了コード 74 を返す。
     fn flush(&mut self) -> Result<(), u8> {
         if self.buf.is_empty() {
             return Ok(());
@@ -210,31 +223,37 @@ impl Output {
     }
 }
 
-/// 1 つの入力を実行した結果である。
+/// 入力を 1 つ実行した結果を表す。
 enum Exec {
     /// 最後まで実行し、結果を表示した。
     Done,
     /// 実行時エラーで止まった(診断は標準出力に書いた)。
     Failed,
-    /// 標準出力に書けない(診断は標準エラーに書いた)。
+    /// 標準出力に書けなかった(診断は標準エラーに書いた)。
     Io,
-    /// プレリュードの初期化が止まったか、
-    /// KIR の検証、LIR への下ろし、実行時の表の準備が内部の誤りか資源の不足で失敗したか、
-    /// 実行のスレッドを作れないか落ちた。
-    /// 診断は標準エラーに書いた。セッションをこの終了状態で終える。
+    /// セッションを続けられないので、この終了コードで終了する(診断は標準エラーに書いた)。
+    ///
+    /// 次のどれかが起きたときである。
+    ///
+    /// - プレリュードの初期化がエラーで止まった。
+    /// - KIR の検証、LIR への変換、ランタイムの表の準備のどれかが、内部エラーか資源不足で失敗した。
+    /// - 実行スレッドを作れなかったか、実行スレッドが異常終了した。
     Exit(u8),
 }
 
-/// 実行の種類である。
+/// 実行スレッドに依頼する実行の種類(プレリュードの初期化か、入力の実行か)を表す。
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
-    /// 始めるときのプレリュードの初期化。止まればセッションを終える。
+    /// セッションの開始時に行う、プレリュードの初期化。
+    /// エラーで止まればセッションを終了する。
     Start,
-    /// 入力の実行。足した単位(この入力)の初期化を実行し、結果を表示する。
+    /// 入力の実行。
+    /// 追加した単位(この入力)の初期化コードを実行し、結果を表示する。
     Input,
 }
 
-/// `keleut repl …`(引数の先頭は `repl`)。
+/// `keleut repl …` のエントリポイントである。
+/// 引数の先頭は `repl` である。
 pub fn main(args: &[String]) -> u8 {
     let rest = &args[1..];
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {
@@ -255,7 +274,8 @@ pub fn main(args: &[String]) -> u8 {
             return exit::USAGE;
         }
     };
-    // 入力の種類は書かない。変換の役割の確保の失敗で REPL を終えない(`keleut_rt::alloc`)。
+    // 入力の種類は設定しない。
+    // 変換スレッドがメモリの確保に失敗しても、アロケータのラッパが REPL のプロセスを終了しないようにするためである(`keleut_rt::alloc`)。
     match on_check_stack(limits, || {
         keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Conv);
         session_loop(&o)
@@ -268,7 +288,7 @@ pub fn main(args: &[String]) -> u8 {
     }
 }
 
-/// 行末の空白と CR を除く(コマンドの行)。
+/// コマンドの行から、行末の空白、タブ、CR を取り除く。
 fn trim_command(line: &[u8]) -> &[u8] {
     let mut n = line.len();
     while n > 0 && matches!(line[n - 1], b' ' | b'\t' | b'\r') {
@@ -277,7 +297,8 @@ fn trim_command(line: &[u8]) -> &[u8] {
     &line[..n]
 }
 
-/// 対話的な実行の本体(Diktor の `repl` の `loop`)。型検査のスレッドの中で呼ぶ。
+/// REPL の本体である(Diktor の `repl` の `loop` に相当する)。
+/// 型検査のスレッドの中で呼ぶ。
 fn session_loop(o: &Options) -> u8 {
     let mut sess = match Session::new(o.session.clone()) {
         Ok(s) => s,
@@ -303,8 +324,8 @@ fn session_loop(o: &Options) -> u8 {
     let mut start_line: u32 = 1;
     let mut line: Vec<u8> = Vec::new();
     loop {
-        // 前の入力が大域の確保器の予備を使っていれば(実行時エラーで止まった入力など)、次の入力の前に取り直す。
-        // 取れなければ予備なしで続ける(`keleut_rt::alloc`)。
+        // 前の入力(実行時エラーで止まった入力など)がグローバルアロケータの予備領域を使っていれば、次の入力の前に確保し直す。
+        // 確保できなければ、予備領域なしで続ける(`keleut_rt::alloc`)。
         keleut_rt::alloc::reacquire();
         if interactive {
             out.bytes(if buf.is_empty() { b"> " } else { b". " });
@@ -353,7 +374,7 @@ fn session_loop(o: &Options) -> u8 {
                     Err(c) => c,
                 };
             } else if cmd == b":reset" {
-                // 前の実行時の状態を捨ててから、プレリュードだけのセッションを始め直す。
+                // それまでのランタイムの状態を捨ててから、プレリュードだけのセッションを始め直す。
                 drop(live);
                 if let Err(e) = sess.reset() {
                     let _ = out.flush();
@@ -398,7 +419,7 @@ fn session_loop(o: &Options) -> u8 {
     }
 }
 
-/// フロントエンドがセッションを始められなかったときの診断と終了状態。
+/// フロントエンドがセッションを始められなかったときに、診断を標準エラーに書いて終了コードを返す。
 fn front_stop(e: StartError) -> u8 {
     match e {
         StartError::Stop(FrontStop::Input(m)) => {
@@ -424,35 +445,39 @@ fn front_stop(e: StartError) -> u8 {
     }
 }
 
-/// 実行のスレッドへの依頼。
+/// 実行スレッドへの要求。
 struct Job {
-    /// セッションのプログラム。最後の単位(始めるときはプレリュードまでの単位)を足したもの。
+    /// セッションのプログラム。
+    /// 末尾の単位(セッションの開始時は、プレリュードまでの単位)が、この要求で追加した分である。
     program: Box<kir::Program>,
     shown: Vec<Shown>,
     layouts: Layouts,
     mode: Mode,
-    /// 足した単位の検証に使った深さの上限(`kir::verify_extension` が返したもの)。
-    /// 下ろしのスタックは、この深さに見合う大きさにする。
+    /// 追加した単位の検証に使った、入れ子の深さの上限(`kir::verify_extension` が返した値)。
+    /// LIR への変換に使うスタックは、この深さに必要な大きさにする。
     max_nest: usize,
 }
 
-/// 実行のスレッドからの返事。
+/// 実行スレッドからの応答。
 struct Reply {
-    /// 依頼で渡したプログラム(型検査の側に返す)。
+    /// 要求で渡されたプログラム。
+    /// 型検査の側に返す。
     program: Box<kir::Program>,
     exec: Exec,
-    /// LIR に下ろして足した関数の数と、LIR の関数の総数(`KELEUT_REPL_STATS`)。
+    /// LIR に変換して追加した関数の数と、LIR の関数の総数(`KELEUT_REPL_STATS` の出力に使う)。
     lir: (usize, usize),
 }
 
-/// 生きている実行時の状態を持つ、実行のスレッドとの窓口である。
+/// 実行スレッドを操作するハンドルである。
+/// 実行スレッドは、セッションのランタイムの状態を保持している。
 ///
-/// 捨てると依頼の口を閉じ、スレッドの終わりを待つ(ヒープと表を手放す)。
+/// ドロップすると、要求の送信側を閉じてスレッドの終了を待つ。
+/// スレッドは、終了するときにヒープと表を解放する。
 struct Live {
     jobs: Option<mpsc::Sender<Job>>,
     replies: mpsc::Receiver<Reply>,
     thread: Option<std::thread::JoinHandle<()>>,
-    /// 足した単位の KIR の検証の状態。
+    /// これまでに追加した単位の、KIR の検証の状態。
     verified: kir::verify::Extension,
 }
 
@@ -465,22 +490,26 @@ impl Drop for Live {
     }
 }
 
-/// 実行の依頼の結果。
+/// 実行の要求の結果を表す。
 enum Ran {
-    /// 実行した(またはセッションを終える誤りで止まった)。
+    /// 実行した。
+    /// セッションを終了するエラーで止まった場合も含む。
     Ran(Exec),
-    /// 入れ子が KIR の限度 `N_nest` を超えたので、実行しなかった。標準出力に書く 1 行の診断。
+    /// 処理系の限度のために実行しなかった。
+    /// 値は 1 行の診断である。
+    ///
+    /// 入れ子が KIR の上限 `N_nest` を超えたときと、KIR を処理するスレッドを作れなかったときである。
     Limit(String),
 }
 
 impl Live {
-    /// 実行のスレッドを作る。
+    /// 実行スレッドを作る。
     ///
-    /// `keleut run` と同じく、仮想メモリの上限があればスタックを初めから上限の 4 分の 1 までにし、
+    /// `keleut run` と同じく、仮想メモリを制限しているとき(`ulimit -v`)は、スタックを初めから仮想メモリの上限の 4 分の 1 以下にし、
     /// 作れなければ半分ずつ小さくして作り直す(`keleut_interp::exec_stack_sizes`)。
-    /// 最も小さいスタックでも作れなければ、`実行時エラー: メモリ不足です` を書いて 3 を返す
-    /// (プレリュードの初期化を始めるときの実行時エラーと同じ)。
-    /// 上限が無いのに作れなければ、内部の誤りとして 70 を返す。
+    /// 最も小さいスタックでも作れなければ、`実行時エラー: メモリ不足です` を標準エラーに書いて 3 を返す
+    /// (プレリュードの初期化の開始時に起きた実行時エラーと同じ扱いである)。
+    /// 仮想メモリを制限していないのに作れなければ、内部エラーとして 70 を返す。
     fn spawn(o: &Options) -> Result<Live, u8> {
         let mut last = None;
         for native in
@@ -509,7 +538,7 @@ impl Live {
         if let Some((size, e)) = last
             && keleut_rt::alloc::address_space_limit().is_none()
         {
-            // 上限が無いのに作れないのは、処理系の内部の誤りである(`keleut run` と同じ)。
+            // 仮想メモリを制限していないのに作れないのは、処理系の内部エラーである(`keleut run` と同じ)。
             eprintln!(
                 "keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}"
             );
@@ -520,12 +549,15 @@ impl Live {
         Err(stop.exit_code())
     }
 
-    /// プログラムに足した単位を検証し、実行のスレッドで実行する。
+    /// プログラムに追加した単位を検証し、実行スレッドで実行する。
     ///
-    /// 入れ子が KIR の限度 `N_nest` を超えた単位は、処理系の限度として実行しない([`Ran::Limit`])。
-    /// `keleut run --frontend rust` が KIR の書き出しで止まるのと同じ限度である。
-    /// それ以外の検証の失敗は内部の誤りなので、診断を標準エラーに書いて [`Exec::Exit`] の 70 を返す。
-    /// プログラムは、どの場合も返す。
+    /// 次の 2 つの場合は、処理系の限度として単位を実行しない([`Ran::Limit`])。
+    ///
+    /// - 単位の入れ子が KIR の上限 `N_nest` を超えた。`keleut run --frontend rust` が KIR の書き出しで止まるのと同じ上限である。
+    /// - 仮想メモリを制限しているとき(`ulimit -v`)に、KIR を処理するスレッドを作れなかった。
+    ///
+    /// それ以外の検証の失敗は内部エラーなので、診断を標準エラーに書いて [`Exec::Exit`] の 70 を返す。
+    /// プログラムは、どの場合も呼び出し元に返す。
     fn run(
         &mut self,
         program: Box<kir::Program>,
@@ -538,7 +570,7 @@ impl Live {
         let max_nest = match kir::verify_extension(&mut self.verified, &program, &limits) {
             Ok(n) => n,
             Err(e) if e.kind() == kir::ErrorKind::Limit => {
-                // 書き手の診断を優先する(`keleut run` の `program_for_run` と同じ文面にする)。
+                // ライタの診断を優先する(`keleut run` の `program_for_run` と同じメッセージにする)。
                 let msg = match kir::write_kir_with(&program, &limits) {
                     Err(w) if w.kind() == kir::ErrorKind::WriteLimit => w.message().to_string(),
                     _ => e.message().to_string(),
@@ -584,7 +616,7 @@ impl Live {
                 (r.program, Ran::Ran(r.exec))
             }
             Err(_) => {
-                // スレッドが落ちて、プログラムも失われた。セッションを終えるので、空のプログラムを返す。
+                // スレッドが異常終了して、プログラムも失われた。セッションを終了するので、空のプログラムを返す。
                 eprintln!("keleut: 内部エラー: 実行のスレッドが落ちました");
                 self.jobs = None;
                 let empty = kir::Program {
@@ -604,14 +636,15 @@ impl Live {
     }
 }
 
-/// 実行時の文脈を使わない間に付けておく、空のプログラム。
+/// 要求を処理していない間、インタプリタに持たせておく空のプログラム([`mutator`])。
 static PARKED: keleut_lir::Program = keleut_lir::Program::empty();
 
-/// 実行のスレッドの本体。
+/// 実行スレッドの本体。
 ///
-/// 依頼ごとに、足した単位を LIR に下ろして LIR のプログラムの後ろに足し、インタプリタをそのプログラムに付け替え、
-/// 実行時の表を伸ばして、足した単位の初期化を実行する。
-/// 依頼の間は、インタプリタを空のプログラムに付け替えておく(LIR のプログラムに単位を足せるようにする)。
+/// 要求ごとに、追加した単位を LIR に変換して LIR のプログラムの末尾に追加し、インタプリタが指すプログラムをそれに差し替え、
+/// ランタイムの表を拡張して、追加した単位の初期化コードを実行する。
+/// 要求を処理していない間は、インタプリタが指すプログラムを空のプログラム([`PARKED`])に差し替えておく。
+/// インタプリタが LIR のプログラムを借用したままでは、そこに単位を追加できないからである。
 fn mutator(o: &Options, native: u64, jobs: mpsc::Receiver<Job>, replies: mpsc::Sender<Reply>) {
     keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
     let x = 0u8;
@@ -638,7 +671,7 @@ fn mutator(o: &Options, native: u64, jobs: mpsc::Receiver<Job>, replies: mpsc::S
     }
 }
 
-/// 1 つの依頼を実行する([`mutator`])。
+/// 要求を 1 つ処理する([`mutator`] から呼ぶ)。
 fn run_job(
     o: &Options,
     low: usize,
@@ -647,7 +680,7 @@ fn run_job(
     ext: &mut keleut_lir::Extender,
     parked: &mut Option<Interp<'static>>,
 ) -> Exec {
-    // 実行時がこれまでに作った形を、LIR の形の表の後ろに同じ番号で足す。
+    // ランタイムがこれまでに作ったシェイプを、LIR のシェイプ表の末尾に同じ番号で追加する。
     if let Some(it) = parked.as_ref() {
         let n = it.rt.shapes.count() as usize;
         for i in lp.shapes.len()..n {
@@ -657,10 +690,10 @@ fn run_job(
         }
     }
     let init0 = lp.init.len();
-    // 下ろしのスタックは、検証が使った深さの上限に見合う大きさにする(`Job::max_nest`)。
-    // 仮想メモリの上限の下でそのスレッドを作れなければ(`keleut_lir::ErrorKind::Limit`)、
-    // 検証を済ませた状態を戻せないので、処理系の限度の行を書いてセッションを 1 で終える。
-    // 下ろしの再帰は単位の深さだけ進むので、検証の深さより小さいスタックで作り直すことはしない。
+    // LIR への変換に使うスタックは、検証が使った深さの上限に必要な大きさにする(`Job::max_nest`)。
+    // 仮想メモリを制限しているとき(`ulimit -v`)にそのスレッドを作れなければ(`keleut_lir::ErrorKind::Limit`)、
+    // 検証を済ませた状態を元に戻せないので、`処理系の限度` の行を書いてセッションを終了コード 1 で終了する。
+    // LIR への変換の再帰は単位の深さだけ進むので、検証の深さより小さいスタックで作り直すことはしない。
     if let Err(e) = ext.extend(&job.program, lp, job.max_nest, o.yield_prune) {
         eprintln!("keleut: {e}");
         *parked = None;
@@ -671,21 +704,22 @@ fn run_job(
         });
     }
     let lp: &keleut_lir::Program = lp;
-    // 前の入力の後や、この単位を下ろす途中で、ほかの確保が大域の確保器の予備を使っていれば、実行の役割の印が立っている。
-    // 印をここで下ろしてから表を伸ばす(残った印で表を伸ばす確保が止まり、セッションが終わらないように)。
-    // 下ろした印は、この入力のメモリの不足として報せる。
+    // 前の入力の後や、この単位を LIR に変換する途中で、ほかの確保がグローバルアロケータの予備領域を使っていれば、実行スレッドのフラグが立っている。
+    // 表を拡張する前に、ここでフラグを下ろす。
+    // フラグが残っていると、表を拡張する確保が失敗して、セッションが終了するからである。
+    // 下ろしたフラグは、この入力のメモリ不足として報告する。
     let early_oom = keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec);
-    // この単位が足す大域とインスタンスの最初の添字(実行時エラーで止まったときに値を捨てる)。
+    // この単位が追加するグローバルとインスタンスの最初の添字。実行時エラーで止まったときに、ここから後の値を捨てる。
     let base = parked
         .as_ref()
         .map(|it| (it.rt.globals.len(), it.rt.inst_values.len()));
-    // この単位の形を実行時の形の表に入れられなかった(メモリの不足)。
+    // この単位のシェイプを、メモリ不足でランタイムのシェイプ表に登録できなかったときに真にする。
     let mut shape_oom = false;
     let mut it = match parked.take() {
         Some(it) => {
             let mut it = it.rebind(lp);
-            // 形の表を広げられないときは、ほかの表にまだ触れていないので、この入力のメモリの不足として続ける。
-            // 入れられた形は表に残り、次の入力の `grow_shapes` が続きから入れる。
+            // シェイプ表を拡張できないときは、ほかの表をまだ変えていないので、この入力のメモリ不足として扱い、セッションを続ける。
+            // 登録できたシェイプは表に残り、次の入力の `grow_shapes` が続きから登録する。
             match it.rt.grow_shapes() {
                 Ok(()) => {}
                 Err(Stop::OutOfMemory) => shape_oom = true,
@@ -695,8 +729,8 @@ fn run_job(
                 }
             }
             if !shape_oom && let Err(e) = it.rt.grow() {
-                // 表を伸ばす途中の内部の誤りか、メモリの不足である。
-                // 大域の表を伸ばした後なので、入力の誤りとして続けず、セッションを終える。
+                // 表を拡張する途中の内部エラーか、メモリ不足である。
+                // グローバルの表を拡張した後なので、この入力のエラーとして続けることはせず、セッションを終了する。
                 eprint!("{}", String::from_utf8_lossy(&e.message()));
                 return Exec::Exit(70);
             }
@@ -709,8 +743,8 @@ fn run_job(
                 it
             }
             Err(e) => {
-                // 起動のときの形の登録がメモリの不足になれば、初期化を始めるときの実行時エラー(3)で終える。
-                // 内部の誤り(形の番号の食い違い)は 70 である。
+                // 起動時のシェイプの登録がメモリ不足で失敗すれば、初期化の開始時の実行時エラーとして終了コード 3 で終了する。
+                // 内部エラー(シェイプの番号の食い違い)なら 70 である。
                 eprint!("{}", String::from_utf8_lossy(&e.message()));
                 return Exec::Exit(e.exit_code());
             }
@@ -729,7 +763,8 @@ fn run_job(
         )
     };
     if r.is_err() {
-        // 止まった入力の間に立った印は、この入力の停止とともに捨てる(印はメモリの不足 1 回に 1 度だけ答える)。
+        // 止まった入力の実行中に立ったフラグは、この入力の停止とともに下ろす。
+        // メモリ不足 1 回につき、フラグによる報告は 1 度だけにする。
         keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec);
     }
     let exec = match r {
@@ -738,13 +773,13 @@ fn run_job(
             Err(e) => io_failed(&mut it, Stop::from(e)),
         },
         Err(e) if job.mode == Mode::Start => {
-            // プレリュードの初期化が止まった(Diktor は標準エラーに書いて終わる)。
+            // プレリュードの初期化がエラーで止まった。Diktor と同じく、診断を標準エラーに書いて終了する。
             it.rt.out.eprint(&e.message());
             Exec::Exit(e.exit_code())
         }
         Err(e @ (Stop::Io(_) | Stop::IoAbort(_))) => io_failed(&mut it, e),
         Err(e) => {
-            // 止まるまでに書いた出力を残し、その後ろに診断を書く(Diktor の `runtime_message`)。
+            // 止まるまでに書いた出力を残し、その後に診断を書く(診断は Diktor の `runtime_message` に相当する)。
             match it.rt.out.flush() {
                 Err(w) => io_failed(&mut it, Stop::from(w)),
                 Ok(()) => {
@@ -770,12 +805,13 @@ fn run_job(
     exec
 }
 
-/// 実行時エラーで止まった入力の単位の、大域とインスタンスの値を捨てる。
+/// 実行時エラーで止まった入力の単位が追加した、グローバルとインスタンスの値を捨てる。
 ///
-/// 型検査の側がその入力の名前とインスタンスを捨てるので、後の入力はこれらの値を指せない。
+/// 型検査の側がその入力の名前とインスタンスを捨てるので、後の入力はこれらの値を参照できない。
 /// 参照セルはトップレベルに置けない(`Heap[h]` を導入するのは `run` だけである)ので、
-/// 前の入力の値からこれらの値に届くことも無い。
-/// 値を Unit にして初期化前に戻し、回収の根から外す(`g0` と `i0` は [`Rt::grow`] で伸ばす前の表の長さ)。
+/// 前の入力の値からこれらの値に到達することもない。
+/// 値を Unit にして初期化前の状態に戻し、GC ルートから外す。
+/// `g0` と `i0` は、[`Rt::grow`] で拡張する前の表の長さである。
 fn drop_unit_values(it: &mut Interp<'_>, g0: usize, i0: usize) {
     let rt = &mut it.rt;
     for g in g0..rt.globals.len() {
@@ -788,11 +824,11 @@ fn drop_unit_values(it: &mut Interp<'_>, g0: usize, i0: usize) {
     }
 }
 
-/// プレリュードの初期化を 1 回実行する(Diktor の `repl` の `start` の `Interp.start_session`)。
+/// プレリュードの初期化を 1 回実行する(Diktor の `repl` の `start` が呼ぶ `Interp.start_session` に相当する)。
 ///
-/// 実行のスレッドを作り、組み込みの単位とプレリュードの単位からなるプログラムを下ろして初期化する。
-/// プレリュードの出力は標準出力に出す。
-/// 止まれば、診断を標準エラーに書いた後の終了状態を `Err` で返す。
+/// 実行スレッドを作り、組み込みの単位とプレリュードの単位からなるプログラムを LIR に変換して、初期化コードを実行する。
+/// プレリュードの出力は標準出力に書く。
+/// エラーで止まれば、診断を標準エラーに書き、終了コードを `Err` で返す。
 fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<Live, u8> {
     out.flush()?;
     let mut live = Live::spawn(o)?;
@@ -807,8 +843,8 @@ fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<Live, 
         Ran::Ran(Exec::Io) => Err(exit::IO),
         Ran::Ran(Exec::Exit(c)) => Err(c),
         Ran::Ran(Exec::Failed) => Err(70),
-        // 仮想メモリの上限の下で KIR の処理のスレッドを作れないのは処理系の限度で、1 で終える
-        // (入力の下ろしのスレッドを作れないとき([`run_job`])と同じ)。
+        // 仮想メモリを制限しているとき(`ulimit -v`)に KIR を処理するスレッドを作れないのは処理系の限度なので、終了コード 1 で終了する。
+        // 入力を LIR に変換するスレッドを作れないとき([`run_job`])と同じである。
         Ran::Limit(msg) if msg.contains(kir::SPAWN_LIMIT_MESSAGE) => {
             eprintln!("keleut: プレリュードを初期化できません: {msg}");
             Err(1)
@@ -820,7 +856,7 @@ fn start_run(o: &Options, sess: &mut Session, out: &mut Output) -> Result<Live, 
     }
 }
 
-/// 1 つの入力を型検査して実行する(Diktor の `repl` の `process`)。
+/// 入力を 1 つ型検査して実行する(Diktor の `repl` の `process` に相当する)。
 fn process(
     live: &mut Live,
     sess: &mut Session,
@@ -873,7 +909,10 @@ fn io_failed(it: &mut Interp<'_>, e: Stop) -> Exec {
     Exec::Io
 }
 
-/// 関数 `f` を呼ぶ。最上位に届いた状態語は、その誤りにする(`keleut_interp` の `run_init` と同じ)。
+/// 関数 `f` を呼ぶ。
+///
+/// 状態ワードが設定されたまま最上位に戻ったときは、それが表すエラーを返す(`keleut_interp` の `run_init` と同じ)。
+/// エラー以外の状態ワードなら、内部エラーを返す。
 fn call(
     it: &mut Interp<'_>,
     f: keleut_lir::FuncId,
@@ -897,7 +936,7 @@ fn call(
     }
 }
 
-/// 止まった呼び出しの後で、次の呼び出しができる状態に戻す。
+/// エラーで止まった呼び出しの後で、ランタイムを次の呼び出しができる状態に戻す。
 fn reset(it: &mut Interp<'_>) {
     it.rt.pending = Pending::None;
     it.rt.limit = it.rt.max_depth;
@@ -905,7 +944,7 @@ fn reset(it: &mut Interp<'_>) {
     it.rt.chain = Word::UNIT;
 }
 
-/// 足した単位の初期化 `inits` を順に実行し、結果を表示する。
+/// 追加した単位の初期化関数 `inits` を順に実行し、束縛の値を表示する。
 fn exec(
     it: &mut Interp<'_>,
     lp: &keleut_lir::Program,
@@ -917,9 +956,9 @@ fn exec(
     for &f in inits {
         call(it, f, Word(0), &[])?;
     }
-    // 初期化の途中で、ヒープの確保の入口を通らない確保(引数の退避など)が大域の確保器の予備を使っていれば、
-    // 印が残っている。
-    // その入力のメモリの不足として、束縛を表示する前に報せる。
+    // 初期化の途中で、`Rt` のヒープ確保の関数を通らない確保(引数の退避など)がグローバルアロケータの予備領域を使っていれば、
+    // 実行スレッドのフラグが立ったままになっている。
+    // その入力のメモリ不足として、束縛を表示する前に報告する。
     if keleut_rt::alloc::take_flag(keleut_rt::alloc::Role::Exec) {
         return Err(Stop::OutOfMemory);
     }
@@ -941,7 +980,8 @@ fn exec(
     Ok(())
 }
 
-/// KIR の大域 `g` が辞書を受け取る関数なら、その辞書の数。
+/// KIR のグローバル `g` が辞書を受け取る関数なら、受け取る辞書の個数を返す。
+/// それ以外なら 0 を返す。
 fn dict_count(kp: &kir::Program, g: usize) -> usize {
     match kp.globals.get(g).map(|x| &x.kind) {
         Some(kir::GlobalKind::Dictabs(f)) => {
@@ -951,13 +991,14 @@ fn dict_count(kp: &kir::Program, g: usize) -> usize {
     }
 }
 
-/// 束縛の値の表示(Diktor の `show_value`)。
+/// 束縛の値を、表示するバイト列にする(Diktor の `show_value` に相当する)。
 ///
-/// 辞書を受け取る値は、辞書の代わりに Unit を渡して評価してから表示する
-/// (初期化式は構文上の値なので、辞書を使わず、停止し、エフェクトを起こさない)。
-/// 評価が止まったときは `<unevaluated>` にする。
-/// 型の頭が newtype で `Show` を満たす値は、`$show` の関数で文字列にする。
-/// その関数が止まったら、入力を受理しない。
+/// 辞書を受け取る値は、辞書の代わりに Unit を渡して評価してから表示する。
+/// 初期化式は構文上の値なので、辞書を使わず、停止し、エフェクトを起こさない。
+/// 評価がエラーで止まったときは `<unevaluated>` と表示する。
+/// ただし、巻き戻さずに終了するエラー(`Stop::is_fatal`)と出力エラーは、そのまま返す。
+/// 型の先頭の型構成子が newtype で `Show` を満たす値は、フロントエンドがその値のために作った内部用のグローバル `$show` の関数を呼んで文字列にする。
+/// その関数がエラーで止まったら、入力を受理しない。
 fn display(
     it: &mut Interp<'_>,
     lp: &keleut_lir::Program,
@@ -991,7 +1032,7 @@ fn display(
     r
 }
 
-/// `$show` の関数を、根の枠の `mark` 番の値に適用する。
+/// `$show` の関数を、ルートスタックの `mark` 番の値に適用する。
 fn show_call(
     it: &mut Interp<'_>,
     lp: &keleut_lir::Program,
@@ -1017,14 +1058,14 @@ fn show_call(
     Ok(it.rt.str_bytes(s).to_vec())
 }
 
-/// 値の構造に沿った表示(Diktor の `Value.show ~fn_name:false`)。
+/// 値を、その構造に沿って文字列にする(Diktor の `Value.show ~fn_name:false` に相当する)。
 ///
-/// [`Rt::show`] と同じ形で、関数の値(組み込みの値、`extern`、メソッドの値を含む)をすべて `<fn>` と書く。
-/// レコードのフィールドは、型の配置([`Layout`])が分かれば型の行の順に書き、値の表示の順を型の表示の順にそろえる。
-/// 配置が分からないとき(型の大きさや配置の表の上限を超えたときを含む)と、配置のラベルの集まりが値と合わないときは、
-/// ラベルの綴りのバイト列の順に書く(安定な整列で、同じラベルは正準の配置のとおり外側から)。
-/// 正準の配置の順(ラベルの番号の順)は受理しなかった入力を含むセッションの履歴で決まるので、表示に使わない(V231)。
-/// 深い値でもネイティブのスタックを使わないよう、明示の作業の列でたどる。
+/// [`Rt::show`] と同じ形式で、関数の値(組み込みの値、`extern`、メソッドの値を含む)をすべて `<fn>` と書く。
+/// レコードのフィールドは、型のレイアウト([`Layout`])が分かれば、型が持つレコードの行(row)の順に書き、値の表示の順序を型の表示の順序にそろえる。
+/// レイアウトが分からないとき(型の大きさやレイアウトの表が上限を超えたときを含む)と、レイアウトのラベルの集合が値と合わないときは、
+/// ラベル名のバイト列の順に書く(安定ソートなので、同じラベルは正準なレイアウトのとおり外側から並ぶ)。
+/// 正準なレイアウトの順(ラベルの番号の順)は、受理しなかった入力を含むセッションの履歴で決まるので、表示には使わない。
+/// 深い値でもネイティブスタックを使わないように、再帰せずにワークリストでたどる。
 fn show_value(rt: &Rt<'_>, w: Word, ls: &Layouts, root: usize) -> Vec<u8> {
     enum Item {
         V(Word, usize),
@@ -1080,9 +1121,9 @@ fn show_value(rt: &Rt<'_>, w: Word, ls: &Layouts, root: usize) -> Vec<u8> {
             out.extend_from_slice(b"<?>");
             continue;
         }
-        // SAFETY: w は生きている箱を指す。
+        // SAFETY: `w` は生きているオブジェクトを指す。
         let (kind, n) = unsafe { (value::kind_of(w), value::count_of(w) as usize) };
-        // SAFETY: 各分岐は箱の種類の配置のとおりに読む。
+        // SAFETY: 各分岐は、オブジェクトの種類ごとのレイアウトのとおりに読む。
         let at = |i: usize| Word(unsafe { value::get(w, i) });
         match kind {
             Some(Kind::I64) => {
@@ -1103,7 +1144,7 @@ fn show_value(rt: &Rt<'_>, w: Word, ls: &Layouts, root: usize) -> Vec<u8> {
                     .iter()
                     .map(|&l| p.labels[l as usize].as_str())
                     .collect();
-                // 型の行の順に並べ替える。配置が無いか、ラベルの集まりが型と違えば、ラベルの綴りの順にする。
+                // 型が持つレコードの行の順に並べ替える。レイアウトがないか、ラベルの集合が型と違えば、ラベル名の順にする。
                 let mut order: Vec<(usize, usize)> = (0..n).map(|i| (i, 0)).collect();
                 order.sort_by(|&(a, _), &(b, _)| {
                     display_name(names[a])
@@ -1228,7 +1269,7 @@ mod tests {
             .is_ok()
         );
         assert!(opts(&["x.kel"]).is_err());
-        // 後段の組の選択肢と --strict-exhaustive は受けて捨てる(入力はインタプリタで実行する)。
+        // バックエンドのペアのオプションと `--strict-exhaustive` は、受け付けて無視する(入力はインタプリタで実行する)。
         assert!(
             opts(&[
                 "--backend",

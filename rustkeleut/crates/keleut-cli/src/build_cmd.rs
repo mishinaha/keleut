@@ -1,19 +1,21 @@
-//! サブコマンド `keleut build` である(計画 261024-1 の 6.2 節)。
+//! サブコマンド `keleut build` である。
 //!
-//! `keleut build --target wasm -o DIR [OPTIONS] FILE.kel… | FILE.kir` は、WasmGC の後段の出力
-//! `program.wasm`、`rt.wasm`、`main.mjs` と起動の台本 `run` を `DIR` に書く。
-//! `DIR/run` か `node DIR/main.mjs` だけで走る(スタックは `Worker` の `resourceLimits.stackSizeMb` で取る)。
-//! `DIR/run` は閉じた標準出力を Node の前に見分け、`keleut run --backend wasm` と同じく、書いたときに 74 で終える。
-//! `node DIR/main.mjs` を直に走らせると、閉じた標準出力を見分けない。
+//! `keleut build --target wasm -o DIR [OPTIONS] FILE.kel… | FILE.kir` は、WasmGC バックエンドの出力 `program.wasm`、`rt.wasm`、`main.mjs` と起動スクリプト `run` を `DIR` に書く。
+//! 書いたプログラムは、`DIR/run` か `node DIR/main.mjs` だけで実行できる。
+//! スタックは `Worker` の `resourceLimits.stackSizeMb` で確保する。
+//! `DIR/run` は、標準出力が閉じているかどうかを Node を起動する前に調べる。
+//! 閉じた標準出力にプログラムが書いたときは、`keleut run --backend wasm` と同じく終了コード 74 で終了する。
+//! `node DIR/main.mjs` を直接実行すると、標準出力が閉じていることを検出できない。
 //!
-//! 入力の読み方と選択肢(`--frontend`、`--max-depth`、`--prelude`、`--no-prelude`、`--import-path`、`--no-yield-prune`)は
-//! `keleut run` と同じである(既定のフロントエンドは `rust`)。
-//! `--max-depth` は `main.mjs` が使う論理的な深さの限度になる。
-//! 終了状態は、成功が 0、使い方の誤りが 64、KIR の不正が 65、翻訳と検証と書き出しの失敗が 70 である。
+//! 入力の読み方とオプション(`--frontend`、`--max-depth`、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive`、`--no-yield-prune`)は `keleut run` と同じである(既定のフロントエンドは `rust`)。
+//! `keleut run` のオプションのうち `--backend`、`--tier`、`--native-stack`、`--gc-stress` は、未知のオプションとして拒否する。
+//! `--max-depth` は、`main.mjs` が使う論理的な深さの上限になる。
+//! 終了コードは、成功が 0、使い方のエラーが 64、KIR の不正が 65、Wasm のコード生成、検証、ファイルの書き出しの失敗が 70 である。
+//! 入力を読み込む段階でそれ以外のエラーが起きたときは、`keleut run` と同じ終了コードで終了する。
 
 use crate::{exit, run_cmd};
 
-/// `keleut build` の使い方である。
+/// `keleut build` の使い方の説明(usage)である。
 pub const USAGE: &str = "\
 usage: keleut build --target wasm -o DIR [OPTIONS] FILE.kel... | FILE.kir
 
@@ -28,7 +30,7 @@ options:
   --prelude FILE, --no-prelude, --import-path DIR   passed to the front end
 ";
 
-/// `keleut build …` の入口である。引数の先頭は `build` である。
+/// `keleut build …` のエントリポイントである。引数の先頭は `build` である。
 pub fn main(args: &[String]) -> u8 {
     let rest = &args[1..];
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {

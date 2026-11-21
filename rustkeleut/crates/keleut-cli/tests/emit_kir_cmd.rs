@@ -1,7 +1,7 @@
-//! `keleut emit-kir` の終了状態と出力の試験。
+//! `keleut emit-kir` の終了コードと出力のテスト。
 //!
-//! 終了状態と診断の形は Diktor の `--emit-ir` と同じである(計画 261024-1 の 6.2 節)。
-//! 途中で終わったときは、出力先のファイルを作らない。
+//! 終了コードと診断の形式は、Diktor の `--emit-ir` と同じである。
+//! エラーで途中で終了したときは、出力先のファイルを作らない。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -50,7 +50,7 @@ fn バイナリとテキストを書く() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// 終了状態と、標準エラーに含まれる文面と、出力先のファイルを作らないことを確かめる。
+/// 終了コードが `code` であること、標準エラーが `msg` を含むこと、出力先のファイルを作らないことを確かめる。
 fn fails(d: &Path, args: &[&str], code: i32, msg: &str) {
     let mut v = vec!["emit-kir", "-o", "out.kir"];
     v.extend_from_slice(args);
@@ -81,7 +81,7 @@ fn 誤りの終了状態() {
         "keleut: ファイルを開けません: nosuch.kel: No such file or directory",
     );
     fails(&d, &["--typo", "ty.kel"], 64, "unknown option: --typo");
-    // 網羅性の警告は標準エラーに出し、--strict-exhaustive では 1 で終わる。
+    // 網羅漏れの警告は標準エラーに書き、`--strict-exhaustive` を付けると終了コード 1 で終了する。
     let r = keleut(&d, &["emit-kir", "-o", "ex.kir", "ex.kel"]);
     assert_eq!(r.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&r.stderr).contains('⚠'));
@@ -110,7 +110,10 @@ fn 書き出せないときは_74() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// diktor/test/ir_run.t の、入れ子の限度をちょうど超える式である。
+/// 入れ子の上限をちょうど超える式は、KIR を書かずに終了コード 1 で終了する。
+///
+/// 式は `diktor/test/ir_run.t` と同じである。
+/// 上限より 1 段浅い式は、KIR を書ける。
 #[test]
 fn 入れ子の限度を超えるプログラムは書かずに_1() {
     let d = scratch("nest");
@@ -146,9 +149,9 @@ fn 入れ子の限度を超えるプログラムは書かずに_1() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// 標準出力がプロセスの始めから閉じていれば、Diktor と同じく 74 で終わる。
+/// 標準出力がプロセスの開始時から閉じていれば、Diktor と同じく終了コード 74 で終了する。
 ///
-/// Rust の標準ライブラリは閉じた標準出力を `/dev/null` で開き直すので、何もしなければ出力が黙って捨てられる。
+/// Rust の標準ライブラリは閉じた標準出力を `/dev/null` で開き直すので、対策をしなければ、出力は黙って捨てられる。
 #[cfg(target_os = "linux")]
 #[test]
 fn 閉じた標準出力には書けずに_74() {
@@ -175,7 +178,7 @@ fn 閉じた標準出力には書けずに_74() {
             "{args}"
         );
     }
-    // 開いていれば、/dev/null に書くのは誤りでない。
+    // 標準出力が開いていれば、`/dev/null` に書くのはエラーではない。
     let r = Command::new("sh")
         .current_dir(&d)
         .arg("-c")
@@ -187,11 +190,11 @@ fn 閉じた標準出力には書けずに_74() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// テキストは全体をメモリに置かずに流しながら書く(Diktor の `Ir_text.output` と同じ)。
+/// テキストは、全体をメモリに置かずに、できた部分から順に出力先へ書く(Diktor の `Ir_text.output` と同じ)。
 ///
 /// 深さ 20,000 の式のテキストは約 800 MB である。
-/// 仮想メモリを 1.5 GB(うち 1 GB は `--native-stack` のスタック)に抑えても書き終えることで、
-/// テキストを組み上げてから書く作りに戻っていないことを確かめる。
+/// 仮想メモリを 1.5 GB(うち 1 GB は `--native-stack` のスタック)に制限しても書き終えることから、
+/// テキスト全体をメモリに作ってから書く実装になっていないことを確かめる。
 #[cfg(target_os = "linux")]
 #[test]
 fn 深いプログラムのテキストを流しながら書く() {

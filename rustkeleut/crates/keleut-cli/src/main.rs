@@ -1,11 +1,12 @@
-//! RustKeleut のコマンド行の入口 `keleut` である。
+//! RustKeleut のコマンド `keleut` のエントリポイントである。
 //!
-//! サブコマンドの一覧と終了状態は、計画 261024-1 の 6.2 節に従う。
-//! 本ファイルは振り分けだけを持ち、各サブコマンドの中身はそれぞれのモジュールにある。
+//! 本ファイルはサブコマンドへの振り分けだけを行い、各サブコマンドの実装はそれぞれのモジュールにある。
+//! サブコマンドの一覧は `COMMANDS` に、複数のサブコマンドが使う終了コードはモジュール `exit` にある。
 
 use std::process::ExitCode;
 
-/// 大域の確保器の包み(予備と役割の印。`keleut_rt::alloc`)。
+/// グローバルアロケータである。
+/// システムのアロケータのラッパで、確保に失敗すると予備領域を解放してやり直し、スレッドの役割のフラグを立てる(`keleut_rt::alloc`)。
 #[global_allocator]
 static ALLOC: keleut_rt::alloc::Wrap = keleut_rt::alloc::Wrap;
 
@@ -20,19 +21,19 @@ mod lir_cmd;
 mod repl_cmd;
 mod run_cmd;
 
-/// 終了状態の定数である(計画 6.2 節の表)。
+/// 複数のサブコマンドが使う終了コードの定数である。
 mod exit {
-    /// 未実装の機能を使った(feature `llvm` を外して組んだときの後段 `jit` など)。
+    /// 未実装の機能を使った(feature `llvm` を外してビルドしたときのバックエンド `jit` など)。
     #[cfg_attr(feature = "llvm", allow(dead_code))]
     pub const UNIMPLEMENTED: u8 = 4;
-    /// 使い方の誤り。
+    /// 使い方のエラー。
     pub const USAGE: u8 = 64;
-    /// 出力に書けない。
+    /// 出力エラー(出力先に書けない)。
     pub const IO: u8 = 74;
 }
 
-/// 使い方の説明である。
-/// 使い方の誤りのときに、標準エラーへ印字する。
+/// `keleut` の使い方の説明(usage)である。
+/// 使い方のエラーのときは標準エラーに、`--help` のときは標準出力に書く。
 const USAGE: &str = "\
 usage: keleut COMMAND [ARGS...]
 
@@ -47,23 +48,23 @@ commands:
   compat-diktor ARGS...                  interpret Diktor's flags
 ";
 
-/// この構築で使える後段の名前である(`keleut --version` の 2 行目に印字する)。
+/// このビルドで使えるバックエンドの名前である。`keleut --version` の 2 行目に出力する。
 ///
-/// `jit` は feature `llvm`(既定で有効)で組んだときだけ入る。
-/// kconform はこの行を読み、LLVM の後段の組を走らせられるかを決める。
+/// `jit` は、feature `llvm`(既定で有効)を外さずにビルドしたときだけ入る。
+/// kconform はこの行を読み、LLVM ペアを実行できるかどうかを決める。
 const BACKENDS: &str = if cfg!(feature = "llvm") {
     "interp jit wasm"
 } else {
     "interp wasm"
 };
 
-/// サブコマンドを受け持つ関数である。
-/// 引数の列(先頭はサブコマンドの名前)を受け取り、終了状態を返す。
+/// サブコマンドを実装する関数の型である。
+/// 引数の並び(先頭はサブコマンドの名前)を受け取り、終了コードを返す。
 type Handler = fn(&[String]) -> u8;
 
-/// サブコマンドの名前と、それを受け持つ関数の表である。
+/// サブコマンドの名前と、それを実装する関数の表である。
 ///
-/// 表に無い名前は使い方の誤り(64)にする。
+/// 表にない名前は使い方のエラー(終了コード 64)になる。
 const COMMANDS: &[(&str, Handler)] = &[
     ("run", run_cmd::main),
     ("check", check_cmd::main),
@@ -75,7 +76,7 @@ const COMMANDS: &[(&str, Handler)] = &[
     ("compat-diktor", compat_cmd::main),
 ];
 
-/// 引数の列(プログラム名を除く)を振り分け、終了状態を返す。
+/// 引数の並び(プログラム名を除く)をサブコマンドに振り分け、終了コードを返す。
 fn dispatch(args: &[String]) -> u8 {
     let Some(name) = args.first() else {
         eprint!("keleut: missing command\n{USAGE}");
@@ -100,12 +101,14 @@ fn dispatch(args: &[String]) -> u8 {
 }
 
 fn main() -> ExitCode {
-    // 予備を取り、主のスレッドをそのほかの役割にし、試験用の失敗の指定を読む。
+    // 予備領域を確保し、メインスレッドの役割を `Role::Other` に設定し、テスト用の確保失敗の指定(`KELEUT_TEST_ALLOC_FAIL`)を読む。
+    // 指定を読めなければ、使い方のエラーとして終了する。
     if let Err(msg) = keleut_rt::alloc::init() {
         eprintln!("keleut: {msg}");
         return ExitCode::from(exit::USAGE);
     }
-    // `std::env::args` は UTF-8 でない引数で落ちるので、`args_os` で受けて使い方の誤りにする。
+    // `std::env::args` は UTF-8 でない引数があるとパニックするので、`args_os` で受け取る。
+    // UTF-8 でない引数があれば、使い方のエラーとして終了する。
     let mut args = Vec::new();
     for a in std::env::args_os().skip(1) {
         match a.into_string() {

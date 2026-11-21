@@ -1,32 +1,31 @@
-//! `keleut emit-kir` である(計画 261024-1 の 6.2 節。M99 で KIR の書き手を移した)。
+//! サブコマンド `keleut emit-kir` である。
 //!
-//! | 形 | 働き |
+//! | 書式 | 動作 |
 //! |---|---|
 //! | `keleut emit-kir [OPTIONS] FILE...` | 型検査し、KIR のバイナリ(`--text` ならテキスト)を書く(`diktor --emit-ir`、`--emit-ir-text` と同じバイト列) |
 //!
 //! `OPTIONS` は次のとおりである。
 //!
-//! - `--text`:正準のテキスト(`.kirt`)を書く。無ければバイナリ(`.kir`)を書く。
-//! - `-o FILE`:書き出す先。無ければ標準出力に書く。
-//! - `--no-prelude`、`--prelude PATH`、`--import-path DIR`、`--strict-exhaustive`、`--max-nest N`、`--native-stack BYTES`:
-//!   `keleut check` の同名の旗と同じ。
+//! - `--text`: 正準なテキスト(`.kirt`)を書く。指定しなければバイナリ(`.kir`)を書く。
+//! - `-o FILE`: 出力先のファイル。指定しなければ標準出力に書く。
+//! - `--no-prelude`、`--prelude PATH`、`--import-path DIR`、`--strict-exhaustive`、`--max-nest N`、`--native-stack BYTES`: `keleut check` の同名のオプションと同じ。
 //!
-//! 手順と終了状態は Diktor の `--emit-ir` と同じである。
+//! 手順と終了コードは Diktor の `--emit-ir` と同じである。
 //!
 //! 1. 型検査する。
-//!    警告と誤りは標準エラーに書き(Diktor が実行の前段で行う型検査と同じ)、
-//!    型エラーと import エラーは 1、字句と構文の誤りは 2、内部の誤りは 3、未実装は 4、入力を開けないときは 64 で終わる。
-//!    `--strict-exhaustive` で警告が残れば 1 で終わる。
-//! 2. 単位の鍵を決める。別のファイルが同じ鍵になれば 64 で終わる。
+//!    警告とエラーは標準エラーに書く(Diktor が実行の前に行う型検査と同じ)。
+//!    型エラーと import エラーは 1、字句エラーと構文エラーは 2、内部エラーは 3、未実装は 4、入力を開けないときは 64 で終了する。
+//!    `--strict-exhaustive` を指定して警告が残れば、1 で終了する。
+//! 2. 単位(コンパイル単位)のキーを決める。2 つのファイルのキーが同じになれば、64 で終了する。
 //! 3. KIR を作り、先にバイナリに符号化する。
-//!    ノードの深さが入れ子の限度を超えるプログラムは、何も書かずに 1 で終わる。
-//! 4. 書き出す。書き出せなければ 74 で終わる。
+//!    ノードの深さが入れ子の上限を超えるプログラムは、何も書かずに 1 で終了する。
+//! 4. 書き出す。書き出せなければ、74 で終了する。
 //!
-//! 出力先のファイルは、すべてが済んでから開く。
-//! 書き出す前に終わったときは、ファイルを作らない。
+//! 出力先のファイルは、手順 3 までがすべて済んでから開く。
+//! 書き出す前に終了したときは、ファイルを作らない。
 //! 開いた後に書けなくなったときは、Diktor と同じく書きかけのファイルが残る。
-//! テキストは全体をメモリに置かずに流しながら書く。
-//! 標準出力に書くとき、標準出力がプロセスの始めから閉じていれば、Diktor と同じく 74 で終わる。
+//! テキストは、全体をメモリに置かずに出力先へ順に書く。
+//! 標準出力に書くときに、標準出力がプロセスの開始時から閉じていれば、Diktor と同じく 74 で終了する。
 
 use crate::exit;
 use crate::front_cmd::{MAX_STACK_BYTES, io_msg, parse_bytes, stdout_closed};
@@ -40,7 +39,7 @@ use keleut_front::types::load::{StdFs, UnitKeyError};
 use keleut_front::types::{Fail, OutLine};
 use std::io::Write;
 
-/// 使い方である。
+/// `keleut emit-kir` の使い方の説明(usage)である。
 pub const USAGE: &str = "\
 usage: keleut emit-kir [OPTIONS] FILE...
 options:
@@ -61,7 +60,9 @@ struct Options {
     text: bool,
     out: Option<String>,
     limits: Limits,
-    /// `--native-stack` を与えたか(与えたときは、スタックを小さくして作り直さない)。
+    /// `--native-stack` を指定していれば真である。
+    /// 指定したときは、[`build_on_front_stack`] がスタックを小さくしない。
+    /// 仮想メモリの上限の 4 分の 1 への切り下げも、スレッドを作れないときに半分ずつ小さくする作り直しも行わない。
     fixed_stack: bool,
 }
 
@@ -140,31 +141,32 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
     })
 }
 
-/// 標準エラーに 1 行を書き出す。
+/// 標準エラーに 1 行を書き、すぐに flush する。
 fn eprintln_now(s: &str) {
     let mut e = std::io::stderr().lock();
     let _ = writeln!(e, "{s}");
     let _ = e.flush();
 }
 
-/// 書き出しの段の入れ子の限度の診断(Diktor の `encode_ir` の `Limit_error`)。
+/// KIR を書き出す段階で処理系の限度を超えたときの診断を書き、終了コード 1 を返す(Diktor の `encode_ir` の `Limit_error` に対応する)。
 fn write_limit(msg: &str) -> u8 {
     eprintln_now(&format!("keleut: KIR を書き出せません: {msg}"));
     1
 }
 
-/// 書き出しの誤りが処理系の限度か(入れ子の限度か、最も小さいスタックでも KIR の処理のスレッドを作れない)。
+/// 書き出しのエラーが処理系の限度なら真を返す。
 ///
-/// どちらも、`.kel` の入力を実行の前に変換する段の限度なので、1 で終える(LangSpec §15.5)。
+/// 処理系の限度になるのは、入れ子の上限を超えた場合と、最も小さいスタックでも KIR を処理するスレッドを作れない場合である。
+/// どちらも、`.kel` の入力を実行の前に変換する段階で起きる処理系の限度なので、終了コード 1 で終了する(LangSpec §15.5)。
 fn is_write_limit(e: &kir::Error) -> bool {
     matches!(e.kind(), kir::ErrorKind::WriteLimit | kir::ErrorKind::Limit)
 }
 
-/// フロントエンドのスレッドを作れなかったときの診断を書き、終了状態を返す。
+/// フロントエンドのスレッドが失敗したときの診断を書き、終了コードを返す。
 ///
-/// 仮想メモリの上限の下でスレッドを作れないのは、型検査に要する領域が処理系の限度を超えた場合なので、
-/// 限度の行を書いて 1 で終える(LangSpec §15.5)。
-/// 上限が無いのに作れないときと、ほかの誤り(スレッドが落ちた)は内部の誤りで 70 である。
+/// 仮想メモリを制限しているとき(`ulimit -v`)にスレッドを作れないのは、型検査に必要なメモリが処理系の限度を超えた場合である。
+/// このときは `処理系の限度` の行を書き、終了コード 1 を返す(LangSpec §15.5)。
+/// 制限していないのに作れないときと、それ以外のエラー(スレッドのパニック)は内部エラーで、70 を返す。
 fn front_failure(msg: &str) -> u8 {
     if msg.starts_with(SPAWN_FAILED) && kir::address_space_limit().is_some() {
         eprintln_now(&format!("keleut: 処理系の限度: {msg}"));
@@ -175,7 +177,7 @@ fn front_failure(msg: &str) -> u8 {
     }
 }
 
-/// 型検査して KIR を作る。終わるときは終了状態を `Err` で返す。
+/// 型検査して KIR を作る。途中で終了するときは、終了コードを `Err` で返す。
 ///
 /// 型検査のスレッドの中で呼ぶ。
 fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
@@ -195,7 +197,7 @@ fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
             return Err(3);
         }
     };
-    // 型検査の間に確保が大域の確保器の予備を使ったら、限度の行で終える(`keleut_rt::alloc`)。
+    // 型検査の間に確保に失敗してグローバルアロケータが予備領域を使っていたら、`処理系の限度` の行を書いて終了する(`keleut_rt::alloc::conv_checkpoint`)。
     keleut_rt::alloc::conv_checkpoint(keleut_rt::alloc::Stage::Check);
     let out = std::mem::take(&mut c.output);
     if let Some(p) = &out.panic {
@@ -230,10 +232,9 @@ fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
         }
     };
     let r = program_of_checked(&mut c, &keys, check);
-    // 型検査の文脈と木は、KIR を作り終えたらこのスレッドで捨てる。
-    // `keleut check` と違い、このあと KIR の処理と実行が続くので、残すと実行の間ずっと常駐し、
-    // 仮想メモリの上限の下で実行に使える領域を減らす。
-    // 木を捨てる再帰は、構文解析の限度に合わせたこのスレッドのスタックに収まる。
+    // 型検査を済ませたプログラム(型検査の文脈と木)は、KIR を作り終えたらこのスレッドで解放する。
+    // `keleut check` と違い、この後に KIR の処理と実行が続くので、残すと実行の間ずっとメモリを占め、仮想メモリを制限しているとき(`ulimit -v`)に実行に使えるメモリが減る。
+    // 木を解放する再帰は、構文解析の上限に合わせたこのスレッドのスタックに収まる。
     drop(c);
     match r {
         Ok(p) => Ok(p),
@@ -249,10 +250,10 @@ fn build(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
     }
 }
 
-/// 書き出す先を開く。
+/// 出力先を開く。
 ///
-/// 開けないときの文面は Diktor と同じく `パス: 理由` である。
-/// 標準出力がプロセスの始めから閉じていたときは、Diktor と同じく書けない誤りにする([`stdout_closed`])。
+/// 開けないときのメッセージは、Diktor と同じく `パス: 理由` である。
+/// 標準出力がプロセスの開始時から閉じていたときは、Diktor と同じく書き込みエラーにする([`stdout_closed`])。
 fn open_out(o: &Options) -> Result<Box<dyn Write + Send>, String> {
     match &o.out {
         Some(path) => match std::fs::File::create(path) {
@@ -266,20 +267,20 @@ fn open_out(o: &Options) -> Result<Box<dyn Write + Send>, String> {
     }
 }
 
-/// 書き出せない誤りを報告して 74 を返す。
+/// 書き出せないことを報告して、終了コード 74 を返す。
 fn output_error(what: &str, msg: &str) -> u8 {
     eprintln_now(&format!("keleut: KIR の{what}を書き出せません: {msg}"));
     exit::IO
 }
 
-/// OCaml の `Sys_error` の文面に合わせて、末尾の `(os error N)` を除く。
+/// OCaml の `Sys_error` のメッセージに合わせて、末尾の `(os error N)` を取り除く。
 fn strip_os_error(s: &str) -> &str {
     s.rfind(" (os error ").map_or(s, |i| &s[..i])
 }
 
 /// バイナリを書き出す。
 ///
-/// 診断の文面は Diktor と同じく、開けないときは `パス: 理由`、開いた後に書けないときは理由だけである。
+/// 診断のメッセージは Diktor と同じく、開けないときは `パス: 理由`、開いた後に書けないときは理由だけである。
 fn write_binary(o: &Options, data: &[u8]) -> u8 {
     const WHAT: &str = "バイナリ";
     let mut w = match open_out(o) {
@@ -292,9 +293,9 @@ fn write_binary(o: &Options, data: &[u8]) -> u8 {
     }
 }
 
-/// 正準のテキストを、全体をメモリに置かずに流しながら書き出す(Diktor の `Ir_text.output` と同じ)。
+/// 正準なテキストを、全体をメモリに置かずに出力先へ順に書く(Diktor の `Ir_text.output` と同じ)。
 ///
-/// 入れ子の深さが限度に近いプログラムのテキストは数十 GB になりうるので、組み上げてから書くことはしない。
+/// 入れ子の深さが上限に近いプログラムのテキストは数十 GB になることがあるので、全体を作ってから書くことはしない。
 /// 開いた後に書けなくなったときは、Diktor と同じく書きかけのファイルを残す。
 fn write_text(o: &Options, prog: &kir::Program) -> u8 {
     const WHAT: &str = "テキスト";
@@ -315,7 +316,7 @@ fn write_text(o: &Options, prog: &kir::Program) -> u8 {
     }
 }
 
-/// `keleut emit-kir …`(引数の先頭は `emit-kir`)。
+/// `keleut emit-kir …` のエントリポイントである。引数の先頭は `emit-kir` である。
 pub fn main(args: &[String]) -> u8 {
     let o = match parse_options(&args[1..]) {
         Ok(o) => o,
@@ -332,7 +333,7 @@ pub fn main(args: &[String]) -> u8 {
         Ok(Err(code)) => return code,
         Err(msg) => return front_failure(&msg),
     };
-    // テキストだけを書くときも、先にバイナリに符号化して深さを確かめる(Diktor と同じ順)。
+    // テキストだけを書くときも、先にバイナリに符号化して深さを検査する(Diktor と同じ順)。
     let bin = match encode(&prog) {
         Ok(b) => b,
         Err(e) if is_write_limit(&e) => return write_limit(e.message()),
@@ -342,7 +343,7 @@ pub fn main(args: &[String]) -> u8 {
         }
     };
     if o.text {
-        // 深さは確かめ終えたので、バイナリは捨ててからテキストを流す。
+        // 深さの検査は済んだので、バイナリを解放してからテキストを書く。
         drop(bin);
         write_text(&o, &prog)
     } else {
@@ -350,16 +351,17 @@ pub fn main(args: &[String]) -> u8 {
     }
 }
 
-/// フロントエンドの専用のスレッドで型検査して KIR を組み立てる。
+/// フロントエンドの専用のスレッドで型検査して、KIR を作る。
 ///
-/// `shrink` が真なら、仮想メモリの上限(`ulimit -v`)に合わせてスタックを小さくする。
-/// 既定のスタック(8 GiB)は上限の下では予約できず、[`on_check_stack`] はそのとき深さの限度に見込むスタック
-/// (リリースの構築で約 455 MiB)で作り直す。
-/// feature `llvm` で組んだ `keleut` では `libLLVM.so` が仮想メモリの大部分を使うので、上限 512 MiB の下ではその作り直しも失敗する。
-/// 予約できたときも、ヒープの残りが足りなくなることがある。
-/// 上限があれば、初めからスタックを上限の 4 分の 1 までにする。
+/// `shrink` が真なら、仮想メモリの制限(`ulimit -v`)に合わせてスタックを小さくする。
+/// 既定のスタック(8 GiB)は、仮想メモリを制限していると予約できない。
+/// [`on_check_stack`] はそのとき、深さの上限に必要なスタック(リリースビルドで約 455 MiB)で作り直す。
+/// feature `llvm` を有効にしてビルドした `keleut` では `libLLVM.so` が仮想メモリの大部分を使うので、仮想メモリの上限が 512 MiB のときはその作り直しも失敗する。
+/// 予約できたときも、ヒープに使えるメモリが足りなくなることがある。
+/// そこで、仮想メモリを制限しているときは、初めからスタックを仮想メモリの上限の 4 分の 1 以下にする(16 MiB より小さくはしない)。
 /// それでもスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は [`MIN_RUN_FRONT_STACK`])。
-/// どちらも、`--native-stack` と同じ規則で、そのスタックに収まる深さまで `check.max_nest` を下げる(限度は I)。
+/// どちらの場合も、`--native-stack` と同じ規則で、そのスタックに収まる深さまで `check.max_nest` を下げる。
+/// 構文解析の上限は処理系の限度なので、下げても言語仕様に反しない(LangSpec §15.5)。
 fn build_on_front_stack(
     check: &mut CheckOptions,
     strict: bool,
@@ -394,16 +396,19 @@ fn build_on_front_stack(
     r
 }
 
-/// フロントエンドのスレッドの本体。変換の役割と場所 `check` を書いてから [`build`] を呼ぶ(`keleut_rt::alloc`)。
+/// フロントエンドのスレッドの本体である。
+///
+/// スレッドの役割を変換スレッド(`Role::Conv`)に、確保箇所を `check` に設定してから、[`build`] を呼ぶ(`keleut_rt::alloc`)。
 fn front_thread(check: &CheckOptions, strict: bool) -> Result<kir::Program, u8> {
     keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Conv);
     let _site = keleut_rt::alloc::site(keleut_rt::alloc::Site::Check);
     build(check, strict)
 }
 
-/// KIR に符号化する。符号化は KIR の処理のスレッドで行い、場所を `kir` にする(`keleut_rt::alloc`)。
+/// KIR をバイナリに符号化する。
 ///
-/// 符号化の後に変換の役割の印を見る。
+/// 符号化は KIR を処理するスレッドで行うので、プロセス全体で共有する確保箇所を `kir` に設定しておく(`keleut_rt::alloc::conv_site`)。
+/// 符号化の後に、変換スレッドのフラグを調べる(`keleut_rt::alloc::conv_checkpoint`)。
 fn encode(prog: &kir::Program) -> Result<Vec<u8>, kir::Error> {
     let r = {
         let _site = keleut_rt::alloc::conv_site(keleut_rt::alloc::Site::Kir);
@@ -413,15 +418,16 @@ fn encode(prog: &kir::Program) -> Result<Vec<u8>, kir::Error> {
     r
 }
 
-/// フロントエンドのスレッドを作れなかったときの、[`on_check_stack`] の誤りの文面の始まりである。
+/// フロントエンドのスレッドを作れなかったときに [`on_check_stack`] が返す、エラーメッセージの先頭の部分である。
 const SPAWN_FAILED: &str = "フロントエンドのスレッドを作れません";
 
-/// フロントエンドのスレッドを作り直すときのスタックの下限(16 MiB)である。
+/// フロントエンドのスレッドを作り直すときの、スタックサイズの下限(16 MiB)である。
 const MIN_RUN_FRONT_STACK: usize = 16 << 20;
 
-/// 構文解析の限度を下限の [`MIN_CHECK_NEST`] 段にできる、最も小さいフロントエンドのスタック(バイト)を返す。
+/// フロントエンドのスレッドに使える、最も小さいスタックサイズ(バイト)を返す。
 ///
-/// リリースの構築で約 384 KiB、最適化なしの構築で約 2.3 MiB である。
+/// 構文解析の上限を、その最小値である [`MIN_CHECK_NEST`] 段まで下げたときに必要なサイズである。
+/// リリースビルドで約 384 KiB、デバッグビルドで約 2.3 MiB である。
 fn min_front_stack() -> usize {
     let mut s = MIN_CHECK_NEST * CHECK_STACK_BYTES_PER_LEVEL;
     while check_limits(MIN_CHECK_NEST, Some(s)).is_err() {
@@ -430,11 +436,11 @@ fn min_front_stack() -> usize {
     s
 }
 
-/// `keleut run` の `--native-stack` から、フロントエンドのスレッドのスタックを決める。
+/// `keleut run` の `--native-stack` から、フロントエンドのスレッドのスタックサイズを決める。
 ///
-/// 与えた大きさを、[`min_front_stack`] から [`MAX_STACK_BYTES`] までに丸める。
-/// 小さい側を使い方の誤りにしないのは、同じ値がインタプリタと JIT のスタックでもあり、
-/// 実行時のために与えた `--native-stack 512k` が、最適化なしの構築でフロントエンドに足りないからである。
+/// 指定された値を、[`min_front_stack`] 以上、[`MAX_STACK_BYTES`] 以下の範囲に収める。
+/// 小さい値を使い方のエラーにしないのは、同じ値がインタプリタと JIT のスタックサイズでもあるからである。
+/// たとえば、実行のために指定した `--native-stack 512k` は、デバッグビルドではフロントエンドに足りない。
 pub(crate) fn front_stack_for_run(native_stack: u64) -> usize {
     usize::try_from(native_stack)
         .unwrap_or(usize::MAX)
@@ -443,15 +449,14 @@ pub(crate) fn front_stack_for_run(native_stack: u64) -> usize {
 
 /// `keleut run --frontend rust` のフロントエンドである。
 ///
-/// `front_args` は `keleut run` が受けたフロントエンドの旗(`--no-prelude`、`--prelude PATH`、`--import-path DIR`、
-/// `--strict-exhaustive`)である。
-/// 手順、診断、終了状態は `diktor --emit-ir` と同じで、KIR をファイルに書く代わりに返す
-/// (入れ子の深さは、バイナリに符号化して確かめる)。
+/// `front_args` は、`keleut run` が受け取ったフロントエンドのオプション(`--no-prelude`、`--prelude PATH`、`--import-path DIR`、`--strict-exhaustive`)である。
+/// 手順、診断、終了コードは `diktor --emit-ir` と同じで、KIR をファイルに書く代わりに返す。
+/// 入れ子の深さは、バイナリに符号化して検査する。
 ///
-/// `front_stack` は `keleut run` の `--native-stack` から決めたフロントエンドのスタックである([`front_stack_for_run`])。
-/// 与えたときは、そのスタックで走らせ、`keleut check --native-stack` と同じく、収まる深さまで構文解析の限度を下げる。
-/// 与えなかったときは既定の大きさのスタックで走らせ、仮想メモリの上限(`ulimit -v`)があれば、
-/// スタックを初めから上限の 4 分の 1 までにし、収まる深さまで入れ子の限度を下げる。
+/// `front_stack` は、`keleut run` の `--native-stack` から決めたフロントエンドのスタックサイズである([`front_stack_for_run`])。
+/// 値があれば、そのスタックで実行し、`keleut check --native-stack` と同じく、収まる深さまで構文解析の上限を下げる。
+/// `None` なら、既定のサイズのスタックで実行する。
+/// このとき仮想メモリを制限していれば(`ulimit -v`)、初めからスタックを仮想メモリの上限の 4 分の 1 以下にし、収まる深さまで構文解析の上限を下げる。
 /// スレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は 16 MiB。[`build_on_front_stack`])。
 pub(crate) fn program_for_run(
     files: &[std::path::PathBuf],

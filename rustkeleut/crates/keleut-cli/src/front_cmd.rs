@@ -1,36 +1,36 @@
-//! `keleut dump tokens` と `keleut dump ast` である(計画 261024-1 の 6.2 節、M96)。
+//! サブコマンド `keleut dump tokens` と `keleut dump ast` である。
 //!
-//! | 形 | 働き |
+//! | 書式 | 動作 |
 //! |---|---|
-//! | `keleut dump tokens [OPTIONS] FILE...` | ASI を適用した後のトークン列を印字する(`diktor --dump-tokens` と同じ形) |
-//! | `keleut dump ast [OPTIONS] FILE...` | 脱糖した AST を S 式で印字する(`diktor --dump-ast` と同じ形) |
+//! | `keleut dump tokens [OPTIONS] FILE...` | ASI を適用した後のトークン列を出力する(`diktor --dump-tokens` と同じ形式) |
+//! | `keleut dump ast [OPTIONS] FILE...` | 脱糖した AST を S 式で出力する(`diktor --dump-ast` と同じ形式) |
 //!
 //! `OPTIONS` は次のとおりである。
 //!
-//! - `--max-nest N`: 構文解析で作る木の深さの限度(既定は 200,000)。
-//!   限度に見合うスタックが [`MAX_STACK_BYTES`] を超える値は、使い方の誤りにする。
-//! - `--native-stack BYTES`: フロントエンドを走らせる専用のスレッドのスタックの大きさ。
-//!   `k`、`m`、`g` の接尾辞を使える。与えたスタックに `--max-nest` が収まらなければ、限度を下げる。
-//!   [`MAX_STACK_BYTES`] を超える値は、使い方の誤りにする。
+//! - `--max-nest N`: 構文解析で作る木の深さの上限(既定は 200,000)。
+//!   その上限に必要なスタックが [`MAX_STACK_BYTES`] を超える値は、使い方のエラーになる。
+//! - `--native-stack BYTES`: フロントエンドを実行する専用のスレッドのスタックサイズ。
+//!   `k`、`m`、`g` の接尾辞を使える。
+//!   指定したスタックに `--max-nest` の深さが収まらなければ、収まる深さまで上限を下げる。
+//!   [`MAX_STACK_BYTES`] を超える値、64 KiB より小さい値、1 段も収まらない値は、使い方のエラーになる。
 //!
-//! ファイルは並べた順に処理し、誤りのあったファイルで止まる。
-//! 終了状態は Diktor と同じで、字句と構文の誤りと構文解析の限度は 2、
-//! 入力を開けないときと使い方の誤りは 64、標準出力に書けないときは 74、内部の誤りは 3 である。
-//! 専用のスレッドを作れないときと、その中で落ちたときは 70 である。
+//! ファイルは並べた順に処理し、エラーのあったファイルで処理をやめる。
+//! 終了コードは Diktor と同じで、字句エラー、構文エラー、構文解析の上限を超えたときは 2、入力を開けないときと使い方のエラーは 64、標準出力に書けないときは 74、内部エラーは 3 である。
+//! 専用のスレッドを作れないときと、そのスレッドがパニックしたときは 70 である。
 //!
-//! 標準出力と標準エラーへ書く時機も Diktor(OCaml のチャネル)に合わせる。
-//! cram は 2 つを 1 本にして読むので、書く時機が変わると行の前後が入れ替わる。
+//! 標準出力と標準エラーに書くタイミングも、Diktor(OCaml のチャネル)に合わせる。
+//! cram は標準出力と標準エラーを 1 つのストリームにまとめて読むので、書くタイミングが変わると行の前後が入れ替わるからである。
 //!
-//! - 標準出力は 65,536 バイトの緩衝で、満ちたときと、AST の各宣言を印字した後
-//!   (`Format` の `@.`)と、終わるときに書き出す。
-//! - 字句エラーと入力の誤りの診断は緩衝に溜め、終わるときに標準出力の後に書き出す。
-//! - 構文エラーの診断は、その場で書き出す(OCaml の `prerr_endline`)。
+//! - 標準出力は 65,536 バイトのバッファを持ち、次の 3 つの時点で flush する。
+//!   バッファがいっぱいになったとき、AST の各宣言を出力した後(`Format` の `@.`)、終了するときである。
+//! - 字句エラー、入力を開けないとき、内部エラーの診断は標準エラーのバッファにため、終了するときに、標準出力の後で flush する。
+//! - 構文エラーの診断は、書いてすぐに flush する(OCaml の `prerr_endline`)。
 
 use crate::exit;
 use keleut_front::{Files, Limits, ParseError, dump};
 use std::io::Write;
 
-/// 使い方である。
+/// `keleut dump tokens` と `keleut dump ast` の使い方の説明(usage)である。
 pub const USAGE: &str = "\
 usage: keleut dump tokens [OPTIONS] FILE...
        keleut dump ast [OPTIONS] FILE...
@@ -39,15 +39,15 @@ options:
   --native-stack BYTES   stack size of the frontend thread (suffix k, m or g)
 ";
 
-/// 専用のスレッドのスタックの大きさの上限(8 GiB)である。
+/// 専用のスレッドのスタックサイズの上限(8 GiB)である。
 ///
-/// これより大きいスタックは、多くの環境でスレッドを作れない。
+/// これより大きいスタックを指定すると、多くの環境でスレッドを作れない。
 pub const MAX_STACK_BYTES: usize = 8 << 30;
 
-/// OCaml のチャネルの緩衝の大きさである。
+/// OCaml のチャネルが持つバッファのサイズ(65,536 バイト)である。
 const CHANNEL_BUFFER: usize = 65536;
 
-/// OCaml の出力チャネルの写しである。
+/// OCaml の出力チャネルと同じタイミングで書く、バッファ付きの出力先である。
 struct Chan {
     fd: i32,
     buf: Vec<u8>,
@@ -73,7 +73,7 @@ impl Chan {
         }
     }
 
-    /// 緩衝に書く(`caml_putblock`)。満ちたら書き出す。
+    /// バッファに追記する(OCaml の `caml_putblock` と同じ)。バッファがいっぱいになったら flush する。
     fn put(&mut self, mut data: &[u8]) -> std::io::Result<()> {
         while !data.is_empty() {
             let free = CHANNEL_BUFFER - self.buf.len();
@@ -98,15 +98,15 @@ impl Chan {
     }
 }
 
-/// 標準出力と標準エラーの組である。
+/// 標準出力と標準エラーのチャネルの組である。
 struct Out {
     stdout: Chan,
     stderr: Chan,
 }
 
-/// 処理を止める理由である。
+/// 処理を途中でやめる理由である。
 enum Stop {
-    /// 診断を書き終えた。終了状態を持つ。
+    /// 診断は [`Out`] に書いてある。値は終了コードである。
     Exit(u8),
     /// 標準出力に書けない。
     Output(std::io::Error),
@@ -128,19 +128,19 @@ impl Out {
         self.stdout.flush().map_err(Stop::Output)
     }
 
-    /// 緩衝に溜める診断(OCaml の `eprintf`)。
+    /// 診断を標準エラーのバッファにためる(OCaml の `eprintf` と同じ)。
     fn eprint(&mut self, s: &str) {
         let _ = self.stderr.put(s.as_bytes());
     }
 
-    /// その場で書き出す診断(OCaml の `prerr_endline`)。
+    /// 診断を 1 行書いて、すぐに flush する(OCaml の `prerr_endline` と同じ)。
     fn eprintln_flush(&mut self, s: &str) {
         let _ = self.stderr.put(s.as_bytes());
         let _ = self.stderr.put(b"\n");
         let _ = self.stderr.flush();
     }
 
-    /// 終わる(Diktor の `safe_exit`)。標準出力、標準エラーの順に書き出す。
+    /// 標準出力、標準エラーの順に flush し、`code` をそのまま返す(Diktor の `safe_exit` と同じ順)。
     fn exit(mut self, code: u8) -> u8 {
         let _ = self.stdout.flush();
         let _ = self.stderr.flush();
@@ -148,7 +148,7 @@ impl Out {
     }
 }
 
-/// I/O の誤りの文面(OCaml の `Sys_error` の文面と同じく、末尾の `(os error N)` を除く)。
+/// I/O エラーのメッセージを返す。OCaml の `Sys_error` のメッセージに合わせて、末尾の `(os error N)` を取り除く。
 pub(crate) fn io_msg(e: &std::io::Error) -> String {
     let s = e.to_string();
     match s.rfind(" (os error ") {
@@ -157,12 +157,12 @@ pub(crate) fn io_msg(e: &std::io::Error) -> String {
     }
 }
 
-/// プロセスが始まったときに標準出力(fd 1)が閉じていたかどうかである。
+/// プロセスの開始時に標準出力(fd 1)が閉じていたら真である。
 ///
-/// Rust の標準ライブラリは `main` の前に、閉じている fd 0〜2 を `/dev/null` で開き直す。
-/// そのため `main` の中から書いても誤りにならず、出力が黙って捨てられる。
-/// Diktor(OCaml)は同じとき `Bad file descriptor` で 74 で終わるので、
-/// 標準ライブラリの初期化より前に走る `.init_array` の関数で fd 1 を調べておく。
+/// Rust の標準ライブラリは、`main` の前に、閉じている fd 0〜2 を `/dev/null` で開き直す。
+/// そのため、`main` の中から書いてもエラーにならず、出力は何も報告されずに捨てられる。
+/// Diktor(OCaml)は、同じ状況で `Bad file descriptor` のエラーになり、終了コード 74 で終了する。
+/// これに合わせるために、標準ライブラリの初期化より前に実行される `.init_array` の関数で fd 1 を調べておく。
 static STDOUT_CLOSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(target_os = "linux")]
@@ -171,11 +171,11 @@ mod stdout_probe {
         fn fcntl(fd: i32, cmd: i32, ...) -> i32;
     }
 
-    /// `F_GETFD` である。
+    /// `fcntl` のコマンド `F_GETFD`(ファイル記述子フラグを読む)の値である。
     const F_GETFD: i32 = 1;
 
     extern "C" fn probe() {
-        // SAFETY: fd 1 の記述子の旗を読むだけで、何も変えない。
+        // SAFETY: fd 1 のファイル記述子フラグを読むだけで、何も変更しない。
         if unsafe { fcntl(1, F_GETFD) } == -1 {
             super::STDOUT_CLOSED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -186,20 +186,20 @@ mod stdout_probe {
     static PROBE: extern "C" fn() = probe;
 }
 
-/// プロセスが始まったときに標準出力が閉じていたなら、書けない誤り(`EBADF`)を返す。
+/// プロセスの開始時に標準出力が閉じていたら、書き込みエラー(`EBADF`)を返す。
 pub(crate) fn stdout_closed() -> Option<std::io::Error> {
     STDOUT_CLOSED
         .load(std::sync::atomic::Ordering::Relaxed)
         .then(|| std::io::Error::from_raw_os_error(9))
 }
 
-/// 解釈したコマンド行である。
+/// コマンド行を解釈した結果である。
 struct Options {
     files: Vec<String>,
     limits: Limits,
 }
 
-/// `k`、`m`、`g` の接尾辞を使えるバイト数を読む。64 KiB より小さい値は受けない。
+/// バイト数を読む。`k`、`m`、`g` の接尾辞を使える。数として読めない値と、64 KiB より小さい値は `None` になる。
 pub(crate) fn parse_bytes(s: &str) -> Option<usize> {
     let (num, mul) = match s.as_bytes().last()? {
         b'k' | b'K' => (&s[..s.len() - 1], 1usize << 10),
@@ -211,7 +211,7 @@ pub(crate) fn parse_bytes(s: &str) -> Option<usize> {
     (v >= 64 << 10).then_some(v)
 }
 
-/// 深さの限度 `n` に見合うスタック([`Limits::for_nest`] と同じ見積もり)が上限に収まるか。
+/// 深さの上限 `n` に必要なスタック([`Limits::for_nest`] と同じ見積もり)が [`MAX_STACK_BYTES`] 以下なら真を返す。
 fn nest_fits(n: usize) -> bool {
     n.checked_mul(keleut_front::STACK_BYTES_PER_LEVEL)
         .and_then(|b| b.checked_add(32 << 20))
@@ -261,7 +261,7 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
     Ok(Options { files, limits })
 }
 
-/// 入力のファイルを読む。読めなければ診断を溜めて 64 で止まる。
+/// 入力ファイルを読む。読めなければ、診断をバッファにためて、終了コード 64 の [`Stop::Exit`] を返す。
 fn read_input(out: &mut Out, path: &str) -> Result<Vec<u8>, Stop> {
     std::fs::read(path).map_err(|e| {
         out.eprint(&format!(
@@ -354,12 +354,12 @@ fn run(args: &[String], body: fn(&mut Out, &Options) -> Result<(), Stop>) -> u8 
     }
 }
 
-/// `keleut dump tokens …`(引数の先頭は `tokens`)。
+/// `keleut dump tokens …` のエントリポイントである。引数の先頭は `tokens` である。
 pub fn tokens(args: &[String]) -> u8 {
     run(args, tokens_files)
 }
 
-/// `keleut dump ast …`(引数の先頭は `ast`)。
+/// `keleut dump ast …` のエントリポイントである。引数の先頭は `ast` である。
 pub fn ast(args: &[String]) -> u8 {
     run(args, ast_files)
 }

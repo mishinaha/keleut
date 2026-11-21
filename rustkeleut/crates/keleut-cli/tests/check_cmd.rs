@@ -1,8 +1,8 @@
-//! `keleut check` の限度と import の試験。
+//! `keleut check` の入れ子の上限と import のテスト。
 //!
-//! 計画 261024-1 の 6.11 節のとおり、深い入力でもプロセスをスタックあふれで落とさないことを確かめる。
-//! `--native-stack` で小さいスタックを与えたときは、深さの限度をスタックに収まるまで下げ、
-//! 構文解析の限度の診断(終了状態 2)で止まる。
+//! 深い入力でも、プロセスがスタックオーバーフローで異常終了しないことを確かめる。
+//! `--native-stack` で小さいスタックを指定したときは、深さの上限をスタックに収まる値まで下げることと、
+//! 上限を超えた入力に対して `処理系の限度: 構文解析で再帰が深すぎます` の診断を書き、終了コード 2 で終了することを確かめる。
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -20,7 +20,7 @@ fn scratch(tag: &str) -> PathBuf {
     d
 }
 
-/// diktor/test/run_exit.t の 2 万段の `1 + (...)` の式である。
+/// `diktor/test/run_exit.t` と同じく、`1 + (...)` を 2 万段入れ子にした式のソースを返す。
 fn deep_source() -> String {
     format!("let x = {}1{}\n", "1 + (".repeat(20000), ")".repeat(20000))
 }
@@ -48,7 +48,9 @@ fn 小さいスタックでも深い入力で落ちない() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// 2 万文のブロックである(文を `let` の鎖に脱糖するので、ブロックを閉じる 1 回の還元で深さ 2 万の木になる)。
+/// 文を 2 万個並べたブロックのソースを返す。
+///
+/// 文は `let` の連鎖に脱糖されるので、ブロックを閉じる 1 回の還元で深さ 2 万の木になる。
 fn long_block_source() -> String {
     let mut s = String::from("let r = {\n");
     for i in 0..20000 {
@@ -81,7 +83,7 @@ fn 限度を超えた長いブロックを捨てても落ちない() {
 
 #[test]
 fn 長い_import_の鎖も小さいスタックで型検査する() {
-    // f0 が f1 を、f1 が f2 を、… と検索パスで import する 3,000 段の鎖である。
+    // f0 が f1 を、f1 が f2 を、というように検索パスで import していく、3,000 段の import の連鎖を作る。
     let d = scratch("chain");
     let n = 3000;
     for i in 0..n {
@@ -162,7 +164,7 @@ fn 深いヴァリアントのパターンの網羅性の検査() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// import 先を検索パスで探し、import 先を開けないときは 64 で終わる。
+/// import 先を検索パスで探すことと、import 先を開けないときに終了コード 64 で終了することを確かめる。
 #[test]
 fn import_の検索パスと開けない_import_先() {
     let d = scratch("import");
