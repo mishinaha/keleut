@@ -1,8 +1,8 @@
-G の節(継続を末尾でなく再開するか、捨てるか、2 回以上再開しうる操作節)の取り出しと再開の試験である(IRSpec 9 節、計画 261024-1 の 6.6 節と 6.10 節)。
-記録は keleut run の結果で、Diktor の木の評価器の結果とも同じである。
-WasmGC の後段(組 kw)では、継続はフレームの記録の列で、再開は各フレームの再開の入口を最上段から順に呼ぶことである。
+G の節(IRSpec 9.2 節の分類で、返り値の型が Never でない操作の節のうち、本体に非末尾の resume を持つもの)の継続のキャプチャと再開のテストである(IRSpec 9 節)。
+期待出力は keleut run の結果で、Diktor の構文木の評価器の結果とも一致する。
+WasmGC バックエンド(ペア kw)は、継続をフレームの記録の並びで表し、再開するときは各フレームの再開用エントリを最上段から順に呼ぶ。
 
-生成器。G の節の末尾の resume は一定の領域で 10 万回再開し、末尾でない resume は再開を 10 万段重ねる。
+生成器のテストである。T の節(IRSpec 9.2 節の分類)も扱い、T の節の末尾 resume は一定のメモリで 10 万回再開し、G の節の非末尾の resume は再開を 10 万段重ねる。
 
   $ cat > gen.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }
@@ -26,7 +26,7 @@ WasmGC の後段(組 kw)では、継続はフレームの記録の列で、再�
   0 1 2 3 4 
 
 深い再帰の底で yield する。
-継続は 1,000 段のフレームを持ち、再開のたびにそのすべてを再開の入口から続ける。
+1 つ目の呼び出しの継続は 1,000 段のフレームを持ち、再開のたびにそのすべてのフレームを再開用エントリから続行する。
 
   $ cat > deep.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }
@@ -45,8 +45,8 @@ WasmGC の後段(組 kw)では、継続はフレームの記録の列で、再�
   1009000
 
 継続は高々 1 回しか再開できない。
-2 回目の resume は実行時エラー(付録 B の 7 番)で、1 回目の再開の出力の後に 3 で終わる。
-継続は使ったので、ハンドラの cancel 節は走らない。
+2 回目の resume は実行時エラー(IRSpec 付録 B の 7 番)になり、1 回目の再開の出力の後に終了コード 3 で終了する。
+継続は再開済みなので、ハンドラの cancel 節は実行されない。
 
   $ cat > affine.kel <<'EOF'
   > effect Ask = { ask: (Int32) => Int32 }
@@ -62,8 +62,8 @@ WasmGC の後段(組 kw)では、継続はフレームの記録の列で、再�
   実行時エラー: resume は高々1回しか呼べません(アフィン)
   [3]
 
-再開の間に多くの値を確保して捨てる(WasmGC の後段では V8 の回収が走る)。
-継続のフレームの記録が持つ値は回収されない。
+再開の合間に多くの値を確保して捨てる(WasmGC バックエンドでは V8 の GC が動く)。
+継続のフレームの記録が持つ値は、GC で解放されない。
 
   $ cat > churn.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }
@@ -76,8 +76,8 @@ WasmGC の後段(組 kw)では、継続はフレームの記録の列で、再�
   $ keleut run churn.kel
   1000
 
-G の節と N の節と T の節を重ねる。
-G の節の本体が外側の N の操作を起こすと、継続を捨て、継続の中の cancel 節が内側から走る。
+G の節、N の節、T の節を組み合わせる。
+G の節の本体が外側の N の操作を起こすと、継続は破棄され、継続の中の cancel 節が内側から順に実行される。
 T の節は外側の G の節の継続にも含まれる。
 
   $ cat > mixed.kel <<'EOF'
@@ -141,8 +141,8 @@ T の節の本体が外側の G の操作を起こし、内側のハンドラの
   t 7
   210
 
-辞書を通るメソッドの呼び出し、メソッドの値、引数の多い関数の中で yield する。
-引数が 32 個を超える関数は、残りの引数を 1 つの配列で受け取る(WasmGC の後段)。
+辞書を通すメソッド呼び出し、メソッドの値、引数の多い関数の中で yield する。
+WasmGC バックエンドでは、引数が 32 個を超える関数は、33 個目からの引数を 1 つの配列で受け取る。
 
   $ cat > via.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }
@@ -161,9 +161,9 @@ T の節の本体が外側の G の操作を起こし、内側のハンドラの
   4003
   2214
 
-組み込みの Array.each と pinned の中の perform を取り出す。
+組み込みの Array.each と pinned の中の perform で継続をキャプチャする。
 組み込みの本体は LIR の関数なので、その中の呼び出しも再開点を持ち、継続は組み込みのフレームを含む。
-G の節の末尾でない resume で、Array.each の中の yield を集める:
+G の節の非末尾の resume で、Array.each の中の yield の値を集める:
 
   $ cat > each_collect.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }
@@ -175,7 +175,7 @@ G の節の末尾でない resume で、Array.each の中の yield を集める:
   $ keleut run each_collect.kel
   10 20 30 40 50 .
 
-G の節の末尾の resume で、Array.each の中の yield の値を足す:
+T の節の末尾 resume で、Array.each の中の yield の値を合計する:
 
   $ cat > each_sum.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }
@@ -191,7 +191,7 @@ G の節の末尾の resume で、Array.each の中の yield の値を足す:
   150
 
 Never を返す操作で、Array.each の途中から抜ける。
-操作を処理したハンドラが自分で継続を破棄するので、そのハンドラ自身の cancel 節は走らず、操作節の値がハンドラ式の値になる:
+操作を受け取ったハンドラ自身が継続を破棄するので、そのハンドラの cancel 節は実行されず、操作節の値がハンドラ式の値になる:
 
   $ cat > each_stop.kel <<'EOF'
   > effect Stop = { stop: (Int32) => Never }
@@ -204,7 +204,7 @@ Never を返す操作で、Array.each の途中から抜ける。
   skip 20
   30
 
-pinned の中で yield し、G の節の末尾でない resume で再開する:
+pinned の中で yield し、G の節の非末尾の resume で再開する:
 
   $ cat > pinned_yield.kel <<'EOF'
   > effect Gen = { yield: (Int32) => Unit }

@@ -1,8 +1,8 @@
-閉じた標準出力への書き込みが cancel 節を走らせてから 74 で終わる試験である(計画 261024-1 の 6.5 節の出力。diktor/test/eval.t:820-848 を写したもの)。
-ハンドラと cancel 節を使うので、M89 の受け入れで確かめる(計画 9 節の M87 と M89 の行)。
+閉じた標準出力への書き込みが失敗したときに、cancel 節を実行してから終了コード 74 で終了することのテストである(IRSpec 9.7 節)。
+プログラムは diktor/test/eval.t の sinkfail.kel と同じで、バッファがいっぱいになった時点の flush が失敗する。
 
-Rust の実行時は、閉じた標準入出力(>&-)を起動のときに /dev/null で開き直す。
-keleut-rt の out.rs が、.init_array の関数で起動の前に fcntl(1, F_GETFD) を呼んで記述子 1 が閉じていたかを記録するので、keleut はこの試験で 74 で終わる。
+Rust のランタイムは、閉じた標準入出力(>&-)を起動時に /dev/null で開き直す。
+keleut-rt の out.rs は、それより前に動く .init_array の関数で fcntl(1, F_GETFD) を呼び、ファイル記述子 1 が閉じていたかを記録して書き込みを EBADF で失敗させるので、keleut はこのテストで終了コード 74 で終了する。
 
   $ cat > sinkfail.kel <<'EOF2'
   > effect Res = { use: (String) => Unit }
@@ -28,9 +28,9 @@ keleut-rt の out.rs が、.init_array の関数で起動の前に fcntl(1, F_GE
   keleut: 標準出力に書き出せません: Bad file descriptor
   [74]
 
-防壁が抑制した例外を記録する前の flush が、標準出力への最初の失敗になる試験である。
-Diktor と同じく、記録を書かずに、書き込みの失敗の診断だけを出してすぐに 74 で終わる(IRSpec 9.6 節の 4)。
-残りの cancel 節も走らせない。
+防壁(cancel 節の実行中に、伝播中の状態を退避して守る手順)が抑制した例外を記録する前の flush が、標準出力への最初の出力エラーになる場合のテストである。
+Diktor と同じく、抑制の記録を書かずに、出力エラーの診断だけを書いて、すぐに終了コード 74 で終了する(IRSpec 9.6 節の 4)。
+残りの cancel 節も実行しない。
 
   $ cat > suppflush.kel <<'EOF2'
   > effect Fail = { throw: (String) => Never }
@@ -43,9 +43,9 @@ Diktor と同じく、記録を書かずに、書き込みの失敗の診断だ�
   keleut: 標準出力に書き出せません: Bad file descriptor
   [74]
 
-cancel 節が、標準出力への書き込みの失敗の後に書き込んでから脱出する試験である。
-失敗で捨てたバッファの後に書き足したものは、防壁の記録の前の flush で改めて書き出しを試み、また失敗する。
-Diktor と同じく、記録を書かずに、書き込みの失敗の診断だけを出してすぐに 74 で終わる(IRSpec 9.7 節)。
+cancel 節が、標準出力への出力エラーの後に書き込んでから脱出する場合のテストである。
+出力エラーでバッファを捨てた後に書き足したバイトは、抑制の記録の前の flush で改めて書き出そうとして、また失敗する。
+Diktor と同じく、抑制の記録を書かずに、出力エラーの診断だけを書いて、すぐに終了コード 74 で終了する(IRSpec 9.7 節)。
 
   $ cat > cancelwrite.kel <<'EOF2'
   > effect Res = { use: (String) => Unit }
@@ -69,10 +69,10 @@ Diktor と同じく、記録を書かずに、書き込みの失敗の診断だ�
   keleut: 標準出力に書き出せません: Bad file descriptor
   [74]
 
-標準出力が /dev/full のとき(ENOSPC)の試験である。
-OCaml のチャネルは、ENOSPC では書けなかったバイトをバッファに残すので、防壁の記録の前の flush もまた失敗する。
-Diktor と同じく、記録を書かずに、書き込みの失敗の診断だけを出してすぐに 74 で終わる(IRSpec 9.7 節)。
-EBADF で失敗する 26 行目の場合とは違い、抑制の記録は出ない。
+標準出力が /dev/full の場合(ENOSPC)のテストである。
+ENOSPC では、OCaml のチャネルと同じく、書けなかったバイトをバッファに残すので、抑制の記録の前の flush もまた失敗する。
+Diktor と同じく、抑制の記録を書かずに、出力エラーの診断だけを書いて、すぐに終了コード 74 で終了する(IRSpec 9.7 節)。
+EBADF で失敗する 26 行目のコマンドとは違い、抑制の記録は出ない。
 
   $ keleut run sinkfail.kel > /dev/full
   keleut: 標準出力に書き出せません: No space left on device

@@ -1,9 +1,9 @@
-ハンドラ式を含まないプログラムの論理的な深さの試験である(IRSpec 11.2 節、11.3 節)。
-diktor/test/ir_depth.t の前半のブロックを、keleut run --max-depth で走らせる形に写した。
-組 dk-ir では、shim が --max-depth を diktor --run-ir に渡す。
+ハンドラ式を含まないプログラムで論理的な深さを確かめるテストである(IRSpec 11.2 節、11.3 節)。
+diktor/test/ir_depth.t の前半のブロックを、keleut run --max-depth で実行する形に書き直した。
+ペア dk-ir では、shim が --max-depth を diktor --run-ir に渡す。
 
-末尾でない再帰は限度 100 の下で f(98) まで通り、f(99) で止まる。
-末尾呼び出しの 10 万回のループは深さを増やさない。
+非末尾の再帰は、上限 100 のとき f(98) まで実行でき、f(99) で上限を超える。
+末尾呼び出しによる 10 万回のループは、深さを増やさない。
 
   $ cat > nontail.kel <<'EOF'
   > let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
@@ -19,7 +19,7 @@ diktor/test/ir_depth.t の前半のブロックを、keleut run --max-depth で�
   実行時エラー: 論理的な深さが限度 100 を超えました
   [3]
 
-Array.each と pinned は、呼び出し元より 1 つ深く走り、利用者の関数をさらに 1 つ深く呼ぶ(IRSpec 付録 A.4)。
+Array.each と pinned は、非末尾呼び出しで呼ぶと呼び出し元より 1 段深い位置で実行され、ユーザの関数をさらに 1 段深い位置で呼ぶ(IRSpec 11.2 節、付録 A.4)。
 
   $ cat > each.kel <<'EOF'
   > let rec f(n: Int32): Int32 = if n == 0 then 0 else 1 + f(n - 1)
@@ -41,7 +41,7 @@ Array.each と pinned は、呼び出し元より 1 つ深く走り、利用者�
   実行時エラー: 論理的な深さが限度 100 を超えました
   [3]
 
-相互の末尾呼び出し、メソッドを通した末尾呼び出し、辞書を渡す末尾呼び出しは、限度 10 の下で 10 万回続く。
+相互の末尾呼び出し、メソッドを通した末尾呼び出し、辞書を渡す末尾呼び出しは、上限 10 のときも 10 万回続けられる。
 
   $ cat > tails.kel <<'EOF'
   > let rec even(n: Int32): Boolean = if n == 0 then true else odd(n - 1)
@@ -58,7 +58,7 @@ Array.each と pinned は、呼び出し元より 1 つ深く走り、利用者�
   7
   0
 
-opcall は末尾位置でも 1 段と数え、辞書を渡す末尾でない再帰も 1 段ずつ数える。
+演算子の呼び出し(opcall)は末尾位置にあっても 1 段と数え、辞書を渡す非末尾の再帰も 1 段ずつ数える。
 
   $ cat > opcall.kel <<'EOF'
   > let add(a: Int32, b: Int32): Int32 = a + b

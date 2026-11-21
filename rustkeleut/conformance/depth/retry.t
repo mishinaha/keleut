@@ -1,10 +1,10 @@
-限度 10 の下で、防壁と再試行の組と、末尾の resume の形が 10 万回完走することの試験である(計画 261024-1 の 6.6 節、8.1 節)。
-diktor/test/tail_calls.t の OCAMLRUNPARAM で絞ったブロック(V213 で除外する)のうち、loops.t が写していないものを、論理的な深さで作り直した。
+上限 10 のとき、防壁と再試行の組み合わせと、末尾 resume の各形が 10 万回完走することのテストである(IRSpec 9.6 節の 4、11.2 節)。
+diktor/test/tail_calls.t のうち OCAMLRUNPARAM でスタックを絞ったブロック(既知の差分に台帳 V213 で登録してある)の中で、loops.t が扱っていないブロックが確かめる性質を、論理的な深さで確かめ直す。
 プログラムは tail_calls.t のものと同じである。
 
-cancel 節から起こした再開しない操作による破棄を防壁が打ち切った後に、節の本体から末尾で再試行する。
-打ち切るのが外側のハンドラ(retrycancel.kel)でも、再開する操作の節から送出を受けるハンドラ(retrycancelvia.kel)でも、破棄を進めている当のハンドラ(retrycancelsame.kel)でも、深さは再試行の回数で増えない。
-打ち切るたびに同じ記録を 1 行書く。
+cancel 節が再開しない操作を起こして始まった破棄を、防壁(cancel 節の実行中に、伝播中の状態を退避して守る手順)が抑制し、その後に操作節の本体から末尾呼び出しで再試行する。
+cancel 節が起こした操作を受け取るのが、外側のハンドラ(retrycancel.kel)でも、再開する操作の節から再開しない操作を起こして外側に送るハンドラ(retrycancelvia.kel)でも、破棄を進めているハンドラ自身(retrycancelsame.kel)でも、深さは再試行の回数に応じて増えない。
+抑制するたびに、同じ抑制の記録を 1 行書く。
 
   $ cat > retrycancel.kel <<'EOF'
   > effect Fail = { throw: (String) => Never }
@@ -71,7 +71,7 @@ cancel 節から起こした再開しない操作による破棄を防壁が打�
   $ sort err.txt | uniq -c | sed 's/^ *//'
   100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
 
-打ち切られた外側のハンドラの return 節から末尾で再帰しても、深さは回数で増えない。
+cancel 節が起こした操作を受け取った外側のハンドラが、return 節から末尾呼び出しで再帰しても、深さは回数に応じて増えない。
 
   $ cat > retcancelret.kel <<'EOF'
   > effect Fail = { throw: (String) => Never }
@@ -95,7 +95,7 @@ cancel 節から起こした再開しない操作による破棄を防壁が打�
   $ sort err.txt | uniq -c | sed 's/^ *//'
   100000 cancel 節で例外が抑制されました: cancel 節から操作の巻き戻しで脱出しようとしました
 
-操作節の末尾の resume の 5 つの形(節が resume だけの形、文の後、match の腕、run の本体、&& の右辺)である。
+操作節の末尾 resume の 5 つの形(節が resume だけの形、文の後、match の節、run の本体、&& の右辺)を確かめる。
 
   $ cat > resume.kel <<'EOF'
   > effect Tick = { tick: () => Unit }
@@ -125,7 +125,7 @@ cancel 節から起こした再開しない操作による破棄を防壁が打�
   run
   true
 
-プレリュードの with_stdout の中のループである。
+プレリュードの with_stdout の中で実行するループを確かめる。
 
   $ cat > stdout.kel <<'EOF'
   > let rec loop(n: Int32): Unit @ Print = (n == 0) match { case true => () case false => { perform print(""); loop(n - 1) } }

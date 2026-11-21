@@ -1,7 +1,7 @@
-標準出力のバイト列と出力の規約の試験である(計画 261024-1 の 6.5 節の出力、8.3 節、D530)。
+標準出力に書くバイト列と、出力エラーの扱い(IRSpec 9.7 節)のテストである。
 文字列はバイト列で、Console.write は文字列のバイトをそのまま書く。
 
-NUL と、文字の途中で切った不正な UTF-8 のバイト列もそのまま書く(期待は Diktor と同じ):
+NUL と、文字の途中で切った不正な UTF-8 のバイト列もそのまま書く(期待出力は Diktor と同じ):
 
   $ cat > nul.kel <<'EOF'
   > echo("a\u0000b\U0001F600")
@@ -12,8 +12,8 @@ NUL と、文字の途中で切った不正な UTF-8 のバイト列もそのま
   $ keleut run nul.kel | od -An -tx1
    61 00 62 f0 9f 98 80 e3 81 82 0a
 
-1 MiB を超える文字列を、バッファの大きさ(64 KiB)をまたいで書く。
-読み手が 1 秒遅れて読み始めるパイプでも、バイト列は欠けない(期待は Diktor と同じ):
+1 MiB を超える文字列を、バッファのサイズ(64 KiB)をまたいで書く。
+読み取る側のプロセスが 1 秒遅れて読み始めるパイプでも、バイト列は欠けない(期待出力は Diktor と同じ):
 
   $ cat > big.kel <<'EOF'
   > let rec dbl(s: String, n: Int32): String = if n == 0 then s else dbl(s + s, n - 1)
@@ -28,9 +28,9 @@ NUL と、文字の途中で切った不正な UTF-8 のバイト列もそのま
   $ keleut run big.kel | (sleep 1; cat) | cksum
   3609452285 4194313
 
-非ブロッキングのパイプでは、書き込みが EAGAIN で返る。
-keleut は待ってから書き直すので、バイト列は欠けず、終了状態は 0 である。
-Diktor も起動のときに O_NONBLOCK を外すので、同じく欠けずに書く:
+非ブロッキングのパイプがいっぱいになると、書き込みは EAGAIN で失敗する。
+keleut は少し待ってから再試行するので、バイト列は欠けず、終了コードは 0 である。
+Diktor は起動時に O_NONBLOCK を外すので、同じく欠けずに書く:
 
   $ cat > nb.py <<'EOF'
   > import fcntl, os, subprocess, sys, time
@@ -50,22 +50,22 @@ Diktor も起動のときに O_NONBLOCK を外すので、同じく欠けずに�
   $ python3 nb.py keleut run big.kel
   0 4194313
 
-書けない標準出力(/dev/full)では、最初の書き込みの失敗で 74 になる。
-小さな出力は終了の前の flush で失敗する(期待は Diktor と同じ。診断の名前だけが違う):
+書き込めない標準出力(/dev/full)では、最初の出力エラーで終了コード 74 で終了する。
+小さな出力は、終了前の flush で失敗する(期待出力は Diktor と同じで、診断の先頭のプログラム名だけが違う):
 
   $ printf 'echoln("hello")\n' > hello.kel
   $ keleut run hello.kel > /dev/full
   keleut: 標準出力に書き出せません: No space left on device
   [74]
 
-バッファが満ちた時点で失敗すれば、プログラムはそこで止まる:
+バッファがいっぱいになった時点の flush が失敗すれば、プログラムはそこで終了する:
 
   $ keleut run big.kel > /dev/full
   keleut: 標準出力に書き出せません: No space left on device
   [74]
 
-閉じた標準出力(>&-)でも、最初の書き込みの失敗で 74 になる。
-小さな出力は終了の前の flush で、大きな出力はバッファが満ちた時点で失敗する(期待は Diktor と同じ。診断の名前だけが違う):
+閉じた標準出力(>&-)でも、最初の出力エラーで終了コード 74 で終了する。
+小さな出力は終了前の flush で、大きな出力はバッファがいっぱいになった時点の flush で失敗する(期待出力は Diktor と同じで、診断の先頭のプログラム名だけが違う):
 
   $ keleut run hello.kel >&-
   keleut: 標準出力に書き出せません: Bad file descriptor
@@ -74,25 +74,25 @@ Diktor も起動のときに O_NONBLOCK を外すので、同じく欠けずに�
   keleut: 標準出力に書き出せません: Bad file descriptor
   [74]
 
-何も書かないプログラムは、閉じた標準出力でも 0 で終わる(Diktor と同じ):
+何も書かないプログラムは、閉じた標準出力でも終了コード 0 で終了する(Diktor と同じ):
 
   $ printf 'let x = 1\n' > quiet.kel
   $ keleut run quiet.kel >&-
 
-実行時エラーで止まるときは、flush の失敗を捨てて、実行時エラーの終了状態 3 で終わる(Diktor と同じ):
+実行時エラーで終了するときは、flush の失敗を無視して、実行時エラーの終了コード 3 で終了する(Diktor と同じ):
 
   $ printf 'echoln("hello")\necholn(show(1 / 0))\n' > m74.kel
   $ keleut run m74.kel > /dev/full
   実行時エラー: ゼロ除算です
   [3]
 
-標準エラーにも書けないときは、診断を捨てる:
+標準エラーにも書けないときは、診断を出さずに同じ終了コードで終了する:
 
   $ keleut run m74.kel > /dev/null 2> /dev/full
   [3]
 
-書き出しの失敗の種類に依らず、OS の誤りの文を診断に書いて 74 になる。
-つながっていない AF_INET の SOCK_DGRAM のソケットと、つながっていない AF_UNIX の SOCK_STREAM のソケットを標準出力にする(期待は Diktor と同じ。診断の名前だけが違う):
+出力エラーの種類によらず、OS のエラーメッセージを診断に書いて終了コード 74 で終了する。
+接続していない AF_INET の SOCK_DGRAM のソケットと、接続していない AF_UNIX の SOCK_STREAM のソケットを標準出力にする(期待出力は Diktor と同じで、診断の先頭のプログラム名だけが違う):
 
   $ cat > sock.py <<'EOF'
   > import socket, subprocess, sys
