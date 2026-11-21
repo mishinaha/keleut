@@ -1,4 +1,4 @@
-// 小さな型検査器:let 多相つきの単一化による型推論(水準で一般化する)。
+// 小さな型検査器。単一化で型を推論し、let で束縛した式の型をレベルで一般化する。
 newtype Ty = TInt | TBool | TVar(Int32) | TFun(Ty, Ty) | TPair(Ty, Ty)
 newtype Scheme = Forall(List[Int32], Ty)
 newtype Ex = EInt(Int32) | EBool(Boolean) | EVar(String) | ELam(String, Ex) | EApp(Ex, Ex)
@@ -119,7 +119,7 @@ let rec infer[h](st: St[h], env: List[(String, Scheme)], level: Int32, e: Ex): T
   }
 }
 
-// 入力の生成(線形合同法の擬似乱数で、型で導いた式を作る)。
+// 入力の式を作る。線形合同法の擬似乱数を使い、求める型(Int、Bool、関数のいずれか)に合わせて式を選ぶ。
 let next_seed(s: Int32): Int32 = (s * 1103 + 12345) % 1000003
 let names(i: Int32): String = __string_sub("abcdefgh", i % 8, 1)
 let more(n: Int32): Int32 = if n < 8 then n + 1 else n
@@ -186,7 +186,7 @@ and gen_fn(seed: Int32, depth: Int32, nv: Int32): (Ex, Int32) = {
   }
 }
 
-// 型のよい既知のプログラム(id、compose、twice を let で多相に使う)。
+// 生成した式の外側に置く定義の並びで、どれも型検査に通る。生成した式は id、compose、twice を let 多相により複数の型で使う。
 let prelude_ex(body: Ex): Ex =
   ELet("id", ELam("x", EVar("x")),
   ELet("compose", ELam("f", ELam("g", ELam("x", EApp(EVar("f"), EApp(EVar("g"), EVar("x")))))),
@@ -195,7 +195,7 @@ let prelude_ex(body: Ex): Ex =
   ELet("swap", ELam("p", EPair(EFst(EVar("p")), EFst(EVar("p")))),
   body)))))
 
-// 1 回の検査が使う型変数は 256 個に収まる(128 個では足りない)ので、配列は 512 要素にする。
+// 1 回の検査で作る型変数は 128 個を超えることがあるが 256 個には収まるので、配列は 512 要素にする。
 let check(e: Ex): String = run h {
   let st = {links = MutableArray.new(512, None), levels = MutableArray.new(512, 0), next = Ref.new(0)}
   { let t = infer(st, Nil, 0, prelude_ex(e)); show_ty(st, t) } handle { case fail(m) => "誤り: " + m }

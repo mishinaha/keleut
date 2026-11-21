@@ -23,7 +23,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROGRAMS = os.path.join(HERE, "programs")
 
-# 設定の名前と、コマンド行の作り方。K は keleut、D は diktor、kir と kel は入力。
+# 設定の名前と、コマンド行の作り方。K は keleut のパス、D は diktor のパス、kir と kel は入力ファイルのパスである。
 CONFIGS = {
     "ki": lambda K, D, kir, kel: [K, "run", "--backend", "interp", kir],
     "kj": lambda K, D, kir, kel: [K, "run", "--backend", "jit", "--tier", "jit-only", kir],
@@ -154,7 +154,7 @@ def main():
                 run_once(cmds[c], env)
         samples_of = {c: [] for c in configs}
         if a.interleave:
-            # 回ごとに全設定を 1 回ずつ走らせる。回数の少ない設定は先に終わる。
+            # 1 回ごとにすべての設定を 1 度ずつ実行する。回数の少ない設定は先に終わる。
             for i in range(max(a.slow_repeat if c in SLOW else a.repeat for c in configs)):
                 for c in configs:
                     if i < (a.slow_repeat if c in SLOW else a.repeat):
