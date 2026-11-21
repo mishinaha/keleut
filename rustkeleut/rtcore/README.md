@@ -7,7 +7,7 @@ RustKeleut のすべてのバックエンドが共有する、ランタイムの
 ## ファイル構成
 
 - `rtcore.h`: C の API と、その仕様と事前条件。
-- `f64show.c`: `show(Float64)`(LangSpec 16.2 節)。
+- `f64show.c`: `show(Float64)`(LangSpec §16.2)。
   多倍長整数による正確な 10 進展開と、丸めの区間との正確な比較で、読み戻すと元の値になる最小の桁数を求める。
 - `shape.c`: レコードのシェイプ表(intern、拡張、フィールドの除去、位置の検索)。
   メモリは呼び出し元が渡す。
@@ -15,14 +15,15 @@ RustKeleut のすべてのバックエンドが共有する、ランタイムの
 - `musl/`: musl 1.2.6 の `sin cos exp log` と、それらが依存するファイルを、改変せずにコピーしたもの。
   バージョン、入手元、sha256 は `musl/SOURCE.md` に、ライセンスは `musl/COPYRIGHT` にある。
 - `shim/`: libc のヘッダの代わりに使う最小限のヘッダと、外部シンボルを `krt_` で始まる名前に変える `krt_names.h`。
+  `shim/` は、musl のソースをビルドするために rtcore が用意したヘッダである。
 
 ## ビルド方法
 
 コンパイルオプションは次のとおりである。
 
 - 共通: `-std=c99 -O2 -ffreestanding -fno-builtin -ffp-contract=off -fno-math-errno -nostdlibinc -Ishim -Imusl/src/internal -I. -include shim/krt_names.h`
-- x86_64: `--target=<対象> -fPIC -fno-stack-protector -ffunction-sections -fdata-sections` を追加し、`llvm-ar` で静的ライブラリにする。
-  `<対象>` は、cargo が環境変数 `TARGET` で渡すターゲットトリプルである。
+- x86_64: `--target=<ターゲットトリプル> -fPIC -fno-stack-protector -ffunction-sections -fdata-sections` を追加し、`llvm-ar` で静的ライブラリにする。
+  `<ターゲットトリプル>` は、cargo が環境変数 `TARGET` で渡すターゲットトリプルである。
 - wasm32: `--target=wasm32 -nostdlib` を追加し、`wasm-ld --no-entry -z stack-size=1048576` と `--export=krt_...` で `rt.wasm` にする。
   `krt_` で始まるシンボルのほかに、`__heap_base` も export する。
 

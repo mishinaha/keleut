@@ -612,7 +612,7 @@ reason = "RustKeleut の形の表が 2 乗で大きくなり、Diktor より先�
 ledger = "V240"
 against = "pair"
 
-# V213(conformance/depth/limit.t): LangSpec §15.5 は、評価に要する領域の上限の大きさを定めていないので、上限は処理系が決める(reason の `限度は I` はこのことを指す)。
+# V213(conformance/depth/limit.t): LangSpec §15.5 は、評価に必要なメモリの上限の大きさを定めていないので、上限は処理系が決める(reason の `限度は I` はこのことを指す)。
 # 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックの上限を下げると、Diktor の KIR の評価器は、論理的な深さが上限に達する前に、スタックオーバーフローの実行時エラー(終了コード 3)で終了する(IRSpec 11.5 節)。
 # conformance/depth/limit.t の期待出力は keleut run の結果である。
 

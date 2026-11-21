@@ -1,4 +1,4 @@
-/* rtcore: Float64 の文字列化(LangSpec 16.2 節)。
+/* rtcore: Float64 の文字列化(LangSpec §16.2)。
 
    有限で整数でない値と、絶対値が 1e16 以上の整数値は、次の方法で書く。
    有効数字の桁数 p を 1 から 17 まで増やし、p 桁に丸めた 10 進の値が x の丸めの区間に入る最初の p で書く。
@@ -180,7 +180,7 @@ static size_t put_u64(char *out, size_t at, uint64_t v) {
 }
 
 /* p 個の 10 進の桁の並び ds(先頭は 0 でない)と、先頭の桁の 10 進の指数 x10 を、%.*g の形式で out に書く。
-   ただし LangSpec 16.2 節の表記に合わせて、指数の + と先頭の 0 を書かず、小数点も指数もなければ .0 を付ける。 */
+   ただし LangSpec §16.2 の表記に合わせて、指数の + と先頭の 0 を書かず、小数点も指数もなければ .0 を付ける。 */
 static size_t format_g(char *out, size_t at, const char *ds, int p, int x10) {
   int nd = p;
   int has_point = 0;

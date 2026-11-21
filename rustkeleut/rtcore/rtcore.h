@@ -6,7 +6,7 @@
 
    rtcore は次の 4 つからなる。
 
-   - f64show.c: Float64 の文字列化(LangSpec 16.2 節)。
+   - f64show.c: Float64 の文字列化(LangSpec §16.2)。
    - shape.c: レコードのシェイプの intern、拡張、フィールドの除去、位置の検索。
    - bytes.c: 符号なしバイトの辞書順の比較。
    - musl/: musl の sin cos exp log(名前を krt_sin などに変えてビルドする)。
@@ -28,7 +28,7 @@ double krt_exp(double x);
 double krt_log(double x);
 
 /* ---- Float64 の文字列化 ----
-   krt_f64_show は x を LangSpec 16.2 節の表記で out に書き、書いたバイト数を返す。
+   krt_f64_show は x を LangSpec §16.2 の表記で out に書き、書いたバイト数を返す。
    out には KRT_F64_SHOW_MAX バイトの領域が必要である。
    書いた文字列の後ろに NUL を 1 バイト置くが、返すバイト数には含めない。
 
@@ -64,7 +64,7 @@ int krt_bytes_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t bl
    正準なレイアウトでは、ラベルの番号の昇順に並べ、同じラベルが重なるときは外側のものを先に置く。
    フィールドの値の配列も、このレイアウトの順に並べる。
    したがって、ラベル l の最も外側のフィールドの位置は、並びの中で l が最初に現れる位置である。
-   異なるラベルの順序は評価の結果に影響しない(LangSpec 18.3 節)ので、このレイアウトは処理系の内部だけの規則である。
+   異なるラベルの順序は型の一致に影響しない(LangSpec §7.2、§18.3)ので、このレイアウトは処理系の内部だけの規則である。
 
    シェイプ表は intern 表で、同じ並びには同じ番号を返す。
    番号は 0 から順に振り、空のシェイプは常に 0 である。
@@ -99,6 +99,7 @@ uint32_t krt_shapes_labels_used(const krt_shapes *t);
 /* 書いた順のラベルの並びからシェイプを作って intern し、番号を返す。
    先に書いたラベルが外側である。
    pos が NULL でなければ、書いた i 番目のフィールドが正準なレイアウトで占める位置を pos[i] に書く。
+   KRT_SHAPE_FULL を返したときの pos の内容は不定である。
    処理時間は n の 2 乗に比例する。 */
 uint32_t krt_shape_intern(krt_shapes *t, const uint32_t *labels, uint32_t n, uint32_t *pos);
 /* シェイプのラベルの個数と、正準なレイアウトに並べたラベルの並びを返す。

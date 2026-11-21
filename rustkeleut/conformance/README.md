@@ -75,7 +75,7 @@ kconform の出力と本書のコードブロックの中のコメントは、�
 | `dk` | 本物の diktor(構文木の評価器) | Diktor の対応する呼び出し |
 | `dk-ir` | `diktor --emit-ir` の後の `diktor --run-ir` | 左の列と同じ |
 | `kf` | 先に `keleut check` を実行し、型検査でエラーになる入力はその結果を返す。型検査に通れば本物の diktor に渡す | Diktor の対応する呼び出し |
-| `ki` | `keleut compat-diktor --frontend diktor --backend interp --tier interp-only --` に同じ引数を渡す。`keleut run --frontend diktor` が PATH の `diktor`(shim)を `--emit-ir` で呼び、shim はその呼び出しを本物の diktor に渡す。その終了コードが 0 でなければ、その出力と終了コードを返す | `keleut run --backend interp --tier interp-only` |
+| `ki` | `keleut compat-diktor --frontend diktor --backend interp --tier interp-only --` に同じ引数を渡す。`keleut run --frontend diktor` が PATH の `diktor`(shim)を `--emit-ir` で呼び、shim はその呼び出しを本物の diktor に渡す。本物の `diktor --emit-ir` の終了コードが 0 でなければ、`keleut run` は同じ終了コードで終了し、出力は `diktor --emit-ir` が書いたものだけになる | `keleut run --backend interp --tier interp-only` |
 | `kj` | `ki` と同じく、`keleut compat-diktor --frontend diktor --backend jit --tier jit-only --` に同じ引数を渡す | `keleut run --backend jit --tier jit-only` |
 | `kt` | `ki` と同じく、`keleut compat-diktor --frontend diktor --tier threshold=1 --` に同じ引数を渡す | `keleut run --tier threshold=1` |
 | `ka` | シード 1〜8 のそれぞれで、`keleut compat-diktor --frontend diktor --tier alternating=SEED --` に同じ引数を渡す | `keleut run --tier alternating=SEED` |
@@ -190,7 +190,8 @@ GC は V8 が行い、Node のスタックサイズは深さの上限 L から�
 `--pairs` に `dk` か `kf` を書くと終了コード 64 で終了する。
 `--suite depth` を LLVM ペア(`--pairs` を省いたときの既定のペアにも含まれる)で実行するときは、`--jobs` を 6 程度にする。
 32 コア、31 GB のマシンで既定の並列数(CPU の数)にすると、ペア `ka` と `kr-ka` の `depth/gresume.t` がメモリ不足になり、OOM killer に強制終了される(終了コード 137)。
-深さのテストでは、どのペアでも、スタック残量の検査による終了コード 70 を失敗として扱う。
+深さのテストでは、どのペアでも、終了コード 70 を失敗として扱う。
+スタック残量の検査で終了したときの終了コードだからである(原因は調べないので、ほかの内部エラーの 70 も失敗になる)。
 どのスイートでも、実行するテストが 1 つもなければ終了コード 1 で終了する。
 `FILES` を与えたときは、スイートの代わりにその `.t` と `.kel` を実行する。
 
@@ -289,10 +290,10 @@ kconform も、これらの行を期待出力との差分として報告する�
 `diktor/test` を変えたら `kconform extract-corpus` で作り直す。
 `kconform extract-corpus --check` は、コーパスが `diktor/test` と食い違っていれば終了コード 1 で終了する。
 
-`index.tsv` の各行は、コーパスの中のパス、抽出元(`試験.t:行`)、オプションである。
+`index.tsv` の各行は、コーパスの中のパス、抽出元(`テスト.t:行`)、オプションである。
 オプションは、同じ `.t` の後ろのコマンドのうち、そのファイルを引数に取る最初の `diktor` の呼び出しから取る。
 そのような呼び出しがないファイルは、オプションの列を `?` にする。
-`--suite all` は、各ファイルを `diktor 旗 FILE` の 1 つのコマンドとして実行する(`旗` はそのファイルのオプションで、`?` ならオプションなし)。
+`--suite all` は、各ファイルを `diktor オプション FILE` の 1 つのコマンドとして実行する(`オプション` は `index.tsv` のそのファイルの行のオプションで、`?` なら何も付けない)。
 `kir-roundtrip` は、各ファイルを `index.tsv` のオプションで KIR に書き出す。
 オプションが `?` のファイルは、オプションなしで書き出し、失敗すれば(終了コードが 0 でなければ)`--no-prelude` を付けてやり直す。
 
