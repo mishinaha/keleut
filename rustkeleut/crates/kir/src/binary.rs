@@ -1,19 +1,22 @@
 //! KIR のバイナリ(`.kir`)の読み書き。
 //!
-//! 規範は IRSpec の 13 節である。
-//! Diktor の第20章(`ir_bin.ml`)とバイト単位で同じに読み書きする。
-//! 読み込みの検査の順と誤りの文面も、Diktor の読み手に合わせてある。
+//! 仕様は IRSpec の 13 節が定める。
+//! Diktor の `diktor/lib/ir_bin.ml` とバイト単位で一致するように読み書きする。
+//! 読み込みの検査の順序とエラーメッセージも、Diktor のリーダに合わせてある。
 //!
-//! 読み込みは、どの入力に対しても誤りを値で返し、落ちない。
-//! 再帰は式、辞書、パターンのノードの深さで数え、深さが限度を超えたらそこで拒否する。
-//! 個数と長さは、使う前に節の残りのバイト数と比べる。
+//! 読み込みは、どの入力に対してもエラーを値で返し、異常終了しない。
+//! 再帰の深さは式、辞書、パターンのノードの深さで数え、深さが上限を超えたらそこで拒否する。
+//! 個数と長さは、使う前にセクションの残りのバイト数と比べる。
+//!
+//! エラーメッセージは Diktor と同じ語で書くので、セクションを `節`、ヘッダを `見出し`、バージョンを `版`、
+//! グローバルを `大域`、キャプチャを `捕獲` と呼ぶ。
 
 use std::collections::{BTreeSet, HashMap};
 
 use crate::error::{Error, ErrorKind, READ_LIMIT_MESSAGE, WRITE_LIMIT_MESSAGE};
 use crate::model::*;
 
-/// マジック(`\0KIR`)。
+/// ファイルの先頭に置くマジックナンバー(`\0KIR`)。
 pub const MAGIC: [u8; 4] = [0x00, 0x4B, 0x49, 0x52];
 
 const SEC_STRINGS: u8 = 0x01;
@@ -32,7 +35,10 @@ const SEC_INIT: u8 = 0x0B;
 // 読み込み
 // ---------------------------------------------------------------------------
 
-/// 読み込みの途中の誤り。位置は、誤りに気づいたときのファイルの先頭からのバイト数である。
+/// 読み込みの途中で見つけたエラー。
+///
+/// `pos` は、エラーを見つけたときの読み取り位置で、ファイルの先頭からのバイト数である。
+/// `limit` は、入れ子の上限を超えたエラーのときに真にする。
 struct Fail {
     pos: usize,
     msg: String,
@@ -65,7 +71,7 @@ impl Rd<'_> {
         Ok(c)
     }
 
-    /// uLEB128 の `u32`。5 バイト目は第 4〜7 ビットが 0 でなければならない。
+    /// uLEB128 の `u32` を読む。5 バイト目は第 4〜7 ビットが 0 でなければならない。
     fn uleb(&mut self) -> R<u32> {
         let mut acc: u64 = 0;
         let mut shift = 0u32;
@@ -84,7 +90,7 @@ impl Rd<'_> {
         }
     }
 
-    /// sLEB128 の `i32`。5 バイト目は続きの印を持たず、第 4〜6 ビットが第 3 ビットと同じである。
+    /// sLEB128 の `i32` を読む。5 バイト目は継続ビットが立っておらず、第 4〜6 ビットが第 3 ビットと同じでなければならない。
     fn sleb32(&mut self) -> R<i32> {
         let mut acc: i64 = 0;
         let mut shift = 0u32;
@@ -110,7 +116,7 @@ impl Rd<'_> {
         }
     }
 
-    /// sLEB128 の `i64`。10 バイト目は 0x00 か 0x7F である。
+    /// sLEB128 の `i64` を読む。10 バイト目は 0x00 か 0x7F でなければならない。
     fn sleb64(&mut self) -> R<i64> {
         let mut acc: i64 = 0;
         let mut shift = 0u32;
@@ -151,7 +157,7 @@ impl Rd<'_> {
         Ok(s)
     }
 
-    /// 個数。どの項目も 1 バイト以上を占めるので、節の残りのバイト数を超える個数は誤りである。
+    /// 項目の個数を読む。どの項目も 1 バイト以上を占めるので、セクションの残りのバイト数を超える個数はエラーである。
     fn count(&mut self) -> R<usize> {
         let n = self.uleb()? as usize;
         if n > self.stop - self.pos {
@@ -196,7 +202,11 @@ impl Rd<'_> {
     }
 }
 
-/// 読み込みの途中の表。参照の範囲の検査と、strings と blobs の使用の印に使う。
+/// 読み込みの途中で持つ表。
+///
+/// strings と blobs の内容と項目ごとの使用済みフラグ、ほかの表の項目数を持つ。
+/// 項目数は、参照の添字が表の範囲に入っているかどうかの検査に使う。
+/// フラグには、参照された項目を記録する。
 #[derive(Default)]
 struct Tables {
     strs: Vec<String>,
@@ -417,8 +427,9 @@ impl Dec<'_> {
 
     /// 式のノードを読む。
     ///
-    /// 再帰の 1 段のスタックを小さく保つため、構文ごとの読み方を別の関数に分け、
-    /// ここでは番号から関数を選んで呼ぶだけにする(最適化なしで組んだときの大きな 1 枚のフレームを避ける)。
+    /// 再帰の 1 段が使うスタックを小さく保つため、構文ごとの読み込みを別の関数に分け、
+    /// ここでは式の番号から関数を選んで呼ぶだけにする。
+    /// 1 つの関数にまとめると、デバッグビルドでフレームが大きくなる。
     fn exp(&mut self, d: usize) -> R<ExpId> {
         self.nest(d)?;
         let tag = self.r.u8()?;
@@ -769,7 +780,7 @@ fn check_sorted<T: Ord>(r: &Rd<'_>, what: &str, items: &[T]) -> R<()> {
 
 /// バイナリを読む。`max_nest` はノードの深さの上限(IRSpec 13.9 節の `N_nest`)である。
 ///
-/// 深さに比例してスタックを使うので、深い入力を読むときは大きなスタックの上で呼ぶ
+/// 深さに比例してスタックを使うので、深い入力を読むときは大きなスタックを持つスレッドで呼ぶ
 /// ([`crate::read_kir`] はそうする)。
 pub fn decode(src: &[u8], max_nest: usize) -> Result<Program, Error> {
     decode_inner(src, max_nest).map_err(|f| {
@@ -874,7 +885,7 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
         }
         Ok(())
     };
-    // strings と blobs。Diktor と同じく、並びの検査を残りのバイトの検査より先に行う
+    // strings と blobs を読む。Diktor と同じく、昇順の検査を、セクションの残りのバイトの検査より先に行う
     enter(&mut dec, SEC_STRINGS);
     let strs = dec.list(|s| s.r.bytes())?;
     check_sorted(&dec.r, "strings", &strs)?;
@@ -894,7 +905,7 @@ fn decode_inner(src: &[u8], lim: usize) -> R<Program> {
     dec.t.strs = names;
     dec.t.blob_used = vec![false; blobs.len()];
     dec.t.blobs = blobs;
-    // 関数の記号の列。項目は後で同じ節の続きから読む
+    // 関数のシンボルの並びを先に読む。関数の項目は、globals までのセクションを読んだ後で、同じセクションの続きから読む
     enter(&mut dec, SEC_FUNCTIONS);
     let nfn = dec.r.count()?;
     let fn_syms = dec.times(nfn, |s| s.str())?;
@@ -1070,7 +1081,9 @@ fn internal<T>(msg: impl Into<String>) -> W<T> {
     ))
 }
 
-/// strings と blobs の表を集める。深さが限度を超えたら書き出しの限度の誤りにする。
+/// strings と blobs の表に入れる名前と文字列を集める。
+///
+/// ノードの深さが上限 `lim` を超えたら、[`ErrorKind::WriteLimit`] を返す。
 struct Collect<'a> {
     p: &'a Program,
     strs: BTreeSet<&'a str>,
@@ -1144,7 +1157,9 @@ impl<'a> Collect<'a> {
         Ok(())
     }
 
-    /// 式の表の項目を集める。再帰の 1 段のスタックを小さく保つため、構文を 2 つの群に分けて別の関数で集める。
+    /// 式のノードの中の名前と文字列を集める。
+    ///
+    /// 再帰の 1 段が使うスタックを小さく保つため、構文を 2 つのグループに分けて別の関数で集める。
     fn exp(&mut self, id: ExpId, d: usize) -> W<()> {
         self.nest(d)?;
         let Some(x) = self.p.nodes.exp(id) else {
@@ -1558,7 +1573,9 @@ impl<'a> Enc<'a> {
         Ok(())
     }
 
-    /// 式のノードを書く。再帰の 1 段のスタックを小さく保つため、構文を群に分けて別の関数で書く。
+    /// 式のノードを書く。
+    ///
+    /// 再帰の 1 段が使うスタックを小さく保つため、構文をグループに分けて別の関数で書く。
     fn exp(&mut self, id: ExpId) -> W<()> {
         let p = self.p;
         let Some(x) = p.nodes.exp(id) else {
@@ -1925,7 +1942,11 @@ impl<'a> Enc<'a> {
         Ok(())
     }
 
-    /// 1 つの節の中身を `f` で作り、`self.b` の代わりに返す。
+    /// セクション 1 つの内容を `f` で作って返す。
+    ///
+    /// `f` を呼ぶ間は `self.b` を空のバッファに差し替える。
+    /// `f` が終わったら、`f` が書いたバイト列を取り出して `self.b` を元に戻し、取り出したバイト列を返す。
+    /// `f` が失敗したときは、`self.b` を元に戻してからエラーを返す。
     fn section(&mut self, f: impl FnOnce(&mut Self) -> W<()>) -> W<Vec<u8>> {
         let saved = std::mem::take(&mut self.b);
         let r = f(self);
@@ -1935,7 +1956,8 @@ impl<'a> Enc<'a> {
 }
 
 /// 関数の本体、ガード、パターンと `def_pattern` のパターンをたどり、ノードの中の名前と文字列を集める。
-/// ノードの深さが `lim` を超えたら、何も書かないうちに [`ErrorKind::WriteLimit`] を返す。
+/// ノードの深さが `lim` を超えたら、[`ErrorKind::WriteLimit`] を返す。
+/// この関数は書き出しより前に呼ぶので、深すぎるプログラムは 1 バイトも書かれない。
 fn collect_nodes(p: &Program, lim: usize) -> W<Collect<'_>> {
     let mut c = Collect {
         p,
@@ -1962,15 +1984,15 @@ fn collect_nodes(p: &Program, lim: usize) -> W<Collect<'_>> {
     Ok(c)
 }
 
-/// 書き出しの前に、ノードの深さが `lim` 以下で、どのノードも置き場にあることを確かめる。
+/// 書き出しの前に、ノードの深さが `lim` 以下で、たどったどのノードも [`Nodes`] の配列にあることを検査する。
 pub(crate) fn check_write_depth(p: &Program, lim: usize) -> Result<(), Error> {
     collect_nodes(p, lim).map(|_| ())
 }
 
-/// プログラムを正準のバイナリにする。`max_nest` はノードの深さの上限である。
+/// プログラムを正準なバイナリに符号化する。`max_nest` はノードの深さの上限である。
 ///
-/// 深さが上限を超えるプログラムは書かずに [`ErrorKind::WriteLimit`] を返す(IRSpec 13.9 節)。
-/// 表の範囲の外の添字のような不整合は [`ErrorKind::Internal`] を返す。
+/// 深さが上限を超えるプログラムは、書かずに [`ErrorKind::WriteLimit`] を返す(IRSpec 13.9 節)。
+/// 表の範囲外の添字のような不整合があれば、[`ErrorKind::Internal`] を返す。
 pub fn encode(p: &Program, max_nest: usize) -> Result<Vec<u8>, Error> {
     let mut c = collect_nodes(p, max_nest)?;
     for u in &p.units {
@@ -2233,17 +2255,17 @@ mod tests {
     fn uleb_rules() {
         assert_eq!(rd(&[0x00]).uleb().ok(), Some(0));
         assert_eq!(rd(&[0xE5, 0x8E, 0x26]).uleb().ok(), Some(624_485));
-        // 冗長な符号は受け付ける
+        // 最短でない冗長なエンコーディングも受理する
         assert_eq!(rd(&[0x80, 0x80, 0x80, 0x80, 0x00]).uleb().ok(), Some(0));
         assert_eq!(rd(&[0x81, 0x80, 0x00]).uleb().ok(), Some(1));
         assert_eq!(
             rd(&[0xFF, 0xFF, 0xFF, 0xFF, 0x0F]).uleb().ok(),
             Some(u32::MAX)
         );
-        // 5 バイト目の第 4〜7 ビット
+        // 5 バイト目の第 4〜7 ビットが 0 でなければ拒否する
         assert!(rd(&[0xFF, 0xFF, 0xFF, 0xFF, 0x1F]).uleb().is_err());
         assert!(rd(&[0x80, 0x80, 0x80, 0x80, 0x80, 0x00]).uleb().is_err());
-        // 途中で終わる
+        // 継続ビットが立ったまま入力が終われば拒否する
         assert!(rd(&[0x80]).uleb().is_err());
     }
 
@@ -2261,10 +2283,10 @@ mod tests {
             rd(&[0xFF, 0xFF, 0xFF, 0xFF, 0x07]).sleb32().ok(),
             Some(i32::MAX)
         );
-        // 5 バイト目の第 4〜6 ビットが第 3 ビットと違う
+        // 5 バイト目の第 4〜6 ビットが第 3 ビットと違えば拒否する
         assert!(rd(&[0xFF, 0xFF, 0xFF, 0xFF, 0x0F]).sleb32().is_err());
         assert!(rd(&[0x80, 0x80, 0x80, 0x80, 0x70]).sleb32().is_err());
-        // 5 バイト目が続きの印を持つ
+        // 5 バイト目の継続ビットが立っていれば拒否する
         assert!(rd(&[0x80, 0x80, 0x80, 0x80, 0x80, 0x00]).sleb32().is_err());
     }
 

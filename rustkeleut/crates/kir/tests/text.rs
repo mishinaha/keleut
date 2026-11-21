@@ -1,4 +1,4 @@
-//! テキストの読み込み(IRSpec 12 節)の試験。
+//! テキストの読み込み(IRSpec 12 節)のテスト。
 
 mod common;
 
@@ -47,8 +47,8 @@ fn non_canonical_spellings_are_rejected() {
     syntax(&t.replace("(kir 1 0 0)", "(kir 1 65536 0)"));
 }
 
-/// 主版が同じなら、副版の新しいテキストも読む(IRSpec 14 節)。
-/// 型は読んだ副版を持ち、書き出しもその副版を書く。
+/// メジャーバージョンが同じなら、マイナーバージョンが新しいテキストも読む(IRSpec 14 節)。
+/// `Program` は読んだマイナーバージョンを保持し、書き出すときもそのマイナーバージョンを書く。
 #[test]
 fn newer_minor_is_read() {
     let t = base();
@@ -76,7 +76,7 @@ fn names_must_resolve() {
     assert!(syntax(&t.replace("(init \"prelude\")", "(init \"prelud\")")).contains("init"));
     syntax(&t.replace("(init \"main\"", "(junk) (init \"main\""));
     syntax(&format!("{t}(kir 1 0 0)\n"));
-    // 名前は UTF-8 でなければならない(文字列のリテラルは任意のバイト列でよい)
+    // 名前は UTF-8 でなければならない。文字列リテラルは任意のバイト列でよい。
     syntax(&t.replace(
         r#"(global "main/total" value i64)"#,
         r#"(global "main/tot\xffal" value i64)"#,

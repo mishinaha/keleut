@@ -1,15 +1,19 @@
-//! 検証(IRSpec 13.8 節)の試験。
+//! 検証(IRSpec 13.8 節)のテスト。
 //!
-//! Diktor の書き出した正しいプログラムのテキストを 1 か所ずつ書き換え、検証が拒否することを確かめる。
-//! 書き換えたテキストは読み込みを通る(構文は正しい)ので、拒否するのは検証である。
-//! 環境変数 `KIR_DIKTOR` に Diktor の実行ファイルを与えると、同じプログラムのバイナリを
-//! `diktor --run-ir` にも渡し、Diktor も 65 で拒否する(受理の例では受理する)ことを確かめる。
+//! Diktor が書き出した正しいプログラムのテキストを 1 か所ずつ書き換え、検証器が拒否することを確かめる。
+//! 書き換えたテキストは構文が正しく、読み込みには通るので、拒否するのは検証器である。
+//! 環境変数 `KIR_DIKTOR` に Diktor の実行ファイルを指定すると、同じプログラムのバイナリを `diktor --run-ir` にも渡し、Diktor も終了コード 65 で拒否することを確かめる。
+//! 検証器が受理する書き換えでは、Diktor の終了コードが 65 でないことを確かめる。
 
 mod common;
 
 use kir::ErrorKind;
 
-/// (fixture, 書き換える前, 書き換えた後, 何を壊すか)。書き換える前の綴りが `*` で始まれば、すべての出現を書き換える。
+/// 検証器が拒否する書き換えの表。
+///
+/// 各項目は (フィクスチャの名前, 書き換える前の文字列, 書き換えた後の文字列, 壊す内容の説明) の組である。
+/// 書き換える前の文字列が `*` で始まれば、`*` を除いた文字列が現れる箇所をすべて書き換える。
+/// そうでなければ、最初に現れる箇所だけを書き換える。
 const MUTATIONS: &[(&str, &str, &str, &str)] = &[
     (
         "ex_handle",
@@ -284,7 +288,9 @@ const MUTATIONS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// 受理する書き換え。ハンドラ式の本体の中の resume は、操作節の本体の中なら書ける。
+/// 検証器が受理する書き換えの表。項目の形式は `MUTATIONS` と同じである。
+///
+/// ハンドラ式の本体の中の `resume` は、そのハンドラ式が操作節の本体の中にあれば書ける。
 const ACCEPTED: &[(&str, &str, &str, &str)] = &[(
     "ir_emit_006",
     "  (let 1\n    (resume ntail (rec_empty))",
@@ -292,7 +298,8 @@ const ACCEPTED: &[(&str, &str, &str, &str)] = &[(
     "操作節の本体の中のハンドラ式の本体の resume",
 )];
 
-/// 書き換えで足す関数(ir_emit_006 の `main/st$h0.op.put` の直後に置く)。
+/// 書き換えで追加する関数。
+/// 書き換えた後の文字列が `$h9` を含むとき、`ir_emit_006` の関数 `main/st$h0.op.put#1` の直前に挿入する。
 const EXTRA_FNS: &str = "(fn \"main/st$h0.op.put$h9.body\" handlebody yield (params) (locals) (dicts 0) (caps) (result any) (resume ntail (rec_empty)))\n(fn \"main/st$h0.op.put$h9.op.get\" opclause yield (params) (locals) (dicts 0) (caps) (result i32) (pats) (lit i32 0))\n";
 
 fn mutate(fixture: &str, old: &str, new: &str) -> Vec<u8> {
@@ -329,7 +336,7 @@ fn diktor_run_ir(bin: &[u8], tag: usize) -> Option<i32> {
         .output()
         .unwrap();
     let _ = std::fs::remove_file(&f);
-    // 並行する試験がまだ使っていれば空でないので消えない。最後の試験が消す。
+    // 並行して動くテストがまだ使っていれば、ディレクトリは空でないので削除できない。最後に終わるテストが削除する。
     let _ = std::fs::remove_dir(&dir);
     out.status.code()
 }
@@ -388,8 +395,8 @@ fn accepted_rewrites() {
     }
 }
 
-/// 作る場所の鎖が輪になる `handlebody` の関数は持ち主を持たないので、その中の resume を拒否する。
-/// (Diktor 2f9300a の検証器はこの鎖をたどり続けて止まらないので、Diktor には渡さない。)
+/// 生成箇所を順にたどると循環する `handlebody` の関数には持ち主がないので、検証器はその中の `resume` を拒否する。
+/// このテストは RustKeleut の検証器だけを確かめ、プログラムを Diktor には渡さない。
 #[test]
 fn cyclic_handlebody_has_no_owner() {
     let t = std::fs::read_to_string(common::fixtures().join("ex_handle.kirt")).unwrap();
@@ -412,11 +419,12 @@ fn cyclic_handlebody_has_no_owner() {
     );
 }
 
-/// `handlebody` の関数の長い鎖でも、持ち主を求める時間は鎖の長さに比例する。
+/// `handlebody` の関数が長く連なっていても、持ち主を求める時間は連鎖の長さに比例する。
 ///
 /// 操作節 `main/twice$h0.op.ask` の中の `handle` が `main/c0` を作り、`main/c{i}` の中の `handle` が `main/c{i+1}` を作る。
-/// どの `main/c{i}` も resume を含むので、関数ごとに鎖をたどり直すと 2 乗の時間がかかる。
-/// 正しいプログラムなので受理する。
+/// どの `main/c{i}` も `resume` を含むので、関数ごとに連鎖をたどり直すと、連鎖の長さの 2 乗に比例する時間がかかる。
+/// 正しいプログラムなので、検証器は受理する。
+/// 連鎖の長さを 200,000 にして、検証が 30 秒未満で終わることを確かめる。
 #[test]
 fn long_handlebody_chain_is_linear() {
     const N: usize = 200_000;
@@ -462,7 +470,8 @@ fn long_handlebody_chain_is_linear() {
     assert!(took.as_secs() < 30, "検証に {took:?} かかりました");
 }
 
-/// プログラム `p` の先頭の `k` 個の単位と、その単位の項目だけを残したもの(表は単位の順に並ぶ)。
+/// プログラム `p` から、先頭の `k` 個の単位と、その単位に属する表の項目だけを残したプログラムを返す。
+/// 表の項目は単位の順に並ぶので、残る項目は各表の先頭の部分である。
 fn prefix(p: &kir::Program, k: usize) -> kir::Program {
     let keys: Vec<&str> = p.units[..k].iter().map(|u| u.key.as_str()).collect();
     let mine = |s: &str| keys.contains(&kir::unit_of_symbol(s));
@@ -477,9 +486,10 @@ fn prefix(p: &kir::Program, k: usize) -> kir::Program {
     q
 }
 
-/// 単位を足していく検証([`kir::verify::Extension`])は、全体を 1 回で足しても、単位を 1 つずつ足しても、
-/// 正しいプログラムを受理し、書き換えたプログラムを拒否する。
-/// 確かめた単位と同じ鍵の単位を足すと拒否し、拒否した後も状態は変わらない。
+/// 単位を追加していく検証([`kir::verify::Extension`])は、全体を 1 回で渡しても、単位を 1 つずつ追加しても、正しいプログラムを受理する。
+/// 検証済みの単位と同じキーの単位を追加すると拒否し、拒否した後も検証の状態は変わらない。
+/// `MUTATIONS` で書き換えたプログラムは拒否する。
+/// ただし、単位の並びが `main` で終わらないことのほかに誤りがないプログラムは受理する。
 #[test]
 fn extension_agrees_with_verify() {
     let lim = kir::Limits::default();
@@ -494,7 +504,7 @@ fn extension_agrees_with_verify() {
                 .unwrap_or_else(|x| panic!("{name} の {k} 個の単位: {x}"));
         }
         assert_eq!(e.done(), kir::verify::Marks::of(&p), "{name}");
-        // 同じ鍵の単位をもう 1 つ足す。
+        // 同じキーの単位をもう 1 つ追加する。
         let mut q = p.clone();
         let last = q.units.last().unwrap().clone();
         q.units.push(last);
@@ -512,7 +522,7 @@ fn extension_agrees_with_verify() {
         if let Err(x) = kir::verify_extension(&mut e, &p, &lim) {
             assert_eq!(x.kind(), ErrorKind::Invalid, "{what}: {x}");
         } else {
-            // 単位の列の終わりの `main` だけは、足していくプログラムでは確かめない。
+            // 単位の並びが `main` で終わることだけは、単位を追加していく検証では検査しない。
             assert!(
                 kir::verify(&p).unwrap_err().to_string().contains("main"),
                 "{what}"

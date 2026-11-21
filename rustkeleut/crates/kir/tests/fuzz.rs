@@ -1,13 +1,15 @@
-//! 壊れた入力で落ちないことの試験(切り詰め、ビットの反転、バイトの置き換え)。
+//! 壊れた入力を読んでも異常終了しないことのテスト。
 //!
-//! 読み込みはどの入力でも `Err` か `Ok` を返し、落ちてはならない。
-//! 読めたものは、検証、書き出し、印字に通しても落ちてはならない。
+//! 入力は、フィクスチャのバイナリを切り詰めるかビットを反転して作り、テキストを切り詰めるか文字を置き換え、削除、挿入して作る。
+//! ヘッダの後に乱数のバイト列を並べたバイナリも入力にする。
+//! 読み込みはどの入力でも `Err` か `Ok` を返し、パニックやスタックオーバーフローで異常終了してはならない。
+//! 読めたプログラムは、検証、バイナリの書き出し、テキストの出力に通しても異常終了してはならない。
 
 mod common;
 
 use kir::{Limits, N_NEST, binary, text, verify};
 
-/// 決まった種から作る擬似乱数(xorshift64*)。
+/// 固定のシードから始める擬似乱数生成器(xorshift64*)。
 struct Rng(u64);
 
 impl Rng {
@@ -34,7 +36,7 @@ struct Stats {
     accepted: usize,
 }
 
-/// 読めたプログラムを、検証、書き出し、印字に通す。
+/// 読めたプログラムを、検証、バイナリの書き出し、テキストの出力に通す。
 fn exercise(p: &kir::Program, st: &mut Stats) {
     match verify::check(p, N_NEST) {
         Ok(()) => {
@@ -46,7 +48,7 @@ fn exercise(p: &kir::Program, st: &mut Stats) {
         }
         Err(_) => {
             st.invalid += 1;
-            // 検証を通らないプログラムでも、書き出しと印字は落ちない
+            // 検証に通らないプログラムでも、バイナリの書き出しとテキストの出力は異常終了しない
             let _ = binary::encode(p, N_NEST);
             let _ = text::print(p, N_NEST);
         }
@@ -68,7 +70,7 @@ fn binary_truncation() {
                     "{name}: 長さ {n} を受け付けました"
                 );
             }
-            // 後ろに 1 バイト足したものも拒否する
+            // 末尾に 1 バイト追加したものも拒否する
             let mut longer = src.clone();
             longer.push(0);
             assert!(binary::decode(&longer, N_NEST).is_err());

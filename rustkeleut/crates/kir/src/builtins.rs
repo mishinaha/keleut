@@ -1,9 +1,10 @@
-//! IRSpec の付録 A の組み込みの表。
+//! IRSpec の付録 A が定める組み込みの表。
 //!
-//! 表の順は、テキストとバイナリの表の順(IRSpec 12.4 節)でもある。
-//! 記号は `builtin/` を付けない名前で持つ。
+//! 各表の項目は付録 A の順に並べる。
+//! この順序は、テキストとバイナリの表での順序(IRSpec 12.4 節)でもある。
+//! シンボルは、接頭辞 `builtin/` を付けない名前で持つ。
 
-/// A.1 組み込みの型(順に)。
+/// A.1 組み込みの型。付録の順に並べる。
 pub const TYPES: [&str; 9] = [
     "Boolean",
     "Int32",
@@ -16,7 +17,9 @@ pub const TYPES: [&str; 9] = [
     "MutableArray",
 ];
 
-/// A.2 組み込みのクラスと、そのメソッド(順に)。どのメソッドも自身の辞書の数は 0 である。
+/// A.2 組み込みのクラスと、そのメソッド。付録の順に並べる。
+///
+/// どのメソッドも、メソッド自身の辞書(IRSpec 7.2 節)の個数は 0 である。
 pub const CLASSES: [(&str, &[&str]); 9] = [
     ("Add", &["add"]),
     ("Sub", &["sub"]),
@@ -29,9 +32,9 @@ pub const CLASSES: [(&str, &[&str]); 9] = [
     ("Show", &["show"]),
 ];
 
-/// A.3 組み込みのインスタンスのメソッド(クラス, 型, メソッド, 実装のプリミティブ)。
+/// A.3 組み込みのインスタンスのメソッド。項目は (クラス, 型, メソッド, 実装のプリミティブ) の組である。
 ///
-/// プリミティブで書かない実装は `None` である。
+/// 実装がプリミティブでないメソッドは、4 番目が `None` である。
 pub const METHODS: [(&str, &str, &str, Option<&str>); 44] = [
     ("Add", "Int32", "add", Some("__int32_add")),
     ("Add", "Int64", "add", Some("__int64_add")),
@@ -79,7 +82,7 @@ pub const METHODS: [(&str, &str, &str, Option<&str>); 44] = [
     ("Show", "Boolean", "show", None),
 ];
 
-/// A.4 組み込みの値(順に)。
+/// A.4 組み込みの値。付録の順に並べる。
 pub const VALUES: [&str; 12] = [
     "Ref.new",
     "Ref.get",
@@ -95,7 +98,7 @@ pub const VALUES: [&str; 12] = [
     "pinned",
 ];
 
-/// A.5 `extern "prim"` の実装名(順に)。
+/// A.5 `extern "prim"` の実装名。付録の順に並べる。
 pub const PRIMS: [&str; 48] = [
     "__int32_add",
     "__int32_sub",
@@ -147,10 +150,12 @@ pub const PRIMS: [&str; 48] = [
     "__panic",
 ];
 
-/// A.5 `extern "C"` の実装名(順に)。
+/// A.5 `extern "C"` の実装名。付録の順に並べる。
 pub const C_FUNCTIONS: [&str; 5] = ["sin", "cos", "sqrt", "exp", "log"];
 
-/// `(クラス, 型)` の組(`builtin/` を付けない名前)が、A.3 の組み込みのインスタンスにあるか。
+/// クラスと型の組が A.3 の組み込みのインスタンスにあれば真を返す。
+///
+/// クラスと型は、接頭辞 `builtin/` を付けない名前で指定する。
 pub fn is_builtin_instance(class: &str, ty: &str) -> bool {
     METHODS.iter().any(|&(c, t, _, _)| c == class && t == ty)
 }

@@ -1,6 +1,7 @@
-//! バイナリの読み込みの検査(IRSpec 13.1 節、13.3 節、13.7 節)の試験。
+//! バイナリの読み込みの検査(IRSpec 13.1 節、13.3 節、13.7 節)のテスト。
 //!
-//! 文面は Diktor の読み手(`ir_bin.ml`)と同じである。
+//! 診断メッセージは Diktor のリーダ(`ir_bin.ml`)と同じである。
+//! 診断は、ヘッダを `見出し`、セクションを `節`、バージョンを `版`、メジャーバージョンを `主版`、必須機能ビットを `必要な機能のビット` と書く。
 
 mod common;
 
@@ -24,7 +25,7 @@ fn header() {
     let mut x = b.clone();
     x[1] = 1;
     assert_eq!(err(&x), "位置 0: マジックが KIR のものではありません");
-    // 主版が違えば、副版を問わずに拒否する(IRSpec 14 節)。
+    // メジャーバージョンが違えば、マイナーバージョンによらず拒否する(IRSpec 14 節)。
     let mut x = b.clone();
     x[4] = 0;
     x[6] = 3;
@@ -38,14 +39,14 @@ fn header() {
         err(&x),
         "位置 8: 版 2.0 は読めません(読めるのは主版 1 の版だけです)"
     );
-    // 主版が同じなら、副版の新しいファイルも読み、その副版を保って書く。
+    // メジャーバージョンが同じなら、マイナーバージョンが新しいファイルも読み、書き出すときもそのマイナーバージョンを書く。
     let mut x = b.clone();
     x[6] = 0xff;
     x[7] = 0xff;
     let p = kir::read_kir(&x).unwrap();
     assert_eq!(p.version, (1, 0xffff));
     assert_eq!(kir::write_kir(&p).unwrap(), x);
-    // 副版が新しくても、知らない機能のビットは拒否する。
+    // マイナーバージョンが新しくても、未知の必須機能ビットは拒否する。
     let mut x = b.clone();
     x[6] = 1;
     x[11] = 0x80;
@@ -66,35 +67,35 @@ fn sections() {
     let b = base();
     let secs = common::sections(&b);
     assert_eq!(secs.len(), 11);
-    // 後ろに 0 のバイト(定義しない id 0x00 の節の始まり)
+    // 末尾に 0 のバイトを追加する。定義されていない id 0x00 のセクションの始まりになる。
     let mut x = b.clone();
     x.push(0);
     assert_eq!(
         err(&x),
         format!("位置 {}: 節 0x00 は定義されていません", b.len() + 1)
     );
-    // 定義しない id 0x0C
+    // 定義されていない id 0x0C のセクションを追加する。
     let mut s = secs.clone();
     s.push((0x0C, vec![]));
     let mut x = common::assemble(&b, &s);
     x[12] = 12;
     assert!(err(&x).contains("節 0x0c は定義されていません"));
-    // 節の数が見出しと違う
+    // セクション数がヘッダの値と違う。
     let mut x = b.clone();
     x[12] = 12;
     assert!(err(&x).contains("節の数が見出し(12)と違います(11)"));
-    // 必須の節が無い
+    // 必須のセクションがない。
     let mut s = secs.clone();
     s.remove(3);
     let mut x = common::assemble(&b, &s);
     x[12] = 10;
     assert!(err(&x).contains("必須の節 0x04 がありません"));
-    // 昇順でない
+    // セクションが id の昇順に並んでいない。
     let mut s = secs.clone();
     s.swap(3, 4);
     let x = common::assemble(&b, &s);
     assert!(err(&x).contains("id の昇順に並んでいません"));
-    // 節の大きさがファイルの残りを超える
+    // セクションのサイズがファイルの残りを超える。
     let mut x = b.clone();
     x.truncate(x.len() - 1);
     assert!(err(&x).contains("の大きさがファイルの残りを超えます"));
@@ -105,17 +106,17 @@ fn skippable_section_and_padded_leb() {
     let b = base();
     let canonical = kir::write_kir(&kir::read_kir(&b).unwrap()).unwrap();
     assert_eq!(canonical, b);
-    // 数えた 0x80 の節は読み飛ばす
+    // ヘッダのセクション数に含めた id 0x80 のセクションはスキップする。
     let mut s = common::sections(&b);
     s.push((0x80, b"anything".to_vec()));
     let mut x = common::assemble(&b, &s);
     x[12] = 12;
     let p = kir::read_kir(&x).unwrap();
     assert_eq!(kir::write_kir(&p).unwrap(), b);
-    // 数えない 0x80 の節は拒否する
+    // ヘッダのセクション数に含めていない id 0x80 のセクションは拒否する。
     let x = common::assemble(&b, &s);
     assert!(err(&x).contains("節の数が見出し(11)と違います(12)"));
-    // 節の大きさの冗長な LEB128 は受け付ける
+    // セクションのサイズを最短でない 5 バイトの LEB128 で書いても受理する。
     let s = common::sections(&b);
     let mut x = b[..16].to_vec();
     for (id, payload) in &s {
@@ -132,7 +133,7 @@ fn skippable_section_and_padded_leb() {
     }
     let p = kir::read_kir(&x).unwrap();
     assert_eq!(kir::write_kir(&p).unwrap(), b);
-    // 6 バイトの LEB128 は拒否する
+    // 6 バイトの LEB128 は拒否する。
     let mut y = b[..16].to_vec();
     y.push(s[0].0);
     y.extend_from_slice(&[0x80, 0x80, 0x80, 0x80, 0x80, 0x00]);
@@ -143,7 +144,7 @@ fn skippable_section_and_padded_leb() {
 fn tables() {
     let b = base();
     let s = common::sections(&b);
-    // strings の表の 2 つの項目を入れ替えると、厳密な昇順でなくなる
+    // strings の表の 2 つの項目を入れ替えると、厳密な昇順でなくなる。
     let p = kir::read_kir(&b).unwrap();
     let mut strs: Vec<Vec<u8>> = Vec::new();
     {
@@ -172,7 +173,7 @@ fn tables() {
     let x = common::assemble(&b, &s2);
     let m = err(&x);
     assert!(m.contains("stringsの表が厳密な昇順に並んでいません"), "{m}");
-    // 使われない項目を足す
+    // どこからも使われない項目を追加する。
     let mut extra = strs.clone();
     extra.push(b"~~~unused".to_vec());
     let mut payload = vec![extra.len() as u8];

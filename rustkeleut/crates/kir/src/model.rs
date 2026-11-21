@@ -1,18 +1,20 @@
-//! KIR のプログラムの型。
+//! KIR のプログラムを表す型。
 //!
-//! 規範は `doc/IRSpec.md` である。
-//! 型は IRSpec の 12.5 節の文法と 13.5 節、13.6 節の表をそのまま写す。
+//! 仕様は `doc/IRSpec.md` が定める。
+//! このモジュールの型は、IRSpec の 12.5 節の文法と、13.5 節と 13.6 節の表に合わせて定義している。
 //!
 //! 表の項目は、バイナリと同じく表の中の位置(添字)で指す。
 //! コンストラクタ、操作、メソッドは、それを持つ型、エフェクト、クラスの中の位置で指す。
-//! 記号と短い名前は文字列で持ち、テキストを書くときにだけ使う。
+//! シンボルと修飾しない名前は文字列で持つ。
+//! モデルの中で項目を指すのには使わない。
+//! 使うのは、テキストの読み書き、診断、シンボルの形式と重複の検証と、組み込みの項目(`builtin/Eq` など)と `runtime` の操作を見分けるときである。
 //!
-//! 式、辞書、パターンのノードは、プログラムに 1 つある [`Nodes`] の配列に置き、
-//! 子を [`ExpId`]、[`DictId`]、[`PatId`] で指す。
-//! 木を `Box` でつなぐと、深い木を捨てるときの再帰がスタックを使い尽くす。
-//! 配列に置けば、捨てることも写すことも比べることも平らな操作になる。
+//! 式、辞書、パターンのノードは、プログラムに 1 つある [`Nodes`] の配列に置き、子を [`ExpId`]、[`DictId`]、[`PatId`] で指す。
+//! 木を `Box` でつなぐと、深い木をドロップするときの再帰でスタックオーバーフローになる。
+//! 配列に置けば、ドロップもコピーも比較も、再帰を使わずに配列を順に処理するだけで済む。
 
-/// Rep(値の機械の上の表現の種類。IRSpec 4 節)。
+/// Rep(IRSpec 4 節)。
+/// 値を実行時にどう表現するかの種類である。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Rep {
     /// 真偽値。
@@ -23,9 +25,9 @@ pub enum Rep {
     I64,
     /// IEEE 754 の binary64。
     F64,
-    /// バイトの列。
+    /// バイト列。
     Str,
-    /// ほかのすべての値。
+    /// それ以外のすべての値。
     Any,
 }
 
@@ -33,7 +35,7 @@ impl Rep {
     /// すべての Rep を、バイナリの番号の順に並べたもの。
     pub const ALL: [Rep; 6] = [Rep::Bool, Rep::I32, Rep::I64, Rep::F64, Rep::Str, Rep::Any];
 
-    /// テキストの綴り。
+    /// テキストでの表記を返す。
     pub fn name(self) -> &'static str {
         match self {
             Rep::Bool => "bool",
@@ -45,7 +47,7 @@ impl Rep {
         }
     }
 
-    /// バイナリの番号。
+    /// バイナリでの番号を返す。
     pub fn code(self) -> u8 {
         self as u8
     }
@@ -54,7 +56,7 @@ impl Rep {
 /// 関数の種類(IRSpec 6.1 節)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FnKind {
-    /// ラムダ、関数の定義、種類 `fn` の大域。
+    /// 無名関数、関数の定義、種類 `fn` のグローバル。
     Lambda,
     /// `handle` の操作節。
     Opclause,
@@ -82,7 +84,7 @@ impl FnKind {
         FnKind::Dictabs,
     ];
 
-    /// テキストの綴り。
+    /// テキストでの表記を返す。
     pub fn name(self) -> &'static str {
         match self {
             FnKind::Lambda => "lambda",
@@ -95,7 +97,7 @@ impl FnKind {
         }
     }
 
-    /// バイナリの番号。
+    /// バイナリでの番号を返す。
     pub fn code(self) -> u8 {
         self as u8
     }
@@ -106,7 +108,8 @@ impl FnKind {
 pub enum ClauseClass {
     /// 操作の返り値の型が `Never` である。
     N,
-    /// 本体の `resume` がすべて末尾の `resume` である。
+    /// N でなく、本体の `resume` がすべて末尾 `resume` である。
+    /// `resume` のない節も含む。
     T,
     /// それ以外。
     G,
@@ -116,7 +119,7 @@ impl ClauseClass {
     /// すべての分類を、バイナリの番号の順に並べたもの。
     pub const ALL: [ClauseClass; 3] = [ClauseClass::N, ClauseClass::T, ClauseClass::G];
 
-    /// テキストの綴り。
+    /// テキストでの表記を返す。
     pub fn name(self) -> &'static str {
         match self {
             ClauseClass::N => "N",
@@ -125,7 +128,7 @@ impl ClauseClass {
         }
     }
 
-    /// バイナリの番号。
+    /// バイナリでの番号を返す。
     pub fn code(self) -> u8 {
         self as u8
     }
@@ -144,7 +147,7 @@ impl Abi {
     /// すべての ABI を、バイナリの番号の順に並べたもの。
     pub const ALL: [Abi; 2] = [Abi::Prim, Abi::C];
 
-    /// テキストの綴り。
+    /// テキストでの表記を返す。
     pub fn name(self) -> &'static str {
         match self {
             Abi::Prim => "prim",
@@ -152,7 +155,7 @@ impl Abi {
         }
     }
 
-    /// バイナリの番号。
+    /// バイナリでの番号を返す。
     pub fn code(self) -> u8 {
         self as u8
     }
@@ -190,7 +193,7 @@ id_type!(
     InstanceId
 );
 id_type!(
-    /// 大域の表の添字。
+    /// グローバルの表の添字。
     GlobalId
 );
 id_type!(
@@ -219,29 +222,32 @@ pub enum Lit {
     I32(i32),
     /// `Int64` の値。
     I64(i64),
-    /// `Float64` の値の IEEE 754 のビット列。
+    /// `Float64` の値。
+    /// IEEE 754 のビット列で持つ。
     F64(u64),
     /// `String` の値(任意のバイト列)。
     Str(Vec<u8>),
 }
 
-/// 捕獲の列の要素と、関数の中の値の読み方。
+/// 関数の中での値の読み方。
+/// キャプチャの並びの要素にも使い、そこでは、その生成箇所を本体に含む関数の中での読み方を表す。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Cap {
-    /// スロット。
+    /// スロットを読む(`local`)。
     Local(u32),
-    /// 捕獲。
+    /// キャプチャを読む(`env`)。
     Env(u32),
-    /// 辞書の引数。
+    /// 辞書の引数を読む(`dparam`)。
     DParam(u32),
 }
 
-/// 関数を作る部分(`closure`、`dictabs`、`handle` の各部分)。
+/// 関数の生成箇所が持つ、作る関数と、その関数に渡すキャプチャの並びの組。
+/// `closure`、`dictabs`、`handle` の各部分に使う。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Part {
     /// 作る関数。
     pub func: FnId,
-    /// 捕獲の列。
+    /// キャプチャの並び。
     pub caps: Vec<Cap>,
 }
 
@@ -261,7 +267,8 @@ pub struct Clause {
 pub struct HandlerOp {
     /// 操作(エフェクトの中の位置)。
     pub op: u32,
-    /// 書いた分類。
+    /// ライタが書いた分類。
+    /// 検証器は分類を計算し直し、この値と違えばプログラムを拒否する。
     pub class: ClauseClass,
     /// 操作節の関数。
     pub part: Part,
@@ -276,7 +283,8 @@ pub struct Handle {
     pub effect: EffectId,
     /// 本体の関数。
     pub body: Part,
-    /// 操作節(書いた順。1 個以上)。
+    /// 操作節。
+    /// 書いた順に並び、1 個以上ある。
     pub ops: Vec<HandlerOp>,
     /// `return` 節。
     pub ret: Option<Part>,
@@ -284,20 +292,23 @@ pub struct Handle {
     pub cancel: Option<Part>,
 }
 
-/// 式(IRSpec 5.1 節)。子は評価の順に並ぶ。
+/// 式(IRSpec 5.1 節)。
+/// 子は評価の順に並ぶ。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exp {
     /// 定数。
     Lit(Lit),
-    /// 範囲外のリテラル(`lit_range`)と、その字面。
+    /// 範囲外のリテラル(`lit_range`)。
+    /// リテラルのソース上の表記を持つ。
     LitError(String),
     /// スロットを読む。
     Local(u32),
-    /// 捕獲を読む。
+    /// キャプチャを読む。
     Env(u32),
-    /// 大域を読む。
+    /// グローバルを読む。
     Global(GlobalId),
-    /// 構築。項目はソースに書いた順の(フィールドの位置, 式)。
+    /// 構築。
+    /// 項目は (フィールドの位置, 式) の組で、ソースに書いた順に並ぶ。
     Construct {
         /// 型。
         ty: TypeId,
@@ -310,7 +321,7 @@ pub enum Exp {
     Variant {
         /// ラベル。
         label: String,
-        /// 積載値。
+        /// ペイロード。
         value: ExpId,
     },
     /// 呼び出し。
@@ -358,9 +369,9 @@ pub enum Exp {
     Dictabs(Part),
     /// 辞書の適用。
     Dictapp {
-        /// 辞書を渡す相手。
+        /// 辞書を適用する値。
         func: ExpId,
-        /// 辞書の列。
+        /// 辞書の並び。
         dicts: Vec<DictId>,
     },
     /// 束縛。
@@ -369,7 +380,7 @@ pub enum Exp {
         slot: u32,
         /// 初期化式。
         value: ExpId,
-        /// 続きの式。
+        /// 本体の式。
         body: ExpId,
     },
     /// パターンの束縛。
@@ -378,17 +389,20 @@ pub enum Exp {
         pat: PatId,
         /// 初期化式。
         value: ExpId,
-        /// 続きの式。
+        /// 本体の式。
         body: ExpId,
     },
     /// 再帰の束縛。
     Letrec {
-        /// 項目(スロット, `closure` か `dictabs` の式)。1 個以上。
+        /// 項目。
+        /// (スロット, `closure` か `dictabs` の式) の組が 1 個以上並ぶ。
         items: Vec<(u32, ExpId)>,
-        /// 続きの式。
+        /// 本体の式。
         body: ExpId,
     },
-    /// 列(2 個以上)。
+    /// 列(`seq`)。
+    /// 式を左から評価し、最後の式の値を返す。
+    /// 式は 2 個以上ある。
     Seq(Vec<ExpId>),
     /// 照合。
     Match {
@@ -399,30 +413,32 @@ pub enum Exp {
     },
     /// 空のレコード。
     RecEmpty,
-    /// レコードの拡張。`value` を先に、`record` を後に評価する。
+    /// レコードの拡張。
+    /// `value` を先に、`record` を後に評価する。
     RecExtend {
         /// ラベル。
         label: String,
-        /// 足す値。
+        /// 追加する値。
         value: ExpId,
         /// 元のレコード。
         record: ExpId,
     },
-    /// 選択。
+    /// レコードのフィールドの選択。
     RecSelect {
         /// ラベル。
         label: String,
         /// レコード。
         record: ExpId,
     },
-    /// 制限。
+    /// レコードのフィールドの除去。
     RecRestrict {
         /// ラベル。
         label: String,
         /// レコード。
         record: ExpId,
     },
-    /// 更新。`record` を先に、`value` を後に評価する。
+    /// レコードのフィールドの更新。
+    /// `record` を先に、`value` を後に評価する。
     RecUpdate {
         /// ラベル。
         label: String,
@@ -456,7 +472,7 @@ pub enum Exp {
 /// 辞書の式(IRSpec 5.2 節)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Dict {
-    /// 利用者のインスタンスに前提の辞書を渡したもの。
+    /// ユーザが宣言したインスタンスに、前提の辞書を渡したもの。
     Inst {
         /// インスタンス。
         instance: InstanceId,
@@ -465,7 +481,7 @@ pub enum Dict {
     },
     /// 辞書の引数。
     DParam(u32),
-    /// 捕獲した辞書。
+    /// キャプチャした辞書。
     Env(u32),
     /// 閉じたレコード型の構造的な `Eq`。
     Record(Vec<(String, DictId)>),
@@ -480,7 +496,7 @@ pub enum Dict {
     },
 }
 
-/// レコードのパターンの尾部。
+/// レコードのパターンの末尾の種類(`closed`、`open`、`rest`)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RecordTail {
     /// タプルのパターン。
@@ -496,15 +512,17 @@ pub enum RecordTail {
 pub enum Pat {
     /// ワイルドカード。
     Wild,
-    /// 変数(スロットか、`def_pattern` では大域の列の位置)。
+    /// 変数。
+    /// 持つ番号は、束縛先のスロットの番号である。
+    /// `def_pattern` のパターンでは、スロットではなくグローバルの並びの中の位置を表す。
     Bind(u32),
     /// リテラル。
     Lit(Lit),
     /// レコード。
     Record {
-        /// (ラベル, パターン) の列。
+        /// (ラベル, パターン) の並び。
         fields: Vec<(String, PatId)>,
-        /// 尾部。
+        /// パターンの末尾。
         tail: RecordTail,
     },
     /// コンストラクタ。
@@ -513,19 +531,19 @@ pub enum Pat {
         ty: TypeId,
         /// コンストラクタ(型の中の位置)。
         ctor: u32,
-        /// (フィールドの位置, パターン) の列。
+        /// (フィールドの位置, パターン) の並び。
         fields: Vec<(u32, PatId)>,
     },
     /// ヴァリアント。
     Variant {
         /// ラベル。
         label: String,
-        /// 積載値のパターン。
+        /// ペイロードのパターン。
         pat: PatId,
     },
 }
 
-/// 式、辞書、パターンのノードの置き場。
+/// 式、辞書、パターンのノードを置く 3 つの配列。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Nodes {
     /// 式。
@@ -555,17 +573,20 @@ impl Nodes {
         PatId((self.pats.len() - 1) as u32)
     }
 
-    /// 式を引く。添字が範囲の外なら `None`。
+    /// 式を返す。
+    /// 添字が範囲外なら `None` を返す。
     pub fn exp(&self, id: ExpId) -> Option<&Exp> {
         self.exps.get(id.index())
     }
 
-    /// 辞書を引く。添字が範囲の外なら `None`。
+    /// 辞書を返す。
+    /// 添字が範囲外なら `None` を返す。
     pub fn dict(&self, id: DictId) -> Option<&Dict> {
         self.dicts.get(id.index())
     }
 
-    /// パターンを引く。添字が範囲の外なら `None`。
+    /// パターンを返す。
+    /// 添字が範囲外なら `None` を返す。
     pub fn pat(&self, id: PatId) -> Option<&Pat> {
         self.pats.get(id.index())
     }
@@ -576,14 +597,14 @@ impl Nodes {
 pub struct Ctor {
     /// 名前。
     pub name: String,
-    /// フィールドの数。
+    /// フィールドの個数。
     pub arity: u32,
 }
 
 /// 名目的な型。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Type {
-    /// 記号。
+    /// シンボル。
     pub sym: String,
     /// コンストラクタ。
     pub ctors: Vec<Ctor>,
@@ -594,18 +615,19 @@ pub struct Type {
 pub struct Op {
     /// 名前。
     pub name: String,
-    /// 引数の数。
+    /// 引数の個数。
     pub arity: u32,
-    /// 返り値の型が `Never` か。
+    /// 返り値の型が `Never` なら真。
     pub never: bool,
-    /// 実行時が処理するか。
+    /// ランタイムが処理する操作なら真。
+    /// プレリュードの `Console` の、引数が 1 個の `write` だけが真になる。
     pub runtime: bool,
 }
 
 /// エフェクト。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Effect {
-    /// 記号。
+    /// シンボル。
     pub sym: String,
     /// 操作。
     pub ops: Vec<Op>,
@@ -616,16 +638,17 @@ pub struct Effect {
 pub struct ClassMethod {
     /// 名前。
     pub name: String,
-    /// メソッド自身の辞書の数。
+    /// メソッド自身の辞書の個数。
     pub dicts: u32,
 }
 
 /// クラス。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Class {
-    /// 記号。
+    /// シンボル。
     pub sym: String,
-    /// メソッド(宣言の順)。
+    /// メソッド。
+    /// 宣言の順に並ぶ。
     pub methods: Vec<ClassMethod>,
 }
 
@@ -634,7 +657,7 @@ pub struct Class {
 pub struct Impl {
     /// メソッド(クラスの中の位置)。
     pub method: u32,
-    /// メソッド自身の辞書の数。
+    /// メソッド自身の辞書の個数。
     pub dicts: u32,
     /// 実装の関数。
     pub func: FnId,
@@ -643,19 +666,20 @@ pub struct Impl {
 /// インスタンス(IRSpec 7.2 節)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Instance {
-    /// 記号。
+    /// シンボル。
     pub sym: String,
     /// クラス。
     pub class: ClassId,
-    /// 頭の型構成子。
+    /// インスタンスの対象の型の先頭にある型構成子。
     pub head: TypeId,
-    /// 前提の数。
+    /// 前提の個数。
     pub premises: u32,
-    /// 実装の項目(本体に書いた順)。
+    /// 実装の項目。
+    /// インスタンスの本体に書いた順に並ぶ。
     pub methods: Vec<Impl>,
 }
 
-/// 大域の種類と欄。
+/// グローバルの種類と、種類ごとのフィールド。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GlobalKind {
     /// 組み込みの値。
@@ -666,21 +690,23 @@ pub enum GlobalKind {
         abi: Abi,
         /// 実装名。
         name: String,
-        /// 受け取って捨てる辞書の数。
+        /// 受け取って捨てる辞書の個数。
         dicts: u32,
     },
     /// 関数。
     Fn(FnId),
-    /// 辞書を受け取る関数。
+    /// 辞書を受け取る束縛。
+    /// 種類 `dictabs` の関数を指す。
     Dictabs(FnId),
-    /// 初期化の手順が置く値。
+    /// 初期化手順が値を置くグローバル。
+    /// 値の Rep を持つ。
     Value(Rep),
 }
 
-/// 大域。
+/// グローバル。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Global {
-    /// 記号。
+    /// シンボル。
     pub sym: String,
     /// 種類。
     pub kind: GlobalKind,
@@ -689,7 +715,7 @@ pub struct Global {
 /// 関数の表の項目(IRSpec 6.2 節)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Function {
-    /// 記号。
+    /// シンボル。
     pub sym: String,
     /// 種類。
     pub kind: FnKind,
@@ -699,9 +725,9 @@ pub struct Function {
     pub params: Vec<Rep>,
     /// 引数でないスロットの Rep。
     pub locals: Vec<Rep>,
-    /// 辞書の引数の数。
+    /// 辞書の引数の個数。
     pub dicts: u32,
-    /// 捕獲の Rep。
+    /// キャプチャの Rep。
     pub caps: Vec<Rep>,
     /// 結果の Rep。
     pub result: Rep,
@@ -713,12 +739,12 @@ pub struct Function {
     pub body: ExpId,
 }
 
-/// 初期化の手順(IRSpec 10.1 節)。
+/// 初期化手順(IRSpec 10.1 節)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Step {
     /// `def_value`。
     DefValue {
-        /// 定義する大域。
+        /// 定義するグローバル。
         global: GlobalId,
         /// `thunk` の関数。
         func: FnId,
@@ -727,9 +753,10 @@ pub enum Step {
     DefPattern {
         /// `thunk` の関数。
         func: FnId,
-        /// パターンが束縛する大域の列。
+        /// パターンが束縛するグローバルの並び。
         globals: Vec<GlobalId>,
-        /// パターン。`bind k` は大域の列の `k` 番目を指す。
+        /// パターン。
+        /// `bind k` はグローバルの並びの `k` 番目を指す。
         pat: PatId,
     },
     /// `def_fns`。
@@ -743,22 +770,26 @@ pub enum Step {
 }
 
 /// 単位(IRSpec 2 節)。
+/// プログラムを構成するコンパイル単位である。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Unit {
-    /// 鍵。
+    /// キー。
     pub key: String,
-    /// 元のファイルの綴り(任意のバイト列)。
+    /// 元のファイルのパスの並び。
+    /// 各パスは任意のバイト列である。
     pub paths: Vec<Vec<u8>>,
-    /// 初期化の手順。
+    /// 初期化手順の並び。
     pub init: Vec<Step>,
 }
 
 /// 1 つのプログラム(IRSpec 2.1 節)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
-    /// 版(主版, 副版)。
+    /// バージョン。
+    /// (メジャーバージョン, マイナーバージョン) の組である。
     pub version: (u16, u16),
-    /// 単位(初期化の順)。
+    /// 単位。
+    /// IRSpec 2.1 節の順に並び、リーダはこの順に初期化する。
     pub units: Vec<Unit>,
     /// 型。
     pub types: Vec<Type>,
@@ -768,7 +799,7 @@ pub struct Program {
     pub classes: Vec<Class>,
     /// インスタンス。
     pub instances: Vec<Instance>,
-    /// 大域。
+    /// グローバル。
     pub globals: Vec<Global>,
     /// 関数。
     pub functions: Vec<Function>,
@@ -776,13 +807,17 @@ pub struct Program {
     pub nodes: Nodes,
 }
 
-/// この crate が書く版(主版、副版)。
+/// KIR を新しく作るライタが `Program::version` に入れるバージョン。
+/// (メジャーバージョン, マイナーバージョン) の組である。
 ///
-/// 読み手は主版だけを比べ、副版は問わない(IRSpec 14 節)。
-/// 副版が足すのは、読み飛ばせる節と、必要な機能のビットで守る新しい命令だけだからである。
+/// リーダは、ファイルのメジャーバージョンだけをこの値と比較し、マイナーバージョンは問わない(IRSpec 14 節)。
+/// マイナーバージョンで追加できるのは、スキップできるセクションと、必須機能ビットを立てたときだけ使える新しい命令に限られるからである。
 pub const VERSION: (u16, u16) = (1, 0);
 
-/// 記号の単位の鍵(最後の `/` より前の部分。`/` が無ければ記号そのもの)。
+/// シンボルが属する単位のキーを返す。
+///
+/// キーは、シンボルの最後の `/` より前の部分である。
+/// `/` がなければ、シンボル全体を返す。
 pub fn unit_of_symbol(sym: &str) -> &str {
     match sym.rfind('/') {
         Some(i) => &sym[..i],

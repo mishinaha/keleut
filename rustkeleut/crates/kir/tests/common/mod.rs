@@ -1,4 +1,4 @@
-//! 試験の共通の部品。
+//! 各テストが共通に使う関数。
 
 #![allow(dead_code)]
 
@@ -9,7 +9,7 @@ pub fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
-/// ディレクトリの中の `.kir` と、同じ名前の `.kirt` の組を名前の順に返す。
+/// ディレクトリの中の `.kir` と、同じ名前の `.kirt` を読み、(名前, `.kir` の内容, `.kirt` の内容) の組を名前の順に返す。
 pub fn pairs(dir: &Path) -> Vec<(String, Vec<u8>, Vec<u8>)> {
     let mut names: Vec<PathBuf> = std::fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
@@ -31,7 +31,10 @@ pub fn pairs(dir: &Path) -> Vec<(String, Vec<u8>, Vec<u8>)> {
         .collect()
 }
 
-/// 往復の性質をすべて確かめ、違えば理由を返す。
+/// Diktor が書き出したバイナリ `kir` とテキスト `kirt` の組について、ラウンドトリップの性質をすべて確かめ、違えば理由を返す。
+///
+/// バイナリを読んで書き出したバイナリとテキストが、それぞれ `kir`、`kirt` と一致することを確かめる。
+/// テキストを読んで書き出したバイナリとテキストも、同じように確かめる。
 pub fn roundtrip(kir: &[u8], kirt: &[u8]) -> Result<(), String> {
     let p = kir::read_kir(kir).map_err(|e| format!("read_kir: {e}"))?;
     kir::verify(&p).map_err(|e| format!("verify: {e}"))?;
@@ -62,7 +65,7 @@ pub fn roundtrip(kir: &[u8], kirt: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// 節を切り出す。見出しの後の (id, 中身) の列。
+/// バイナリ `bin` のヘッダ(先頭の 16 バイト)の後に並ぶセクションを、(id, 内容) の組の並びとして取り出す。
 pub fn sections(bin: &[u8]) -> Vec<(u8, Vec<u8>)> {
     let mut out = Vec::new();
     let mut pos = 16;
@@ -85,6 +88,10 @@ pub fn sections(bin: &[u8]) -> Vec<(u8, Vec<u8>)> {
     out
 }
 
+/// `head` の先頭の 16 バイトのヘッダの後に、`secs` のセクションを並べたバイナリを作る。
+///
+/// セクションのサイズは最短の LEB128 で書く。
+/// ヘッダが持つセクション数は書き換えないので、セクションを増減したときは呼び出し元が書き換える。
 pub fn assemble(head: &[u8], secs: &[(u8, Vec<u8>)]) -> Vec<u8> {
     let mut out = head[..16].to_vec();
     for (id, payload) in secs {

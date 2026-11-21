@@ -1,7 +1,8 @@
-//! Diktor の書き出した `.kir` と `.kirt` の組で、読み書きの往復を確かめる。
+//! Diktor が書き出した `.kir` と `.kirt` の組を読み、書き出すと元に戻ること(ラウンドトリップ)を確かめる。
 //!
-//! `tests/fixtures/` の組は `diktor --emit-ir` と `--emit-ir-text` の出力である(作り方は `tests/fixtures/README.md`)。
-//! 環境変数 `KIR_CORPUS_DIR` を与えると、そのディレクトリの組もすべて確かめる。
+//! `tests/fixtures/` の組は `diktor --emit-ir` と `--emit-ir-text` の出力である。
+//! 作り方は `tests/fixtures/README.md` に書いてある。
+//! 環境変数 `KIR_CORPUS_DIR` にディレクトリを指定すると、そのディレクトリの組もすべて確かめる。
 
 mod common;
 
