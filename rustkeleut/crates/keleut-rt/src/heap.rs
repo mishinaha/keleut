@@ -1,76 +1,83 @@
-//! ヒープ(計画 261024-1 の 6.5 節、D526)。
+//! オブジェクトを移動しないマークスイープのヒープ。
 //!
-//! 箱は 8 バイト境界の語の列で、動かない。
-//! 回収は動かさないマークスイープで、印付け([`crate::gc`])とこのモジュールの掃除からなる。
+//! オブジェクトは 8 バイト境界に置いたワードの並びで、確保した後は移動しない。
+//! GC は、マーク([`crate::gc`])と、このモジュールのスイープからなる。
 //!
-//! 小さな箱(見出しを含めて [`MAX_SMALL_WORDS`] 語以下)は、大きさの種類ごとのページ([`PAGE_WORDS`] 語)から切り出す。
-//! ページは同じ大きさの区画の列で、区画は空きリストか、ページの末尾からの切り出しで配る。
-//! 大きな箱は箱ごとにシステムから取る。
-//! ページは `mmap` で取り、空になったページは掃除のときに手元に残すか(最大 [`POOL_PAGES`] 枚)システムへ返す。
+//! 小さなオブジェクト(ヘッダを含めて [`MAX_SMALL_WORDS`] ワード以下)は、サイズクラスごとのページ([`PAGE_WORDS`] ワード)から確保する。
+//! ページは同じサイズのセルに分かれている。
+//! セルは空きリストから配り、空きリストが空ならバンプ割り当てで配る。
+//! バンプ割り当ては、ページのまだ配っていない部分を先頭から順に配る方法である。
+//! 大きなオブジェクトは、1 個ずつグローバルアロケータで確保する。
+//! ページは `mmap` で確保する。
+//! 空になったページは、スイープのときにプールに残すか(最大 [`POOL_PAGES`] 枚)、OS に解放する。
 //!
-//! 見出しの下位 8 ビットは箱の種類で、空いた区画は見出しを 0 にする。
-//! 見出しの次の 8 ビットは GC の印で、印付けが [`MARK`] を立て、掃除が消す。
-//! 掃除は、印の無い箱を空きリストに戻し(大きな箱はシステムへ返し)、空きリストを作り直す。
-//! したがって、確保した区画には、次の回収の前に種類の入った見出しを書かなければならない。
+//! ヘッダの下位 8 ビットはオブジェクトの種類で、空きセルのヘッダは 0 である。
+//! ヘッダの次の 8 ビットは GC が使い、マークのときに [`MARK`] を立て、スイープのときに下ろす。
+//! スイープは、マークのない小さなオブジェクトのセルを空きリストに戻し、マークのない大きなオブジェクトをグローバルアロケータに解放して、空きリストを作り直す。
+//! スイープは種類が 0 のセルを空きセルとして扱うので、確保したセルには、次の GC までに種類の入ったヘッダを書かなければならない。
 //!
-//! 回収の時機はヒープではなく [`crate::Rt`] が決める([`Heap::should_collect`])。
-//! 確保の関数 [`Heap::try_alloc`] は回収をしない。
+//! GC をいつ実行するかは、ヒープではなく [`crate::Rt`] が決める。
+//! [`crate::Rt`] は [`Heap::should_collect`] で GC を始める条件を調べる。
+//! 確保の関数 [`Heap::try_alloc`] は GC を実行しない。
 //!
-//! 領域を取れないとき(システムの確保の失敗)は、プロセスを止めずに [`OutOfMemory`] を返す。
-//! 呼び出し側は回収してから試し直し、それでも取れなければ [`Heap::exhausted`] を呼んでメモリの不足(付録 B の 19 番)にする。
+//! メモリを確保できないとき(`mmap` かグローバルアロケータが失敗したとき)は、プロセスを終了せずに [`OutOfMemory`] を返す。
+//! 呼び出し元は GC を実行してから確保をやり直し、それでも確保できなければ [`Heap::exhausted`] を呼んで、メモリ不足の実行時エラー(IRSpec 付録 B の 19 番)にする。
 //!
-//! メモリの不足の誤りを巻き戻す間に `cancel` 節が走れるよう、最初の確保のときに予備のページ([`RESERVE_PAGES`] 枚、1 MiB)を取っておく
-//! (計画 6.5 節)。
-//! [`Heap::exhausted`] は予備を空きページの手元に移す。
-//! その後のページはまず手元から取り、手元が空ならシステムから取りにいく。
-//! システムから取れたら予備の扱いをやめ、次の確保で新しい予備を取っておく。
-//! [`RESERVE_SWITCH_WORDS`] 語(2 MiB)より大きな箱の失敗は、ほかの確保の余地を減らさないので、予備に切り替えない。
-//! `cancel` 節の中のこの誤りは、ほかの脱出と同じく打ち切られる。
+//! メモリ不足のエラーで巻き戻している間も `cancel` 節を実行できるように、最初の確保のときに予備のページ([`RESERVE_PAGES`] 枚、1 MiB)を確保しておく。
+//! [`Heap::exhausted`] は予備のページを空きページのプールに移す。
+//! その後は、新しいページをまずプールから取り出し、プールが空なら OS から確保しようとする。
+//! OS からページを確保できたとき、または大きなオブジェクトを確保できたときは、予備のページを使っている状態を終える。
+//! その次に新しいページか大きなオブジェクトを確保するときに、新しい予備のページを確保する。
+//! [`RESERVE_SWITCH_WORDS`] ワード(2 MiB)より大きなオブジェクトの確保に失敗しても、ほかの確保に使えるメモリは減らないので、予備のページに切り替えない。
+//! `cancel` 節の中で起きたメモリ不足のエラーは、ほかの脱出と同じく抑制される。
 //!
-//! 失敗を返す確保(表の `try_reserve` と大きな箱)は、大域の確保器の失敗を自分で扱う範囲で行う([`crate::alloc::handled`])。
-//! 失敗しても大域の予備を使わず、呼び手の後退の道かメモリの不足に任せる。
+//! 失敗を返す確保(管理用の `Vec` の `try_reserve` と大きなオブジェクト)は、[`crate::alloc::handled`] の範囲の中で行う。
+//! これは、確保の失敗を呼び出し元が処理する範囲である。
+//! この範囲の中で確保に失敗しても、グローバルアロケータは予備領域を使わない。
+//! 失敗の後は、呼び出し元が代替の経路に切り替えるか、メモリ不足のエラーにする。
 //!
-//! JIT のコードは、小さな箱を [`Heap::try_alloc`] の最初の 2 つの道(空きリストの先頭を外すか、切り出しの位置を進める)と同じ手順で、
-//! 実行時の関数を呼ばずにその場で取る(確保の速い道、`keleut_interp::native` の冒頭)。
-//! JIT のコードは [`fast`] の位置で、ヒープの欄 `since_gc`、`trigger` と大きさの種類の状態を直に読み書きする。
-//! 速い道は、`since_gc >= trigger` なら取らずに実行時の関数に任せ、取ったら区画の語の数を `since_gc` に足す。
-//! そのため、回収の時機は実行時の関数を通る確保と変わらない。
-//! この手順と欄の配置を変えるときは、`keleut_llvm` の確保の速い道も合わせて変える。
+//! JIT のコードは、小さなオブジェクトを、ランタイム関数を呼ばずにその場で確保する。
+//! これを確保の高速経路(fast path)と呼ぶ(`keleut_interp::native` のモジュールの説明を参照)。
+//! 手順は [`Heap::try_alloc`] の最初の 2 つの経路と同じで、空きリストの先頭のセルを外すか、バンプポインタを進める。
+//! JIT のコードは、[`fast`] のオフセットを使って、ヒープのフィールド `since_gc`、`trigger` とサイズクラスごとの状態を直接読み書きする。
+//! 高速経路は、`since_gc >= trigger` なら確保せずにランタイム関数を呼び、確保したらセルのワード数を `since_gc` に足す。
+//! そのため、GC を始める条件は、ランタイム関数を通る確保と変わらない。
+//! この手順とフィールドのレイアウトを変えるときは、`keleut_llvm` の確保の高速経路も合わせて変える。
 
 use std::alloc::{Layout, alloc, dealloc};
 use std::ffi::c_void;
 
 use crate::alloc::handled;
 
-/// 確保の失敗。
+/// メモリを確保できなかったことを表すエラー。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OutOfMemory;
 
-/// 見出しの GC の印。
+/// ヘッダのマークビット。GC がマークのときに立てる。
 pub const MARK: u64 = 1 << 8;
 
-/// ページの語の数(256 KiB)。
+/// 1 ページのワード数(256 KiB)。
 pub const PAGE_WORDS: usize = 1 << 15;
 
-/// 小さな箱の語の数の上限(4 KiB)。
+/// 小さなオブジェクトのワード数の上限(4 KiB)。ヘッダを含めて数える。
 pub const MAX_SMALL_WORDS: usize = 512;
 
-/// 予備のページの数(1 MiB)。
+/// 予備のページの枚数。合計で 1 MiB になる。
 pub const RESERVE_PAGES: usize = 4;
 
-/// 予備の語の数。
+/// 予備のページの合計のワード数。
 pub const RESERVE_WORDS: usize = RESERVE_PAGES * PAGE_WORDS;
 
-/// この語の数より大きな箱の確保の失敗では、予備に切り替えない(2 MiB)。
+/// このワード数(2 MiB)より大きなオブジェクトの確保に失敗しても、予備のページに切り替えない。
 pub const RESERVE_SWITCH_WORDS: usize = 1 << 18;
 
-/// 掃除の後に手元に残す空きページの数の上限(4 MiB)。
+/// スイープの後にプールに残す空きページの枚数の上限。合計で 4 MiB になる。
 pub const POOL_PAGES: usize = 16;
 
-/// 回収の間隔の最小(前の回収の後に確保した語の数。8 MiB)。
+/// GC の間隔の最小値(8 MiB)。間隔は、前の GC の後に確保したワード数で数える。
 pub const MIN_TRIGGER_WORDS: u64 = 1 << 20;
 
-/// 大きさの種類(区画の語の数)。
+/// サイズクラスごとの、セルのワード数。
 const CLASSES: [u16; 31] = [
     2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160,
     192, 224, 256, 320, 384, 448, 512,
@@ -78,7 +85,9 @@ const CLASSES: [u16; 31] = [
 
 const NCLASS: usize = CLASSES.len();
 
-/// 語の数から大きさの種類の番号を引く表。
+/// ワード数からサイズクラスの番号を求める表。
+///
+/// `CLASS_OF[w]` は、`w` ワードが入る最小のサイズクラスの番号である。
 const CLASS_OF: [u8; MAX_SMALL_WORDS + 1] = {
     let mut t = [0u8; MAX_SMALL_WORDS + 1];
     let mut w = 0;
@@ -102,9 +111,9 @@ unsafe extern "C" {
 const PROT_READ_WRITE: i32 = 0x1 | 0x2;
 const MAP_PRIVATE_ANONYMOUS: i32 = 0x02 | 0x20;
 
-/// システムからページを 1 枚取る。
+/// OS からページを 1 枚確保する。確保できなければ `None` を返す。
 fn sys_page() -> Option<*mut u64> {
-    // SAFETY: 無名の写像を新しく作るだけである。
+    // SAFETY: 無名マッピングを新しく作るだけである。
     let p = unsafe {
         mmap(
             std::ptr::null_mut(),
@@ -122,43 +131,44 @@ fn sys_page() -> Option<*mut u64> {
     }
 }
 
-/// ページをシステムへ返す。
+/// ページを OS に解放する。
 fn sys_unpage(p: *mut u64) {
     // SAFETY: p は sys_page が返したページで、もう使わない。
     unsafe { munmap(p.cast(), PAGE_WORDS * 8) };
 }
 
-/// 大きさの種類のページ。
+/// 1 つのサイズクラスのセルに分けたページ。先頭のアドレスとサイズクラスの番号を持つ。
 struct Page {
     base: *mut u64,
     class: u8,
 }
 
-/// 大きな箱。
+/// 大きなオブジェクト 1 個の情報。先頭のアドレス、確保に使った `Layout`、ワード数を持つ。
 struct Large {
     p: *mut u64,
     layout: Layout,
     words: u64,
 }
 
-/// 大きさの種類ごとの状態。
+/// サイズクラスごとの確保の状態。
 #[derive(Clone, Copy)]
 struct Class {
-    /// 空きリストの先頭(区画の 1 番の語が次を指す)。
+    /// 空きリストの先頭。空きセルの 1 番のワードが次の空きセルを指す。
     free: *mut u64,
-    /// 切り出し中のページの、次の区画と終わり。
+    /// バンプポインタ。バンプ割り当て中のページで、次に配るセルを指す。
     cur: *mut u64,
+    /// バンプ割り当て中のページで配れる範囲の終わり。
     end: *mut u64,
 }
 
 impl Class {
-    /// `base` のページが切り出し中のページか。
+    /// `base` から始まるページが、このサイズクラスのバンプ割り当て中のページなら真を返す。
     ///
-    /// `cur` ではなく `end` で決める。
-    /// 区画の語の数が [`PAGE_WORDS`] を割り切る種類では、切り出し中のページを使い切ると `cur` がページの終わりを指し、
-    /// それは隣のページの先頭と同じ番地になりうるからである。
-    /// `end` は切り出し中のページの先頭より大きく、終わり以下であり、ほかのページの範囲には入らない。
-    /// `end` が空(まだページが無い)ならどのページにも当たらない。
+    /// `cur` ではなく `end` で判定する。
+    /// セルのワード数が [`PAGE_WORDS`] を割り切るサイズクラスでは、バンプ割り当て中のページを使い切ると `cur` がページの終わりを指し、
+    /// そのアドレスが隣のページの先頭と一致することがあるからである。
+    /// `end` は、バンプ割り当て中のページの先頭より大きく、そのページの終わり以下なので、ほかのページの範囲には入らない。
+    /// `end` が null のとき(まだページがないとき)は、どのページにも偽を返す。
     #[inline]
     fn bump_in(&self, base: *mut u64) -> bool {
         let e = self.end as usize;
@@ -166,72 +176,72 @@ impl Class {
     }
 }
 
-/// 掃除の結果。
+/// スイープ 1 回の結果。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SweepStats {
-    /// 生き残った箱の語の数(区画の大きさで数える)。
+    /// GC の後に残ったオブジェクトのワード数。小さなオブジェクトはセルのサイズで数える。
     pub live_words: u64,
-    /// 回収した箱の数。
+    /// 解放したオブジェクトの数。
     pub freed: u64,
-    /// システムへ返したページの数。
+    /// OS に解放したページの枚数。
     pub released_pages: u64,
-    /// 見た区画と大きな箱の数(掃除の手間)。
+    /// 調べたセルと大きなオブジェクトの数。スイープの処理量を表す。
     pub scanned: u64,
 }
 
 /// マークスイープのヒープ。
 ///
-/// JIT のコードは欄を [`fast`] の位置で読み書きする。
-/// 位置は `offset_of!` で構築ごとに決まるので、配置は Rust の既定のままでよい。
+/// JIT のコードは、[`fast`] のオフセットを使ってフィールドを読み書きする。
+/// オフセットは `offset_of!` でビルドごとに求めるので、構造体のレイアウトは Rust の既定のままでよい。
 pub struct Heap {
     classes: [Class; NCLASS],
     pages: Vec<Page>,
     large: Vec<Large>,
-    /// 空きページの手元。
+    /// 空きページのプール。
     pool: Vec<*mut u64>,
-    /// システムから取って持っている語の数(ページと大きな箱。手元と予備を除く)。
+    /// OS とグローバルアロケータから確保して使っているワード数。ページと大きなオブジェクトを数え、プールと予備のページは数えない。
     held_words: u64,
-    /// 前の回収の後に確保した語の数。
+    /// 前の GC の後に確保したワード数。
     since_gc: u64,
-    /// 次の回収までに確保してよい語の数。
+    /// 次の GC までに確保してよいワード数。
     trigger: u64,
-    /// 次の掃除で、生き残った量に足して間隔を決める語の数([`Heap::set_root_words`])。
+    /// 次のスイープが GC のしきい値 `trigger` を決めるときに、GC の後に残った量に足すワード数。[`Heap::set_root_words`] で設定する。
     root_words: u64,
-    /// 試験のための、持つ語の数の上限。超えたらシステムの確保の失敗と同じに扱う。
+    /// テスト用の、`held_words` の上限。これを超える確保は、OS が確保に失敗したときと同じように扱う。
     limit_words: Option<u64>,
     /// 予備のページ。
     reserve: Vec<*mut u64>,
-    /// 予備を手元に移したか。
+    /// 予備のページをプールに移して使っている間は真。
     in_reserve: bool,
 }
 
-// SAFETY: Heap はページと大きな箱を所有し、それらはほかのスレッドから参照されない。
-// ミューテータは 1 本で、Heap はそのスレッドへ移すだけである。
+// SAFETY: Heap はページと大きなオブジェクトを所有し、それらはほかのスレッドから参照されない。
+// ミューテータのスレッドは 1 つで、Heap はそのスレッドへ移動するだけである。
 unsafe impl Send for Heap {}
 
-/// JIT のコードの確保の速い道が読み書きする、[`Heap`] の欄のバイトの位置と大きさの種類の表。
+/// JIT のコードの確保の高速経路が使う、[`Heap`] のフィールドのオフセットとサイズクラスの表。
 pub mod fast {
     use super::{CLASS_OF, CLASSES, Class, Heap, MAX_SMALL_WORDS};
     use std::mem::{offset_of, size_of};
 
-    /// `since_gc`(前の回収の後に確保した語の数)。
+    /// `since_gc`(前の GC の後に確保したワード数)のオフセット。
     pub const SINCE_GC: u64 = offset_of!(Heap, since_gc) as u64;
-    /// `trigger`(次の回収までに確保してよい語の数)。
+    /// `trigger`(次の GC までに確保してよいワード数)のオフセット。
     pub const TRIGGER: u64 = offset_of!(Heap, trigger) as u64;
-    /// 大きさの種類ごとの状態の列の先頭。
+    /// サイズクラスごとの状態を並べた配列の、先頭のオフセット。
     pub const CLASSES_AT: u64 = offset_of!(Heap, classes) as u64;
-    /// 大きさの種類ごとの状態の大きさ。
+    /// サイズクラス 1 つ分の状態のバイト数。
     pub const CLASS_BYTES: u64 = size_of::<Class>() as u64;
-    /// 大きさの種類の状態の中の、空きリストの先頭(区画の 1 番の語が次を指す)。
+    /// サイズクラスの状態の中で、空きリストの先頭を持つフィールドのオフセット。空きセルの 1 番のワードが次の空きセルを指す。
     pub const FREE: u64 = offset_of!(Class, free) as u64;
-    /// 大きさの種類の状態の中の、切り出し中のページの次の区画。
+    /// サイズクラスの状態の中で、バンプポインタを持つフィールドのオフセット。バンプポインタは、バンプ割り当て中のページで次に配るセルを指す。
     pub const CUR: u64 = offset_of!(Class, cur) as u64;
-    /// 大きさの種類の状態の中の、切り出し中のページの終わり。
+    /// サイズクラスの状態の中で、バンプ割り当て中のページの終わりを持つフィールドのオフセット。
     pub const END: u64 = offset_of!(Class, end) as u64;
 
-    /// `words` 語(見出しを含む。1 以上)の箱の大きさの種類の番号と、区画の語の数。
+    /// `words` ワード(ヘッダを含む)のオブジェクトの、サイズクラスの番号とセルのワード数を返す。
     ///
-    /// 大きな箱([`MAX_SMALL_WORDS`] 語を超える)なら `None` である。
+    /// `words` が 0 のときと、大きなオブジェクト([`MAX_SMALL_WORDS`] ワードを超える)のときは `None` を返す。
     pub fn class_of(words: usize) -> Option<(usize, usize)> {
         if words == 0 || words > MAX_SMALL_WORDS {
             return None;
@@ -248,7 +258,7 @@ impl Default for Heap {
 }
 
 impl Heap {
-    /// 空のヒープ。
+    /// 空のヒープを作る。
     pub fn new() -> Heap {
         let empty = Class {
             free: std::ptr::null_mut(),
@@ -270,51 +280,54 @@ impl Heap {
         }
     }
 
-    /// ヒープの番地(JIT のコードの確保の速い道が [`fast`] の位置で欄を読み書きする)。
+    /// ヒープのアドレスを返す。JIT のコードの確保の高速経路が、このアドレスと [`fast`] のオフセットでフィールドを読み書きする。
     ///
-    /// ヒープが動かない間だけ使える。
+    /// 返したポインタは、`Heap` の値を移動しない間だけ使える。
     pub fn fast_ptr(&mut self) -> *mut Heap {
         self
     }
 
-    /// 予備を使い始めたか(試験用)。
+    /// 予備のページをプールに移して使っている間は真を返す(テスト用)。
     pub fn in_reserve(&self) -> bool {
         self.in_reserve
     }
 
-    /// 持つ語の数の上限を決める(試験用)。
+    /// [`Heap::held_words`] の上限を設定する(テスト用)。
     pub fn set_limit_words(&mut self, limit: Option<u64>) {
         self.limit_words = limit;
     }
 
-    /// システムから取って持っている語の数(ページと大きな箱)。
+    /// OS とグローバルアロケータから確保して使っているワード数を返す。ページと大きなオブジェクトを数え、プールと予備のページは数えない。
     pub fn held_words(&self) -> u64 {
         self.held_words
     }
 
-    /// 前の回収の後に確保した語の数。
+    /// 前の GC の後に確保したワード数を返す。
     pub fn since_gc(&self) -> u64 {
         self.since_gc
     }
 
-    /// 次の掃除で決める回収の間隔に、根の走査の手間に見合う語の数 `words` を足す。
+    /// 次のスイープが GC のしきい値を決めるときに足すワード数 `words` を設定する。
     ///
-    /// GC([`crate::gc`])は、走査したフレームの数に比例する値を掃除の前に置く。
+    /// GC([`crate::gc`])は、ルートの走査の処理量に相当する値として、走査したフレームの数に比例するワード数をスイープの前に設定する。
     pub fn set_root_words(&mut self, words: u64) {
         self.root_words = words;
     }
 
-    /// 回収の時機か(前の回収の後に確保した量が、前の回収で生き残った量と根の走査の分の和と、最小の間隔の大きいほうを超えた)。
+    /// GC を始める条件を満たしていれば真を返す。
+    ///
+    /// 条件は、前の GC の後に確保した量がしきい値 `trigger` 以上であることである。
+    /// しきい値は、前の GC の後に残った量とルートの走査の分([`Heap::set_root_words`])の和と、最小の間隔 [`MIN_TRIGGER_WORDS`] の大きいほうである。
     #[inline]
     pub fn should_collect(&self) -> bool {
         self.since_gc >= self.trigger
     }
 
-    /// 次の回収の時機を、今から 1 つの間隔(前の掃除で決めたもの)の後にずらす。
+    /// 次に GC を始める条件を満たす時点を、現在から間隔 1 つ分だけ後にずらす。間隔は前のスイープで決めた値である。
     ///
-    /// GC([`crate::gc`])が印付けを打ち切ったときに呼ぶ。
-    /// 掃除をしないので、前の回収の後に確保した量はそのままでは回収の時機を超えたままになり、
-    /// 次の確保(`cancel` 節の確保)がすぐまた回収を起こすからである。
+    /// GC([`crate::gc`])がマークを中断したときに呼ぶ。
+    /// マークを中断するとスイープを実行しないので、そのままでは、前の GC の後に確保した量が GC を始める条件を満たしたまま残る。
+    /// すると次の確保(`cancel` 節の中の確保)ですぐにまた GC を始める条件を満たすので、確保した量を 0 に戻す。
     pub fn defer_collect(&mut self) {
         self.since_gc = 0;
     }
@@ -323,7 +336,7 @@ impl Heap {
         matches!(self.limit_words, Some(l) if self.held_words + words > l)
     }
 
-    /// 新しいページ。手元から取り、無ければシステムから取る。
+    /// サイズクラス `class` の新しいページを用意する。プールにページがあれば取り出し、プールが空なら OS から確保する。
     fn new_page(&mut self, class: usize) -> Result<*mut u64, OutOfMemory> {
         handled(|| self.pages.try_reserve(1)).map_err(|_| OutOfMemory)?;
         let p = match self.pool.pop() {
@@ -345,7 +358,7 @@ impl Heap {
         Ok(p)
     }
 
-    /// 予備のページを取っておく。
+    /// 予備のページを持っていなければ確保する。予備のページをプールに移して使っている間は確保しない。
     fn ensure_reserve(&mut self) -> Result<(), OutOfMemory> {
         if self.in_reserve || !self.reserve.is_empty() {
             return Ok(());
@@ -366,9 +379,10 @@ impl Heap {
         Ok(())
     }
 
-    /// 確保に失敗した(回収しても取れなかった)。予備が残っていれば手元に移す。
+    /// GC を実行しても `words` ワードを確保できなかったときに呼ぶ。予備のページが残っていれば、プールに移す。
     ///
-    /// [`RESERVE_SWITCH_WORDS`] より大きな箱の失敗は、予備に切り替えない。
+    /// [`RESERVE_SWITCH_WORDS`] より大きなオブジェクトの確保に失敗したときは、予備のページに切り替えない。
+    /// テスト用の上限([`Heap::set_limit_words`])を設定していれば、移したページの分だけ上限を上げる。
     pub fn exhausted(&mut self, words: usize) -> OutOfMemory {
         if words > RESERVE_SWITCH_WORDS || self.reserve.is_empty() {
             return OutOfMemory;
@@ -383,7 +397,7 @@ impl Heap {
         OutOfMemory
     }
 
-    /// `words` 語(見出しを含む。1 以上)の箱の領域を確保する。中身は初期化しない。回収はしない。
+    /// `words` ワード(ヘッダを含む)のオブジェクトの領域を確保する。`words` は 1 以上でなければならない。領域の内容は初期化しない。GC は実行しない。
     #[inline]
     pub fn try_alloc(&mut self, words: usize) -> Result<*mut u64, OutOfMemory> {
         debug_assert!(words >= 1);
@@ -393,14 +407,14 @@ impl Heap {
             let k = &mut self.classes[c];
             if !k.free.is_null() {
                 let p = k.free;
-                // SAFETY: 空きリストの区画の 1 番の語は次の空きの区画を指す(区画は 2 語以上)。
+                // SAFETY: 空きリストのセルの 1 番のワードは次の空きセルを指す(セルは 2 ワード以上ある)。
                 k.free = unsafe { *p.add(1) } as *mut u64;
                 self.since_gc += cw as u64;
                 return Ok(p);
             }
             if (k.end as usize).wrapping_sub(k.cur as usize) >= cw * 8 && !k.cur.is_null() {
                 let p = k.cur;
-                // SAFETY: p から cw 語は切り出し中のページの中にある。
+                // SAFETY: p から cw ワードはバンプ割り当て中のページの中にある。
                 k.cur = unsafe { p.add(cw) };
                 self.since_gc += cw as u64;
                 return Ok(p);
@@ -409,7 +423,7 @@ impl Heap {
             let p = self.new_page(c)?;
             let k = &mut self.classes[c];
             let cells = PAGE_WORDS / cw;
-            // SAFETY: ページは PAGE_WORDS 語で、cells × cw 語はその中にある。
+            // SAFETY: ページは PAGE_WORDS ワードで、cells × cw ワードはその中にある。
             unsafe {
                 k.cur = p.add(cw);
                 k.end = p.add(cells * cw);
@@ -424,7 +438,7 @@ impl Heap {
         handled(|| self.large.try_reserve(1)).map_err(|_| OutOfMemory)?;
         let bytes = words.checked_mul(8).ok_or(OutOfMemory)?;
         let layout = Layout::from_size_align(bytes, 8).map_err(|_| OutOfMemory)?;
-        // 失敗は呼び手が回収とメモリの不足で扱うので、失敗を自分で扱う範囲で取る(大域の確保器の予備に触れない)。
+        // 確保の失敗は呼び出し元が GC とメモリ不足のエラーで処理するので、`handled` の範囲の中で確保する(グローバルアロケータの予備領域を使わない)。
         // SAFETY: layout の大きさは 0 でない。
         let p = handled(|| unsafe { alloc(layout) }).cast::<u64>();
         if p.is_null() {
@@ -441,9 +455,10 @@ impl Heap {
         Ok(p)
     }
 
-    /// 掃除。印の付いた箱の印を消し、印の無い箱を空きにする。空きリストを作り直す。
+    /// スイープを実行する。マークのあるオブジェクトのマークを下ろし、マークのないオブジェクトを解放して、空きリストを作り直す。
     ///
-    /// 呼ぶ前に、生きているすべての箱に [`MARK`] を立てておく。
+    /// 最後に、前の GC の後に確保したワード数を 0 に戻し、次の GC のしきい値を決める。
+    /// 呼ぶ前に、生きているすべてのオブジェクトに [`MARK`] を立てておく。
     pub fn sweep(&mut self) -> SweepStats {
         let mut st = SweepStats::default();
         for k in &mut self.classes {
@@ -451,7 +466,7 @@ impl Heap {
         }
         let mut keep = Vec::new();
         if handled(|| keep.try_reserve(self.pages.len())).is_err() {
-            // 作り直す列を取れないときは、ページを返さずにその場で掃除する。
+            // 残すページを入れる `Vec` を確保できないときは、空のページを解放せずに、ページの一覧をそのまま使ってスイープする。
             for i in 0..self.pages.len() {
                 let (base, c) = (self.pages[i].base, self.pages[i].class as usize);
                 let live = self.sweep_page(base, c, &mut st);
@@ -464,7 +479,7 @@ impl Heap {
                 let live = self.sweep_page(pg.base, c, &mut st);
                 let in_page = self.classes[c].bump_in(pg.base);
                 if live == 0 && !in_page {
-                    // 空きリストに入れた区画を外す(このページの区画だけが先頭から続く)。
+                    // このページのセルを空きリストから外す。直前の `sweep_page` が追加したので、空きリストの先頭にはこのページのセルだけが続いている。
                     self.unlink_page(pg.base, c);
                     self.held_words -= PAGE_WORDS as u64;
                     if self.pool.len() < POOL_PAGES && handled(|| self.pool.try_reserve(1)).is_ok()
@@ -476,7 +491,7 @@ impl Heap {
                     }
                 } else {
                     if live == 0 {
-                        // 切り出し中のページが空になった。先頭から切り出し直す(次の掃除で見る区画が減る)。
+                        // バンプ割り当て中のページが空になった。バンプポインタをページの先頭に戻す(次のスイープで調べるセルが減る)。
                         self.unlink_page(pg.base, c);
                         self.classes[c].cur = pg.base;
                     }
@@ -490,10 +505,10 @@ impl Heap {
         let mut i = 0;
         while i < self.large.len() {
             let l = &self.large[i];
-            // SAFETY: 大きな箱の先頭は見出しである。
+            // SAFETY: 大きなオブジェクトの先頭のワードはヘッダである。
             let h = unsafe { *l.p };
             if h & MARK != 0 {
-                // SAFETY: 同じ。
+                // SAFETY: 上と同じ。
                 unsafe { *l.p = h & !MARK };
                 st.live_words += l.words;
                 i += 1;
@@ -513,12 +528,12 @@ impl Heap {
         st
     }
 
-    /// ページの区画を掃除し、空きの区画を空きリストに足す。生きている語の数を返す。
+    /// ページのセルをスイープし、空きセルを空きリストに追加する。生きているオブジェクトのワード数を返す。
     fn sweep_page(&mut self, base: *mut u64, c: usize, st: &mut SweepStats) -> u64 {
         let cw = CLASSES[c] as usize;
         let k = self.classes[c];
         let cells = PAGE_WORDS / cw;
-        // 切り出し中のページでは、まだ配っていない区画を見ない。
+        // バンプ割り当て中のページでは、まだ配っていないセルを調べない。
         let limit = if k.bump_in(base) {
             (k.cur as usize - base as usize) / (cw * 8)
         } else {
@@ -528,7 +543,7 @@ impl Heap {
         st.scanned += limit as u64;
         let mut free = self.classes[c].free;
         for j in (0..limit).rev() {
-            // SAFETY: 区画 j はページの中にあり、配った区画の見出しは初期化してある。
+            // SAFETY: セル j はページの中にあり、配ったセルのヘッダは初期化してある。
             unsafe {
                 let p = base.add(j * cw);
                 let h = *p;
@@ -549,19 +564,20 @@ impl Heap {
         live
     }
 
-    /// 空のページの区画を空きリストの先頭から外す。
+    /// 空になったページのセルを、空きリストの先頭から外す。
     fn unlink_page(&mut self, base: *mut u64, c: usize) {
         let end = base as usize + PAGE_WORDS * 8;
         let k = &mut self.classes[c];
         while !k.free.is_null() && (k.free as usize) >= base as usize && (k.free as usize) < end {
-            // SAFETY: 空きリストの区画の 1 番の語は次を指す。
+            // SAFETY: 空きリストのセルの 1 番のワードは次の空きセルを指す。
             k.free = unsafe { *k.free.add(1) } as *mut u64;
         }
     }
 
-    /// すべての生きている箱(配った区画と大きな箱で、見出しが空きでないもの)の先頭を順に渡す。
+    /// ヒープにあるすべてのオブジェクトの先頭のアドレスを、順に `f` に渡す。
     ///
-    /// 印付けの溢れ([`crate::gc`])の後の走査に使う。
+    /// 対象は、配ったセルのうちヘッダが空きでないものと、すべての大きなオブジェクトである。
+    /// GC([`crate::gc`])が、マークスタックがオーバーフローした後の走査と、マークを中断したときにマークを下ろす走査に使う。
     pub fn for_each_object(&self, mut f: impl FnMut(*mut u64)) {
         for pg in &self.pages {
             let c = pg.class as usize;
@@ -574,9 +590,9 @@ impl Heap {
                 cells
             };
             for j in 0..limit {
-                // SAFETY: 区画 j はページの中にある。
+                // SAFETY: セル j はページの中にある。
                 let p = unsafe { pg.base.add(j * cw) };
-                // SAFETY: 配った区画の見出しは初期化してある。
+                // SAFETY: 配ったセルのヘッダは初期化してある。
                 if unsafe { *p } & 0xff != 0 {
                     f(p);
                 }
@@ -597,18 +613,18 @@ impl Drop for Heap {
             sys_unpage(p);
         }
         for l in &self.large {
-            // SAFETY: 各箱は同じ layout で alloc したものである。
+            // SAFETY: 各オブジェクトは同じ layout で alloc した領域である。
             unsafe { dealloc(l.p.cast(), l.layout) };
         }
     }
 }
 
-/// Rust の実行時の関数が、確保をまたいで値を持つための根の枠(計画 6.5 節の `Root`)。
+/// Rust で書いたランタイム関数が、確保をまたいで値を保持するためのルートスタック。
 ///
 /// 値を積み、使い終えたら積む前の長さに戻す。
-/// GC([`crate::gc`])は、この列のすべての語を根として走査する。
-/// 動かさない GC なので、積んだ語を読み直す必要は無いが、積んだ値を確保の後に使うときは
-/// その値がこの枠かほかの根から届くことを確かめる。
+/// GC([`crate::gc`])は、このスタックのすべてのワードをルートとして走査する。
+/// GC はオブジェクトを移動しないので、積んだワードを確保の後に読み直す必要はない。
+/// ただし、値を確保の後に使うときは、呼び出し元が、その値にこのスタックかほかのルートから到達できるようにしておく。
 #[derive(Default)]
 pub struct Roots {
     stack: Vec<u64>,
@@ -616,12 +632,14 @@ pub struct Roots {
 
 impl Roots {
     /// 値を積み、積む前の長さを返す。
+    ///
+    /// 返した値は、積んだ値の添字として [`Roots::get`] に、元の長さとして [`Roots::truncate`] に渡せる。
     pub fn push(&mut self, w: u64) -> usize {
         self.stack.push(w);
         self.stack.len() - 1
     }
 
-    /// 積んだ値を読む。
+    /// 添字 `i` の値を読む。
     pub fn get(&self, i: usize) -> u64 {
         self.stack[i]
     }
@@ -631,17 +649,17 @@ impl Roots {
         self.stack.truncate(len);
     }
 
-    /// 今の長さ。
+    /// 現在の長さを返す。
     pub fn len(&self) -> usize {
         self.stack.len()
     }
 
-    /// 空か。
+    /// 何も積んでいなければ真を返す。
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
 
-    /// 積んだ語の列。
+    /// 積んだワードをスライスで返す。
     pub fn as_slice(&self) -> &[u64] {
         &self.stack
     }
@@ -653,7 +671,7 @@ mod tests {
 
     fn obj(h: &mut Heap, words: usize) -> *mut u64 {
         let p = h.try_alloc(words).unwrap();
-        // SAFETY: p は words 語の新しい領域である。
+        // SAFETY: p は words ワードの新しい領域である。
         unsafe {
             *p = crate::value::header(crate::value::Kind::Array, (words - 1) as u32);
         }
@@ -678,12 +696,12 @@ mod tests {
         let a = obj(&mut h, 4);
         let b = obj(&mut h, 4);
         let big = obj(&mut h, 1000);
-        // SAFETY: a は生きている箱である。
+        // SAFETY: a は生きているオブジェクトである。
         unsafe { *a |= MARK };
         let st = h.sweep();
         assert_eq!(st.freed, 2);
         assert_eq!(st.live_words, 4);
-        // SAFETY: 同じ。
+        // SAFETY: 上と同じ。
         assert_eq!(unsafe { *a } & MARK, 0);
         assert_eq!(h.held_words(), PAGE_WORDS as u64);
         let c = obj(&mut h, 4);
@@ -701,7 +719,7 @@ mod tests {
         }
         assert_eq!(h.held_words(), 2 * PAGE_WORDS as u64);
         let st = h.sweep();
-        // 切り出し中の 2 枚目は残し、1 枚目を手元に戻す。
+        // バンプ割り当て中の 2 枚目は残し、1 枚目をプールに戻す。
         assert_eq!(st.freed, n as u64);
         assert_eq!(h.held_words(), PAGE_WORDS as u64);
     }
@@ -711,7 +729,7 @@ mod tests {
         let mut h = Heap::new();
         obj(&mut h, 8);
         h.set_limit_words(Some(h.held_words()));
-        // 今のページの残りは使える。
+        // 現在のページの残りは使える。
         let per_page = PAGE_WORDS / 8;
         for _ in 1..per_page {
             obj(&mut h, 8);
@@ -743,11 +761,11 @@ mod tests {
         h.set_limit_words(Some(h.held_words()));
         h.exhausted(8);
         assert!(h.in_reserve());
-        // メモリが空いた(試験の上限を外す)。大きな箱はシステムから取る。
+        // テスト用の上限を外して、メモリが空いた状況を作る。大きなオブジェクトはグローバルアロケータで確保できる。
         h.set_limit_words(None);
         obj(&mut h, 1000);
         assert!(!h.in_reserve());
-        // システムから取る次の確保で予備を取り直し、その後の失敗でまた予備に切り替わる。
+        // 次に大きなオブジェクトを確保するときに予備のページを確保し直し、その後の失敗でまた予備のページに切り替わる。
         obj(&mut h, 1000);
         h.exhausted(8);
         assert!(h.in_reserve());
@@ -755,14 +773,14 @@ mod tests {
 
     #[test]
     fn 使い切った切り出し中のページの隣のページも掃除する() {
-        // 区画の語の数が PAGE_WORDS を割り切る種類で、ページを 3 枚ちょうど使い切る。
-        // 切り出し中のページの cur はその終わりを指し、mmap が隣に置いた前のページの先頭と一致しうる。
+        // セルのワード数が PAGE_WORDS を割り切るサイズクラスで、ページを 3 枚ちょうど使い切る。
+        // バンプ割り当て中のページの cur はそのページの終わりを指し、mmap が隣に置いた前のページの先頭と一致することがある。
         let mut h = Heap::new();
         let n = 3 * PAGE_WORDS / 4;
         let mut objs = Vec::with_capacity(n);
         for _ in 0..n {
             let p = obj(&mut h, 4);
-            // SAFETY: p は生きている箱である。
+            // SAFETY: p は生きているオブジェクトである。
             unsafe { *p |= MARK };
             objs.push(p);
         }
@@ -775,13 +793,13 @@ mod tests {
         assert_eq!(st.live_words, 3 * PAGE_WORDS as u64);
         let mut marked = 0;
         h.for_each_object(|p| {
-            // SAFETY: p は生きている箱の先頭である。
+            // SAFETY: p は生きているオブジェクトの先頭である。
             if unsafe { *p } & MARK != 0 {
                 marked += 1;
             }
         });
         assert_eq!(marked, 0);
-        // 次の確保は生きている区画と重ならない。
+        // 次の確保は生きているセルと重ならない。
         let set: std::collections::HashSet<usize> = objs.iter().map(|&p| p as usize).collect();
         for _ in 0..PAGE_WORDS / 4 {
             let p = obj(&mut h, 4);

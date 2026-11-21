@@ -1,7 +1,7 @@
-//! 大域の確保器の包み([`keleut_rt::alloc`])の試験(計画 261104-3 の D568)。
+//! グローバルアロケータのラッパ([`keleut_rt::alloc`])のテスト。
 //!
-//! 包みは `#[global_allocator]` に宣言した試験の対象の中でしか働かないので、この対象で宣言する。
-//! 予備、印、試験用の失敗の指定はプロセスに 1 つなので、試験は錠で 1 つずつ走らせる。
+//! ラッパは、`#[global_allocator]` でグローバルアロケータとして宣言したバイナリの中でしか有効にならないので、このテストターゲットで宣言する。
+//! 予備領域、スレッドの役割ごとのフラグ、テスト用の失敗の指定は、どれもプロセス全体で共有するので、テストはロックを取って 1 つずつ実行する。
 
 use std::sync::Mutex;
 
@@ -13,7 +13,9 @@ static ALLOC: alloc::Wrap = alloc::Wrap;
 
 static LOCK: Mutex<()> = Mutex::new(());
 
-/// 錠を取り、起動の処理を済ませ、今のスレッドを実行の役割にする。
+/// ロックを取り、起動時の処理を済ませ、現在のスレッドを実行スレッド(役割 `exec`)にする。
+///
+/// 前のテストの影響を消すために、テスト用の失敗の指定を空にし、予備領域を確保し直し、実行スレッドのフラグを下ろす。
 fn setup() -> std::sync::MutexGuard<'static, ()> {
     let g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     alloc::init().unwrap();
@@ -57,7 +59,7 @@ fn 範囲の外の_soft_の失敗は予備を返して印を立て確保をや�
     assert!(!alloc::has_reserve());
     assert!(alloc::take_flag(Role::Exec));
     assert!(!alloc::take_flag(Role::Exec), "印は 1 回だけ応える");
-    // 指定は 1 回だけ失敗させる。
+    // `soft` の指定は 1 回だけ失敗させるので、次の確保は失敗しない。
     let _s = alloc::site(Site::RecFields);
     let c: Vec<u64> = Vec::with_capacity(32);
     assert_eq!(c.capacity(), 32);
@@ -67,8 +69,8 @@ fn 範囲の外の_soft_の失敗は予備を返して印を立て確保をや�
     alloc::configure("").unwrap();
 }
 
-/// 実行の役割が予備を使った後でも、翻訳の役割の確保の失敗は予備を取り直してやり直し、
-/// やり直しの後にまた予備を取り直す。
+/// 実行スレッドが予備領域を使った後でも、コンパイルスレッドの確保が失敗すると、ラッパは予備領域を確保し直してから確保をやり直す。
+/// やり直した後に、もう一度予備領域を確保し直す。
 #[test]
 fn 予備が無いときの翻訳の役割の失敗は予備を取り直してやり直す() {
     let _g = setup();
@@ -114,11 +116,12 @@ fn 役割と場所の違う確保は失敗させない() {
 fn 回収の_keep_の確保が失敗しても掃除は続く() {
     let _g = setup();
     let mut h = Heap::new();
-    // 生かす箱と捨てる箱を交互に作る(種類 1、見出しの印で生死を決める)。
+    // スイープで残すオブジェクトと解放させるオブジェクトを交互に作る。
+    // 種類は 1 で、ヘッダにマークを立てたものがスイープの後に残る。
     let mut boxes = Vec::new();
     for i in 0..10_000 {
         let p = h.try_alloc(4).unwrap();
-        // SAFETY: p は 4 語の新しい領域である。
+        // SAFETY: p は 4 ワードの新しい領域である。
         unsafe {
             *p = 1 | if i % 2 == 0 { MARK } else { 0 };
             *p.add(1) = 0;
@@ -138,13 +141,13 @@ fn 回収の_keep_の確保が失敗しても掃除は続く() {
     assert!(!alloc::flagged(Role::Exec));
     assert_eq!(st.live_words, 5_000 * 4);
     for (i, p) in boxes.iter().enumerate() {
-        // SAFETY: 生かした箱は掃除の後も箱のままで、印だけが消える。
+        // SAFETY: 残したオブジェクトはスイープの後もオブジェクトのままで、マークだけが消える。
         let hd = unsafe { **p };
         if i % 2 == 0 {
             assert_eq!(hd, 1, "生かした箱の印が消える");
         }
     }
-    // 掃除の後も確保できる。
+    // スイープの後も確保できる。
     assert!(h.try_alloc(4).is_ok());
 }
 
