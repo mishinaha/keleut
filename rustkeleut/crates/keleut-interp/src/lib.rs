@@ -1,14 +1,15 @@
-//! LIR のバイトコードの符号化とインタプリタ(計画 261024-1 の 6.7 節、D535)。
+//! LIR をバイトコードに符号化し、インタプリタで実行する。
 //!
-//! | 入口 | 働き |
+//! | 項目 | 役割 |
 //! | --- | --- |
-//! | [`run_program`] | LIR のプログラムを専用のスレッドで実行し、終了状態を返す |
-//! | [`bytecode::encode`] | 1 つの関数をバイトコードにする |
+//! | [`run_program`] | LIR のプログラムを実行スレッドで実行し、終了コードを返す |
+//! | [`bytecode::encode`] | 1 つの関数をバイトコードに符号化する |
 //! | [`interp::Interp`] | インタプリタ(フレームは分割値スタックに置く) |
-//! | [`run_program_with`] | ネイティブの後段(M91 の JIT。[`native`])を付けたインタプリタで実行する |
+//! | [`run_program_with`] | ネイティブコードのバックエンド(JIT。境界は [`native`])を付けたインタプリタで実行する |
 //!
-//! エフェクト(`handle`、利用者の操作の `perform`、`resume`)は、`doc/lir.md` の 16 節の規約で実行する
-//! ([`interp`] の冒頭)。
+//! 実行スレッドは、プログラムを実行するために作る専用のスレッドである。
+//! エフェクト(`handle`、ユーザの操作の `perform`、`resume`)は、`doc/lir.md` の 16 節の規約で実行する。
+//! 実装の説明は [`interp`] の冒頭にある。
 
 pub mod bytecode;
 pub mod interp;
@@ -19,25 +20,26 @@ use keleut_rt::{Rt, Stop, Word};
 
 pub use interp::Interp;
 
-/// 専用のスレッドのネイティブのスタックの最小の大きさ(バイト)。
+/// 実行スレッドのネイティブスタックの最小サイズ(バイト)。
 ///
-/// 予備の検査の余裕 [`interp::NATIVE_MARGIN`] の 2 倍で、残りの半分を実行の初めの段に使う。
-/// これより小さいと、最初の命令の前に予備の検査が働く。
+/// スタック残量の検査の余裕 [`interp::NATIVE_MARGIN`] の 2 倍である。
+/// 半分がスタック残量の検査の余裕で、残りの半分が実行に使える領域である。
+/// これより小さいと、最初の命令を実行する前にスタック残量の検査で失敗する。
 pub const MIN_NATIVE_STACK: u64 = 2 * interp::NATIVE_MARGIN as u64;
 
-/// 実行の選択肢。
+/// [`run_program`] などに渡す実行オプション。
 #[derive(Clone, Debug)]
 pub struct RunOptions {
-    /// 論理的な深さの限度 `L`。
+    /// 論理的な深さの上限 `L`。
     pub max_depth: u64,
-    /// 専用のスレッドのネイティブのスタックの大きさ(バイト)。
+    /// 実行スレッドのネイティブスタックのサイズ(バイト)。
     /// [`MIN_NATIVE_STACK`] 以上にする。
     pub native_stack: u64,
-    /// `--gc-stress` の規則で回収するか(`keleut_rt::gc::STRESS_RATIO`)。
+    /// 真なら、`--gc-stress` の規則で GC を実行する(規則は `keleut_rt::gc::STRESS_RATIO` の説明にある)。
     pub gc_stress: bool,
-    /// 仮想メモリの上限(`ulimit -v`)があれば、スタックを初めから上限の 4 分の 1 までにするか([`exec_stack_sizes`])。
+    /// 真なら、仮想メモリの上限(`ulimit -v`)があるときに、スタックを最初から上限の 4 分の 1 までに抑える([`exec_stack_sizes`])。
     ///
-    /// `--native-stack` を与えなかったとき(既定の大きさのとき)に真にする。
+    /// `--native-stack` を指定しなかったとき(既定のサイズのとき)に真にする。
     pub fit_stack: bool,
 }
 
@@ -52,19 +54,20 @@ impl Default for RunOptions {
     }
 }
 
-/// 実行のスレッドを作り直すときのスタックの下限(16 MiB)。
+/// 実行スレッドを作り直すときのスタックサイズの下限(16 MiB)。
 ///
-/// 512 KiB から 1.1 GB までのどの大きさでも、深さ 100 万の末尾でない再帰と深さ 20 万の構造的な `Eq` は同じ結果になる。
-/// 実行の深さは値スタックに置き、ネイティブのスタックが足りなければ JIT の関数はインタプリタに移り、構造的な `Eq` は新しいスタックのスレッドに移るからである。
-/// 下限は、KIR の処理とフロントエンドのスレッドの下限と同じ値にした。
+/// スタックを 512 KiB から 1.1 GB までのどのサイズにしても、深さ 100 万の非末尾の再帰と、深さ 20 万の構造的な `Eq` の比較は同じ結果になる。
+/// 呼び出しのフレームは値スタックに置き、ネイティブスタックが足りなければ、JIT の関数はインタプリタでの実行に切り替わり、構造的な `Eq` の比較は新しいスタックを持つスレッドに実行を切り替えるからである。
+/// この下限は、KIR を処理するスレッドとフロントエンドのスレッドの下限と同じ値である。
 pub const MIN_EXEC_STACK: u64 = 16 << 20;
 
-/// 構造的な `Eq` の入れ子が移る新しいスタックの大きさ(バイト)を、実行のスレッドのスタック `native_stack` から決める。
+/// 構造的な `Eq` の比較の入れ子が深くなったときに実行を切り替える先のスレッドの、スタックサイズ(バイト)を返す。
 ///
-/// `native_stack` と [`interp::HOP_STACK_MIN`] の大きいほうにする。
-/// 仮想メモリの上限があれば、さらに上限の 16 分の 1(下限は [`interp::HOP_STACK_MIN`])までにする。
-/// 移った先のスレッドは、スタックを使い切るまで入れ子を進めてから次のスレッドに移るので、
-/// 予約したまま使わない領域は最後のスレッドの残りだけで、小さいほどその無駄が減るからである。
+/// 実行スレッドのスタックサイズ `native_stack` と [`interp::HOP_STACK_MIN`] の大きいほうにする。
+/// 仮想メモリの上限があれば、さらに上限の 16 分の 1(下限は [`interp::HOP_STACK_MIN`])までに抑える。
+/// 切り替えた先のスレッドは、スタックの残りが少なくなるまで入れ子を進めてから次のスレッドに切り替えるので、
+/// 予約したまま使わない領域は最後のスレッドの残りだけである。
+/// スタックが小さいほどこの残りも小さいので、上限があるときは小さくする。
 pub fn hop_stack_size(native_stack: u64) -> usize {
     let mut size = usize::try_from(native_stack)
         .unwrap_or(usize::MAX)
@@ -75,12 +78,12 @@ pub fn hop_stack_size(native_stack: u64) -> usize {
     size
 }
 
-/// 実行のスレッドのスタックの大きさの候補を、試す順に返す。
+/// 実行スレッドのスタックサイズの候補を、試す順に並べて返す。
 ///
-/// 仮想メモリの上限が無ければ、`native_stack` だけである。
-/// 上限があれば、初めは `native_stack` で、`fit` が真なら上限の 4 分の 1(下限は [`MIN_EXEC_STACK`])までにする。
-/// 続けて、半分ずつ小さくした大きさを並べ、最後は [`MIN_EXEC_STACK`] にする。
-/// 初めの大きさが [`MIN_EXEC_STACK`] 以下なら、それだけである。
+/// 仮想メモリの上限がなければ、候補は `native_stack` だけである。
+/// 上限があれば、最初の候補は `native_stack` で、`fit` が真なら上限の 4 分の 1(下限は [`MIN_EXEC_STACK`])までに抑える。
+/// その後に、半分ずつ小さくしたサイズを並べ、最後を [`MIN_EXEC_STACK`] にする。
+/// 最初の候補が [`MIN_EXEC_STACK`] 以下なら、候補はそれだけである。
 pub fn exec_stack_sizes(native_stack: u64, fit: bool) -> Vec<u64> {
     let mut size = native_stack;
     let Some(a) = keleut_rt::alloc::address_space_limit() else {
@@ -97,7 +100,9 @@ pub fn exec_stack_sizes(native_stack: u64, fit: bool) -> Vec<u64> {
     v
 }
 
-/// インタプリタを作った後、初期化を走らせる前に呼ぶ準備(ネイティブの後段を付ける)。
+/// インタプリタを作った後、トップレベルの初期化コードを実行する前に呼ぶ準備の関数。
+///
+/// ネイティブコードのバックエンドをインタプリタに付けるために使う。
 pub type Setup<'s> = &'s mut (dyn FnMut(&mut Interp<'_>) -> Result<(), Stop> + Send);
 
 fn run_on_thread(prog: &Program, opts: &RunOptions, setup: Option<Setup<'_>>) -> u8 {
@@ -153,7 +158,7 @@ fn run_init(prog: &Program, it: &mut Interp<'_>) -> u8 {
     for &f in &prog.init {
         match it.run(f, Word(0), &[], 0) {
             Ok(v) if v == Word::SENTINEL => {
-                // 状態語が最上位に届いた。実行時エラーならその文面で止まる。
+                // 状態ワードが最上位まで伝播した。実行時エラーなら、そのメッセージを書いて終了する。
                 r = Err(match std::mem::take(&mut it.rt.pending) {
                     keleut_rt::effect::Pending::Error(s) => s,
                     p => Stop::Internal(format!("最上位に届いた状態語: {p:?}")),
@@ -184,23 +189,24 @@ fn run_init(prog: &Program, it: &mut Interp<'_>) -> u8 {
     }
 }
 
-/// LIR のプログラム(パス 12 を済ませたもの)を実行し、終了状態を返す。
+/// LIR のプログラム(パス 12 を済ませたもの)を実行し、終了コードを返す。
 ///
-/// ミューテータは、ネイティブのスタックを `opts.native_stack` バイト予約した専用のスレッドで走らせる(計画 6.11 節)。
-/// 仮想メモリの上限があり `opts.fit_stack` が真なら、スタックを初めから上限の 4 分の 1 までにする。
-/// 上限の下でスレッドを作れなければ、スタックを半分ずつ小さくして作り直す([`exec_stack_sizes`])。
-/// スタックが小さくなっても、論理的な深さの限度は変わらない([`MIN_EXEC_STACK`])。
-/// 最も小さいスタックでも作れなければ、`実行時エラー: メモリ不足です` を書いて 3 を返す。
-/// 上限が無いのにスレッドを作れなければ、内部の誤り(70)である。
-/// 標準出力は終わる前に flush し、止まった理由の診断を標準エラーに書く。
+/// プログラムは、ネイティブスタックを `opts.native_stack` バイト予約した実行スレッドで実行する。
+/// 仮想メモリの上限(`ulimit -v`)があり `opts.fit_stack` が真なら、スタックを最初から上限の 4 分の 1 までに抑える。
+/// 仮想メモリの上限があるときにスレッドを作れなければ、スタックを半分ずつ小さくして作り直す([`exec_stack_sizes`])。
+/// スタックが小さくなっても、論理的な深さの上限は変わらない(理由は [`MIN_EXEC_STACK`] の説明にある)。
+/// 最も小さいスタックでも作れなければ、`実行時エラー: メモリ不足です` を標準エラーに書いて 3 を返す。
+/// 仮想メモリの上限がないのにスレッドを作れなければ、内部エラーとして 70 を返す。
+/// 標準出力は終了する前に flush し、終了した理由の診断を標準エラーに書く。
 pub fn run_program(prog: &Program, opts: &RunOptions) -> u8 {
     run_program_inner(prog, opts, None)
 }
 
-/// [`run_program`] と同じで、インタプリタを作った後、初期化を走らせる前に `setup` を呼ぶ。
+/// [`run_program`] と同じように実行するが、インタプリタを作った後、トップレベルの初期化コードを実行する前に `setup` を呼ぶ。
 ///
-/// ネイティブの後段(M91 の JIT)は `setup` で [`Interp::set_native`] を呼んで付ける。
-/// `setup` は専用のスレッドで呼ばれる。
+/// ネイティブコードのバックエンド(JIT)は、`setup` の中で [`Interp::set_native`] を呼んで付ける。
+/// `setup` は実行スレッドで呼ばれる。
+/// `setup` がエラーを返したら、その診断を標準エラーに書き、初期化コードを実行せずにその終了コードを返す。
 pub fn run_program_with(
     prog: &Program,
     opts: &RunOptions,
@@ -209,7 +215,9 @@ pub fn run_program_with(
     run_program_inner(prog, opts, Some(setup))
 }
 
-/// 今のスレッドで実行する(試験用)。`margin` は予備の検査の余裕(バイト)。
+/// 新しいスレッドを作らず、現在のスレッドで実行する(テスト用)。
+///
+/// `margin` はスタック残量の検査の余裕(バイト)である。
 pub fn run_program_here(
     prog: &Program,
     opts: &RunOptions,
@@ -257,12 +265,12 @@ fn run_program_inner(prog: &Program, opts: &RunOptions, mut setup: Option<Setup<
     if let Some((size, e)) = last
         && keleut_rt::alloc::address_space_limit().is_none()
     {
-        // 上限が無いのに作れないのは、処理系の内部の誤りとする(`--max-depth` が大きすぎて予約できない場合など)。
+        // 仮想メモリの上限がないのに作れないときは、処理系の内部エラーとして扱う(`--max-depth` が大きすぎてスタックを予約できない場合など)。
         eprintln!("keleut: 内部エラー: 実行のスレッドを作れません({size} バイトのスタック): {e}");
         return 70;
     }
-    // 仮想メモリの上限の下で、最も小さいスタックでも作れなかった。評価のための領域を用意できないので、
-    // 初期化を始めるときのメモリの不足にする(LangSpec §15.5 の表の 3 の行)。
+    // 仮想メモリを制限しているときに、最も小さいスタックでもスレッドを作れなかった。
+    // 評価のための領域を用意できないので、初期化を始めるときに起きたメモリ不足の実行時エラーとして終了する(LangSpec §15.5 の表の実行時エラーの行)。
     let stop = Stop::OutOfMemory;
     keleut_rt::out::Out::default().eprint(&stop.message());
     stop.exit_code()

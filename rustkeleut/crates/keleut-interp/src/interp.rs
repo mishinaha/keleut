@@ -1,63 +1,72 @@
-//! インタプリタ(計画 261024-1 の 6.7 節)。
+//! LIR を符号化したレジスタバイトコードを実行するインタプリタ。
 //!
-//! 振り分けは Rust の `match` の平坦なループで行う。
-//! フレームは分割値スタックに置き(`keleut_rt::stack` の形)、インタプリタの中の呼び出しはネイティブのスタックを使わない。
+//! ディスパッチは、Rust の `match` を 1 つ持つ平坦なループで行う。
+//! フレームは分割値スタックに置き、レイアウトは `keleut_rt::stack` が定める。
+//! インタプリタの中の呼び出しは、ネイティブスタックを使わない。
 //! 末尾呼び出しはフレームを再利用する。
 //!
-//! 末尾でない呼び出しは、呼び出し元の見出しに再開点を書いてから、呼ばれた側のフレームを積む。
-//! 呼ばれた側が戻ったら、呼び出し元の再開点から [`crate::bytecode::Code::resume`] を引いて、書き先と続きの位置を決める。
+//! 非末尾呼び出しでは、呼び出し元のフレームヘッダに再開点を書いてから、呼び出し先のフレームを積む。
+//! 呼び出し先が戻ったら、呼び出し元の再開点の番号で [`crate::bytecode::Code::resume`] を引き、結果の書き込み先と、実行を続ける位置を決める。
 //!
-//! メソッドを実行時に選ぶ呼び出しで、辞書が前提を持つ利用者のインスタンスのときは、
-//! 実装の関数を先に評価してから、得た関数を引数で呼ぶ(`doc/lir.md` の 13 節)。
-//! 実装の関数はふつうのフレームとして積み、呼び出し元の再開点に印 [`PHASE`] を付ける。
-//! 実装の関数が戻ったら、呼び出しの命令を読み直し、得た関数を同じ引数で呼ぶ(末尾の形ならフレームを再利用する)。
-//! 引数は呼び出し元のフレームのスロットに残っている(実装の関数のフレームはその上に積むので、スロットを上書きしない)。
+//! メソッドを実行時に選ぶ呼び出しでは、辞書がユーザのインスタンスで、メソッドの実装の関数が辞書を受け取ることがある。
+//! このときは、実装の関数を先に評価してから、評価で得た関数を引数で呼ぶ(`doc/lir.md` の 13 節)。
+//! 実装の関数が受け取る辞書は、インスタンスの前提の辞書と、メソッド自身の辞書である。
+//! 実装の関数は通常のフレームとして積み、呼び出し元の再開点に [`PHASE`] フラグを付ける。
+//! 実装の関数が戻ったら、呼び出しの命令を読み直し、戻った関数を同じ引数で呼ぶ。
+//! 末尾呼び出し版の命令なら、このときにフレームを再利用する。
+//! 引数は呼び出し元のフレームのスロットに残っている。
+//! 実装の関数のフレームは呼び出し元のフレームの上に積むので、そのスロットを上書きしない。
 //!
-//! Rust の実行時の関数が利用者のコードを呼ぶのは、構造的な `Eq` の比べ方(`dict_record`、`dict_variant`)だけで、
-//! これは [`Interp::run`] を入れ子に呼ぶ。
-//! 入れ子は、比べる値がレコードかヴァリアントを通って入れ子になる段ごとに 1 つ増える。
-//! 再帰する名前の付いた型(`Node({k: T})` のようなもの)では、値の入れ子の深さだけ入れ子になる。
-//! 1 段は論理的な深さを 2 つ使い、ネイティブのスタックを約 1.5 KiB 使うので、既定の `S_native` では論理的な深さの限度が先に来る。
-//! 入れ子の入口では、ネイティブのスタックの残りを予備の検査で確かめ、足りなければ内部の誤り(70)にする(計画 6.8 節)。
-//! 項目を比べる入口でスタックが下限に近ければ、新しいスタックのスレッドに移って続ける([`Interp::set_stack_hop`])ので、
-//! 小さな `--native-stack` でも、入れ子は論理的な深さの限度まで進む。
+//! Rust で書いたランタイム関数がユーザのコードを呼ぶのは、構造的な `Eq` の比較(`dict_record`、`dict_variant`)だけである。
+//! この比較は [`Interp::run`] を入れ子に呼ぶ。
+//! 入れ子は、比較する値の中でレコードかヴァリアントの入れ子が 1 段深くなるごとに 1 つ増える。
+//! 再帰する名目的な型(`Node({k: T})` のような型)では、値の入れ子の深さと同じ数だけ入れ子になる。
+//! 入れ子 1 段は、論理的な深さを 2 つと、ネイティブスタックを約 1.5 KiB 使う。
+//! そのため、既定のネイティブスタックのサイズ `S_native` では、ネイティブスタックを使い切る前に、論理的な深さが上限に達する。
+//! 入れ子の入口では、スタック残量の検査でネイティブスタックの残りを調べる。
+//! 切り替え先のスタックを設定していなければ([`Interp::set_stack_hop`])、残りが足りないときに内部エラーとして終了コード 70 で終了する。
+//! 設定していれば、項目を比較する入口でネイティブスタックの残りが下限に近いときに、新しいスタックを持つスレッドに実行を切り替えて続ける。
+//! そのため、`--native-stack` が小さくても、入れ子は論理的な深さの上限まで進む。
 //!
 //! ## エフェクト(`doc/lir.md` の 16 節)
 //!
-//! 実行時エラー、`depth_limit`、メモリの不足、出力の失敗は、状態語 `ctx.pending` の `ERROR` にして巻き戻す。
+//! 実行時エラー、`depth_limit`、メモリ不足、出力エラーは、状態ワード `ctx.pending` に `ERROR` として設定して巻き戻す。
+//! 状態ワードと番兵は、`doc/lir.md` の 16.1 節が定める。
 //! 巻き戻しは [`Interp::unwind`] の 1 か所で行う。
-//! 今のフレームが番兵で戻り、呼び出し元の再開点の行の種類で次を決める。
+//! 現在のフレームは番兵を返して戻る。
+//! その後の動作は、呼び出し元が止まっている再開点の種類(再開点の表の項目が持つ)で決まる。
 //!
-//! - ふつうの呼び出しなら、呼び出し元も番兵で戻る。
-//!   `YIELD` ならフレームを値スタックに残し(継続に含める)、ほかならフレームを捨てる。
-//!   どちらでも `ctx.depth` を呼び出し元のフレームの深さに書き戻す。
-//! - 番兵を受け取る呼び出し(`$rt_handle` の中の呼び出し)なら、結果のスロットに番兵を書いて続ける。
-//! - `perform` なら、節の選択の結果を状態語にする([`Interp::perform_unwound`])。
+//! - 通常の呼び出しなら、呼び出し元も番兵を返して戻る。
+//!   状態ワードが `YIELD` ならフレームを値スタックに残して継続に含め、それ以外ならフレームを捨てる。
+//!   どちらの場合も、`ctx.depth` を呼び出し元のフレームの深さに書き戻す。
+//! - 番兵を受け取る呼び出し(`$rt_handle` の中の呼び出し)なら、結果のスロットに番兵を書いて実行を続ける。
+//! - `perform` なら、節の選択の結果を状態ワードに設定する([`Interp::perform_unwound`])。
 //!
-//! 継続は、`perform` のフレームからハンドラのフレームの上までのフレームを、呼び出し元の鎖をたどって写す。
-//! 写し戻すときは、塊の境目をまたがないよう、フレームを 1 つずつ置き直して 3 番の語を書き直す。
-//! 深さの語は、取り出したハンドラ記録の `h` からの差で持ち、写し戻す先の深さを足す。
-//! 写し戻したフレームのうち `$rt_handle` のフレームは、そのハンドラ記録の `h` を新しい深さにする
-//! (`$rt_handle` の 0 番の引数がハンドラ記録で、`any` の区画の 0 番のスロットにある)。
+//! 継続は、`perform` のフレームからハンドラのフレームのすぐ上のフレームまでを、呼び出し元を順にたどってコピーして作る。
+//! 継続を値スタックに復元するときは、フレームがチャンクの境界をまたがないように、フレームを 1 つずつ配置し直して、ヘッダの 3 番のワード(呼び出し元の位置)を書き直す。
+//! ヘッダの深さのワードは、継続をキャプチャしたハンドラ記録の `h` からの差で持ち、復元するときに復元先の深さを足す。
+//! 復元したフレームが `$rt_handle` のフレームなら、そのハンドラ記録の `h` を新しい深さに書き直す。
+//! `$rt_handle` の 0 番の引数がハンドラ記録で、`any` の領域の 0 番のスロットにある。
 //!
-//! 構造的な `Eq` の入れ子の [`Interp::run`] の境目は、`DISCARD` と `ERROR` だけを通す。
-//! `Eq` のメソッドはエフェクトを持たないので、境目の外へ `YIELD` が届くことは無く、届いたら内部の誤りにする。
+//! 構造的な `Eq` の比較が入れ子に呼ぶ [`Interp::run`] の境界は、`DISCARD` と `ERROR` だけを外へ通す。
+//! `Eq` のメソッドはエフェクトを持たないので、境界の外へ `YIELD` が届くことはない。
+//! 届いたら、内部エラーとして終了コード 70 で終了する。
 //!
-//! ## 回収(`keleut_rt::gc`)
+//! ## GC(`keleut_rt::gc`)
 //!
-//! 回収は実行時の確保の中で起こる。
-//! インタプリタは、確保する前に、今のフレームの位置を `rt.gc.top` に置き、見出しの点を正しくしておく。
+//! GC は、ランタイムがメモリを確保するときに起こる。
+//! インタプリタは、確保の前に、現在のフレームの位置を `rt.gc.top` に設定し、そのフレームが止まっている点(再開点か安全点)を GC が正しく読めるようにしておく。
 //!
-//! - 確保する命令は、前に置いた命令 `safepoint` が、位置と安全点の番号を `rt.gc` に置く(見出しには書かない)。
-//! - 実行時が命令の外で確保する場合(`perform` の引数の配列を作るとき)は、フレームが `perform` の再開点で止まっているので、
-//!   位置だけを置く。
-//! - 構造的な `Eq` の比べ方の前は、見出しの点を呼び出しの再開点にし、位置を置いてから入れ子の [`Interp::run`] を呼ぶ。
+//! - メモリを確保する命令では、その前に置いた命令 `safepoint` が、フレームの位置と安全点の番号を `rt.gc` に設定する。
+//!   安全点はヘッダには書かない。
+//! - ランタイムが命令の外で確保するとき(`perform` の引数の配列を作るとき)は、フレームが `perform` の再開点で止まっているので、位置だけを設定する。
+//! - 構造的な `Eq` の比較の前には、ヘッダの点をその呼び出しの再開点にし、位置を設定してから、[`Interp::run`] を入れ子に呼ぶ。
 //!
 //! [`Interp::run`] は、入口で外側の最上段の位置を `rt.gc.outer` に積み、戻るときに外して `rt.gc.top` を元に戻す。
-//! 回収は、最上段から呼び出し元の鎖をたどり、ネイティブの呼び出し元の印に着いたら、積んだ外側の位置から続ける。
+//! GC は、最上段から呼び出し元を順にたどり、呼び出し元がネイティブであることを表す値 `NATIVE_CALLER` に着いたら、積んである外側の位置から続ける。
 //!
-//! `YIELD` を伝える間、`perform` のフレームから今のフレームの上までのフレームは値スタックに残り、まだ継続に写していない。
-//! 回収はこれを、状態語の `YIELD` が持つ `perform` のフレームの位置からたどる。
+//! `YIELD` を伝播する間、`perform` のフレームから現在のフレームのすぐ上までのフレームは値スタックに残っていて、まだ継続にコピーしていない。
+//! GC はこれらのフレームを、状態ワードの `YIELD` が持つ `perform` のフレームの位置からたどる。
 
 use keleut_lir::{ClassId, ConvOp, FuncId, InstanceId, LabelId, Program, RtError, ShapeId, TypeId};
 use keleut_rt::alloc::{self, Site};
@@ -72,20 +81,20 @@ use keleut_rt::effect::{Cont, HandlerRec, Pending};
 
 pub use keleut_rt::gc::{PHASE, YIELDED};
 
-/// エフェクトの命令の失敗。
+/// エフェクトの処理で見つけた不整合を、メッセージ `m` の内部エラー(`Stop::Internal`)にする。
 fn bug(m: &str) -> Stop {
     Stop::Internal(m.to_string())
 }
 
-/// ネイティブのスタックの予備の検査で残す余裕(バイト)。
+/// スタック残量の検査が、ネイティブスタックの終わりの手前に残す余裕のバイト数。
 pub const NATIVE_MARGIN: usize = 256 * 1024;
 
-/// 引数の出どころ。
+/// 呼び出しの引数をどこから読むかを表す。
 #[derive(Clone, Copy)]
 enum Args {
-    /// 今のフレームのスロットの番号の列(命令の語を指す)。
+    /// 現在のフレームのスロット番号の並び。ポインタは命令のワードを指す。
     Slots(*const u32, usize),
-    /// 一様な語の列。
+    /// 一様表現の値の並び。
     Words(*const Word, usize),
 }
 
@@ -98,6 +107,8 @@ impl Args {
 }
 
 /// 実行中のフレームの状態。
+///
+/// フレームの位置 `fpos`、ヘッダのアドレス `fp`、関数のバイトコード `code`、次に実行する命令の位置 `pc`、環境 `env` を持つ。
 struct St {
     fpos: u64,
     fp: *mut u64,
@@ -126,18 +137,18 @@ impl St {
 
     #[inline]
     fn code(&self) -> &Code {
-        // SAFETY: Code は Interp::codes の Box の中にあり、Interp が生きている間は動かず解放されない。
+        // SAFETY: Code は Interp::codes の Box の中にあり、Interp が生きている間は移動も解放もされない。
         unsafe { &*self.code }
     }
 
     #[inline]
     fn depth(&self) -> u64 {
-        // SAFETY: fp はこのフレームの見出しを指す。
+        // SAFETY: fp はこのフレームのヘッダを指す。
         unsafe { *self.fp.add(1) }
     }
 
     fn set_resume(&mut self, rp: u32) {
-        // SAFETY: fp はこのフレームの見出しを指す。
+        // SAFETY: fp はこのフレームのヘッダを指す。
         unsafe {
             let h = *self.fp;
             *self.fp = (h & 0xffff_ffff) | (u64::from(rp) << 32);
@@ -145,103 +156,111 @@ impl St {
     }
 }
 
-/// インタプリタ。
+/// インタプリタ。ランタイムコンテキスト、符号化済みのバイトコード、再利用するバッファを持つ。
 pub struct Interp<'p> {
-    /// 実行時の文脈。
+    /// ランタイムコンテキスト。
     pub rt: Rt<'p>,
     pub(crate) prog: &'p Program,
     codes: Vec<Option<Box<Code>>>,
     builtin_methods: HashMap<(u32, u32, u32), FuncId>,
     pub(crate) stack_low: usize,
     words: Vec<Word>,
-    /// エフェクトの呼び出しの一種と末尾で呼ぶ終わりの引数の列に使い回す領域([`Interp::fx_call`]、[`Interp::fx_term_call`])。
+    /// 呼び出しを行うエフェクトの命令と、末尾呼び出しを行うエフェクトの終端命令が、引数の並びに再利用するバッファ([`Interp::fx_call`]、[`Interp::fx_term_call`])。
     ///
-    /// 使う間は `std::mem::take` で取り出し、呼び出しの後で [`Interp::give_args`] で戻す。
-    /// 取り出している間に入れ子で使われても、空の列から作り直すだけで、引数の列は混ざらない。
+    /// 使う間は `std::mem::take` で取り出し、呼び出しの後に [`Interp::give_args`] で戻す。
+    /// 取り出している間に入れ子の呼び出しがこのバッファを使っても、空の `Vec` から作り直すだけなので、引数の並びは混ざらない。
     fx_args: Vec<Word>,
-    /// `cont_resume` が置いたフレームの位置の列に使い回す領域。
+    /// `cont_resume` が配置したフレームの位置を入れる、再利用するバッファ。
     placed: Vec<u64>,
-    /// 再開した継続から外した写しの領域(フレームの語の列と語の数の列)。`cont_make` が使い回す。
+    /// 再開した継続から外したコピー領域。フレームのワードの `Vec` と、フレームごとのワード数の `Vec` の組である。
+    /// `cont_make` が再利用する。
     cont_bufs: Vec<(Vec<u64>, Vec<u32>)>,
     rt_handle: Option<FuncId>,
-    /// ネイティブの後段(M91 の JIT)の入口の表と文脈。無ければインタプリタだけで走る([`crate::native`])。
+    /// ネイティブのバックエンド(JIT)のエントリテーブルとコンテキスト。`None` なら、インタプリタだけで実行する([`crate::native`])。
     pub native: Option<Box<crate::native::Native>>,
-    /// 今の起動(この [`Interp`] の振り分けのループを走らせているネイティブの呼び出し)の最下段のフレームの位置。
+    /// 現在のループの呼び出しで最下段にあるフレームの位置。
     ///
-    /// 最下段のフレームが戻るか番兵で戻ると、振り分けのループを抜けてネイティブの呼び出し元へ値を返す。
-    /// 最下段の見出しの 3 番の語は、[`Interp::run`] の起動では [`NATIVE_CALLER`]、
-    /// JIT の関数から入った起動([`crate::native::krt_interp_run`])では呼び出し元の JIT のフレームの位置である。
+    /// ここでは、この [`Interp`] のディスパッチループを実行しているネイティブの呼び出し 1 回を、**ループの呼び出し**と呼ぶ。
+    /// ループの呼び出しを 1 回始めるのは、[`Interp::run`]、JIT の関数が呼ぶ `run_activation`、`run_from` である。
+    /// `run_from` は、JIT のフレームが継続を再開したときと、JIT のフレームの `cont_make` が継続を作れなかったときに呼ばれる。
+    /// 最下段のフレームが、値か番兵を返して戻ると、ディスパッチループを抜けて、ネイティブの呼び出し元へその値を返す。
+    /// 最下段のフレームヘッダの 3 番のワードは、[`Interp::run`] が始めたループの呼び出しでは [`NATIVE_CALLER`] である。
+    /// JIT の関数が始めたループの呼び出し([`crate::native::krt_interp_run`])では、呼び出し元の JIT のフレームの位置である。
+    /// `run_from` が始めたループの呼び出しでも、呼び出し元の JIT のフレームの位置である。
     pub(crate) bottom: u64,
-    /// 構造的な `Eq` の入れ子がネイティブのスタックの下限に近づいたときに移る新しいスタックの、大きさと予備の検査の余裕(バイト)。
+    /// 構造的な `Eq` の比較の入れ子で、ネイティブスタックの残りが下限に近づいたときに実行を切り替える先の、新しいスタックの設定。
     ///
-    /// 無ければ移らず、入れ子の入口の予備の検査で内部の誤り(70)になる([`Interp::set_stack_hop`])。
+    /// スタックのサイズと、そのスタックでのスタック残量の検査の余裕の組で、どちらもバイト数である。
+    /// `None` なら切り替えない。
+    /// そのときは、入れ子の入口のスタック残量の検査で、内部エラーとして終了コード 70 で終了する([`Interp::set_stack_hop`])。
     stack_hop: Option<(usize, usize)>,
 }
 
-/// 構造的な `Eq` の項目を比べる入口で、ネイティブのスタックの残りがこの量(バイト)と予備の検査の余裕の和を下回ったら、
-/// 新しいスタックのスレッドに移って続ける([`Interp::set_stack_hop`])。
+/// 構造的な `Eq` の項目を比較する入口で、ネイティブスタックの残りが、この量(バイト数)とスタック残量の検査の余裕の和を下回ったら、新しいスタックを持つスレッドに実行を切り替えて続ける([`Interp::set_stack_hop`])。
 ///
-/// JIT の関数を入口でインタプリタに移す下限([`crate::native::SOFT_MARGIN`])より上に置き、
-/// 項目の比べ方の 1 段(インタプリタで約 1.5 KiB)と、その中で JIT の関数が下限に届くまでに使う分を残す。
+/// この量は、JIT の関数がエントリでインタプリタに切り替える下限([`crate::native::SOFT_MARGIN`])より大きくする。
+/// 項目の比較 1 段(インタプリタで約 1.5 KiB)と、その中で JIT の関数が下限に達するまでに使う量を残すためである。
 pub const HOP_MARGIN: usize = 2 * crate::native::SOFT_MARGIN as usize;
 
-/// 再開した継続から外して使い回す写しの領域の組の数の上限([`Interp::keep_cont_bufs`])。
+/// 再開した継続から外して再利用するコピー領域を、何組まで残すかの上限([`Interp::keep_cont_bufs`])。
 const CONT_BUFS: usize = 4;
 
-/// 使い回す写しの領域の語の数の上限。これより大きな領域は使い回さずに返す。
+/// 再利用するコピー領域のワード数の上限。これより大きい領域は、再利用せずに解放する。
 const CONT_BUF_WORDS: usize = 1 << 16;
 
-/// `cont_make` が使い回す領域を選ぶときの、フレームの語の列の大きさの上限の下限。
+/// `cont_make` が再利用する領域を選ぶときに、フレームのワードの `Vec` の容量に許す上限の最小値。
 ///
-/// 上限は要る語の数の 2 倍とこの値の大きい方である。
+/// 容量の上限は、必要なワード数の 2 倍とこの値の大きいほうである。
 const CONT_FIT_WORDS: usize = 64;
 
-/// `cont_make` が使い回す領域を選ぶときの、語の数の列の大きさの上限の下限。
+/// `cont_make` が再利用する領域を選ぶときに、フレームごとのワード数の `Vec` の容量に許す上限の最小値。
 const CONT_FIT_FRAMES: usize = 16;
 
-/// JIT のフレームのエフェクトの命令の結果([`Interp::native_fx`])。
+/// JIT のフレームがエフェクトの命令を実行した結果([`Interp::native_fx`])。
 pub(crate) enum NativeFx {
-    /// 結果を書き先のスロットに書いた(書き先が無ければ何も書かない)。
+    /// 結果を書き込み先のスロットに書いた。書き込み先のない命令では、何も書いていない。
     Next,
-    /// 関数を、環境と引数で、このフレームの上で呼ぶ(番兵を受け取る呼び出しか `perform`)。
+    /// このフレームの上で、関数を環境と引数で呼ぶ。番兵を受け取る呼び出しか `perform` である。
     Enter(FuncId, Word, Vec<Word>),
-    /// 呼び出しの結果(値か番兵)が決まった(継続の再開)。
+    /// 継続の再開によって、呼び出しの結果(値か番兵)が決まった。
     Value(Word),
-    /// 見出しの再開点の呼び出しが、この結果で戻り直した(`cont_make` の失敗)。
+    /// `cont_make` が継続を作れなかった。区間の最上段から巻き戻した結果を、ヘッダの再開点の呼び出し(本体の呼び出し)の結果として返す。
     Redeliver(Word),
 }
 
-/// エフェクトの呼び出しの一種の相手([`Interp::fx_call`])。
+/// 呼び出しを行うエフェクトの命令が、何を呼ぶかを表す([`Interp::fx_call`])。
 enum FxCall {
-    /// 呼ばずに結果を書いた(`call_clause` が深さの限度を超え、番兵を結果に書いた)。
+    /// 呼ばずに結果を書いた。`call_clause` で深さが上限を超え、番兵を結果に書いた場合である。
     Done,
     /// 関数を、環境と引数で呼ぶ。
     Enter(FuncId, Word, Vec<Word>),
-    /// 値を、引数で呼ぶ(`call_value` の規則)。
+    /// 関数値を、引数で呼ぶ(`call_value` の規則に従う)。
     Value(Word, Vec<Word>),
     /// 継続を、値で再開する。
     Resume(Word, Word),
 }
 
-/// 構造的な `Eq` の入れ子が移る新しいスタックの最小の大きさ(バイト)。
+/// 構造的な `Eq` の比較の入れ子が実行を切り替える先の、新しいスタックの最小のサイズ(バイト数)。
 ///
-/// 移る先のスタックは、ネイティブのスタック(`--native-stack`)とこの値の大きいほうにする。
-/// `--native-stack 512k` と同じ大きさでは、予備の検査の余裕と [`HOP_MARGIN`] を除くと 1 つのスレッドで 80 段ほどしか進まず、
-/// 20 万段の入れ子で 2,600 個ほどのスレッドを作る。
-/// 試験を並べて走らせると利用者ごとのスレッドの数の上限に届き、スレッドを作れずに 70 で終わった。
+/// 切り替える先のスタックのサイズは、ネイティブスタックのサイズ(`--native-stack`)とこの値の大きいほうにする。
+/// `--native-stack 512k` と同じサイズにすると、スタック残量の検査の余裕と [`HOP_MARGIN`] を除いた残りでは、1 つのスレッドで 80 段ほどしか進まない。
+/// 20 万段の入れ子では、2,600 個ほどのスレッドを作ることになる。
+/// その状態でテストを並列に実行すると、ユーザごとのスレッド数の上限に達してスレッドを作れなくなり、内部エラーとして終了コード 70 で終了する。
 pub const HOP_STACK_MIN: usize = 8 << 20;
 
-/// フレームの見出しの 2 番の語(区画の大きさ)から、見出しを含むフレームの語の数を求める。
+/// フレームヘッダの 2 番のワード(2 つの領域のスロット数)から、ヘッダを含むフレームのワード数を求める。
 fn frame_words(sz: u64) -> usize {
     HEADER_WORDS + (sz & 0xffff_ffff) as usize + (sz >> 32) as usize
 }
 
+/// 現在のスタックポインタに近いアドレスを返す。ローカル変数のアドレスで代用する。
 pub(crate) fn approx_sp() -> usize {
     let x = 0u8;
     std::hint::black_box(&x) as *const u8 as usize
 }
 
-/// 付録 B の 17 番と 18 番の文面。
+/// 未実装のプリミティブの実行時エラーを作る。
+/// IRSpec 付録 B の 17 番(表示名と実装名が同じ)か、18 番(表示名と実装名が違い、メッセージに実装名も書く)である。
 pub(crate) fn unimpl_prim(prog: &Program, g: keleut_lir::GlobalId) -> Stop {
     let gl = &prog.globals[g.index()];
     let name = match &gl.kind {
@@ -263,7 +282,7 @@ fn conv_name(op: &ConvOp) -> &'static str {
 }
 
 impl<'p> Interp<'p> {
-    /// インタプリタを作る。`stack_low` はネイティブのスタックの下限の番地(0 なら検査しない)。
+    /// インタプリタを作る。`stack_low` はネイティブスタックの下限のアドレスで、0 ならスタック残量を検査しない。
     pub fn new(rt: Rt<'p>, stack_low: usize) -> Interp<'p> {
         let prog = rt.prog;
         let builtin_methods = prog
@@ -288,14 +307,13 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// インタプリタを、プログラム `prog` に付け替える(`keleut repl`。[`Rt::rebind`])。
+    /// インタプリタが実行するプログラムを `prog` に差し替える(`keleut repl` が使う。[`Rt::rebind`])。
     ///
-    /// `prog` は、今のプログラムの各表の後ろに項目を足したもの(`keleut_lir::Extender`)か、
-    /// 使わない間だけ置いておく空のプログラムである。
-    /// 符号化したバイトコードは、前の関数の分を残し、足した関数の分の空きを作る。
-    /// 実行時の文脈の表は伸ばさないので、足したプログラムに付け替えた後で [`Rt::grow`] を呼ぶ。
-    /// ネイティブの後段(JIT)を付けたインタプリタには使えない(付けていれば panic する)。
-    /// JIT の入口の表と翻訳のスレッドは前のプログラムに合わせて作ってあり、足した関数を知らないからである。
+    /// `prog` は、現在のプログラムの各表の後ろに項目を追加したもの(`keleut_lir::Extender`)か、使わない間だけ置いておく空のプログラムである。
+    /// 符号化済みのバイトコードは、以前からある関数の分を残し、追加された関数の分の空きを作る。
+    /// ランタイムコンテキストの表は拡張しないので、項目を追加したプログラムに差し替えた後で [`Rt::grow`] を呼ぶ。
+    /// ネイティブのバックエンド(JIT)を付けたインタプリタには使えず、付けていればパニックする。
+    /// JIT のエントリテーブルとコンパイルスレッドは前のプログラムに合わせて作ってあり、追加された関数を扱えないからである。
     pub fn rebind<'q>(self, prog: &'q Program) -> Interp<'q> {
         assert!(
             self.native.is_none(),
@@ -339,23 +357,26 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// 構造的な `Eq` の入れ子が深くなったときに、大きさ `size` のスタックの新しいスレッドに移って続けるようにする。
+    /// 構造的な `Eq` の比較の入れ子が深くなったときに、サイズ `size` のスタックを持つ新しいスレッドに実行を切り替えて続けるようにする。
     ///
-    /// `margin` は新しいスタックでの予備の検査の余裕で、下限は新しいスレッドの入口の番地から `size` を引き `margin` を足したものである。
-    /// 構造的な `Eq` の比べ方は値の入れ子の段ごとに [`Interp::run`] を入れ子に呼び、ネイティブのスタックを使う。
-    /// 移れば、入れ子は論理的な深さの限度にだけ縛られ、小さな `--native-stack` でも予備の検査(70)に先に届かない。
-    /// JIT の関数の末尾でない再帰がネイティブのスタックを下限の近くまで使った後でも同じである。
+    /// `margin` は、新しいスタックでのスタック残量の検査の余裕である。
+    /// 新しいスタックの下限は、新しいスレッドの入口でのスタックのアドレスから `size` を引き、`margin` を足したアドレスである。
+    /// 構造的な `Eq` の比較は、値の入れ子 1 段ごとに [`Interp::run`] を入れ子に呼び、ネイティブスタックを使う。
+    /// 切り替えるようにすると、入れ子を制限するのは論理的な深さの上限だけになる。
+    /// `--native-stack` が小さくても、スタック残量の検査で先に終了コード 70 になることはない。
+    /// JIT の関数の非末尾の再帰が、ネイティブスタックを下限の近くまで使った後でも同じである。
     pub fn set_stack_hop(&mut self, size: usize, margin: usize) {
         self.stack_hop = Some((size, margin));
     }
 
-    /// ネイティブのスタックが下限に近ければ、`f` を新しいスタックのスレッドで走らせる。そうでなければここで走らせる。
+    /// ネイティブスタックの残りが下限に近ければ、`f` を新しいスタックを持つスレッドで実行する。そうでなければ、現在のスレッドで実行する。
     ///
-    /// 仮想メモリの上限の下で新しいスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は [`HOP_STACK_MIN`])。
-    /// 下限でも作れなければ、メモリの不足([`Stop::OutOfMemory`])を返す(`cancel` 節を走らせて 3 で終わる)。
-    /// 上限が無いのに作れなければ、内部の誤り(70)である。
-    /// 新しいスレッドが走る間、元のスレッドは待つだけで、インタプリタに触れない。
-    /// スタックの下限と、JIT が読む文脈の下限の欄は、移る間だけ新しいスタックのものにし、戻ったら元に戻す。
+    /// 仮想メモリを制限しているとき(`ulimit -v`)に新しいスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(最小は [`HOP_STACK_MIN`])。
+    /// 最小のサイズでも作れなければ、メモリ不足([`Stop::OutOfMemory`])を返す。
+    /// このときは、`cancel` 節を実行して、終了コード 3 で終了する。
+    /// 仮想メモリを制限していないのに作れなければ、内部エラー(終了コード 70)である。
+    /// 新しいスレッドが実行している間、元のスレッドは待つだけで、インタプリタに触れない。
+    /// スタックの下限と、JIT が読むコンテキストの下限のフィールドは、切り替えている間だけ新しいスタックのものにし、戻ったら元に戻す。
     fn maybe_hop<R, F: FnOnce(&mut Self) -> Result<R, Stop>>(&mut self, f: F) -> Result<R, Stop> {
         let Some((size, margin)) = self.stack_hop else {
             return f(self);
@@ -363,9 +384,9 @@ impl<'p> Interp<'p> {
         if self.stack_low == 0 || approx_sp() >= self.stack_low.saturating_add(HOP_MARGIN) {
             return f(self);
         }
-        /// スレッドの間で渡すための包み。元のスレッドは新しいスレッドが終わるまで待つので、同時には触れない。
+        /// スレッドの間で値を渡すためのラッパ。元のスレッドは新しいスレッドが終わるまで待つので、2 つのスレッドが同時に触れることはない。
         struct Pass<T>(T);
-        // SAFETY: 上の説明のとおり、包んだ値を使うのはどの時点でも 1 つのスレッドだけである。
+        // SAFETY: 上の説明のとおり、ラッパの中の値を使うのは、どの時点でも 1 つのスレッドだけである。
         unsafe impl<T> Send for Pass<T> {}
         impl<T> Pass<T> {
             fn take(self) -> T {
@@ -377,8 +398,8 @@ impl<'p> Interp<'p> {
             .native
             .as_ref()
             .map(|n| (n.ctx.stack_low, n.ctx.stack_soft, n.sp0, n.min_sp));
-        // 新しいスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(下限は HOP_STACK_MIN)。
-        // 作れなかった試みでは閉包が走らないので、仕事は外に置き、走ったスレッドが取り出す。
+        // 新しいスレッドを作れなければ、スタックを半分ずつ小さくして作り直す(最小は HOP_STACK_MIN)。
+        // スレッドを作れなかったときはクロージャが実行されないので、ジョブ(self と f)はクロージャの外に置き、作れたスレッドがクロージャの中で取り出す。
         let mut job = Some((self as *mut Self, f));
         let mut size = size;
         let r = loop {
@@ -389,16 +410,16 @@ impl<'p> Interp<'p> {
                     .stack_size(size)
                     .spawn_scoped(s, move || {
                         keleut_rt::alloc::set_role(keleut_rt::alloc::Role::Exec);
-                        // SAFETY: 元のスレッドは join で待っており、この間 job と self に触れない。
+                        // SAFETY: 元のスレッドは join で待っていて、その間 job と self に触れない。
                         let (me, f) =
                             unsafe { (*slot.take()).take() }.expect("仕事は 1 回だけ取り出す");
-                        // SAFETY: 同じ。
+                        // SAFETY: 上と同じ。
                         let it = unsafe { &mut *me };
                         let sp0 = approx_sp();
                         it.stack_low = sp0.saturating_sub(size).saturating_add(margin);
                         if let Some(n) = it.native.as_mut() {
-                            // 実行の統計(`KELEUT_JIT_STATS`)のスタックの番地は、移った先では新しいスタックで測り、
-                            // 戻るときに元の値に戻す(移った先の使用量は数えない)。
+                            // 実行の統計(`KELEUT_JIT_STATS`)に使うスタックのアドレスは、切り替えた先では新しいスタックで測り、戻るときに元の値に戻す。
+                            // 切り替えた先での使用量は統計に含めない。
                             n.sp0 = sp0;
                             n.min_sp = usize::MAX;
                         }
@@ -411,7 +432,7 @@ impl<'p> Interp<'p> {
                     },
                     Err(e) => {
                         if keleut_rt::alloc::address_space_limit().is_none() {
-                            // 上限が無いのに作れないのは、処理系の内部の誤りである。
+                            // 仮想メモリを制限していないのに作れないのは、処理系の内部エラーである。
                             Some(Err(Stop::Internal(format!(
                                 "新しいスタックのスレッドを作れません({size} バイトのスタック): {e}"
                             ))))
@@ -425,8 +446,8 @@ impl<'p> Interp<'p> {
                 break r;
             }
             if size <= HOP_STACK_MIN {
-                // 最も小さいスタックでも作れない。ネイティブのスタックの領域が尽きたので、メモリの不足にする
-                // (`cancel` 節を走らせて 3 で終わる)。
+                // 最小のスタックでも作れない。ネイティブスタックに使うメモリを確保できないので、メモリ不足(`Stop::OutOfMemory`)を返す。
+                // このときは、`cancel` 節を実行して、終了コード 3 で終了する。
                 break Err(Stop::OutOfMemory);
             }
             size = (size / 2).max(HOP_STACK_MIN);
@@ -441,7 +462,7 @@ impl<'p> Interp<'p> {
         r
     }
 
-    /// 関数のバイトコード(無ければ作る)。
+    /// 関数 `f` のバイトコードへのポインタを返す。まだ符号化していなければ、符号化する。
     pub(crate) fn code(&mut self, f: FuncId) -> Result<*const Code, Stop> {
         if let Some(c) = &self.codes[f.index()] {
             return Ok(&**c as *const Code);
@@ -453,13 +474,14 @@ impl<'p> Interp<'p> {
         Ok(p)
     }
 
-    /// 関数のバイトコードを作って返す(`keleut dump bytecode` 用)。
+    /// 関数 `f` のバイトコードを返す。まだ符号化していなければ、符号化する(`keleut dump bytecode` が使う)。
     pub fn code_of(&mut self, f: FuncId) -> Result<&Code, Stop> {
         let p = self.code(f)?;
         // SAFETY: Code は self.codes の Box の中にある。
         Ok(unsafe { &*p })
     }
 
+    /// スタック残量の検査。ネイティブスタックのアドレスが下限を下回っていれば、内部エラーを返す。
     pub(crate) fn check_native_stack(&self) -> Result<(), Stop> {
         if self.stack_low != 0 && approx_sp() < self.stack_low {
             return Err(Stop::Internal(
@@ -469,13 +491,13 @@ impl<'p> Interp<'p> {
         Ok(())
     }
 
-    /// 関数 `func` を環境 `env` と引数 `args` で呼び、戻り値を返す。
+    /// 関数 `func` を環境 `env` と引数 `args` で呼び、返り値を返す。
     ///
-    /// フレームは論理的な位置 `base`(今のフレームの終わり)の後に積み、最下段に「ネイティブの呼び出し元へ戻る」印を置く。
-    /// 深さは変えない(呼ばれた側は `ctx.depth` で始まる)。
+    /// フレームは論理的な位置 `base`(現在のフレームの終わり)以降に置き、ヘッダの 3 番のワードに、呼び出し元がネイティブであることを表す `NATIVE_CALLER` を書く。
+    /// 深さは変えない。呼び出し先は `ctx.depth` の深さで始まる。
     ///
-    /// 入口で外側の最上段の位置を `rt.gc.outer` に積み、戻るときに外す
-    /// ([`keleut_rt::gc::GcState::enter_native`]、冒頭の回収の節)。
+    /// 入口で外側の最上段の位置を `rt.gc.outer` に積み、戻るときに外す([`keleut_rt::gc::GcState::enter_native`])。
+    /// 詳しくは、モジュールの説明の GC の節に書いてある。
     pub fn run(&mut self, func: FuncId, env: Word, args: &[Word], base: u64) -> Result<Word, Stop> {
         self.check_native_stack()?;
         let saved = self.rt.gc.enter_native();
@@ -497,7 +519,7 @@ impl<'p> Interp<'p> {
         let (fw, any, raw) = self.frame_shape(func)?;
         let fpos = self.rt.stack.place(base, fw)?;
         let fp = self.rt.stack.ptr_at(fpos);
-        // SAFETY: fp からフレームの語の数だけ値スタックの塊の中にある。
+        // SAFETY: fp から始まるフレームのワード数の範囲は、値スタックのチャンクの中にある。
         unsafe {
             *fp = u64::from(func.0);
             *fp.add(1) = self.rt.depth;
@@ -521,19 +543,17 @@ impl<'p> Interp<'p> {
         };
         let v = self.exec(&mut st)?;
         if v == crate::native::TAILREQ {
-            // 最下段のフレームが JIT の関数を末尾で呼んだ。フレームは置いてある。
+            // 最下段のフレームが JIT の関数を末尾呼び出しで呼んだ。呼び出し先のフレームは配置してある。
             return self.call_native_request();
         }
         Ok(v)
     }
 
-    /// JIT の関数から入った起動([`crate::native::krt_interp_run`])。
+    /// JIT の関数が始めるループの呼び出し([`crate::native::krt_interp_run`])。
     ///
-    /// 関数 `func` のフレームは呼び出し側が位置 `pos`(見出しは `fp`)に置いてある。
-    /// フレームの見出しの 3 番の語は呼び出し元の JIT のフレームの位置なので、
-    /// 継続はこの起動の境目をまたいでフレームをたどれる。
-    /// このフレームを起動の最下段として振り分けのループを回し、最下段が戻った値か番兵、
-    /// または末尾呼び出しの依頼 [`crate::native::TAILREQ`] を返す。
+    /// 関数 `func` のフレームは、呼び出し元が位置 `pos`(ヘッダのアドレスは `fp`)に配置してある。
+    /// フレームヘッダの 3 番のワードは呼び出し元の JIT のフレームの位置なので、継続をキャプチャするときは、このループの呼び出しの境界をまたいでフレームをたどれる。
+    /// このフレームを最下段としてディスパッチループを実行し、最下段のフレームが返した値か番兵、または末尾呼び出しの依頼 [`crate::native::TAILREQ`] を返す。
     pub(crate) fn run_activation(
         &mut self,
         func: FuncId,
@@ -557,7 +577,9 @@ impl<'p> Interp<'p> {
         r
     }
 
-    /// 関数のフレームの形(見出しを含む語の数、`any` と生の区画の大きさ)。
+    /// 関数 `f` のフレームの大きさを返す。
+    ///
+    /// ヘッダを含むワード数、`any` の領域のスロット数、ボックス化していない値の領域のスロット数の組である。
     pub(crate) fn frame_shape(&self, f: FuncId) -> Result<(usize, u32, u32), Stop> {
         let fr = self.prog.funcs[f.index()]
             .frame
@@ -570,11 +592,12 @@ impl<'p> Interp<'p> {
         ))
     }
 
-    /// 今のフレームの上に呼ばれた側のフレームを積み、その入口へ移る。
+    /// 現在のフレームの上に呼び出し先のフレームを積み、呼び出し先の先頭に制御を移す。
     ///
-    /// 呼ばれた側が JIT の関数なら、フレームを積んだ後にネイティブに呼び、戻った値を今のフレームに渡す
-    /// ([`Interp::native_returned`])。
-    /// そのときは `st` は今のフレームのままで、値を返すのは今のフレームが最下段で末尾の構造的な `Eq` を終えたときだけである。
+    /// 呼び出し先が JIT の関数なら、フレームを積んだ後にネイティブの呼び出しで実行し、戻った値を現在のフレームに渡す([`Interp::native_returned`])。
+    /// このとき、`st` は現在のフレームのままである。
+    /// `Some` を返すのは、JIT の関数が実装の関数で、それが戻った後に行う末尾呼び出し版の呼び出しが、最下段のフレーム(`self.bottom`)で結果を出したときである。
+    /// 結果は、構造的な `Eq` の比較の値か、JIT の関数への末尾呼び出しの依頼 [`crate::native::TAILREQ`] である。
     fn enter(
         &mut self,
         st: &mut St,
@@ -587,7 +610,7 @@ impl<'p> Interp<'p> {
         let (fw, any, raw) = self.frame_shape(func)?;
         let npos = self.rt.stack.place(top, fw)?;
         let nfp = self.rt.stack.ptr_at(npos);
-        // SAFETY: nfp からフレームの語の数だけ塊の中にあり、呼び出し元のフレーム(st.fp)とは重ならない。
+        // SAFETY: nfp から始まるフレームのワード数の範囲はチャンクの中にあり、呼び出し元のフレーム(st.fp)とは重ならない。
         unsafe {
             match args {
                 Args::Slots(p, n) => {
@@ -608,7 +631,7 @@ impl<'p> Interp<'p> {
         }
         if let Some(addr) = native {
             let v = self.call_native(addr, func, env, npos, nfp)?;
-            // 呼び出しの間に値スタックの使っている塊が動きうるので、今のフレームの位置に戻す。
+            // 呼び出しの間に値スタックの使用中のチャンクが変わることがあるので、使用中のチャンクを現在のフレームの位置に戻す。
             self.rt.stack.ptr_at(st.fpos);
             return self.native_returned(st, v);
         }
@@ -623,12 +646,13 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
-    /// 今のフレームを再利用して、呼ばれた側の入口へ移る(末尾呼び出し)。
+    /// 現在のフレームを再利用して、呼び出し先の先頭に制御を移す(末尾呼び出し)。
     ///
-    /// 呼ばれた側が JIT の関数のとき、今のフレームが起動の最下段なら、フレームを置いてから
-    /// 末尾呼び出しの依頼 [`crate::native::TAILREQ`] を返す(ネイティブの呼び出し元が呼ぶ)。
-    /// 最下段でなければ、置いたフレームの呼び出し元(今のフレームの呼び出し元)に戻る呼び出しとして JIT を普通に呼び、
-    /// 戻った値をその呼び出し元に渡す(計画 6.9 節)。
+    /// 呼び出し先が JIT の関数で、現在のフレームが最下段(`self.bottom`)なら、フレームを配置してから、末尾呼び出しの依頼 [`crate::native::TAILREQ`] を返す。
+    /// 実際の呼び出しは、ネイティブの呼び出し元が行う。
+    /// 最下段でなければ、JIT の関数を通常のネイティブの呼び出しで実行する。
+    /// 配置したフレームの呼び出し元は、現在のフレームの呼び出し元である。
+    /// 戻った値は、その呼び出し元に渡す。
     fn tail_enter(
         &mut self,
         st: &mut St,
@@ -638,7 +662,7 @@ impl<'p> Interp<'p> {
     ) -> Result<Option<Word>, Stop> {
         let mut buf = std::mem::take(&mut self.words);
         buf.clear();
-        // SAFETY: 引数の出どころは今のフレームのスロットか、生きている語の列である。
+        // SAFETY: 引数は、現在のフレームのスロットか、生きている値の並びから読む。
         unsafe {
             match args {
                 Args::Slots(p, n) => {
@@ -653,13 +677,13 @@ impl<'p> Interp<'p> {
                 }
             }
         }
-        // SAFETY: fp は今のフレームの見出しを指す。
+        // SAFETY: fp は現在のフレームのヘッダを指す。
         let (caller, depth) = unsafe { (*st.fp.add(3), *st.fp.add(1)) };
         let native = self.native_target(func)?;
         let (fw, any, raw) = self.frame_shape(func)?;
         let npos = self.rt.stack.place(st.fpos, fw)?;
         let nfp = self.rt.stack.ptr_at(npos);
-        // SAFETY: nfp からフレームの語の数だけ塊の中にある。
+        // SAFETY: nfp から始まるフレームのワード数の範囲は、チャンクの中にある。
         unsafe {
             for (i, a) in buf.iter().enumerate() {
                 *nfp.add(HEADER_WORDS + i) = a.0;
@@ -697,9 +721,9 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
-    /// 値 `v` で今のフレームから戻る。今のフレームが起動の最下段なら `Some(v)` を返す。
+    /// 値 `v` を返して、現在のフレームから戻る。現在のフレームが最下段(`self.bottom`)なら `Some(v)` を返す。
     fn ret(&mut self, st: &mut St, v: Word) -> Result<Option<Word>, Stop> {
-        // SAFETY: fp は今のフレームの見出しを指す。
+        // SAFETY: fp は現在のフレームのヘッダを指す。
         let caller = unsafe { *st.fp.add(3) };
         if caller == NATIVE_CALLER || st.fpos == self.bottom {
             return Ok(Some(v));
@@ -708,16 +732,16 @@ impl<'p> Interp<'p> {
         self.deliver(st, v)
     }
 
-    /// 呼ばれた側が値 `v` で戻った。今のフレーム `st` の見出しの再開点から続ける。
+    /// 呼び出し先が値 `v` を返して戻ったときに呼ぶ。現在のフレーム `st` のヘッダの再開点から実行を続ける。
     fn deliver(&mut self, st: &mut St, v: Word) -> Result<Option<Word>, Stop> {
-        // SAFETY: fp は今のフレームの見出しを指す。
+        // SAFETY: fp は現在のフレームのヘッダを指す。
         let rp = (unsafe { *st.fp } >> 32) as u32;
         if rp & PHASE != 0 {
             return self.phase2(st, rp & !PHASE, v);
         }
         let e = st.code().resume[(rp & !YIELDED) as usize];
         if e.kind == rk::PERFORM && rp & YIELDED == 0 {
-            // T の節の末尾の resume(v)。連鎖を perform の時点に戻す。
+            // 分類 T の操作節(IRSpec 9.2 節)の末尾 resume(v) である。連鎖を perform の時点のものに戻す。
             let (_, saved) = self.perform_hr(st, e);
             self.rt.chain = saved;
             self.rt.depth = st.depth();
@@ -727,10 +751,11 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
-    /// ネイティブに呼んだ関数が `v` で戻った。`st` はその呼び出し元のフレームである。
+    /// ネイティブの呼び出しで実行した関数が `v` を返して戻ったときに呼ぶ。`st` はその呼び出し元のフレームである。
     ///
-    /// 番兵なら、呼び出し元の深さに書き戻して [`Interp::receive`] で受け取る。
-    /// 受け取らないフレームなら `Err(Stop::Pending)` で巻き戻しを続ける(今のフレームも番兵で戻る)。
+    /// `v` が番兵なら、`ctx.depth` を呼び出し元の深さに書き戻し、[`Interp::receive`] で受け取る。
+    /// 番兵を受け取らないフレームなら、`Err(Stop::Pending)` を返して巻き戻しを続ける。
+    /// このときは、現在のフレームも番兵を返して戻る。
     fn native_returned(&mut self, st: &mut St, v: Word) -> Result<Option<Word>, Stop> {
         if v == Word::SENTINEL {
             self.rt.depth = st.depth();
@@ -742,10 +767,10 @@ impl<'p> Interp<'p> {
         self.deliver(st, v)
     }
 
-    /// 呼び出し元のフレーム `pos` に移る。`ctx.depth` は変えない。
+    /// `st` が位置 `pos` のフレームを指すようにする。`ctx.depth` と `st.pc` は変えない。
     fn frame_at(&mut self, st: &mut St, pos: u64) -> Result<(), Stop> {
         let fp = self.rt.stack.ptr_at(pos);
-        // SAFETY: fp はフレームの見出しを指す。
+        // SAFETY: fp はフレームヘッダを指す。
         let h0 = unsafe { *fp };
         let code = self.code(FuncId(h0 as u32))?;
         st.fpos = pos;
@@ -755,20 +780,21 @@ impl<'p> Interp<'p> {
         Ok(())
     }
 
-    /// 呼び出し元のフレーム `pos` に移る。`ctx.depth` はそのフレームの深さにする。
+    /// `st` が位置 `pos` のフレームを指すようにし、`ctx.depth` をそのフレームの深さにする。
     fn move_to(&mut self, st: &mut St, pos: u64) -> Result<(), Stop> {
         self.frame_at(st, pos)?;
         self.rt.depth = st.depth();
         Ok(())
     }
 
-    /// 今のフレームが番兵で戻る(状態語が立っている)。
+    /// 現在のフレームから、番兵を返して戻る。この関数を呼ぶ前に、状態ワードを設定しておく。
     ///
-    /// 番兵を受け取るフレームに着いたら `None` を返して続ける。
-    /// 起動の最下段から戻るときは番兵を返す。
+    /// 番兵を受け取るフレームに着いたら、`None` を返す。
+    /// 実行はそのフレームから続く。
+    /// 最下段のフレーム(`self.bottom`)から戻るときは、番兵を `Some` で返す。
     fn unwind(&mut self, st: &mut St) -> Result<Option<Word>, Stop> {
         loop {
-            // SAFETY: fp は今のフレームの見出しを指す。
+            // SAFETY: fp は現在のフレームのヘッダを指す。
             let caller = unsafe { *st.fp.add(3) };
             if caller == NATIVE_CALLER || st.fpos == self.bottom {
                 return Ok(Some(Word::SENTINEL));
@@ -780,12 +806,14 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// 呼ばれた側が番兵で戻り、今のフレーム `st` に着いた。見出しの再開点の行の種類で扱いを決める。
+    /// 呼び出し先が番兵を返して戻り、現在のフレーム `st` に着いたときに呼ぶ。ヘッダに書いてある再開点の種類(再開点の表の項目が持つ)で、次の動作を決める。
     ///
-    /// 番兵を受け取る呼び出しなら結果のスロットに番兵を書いて `true` を返す(そこから続ける)。
-    /// ほかは `false` を返し、今のフレームも番兵で戻る。
+    /// 番兵を受け取る呼び出しなら、結果のスロットに番兵を書いて `true` を返す。
+    /// 実行はそこから続く。
+    /// それ以外は `false` を返す。
+    /// このときは、現在のフレームも番兵を返して戻る。
     fn receive(&mut self, st: &mut St) -> Result<bool, Stop> {
-        // SAFETY: fp は今のフレームの見出しを指す。
+        // SAFETY: fp は現在のフレームのヘッダを指す。
         let rp = (unsafe { *st.fp } >> 32) as u32;
         if rp & PHASE != 0 {
             return Ok(false);
@@ -815,14 +843,14 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// `perform` の再開点の行の命令の被演算子(ハンドラ記録と、perform の時点の連鎖)。
+    /// `perform` の再開点の表の項目 `e` から、その命令のオペランドのうち、ハンドラ記録と `perform` の時点の連鎖を読む。
     fn perform_hr(&self, st: &St, e: ResumeEntry) -> (Word, Word) {
         let w = &st.code().words;
         let pc = e.call_pc as usize;
         (st.w(w[pc + 4]), st.w(w[pc + 5]))
     }
 
-    /// `perform` の操作の引数を `Array` の箱にする。
+    /// `perform` の操作の引数を、`Array` のオブジェクトにする。
     fn perform_args(&mut self, st: &St, e: ResumeEntry) -> Result<Word, Stop> {
         let w = &st.code().words;
         let pc = e.call_pc as usize;
@@ -833,18 +861,19 @@ impl<'p> Interp<'p> {
             let _site = alloc::site(Site::CallArgs);
             xs.extend((0..n).map(|i| st.w(w[pc + 6 + i])));
         }
-        // フレームは perform の再開点で止まっていて、引数はその被演算子として根にある。
+        // フレームは perform の再開点で止まっていて、引数はそのオペランドとして GC ルートになっている。
         self.rt.gc.at_frame(st.fpos);
         let a = self.rt.array_new(Kind::Array, n, Word::UNIT)?;
         for (i, x) in xs.iter().enumerate() {
-            // SAFETY: a は n 個の要素を持つ配列の箱である。
+            // SAFETY: a は n 個の要素を持つ配列のオブジェクトである。
             unsafe { keleut_rt::value::set(a, 1 + i, x.0) };
         }
         self.give_args(xs);
         Ok(a)
     }
 
-    /// 節の候補が番兵で戻り、`perform` のフレームに着いた(`doc/lir.md` の `perform`)。
+    /// 節の候補が番兵を返して戻り、`perform` のフレームに着いたときに呼ぶ(`doc/lir.md` の 16.5 節の `perform` の手順 4)。
+    /// 状態ワードを読み、節の選択の結果を状態ワードに設定する。
     fn perform_unwound(&mut self, st: &mut St, e: ResumeEntry) -> Result<(), Stop> {
         let (hr, saved) = self.perform_hr(st, e);
         match std::mem::take(&mut self.rt.pending) {
@@ -878,7 +907,7 @@ impl<'p> Interp<'p> {
                         cut: saved,
                         top: st.fpos,
                     };
-                    // SAFETY: fp はこのフレームの見出しを指す。
+                    // SAFETY: fp はこのフレームのヘッダを指す。
                     let rp = (unsafe { *st.fp } >> 32) as u32;
                     st.set_resume(rp | YIELDED);
                 }
@@ -898,7 +927,7 @@ impl<'p> Interp<'p> {
         Ok(())
     }
 
-    /// 実装の関数が値 `f` を返した後、呼び出しの命令を読み直して `f` を呼ぶ。
+    /// 実装の関数が関数値 `f` を返した後に、呼び出しの命令を読み直して `f` を呼ぶ。
     fn phase2(&mut self, st: &mut St, rp: u32, f: Word) -> Result<Option<Word>, Stop> {
         let e = st.code().resume[rp as usize];
         let pc = e.call_pc as usize;
@@ -920,7 +949,7 @@ impl<'p> Interp<'p> {
         self.call_value(st, rp, f, args, tail)
     }
 
-    /// 値 `f` を呼ぶ(`call_value` と `tail_call_value`)。
+    /// 関数値 `f` を呼ぶ(`call_value` と `tail_call_value`)。
     fn call_value(
         &mut self,
         st: &mut St,
@@ -994,8 +1023,9 @@ impl<'p> Interp<'p> {
                     ));
                 }
                 let (a, b) = self.args2(st, args);
-                // 比べ方は確保し、利用者のコードを呼ぶので、先に見出しの再開点を今の呼び出しにする。
-                // 末尾の形の番号(`tail_entry`)は LIR の生存の集合を持たず、根は Root に置いた両辺と辞書だけである。
+                // 比較はメモリを確保し、ユーザのコードも呼ぶので、先にヘッダの再開点をこの呼び出しのものにする。
+                // 末尾呼び出し版の項目(`tail_entry` が作る)は、LIR の生存しているレジスタの集合を持たない。
+                // このときのルートは、Root で保持した両辺と辞書だけである。
                 st.set_resume(rp);
                 self.rt.gc.at_frame(st.fpos);
                 let base = st.fpos + st.code().frame_words as u64;
@@ -1016,7 +1046,7 @@ impl<'p> Interp<'p> {
     }
 
     fn args2(&self, st: &St, args: Args) -> (Word, Word) {
-        // SAFETY: 引数は 2 つある(呼び出し側が確かめた)。
+        // SAFETY: 引数は 2 つある(呼び出し元が確かめた)。
         unsafe {
             match args {
                 Args::Slots(p, _) => (st.w(*p), st.w(*p.add(1))),
@@ -1049,7 +1079,7 @@ impl<'p> Interp<'p> {
 
     // ---- 入れ子の呼び出し(構造的な Eq) ----
 
-    /// 入れ子の [`Interp::run`] を呼び、番兵で戻ったら境目の外へ巻き戻す。
+    /// [`Interp::run`] を入れ子に呼ぶ。番兵が返ったら、入れ子の境界の外へ巻き戻す。
     fn run_nested(
         &mut self,
         func: FuncId,
@@ -1069,7 +1099,7 @@ impl<'p> Interp<'p> {
         Err(Stop::Pending)
     }
 
-    /// 値 `f` を入れ子に呼ぶ。
+    /// 関数値 `f` を入れ子に呼ぶ。
     fn call_value_nested(&mut self, f: Word, args: &[Word], base: u64) -> Result<Word, Stop> {
         match self.rt.callee_view(f) {
             CalleeView::Closure(func) => self.run_nested(func, f, args, base),
@@ -1123,6 +1153,7 @@ impl<'p> Interp<'p> {
         }
     }
 
+    /// `ws` の値をルートスタックに積み、積む前のルートスタックの長さを返す。
     fn root_all(&mut self, ws: &[Word]) -> usize {
         let mark = self.rt.roots.len();
         for w in ws {
@@ -1131,10 +1162,10 @@ impl<'p> Interp<'p> {
         mark
     }
 
-    /// 構造的な `Eq` の比べ方(`doc/lir.md` の `call_method`)。
+    /// 構造的な `Eq` の比較(`doc/lir.md` の `call_method`)。
     ///
-    /// 各項目の比較は、深さを 1 つ増やして項目の辞書の `eq`(クラス `class` の 0 番のメソッド)を呼ぶ。
-    /// 比べる間、両辺と辞書を根の枠に置く。
+    /// 項目ごとに、深さを 1 つ増やし、その項目の辞書の `eq`(クラス `class` の 0 番のメソッド)を呼んで比較する。
+    /// 比較する間、両辺と辞書をルートスタックに置く。
     pub(crate) fn eq_struct(
         &mut self,
         class: ClassId,
@@ -1159,9 +1190,9 @@ impl<'p> Interp<'p> {
     ) -> Result<bool, Stop> {
         match self.rt.dict_view(d) {
             DictView::Record(fs) => {
-                // 項目の `l` が辞書で `k` 番目の `l` なら、両辺の外側から `k` 番目の `l` を比べる。
-                // 前の項目で同名のフィールドを除いた残りの最も外側を取るのと同じで、確保をしない。
-                // a、b、d は eq_struct が根の枠に置いている。
+                // 項目のラベル `l` が、辞書の中の同じラベルのうち 0 始まりで `k` 番目なら、両辺の外側から `k` 番目の `l` のフィールドを比較する。
+                // これは、前の項目で同名のフィールドを取り除いた残りから、最も外側のフィールドを取り出すのと同じ結果になり、メモリを確保しない。
+                // a、b、d は eq_struct がルートスタックに置いている。
                 for (i, &(l, dl)) in fs.iter().enumerate() {
                     let k = fs[..i].iter().filter(|(m, _)| *m == l).count() as u32;
                     let xa = self.rt.rec_field(a, l, k);
@@ -1207,7 +1238,7 @@ impl<'p> Interp<'p> {
 
     // ---- エフェクト(`doc/lir.md` の 16 節) ----
 
-    /// 節の候補の番号 `start` 以後で、操作 `op` の最初の節。
+    /// 節の候補のうち、番号が `start` 以上で、操作が `op` である最初の節を探す。
     fn next_clause(&self, hr: Word, op: u32, start: usize) -> Result<Option<(usize, Word)>, Stop> {
         let r = self.rt.hr(hr)?;
         Ok(r.ops
@@ -1218,7 +1249,7 @@ impl<'p> Interp<'p> {
             .map(|(j, o)| (j, o.2)))
     }
 
-    /// 付録 B の 9 番(どの節にも一致しない)。
+    /// IRSpec 付録 B の 9 番(どの節にも一致しない)の実行時エラーを作る。
     fn no_clause(&self, hr: Word, op: u32, args: &[Word]) -> Result<Stop, Stop> {
         let r = self.rt.hr(hr)?;
         let eff = &self.prog.effects[r.effect as usize];
@@ -1232,7 +1263,8 @@ impl<'p> Interp<'p> {
         Ok(Stop::Runtime(m))
     }
 
-    /// 配列の箱の要素を、使い回す引数の領域([`Interp::fx_args`])に入れて返す。`extra` は後で足す語の数である。
+    /// 配列のオブジェクト `a` の要素を、再利用する引数のバッファ([`Interp::fx_args`])に入れて返す。
+    /// `extra` は、呼び出し元が後で追加するワード数である。
     fn array_words_buf(&mut self, a: Word, extra: usize) -> Vec<Word> {
         let mut v = std::mem::take(&mut self.fx_args);
         v.clear();
@@ -1242,9 +1274,9 @@ impl<'p> Interp<'p> {
         v
     }
 
-    /// 使い終えた引数の列を、使い回す領域に戻す。
+    /// 使い終えた引数の並びを、再利用するバッファとして戻す。
     ///
-    /// 取り出している間に入れ子の呼び出しが別の領域を戻していたら、大きいほうを残す。
+    /// 取り出している間に入れ子の呼び出しが別のバッファを戻していたら、容量の大きいほうを残す。
     pub(crate) fn give_args(&mut self, mut v: Vec<Word>) {
         if v.capacity() > self.fx_args.capacity() {
             v.clear();
@@ -1252,17 +1284,17 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// 継続の表の項目。
+    /// 継続 `k` に対応する、継続の表の項目を返す。
     fn cont(&mut self, k: Word) -> Result<&mut Cont, Stop> {
         let i = self.rt.cont_index(k)?;
         Ok(&mut self.rt.conts[i])
     }
 
-    /// エフェクトの命令。`pc` は命令の位置、`idx` は [`Code::fx`] の添字。
-    // 振り分けのループに展開させない。展開されると、ループの形が変わり、エフェクトを使わないプログラムまで遅くなることがある。
+    /// エフェクトの命令を実行する。`pc` は命令の位置、`idx` は [`Code::fx`] の添字である。
+    // ディスパッチループにインライン展開させない。インライン展開されるとループのコードが変わり、エフェクトを使わないプログラムまで遅くなることがある。
     #[inline(never)]
     fn fx(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
-        // SAFETY: Code は self.codes の Box の中にあり、動かない。
+        // SAFETY: Code は self.codes の Box の中にあり、移動しない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
         let rp = w[pc + 1];
@@ -1414,7 +1446,8 @@ impl<'p> Interp<'p> {
                 let mut m = "cancel 節で例外が抑制されました: ".as_bytes().to_vec();
                 m.extend(keleut_rt::effect::suppressed_text(&p));
                 m.push(b'\n');
-                // 記録の前の flush が失敗したら(前の失敗の後に残したものや書き足したものを含む)、記録を書かずにすぐ 74 で止まる(Diktor と同じ)。
+                // 抑制の記録を書く前の flush が失敗したら、記録を書かずに、すぐに終了コード 74 で終了する(Diktor と同じ)。
+                // flush の失敗には、前の失敗の後でバッファに残したデータや、その後に追記したデータを書き出せなかった場合も含む。
                 if let Err(e) = self.rt.out.eprint_after_flush(&m) {
                     return Err(Stop::IoAbort(e.0));
                 }
@@ -1462,14 +1495,15 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
-    /// エフェクトの呼び出しの一種(`FxOp::is_call`)の相手を決める。
+    /// 呼び出しを行うエフェクトの命令(`FxOp::is_call`)について、何を呼ぶかを決める。
     ///
-    /// 呼ぶ前の副作用(`perform` の連鎖と深さ、`call_clause` の深さ)はここで済ませる。
-    /// 呼び出しそのものは呼ぶ側が行う(インタプリタは [`Interp::fx`]、JIT のフレームは [`Interp::native_fx`])。
+    /// 呼ぶ前の副作用(`perform` の連鎖と深さの更新、`call_clause` の深さの更新)は、ここで済ませる。
+    /// 呼び出しそのものは、この関数の呼び出し元が行う(インタプリタでは [`Interp::fx`]、JIT のフレームでは [`Interp::native_fx`])。
     fn fx_call(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<FxCall, Stop> {
-        // 引数の列は失敗を自分で扱う範囲の外で取る(`keleut_rt::alloc`)。中の回収はその場所の印で上書きする。
+        // 引数の並びは、確保の失敗を呼び出し元が処理する範囲(`keleut_rt::alloc::handled`)の外で確保し、確保箇所を `CallArgs` に設定する。
+        // この間に起こる GC は、確保箇所を GC のものに上書きする。
         let _site = alloc::site(Site::CallArgs);
-        // SAFETY: Code は self.codes の Box の中にあり、動かない。
+        // SAFETY: Code は self.codes の Box の中にあり、移動しない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
         let dst = w[pc + 2];
@@ -1531,8 +1565,8 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// エフェクトのブロックの終わり。
-    // [`Interp::fx`] と同じ理由で、振り分けのループに展開させない。
+    /// エフェクトの終端命令を実行する。
+    // [`Interp::fx`] と同じ理由で、ディスパッチループにインライン展開させない。
     #[inline(never)]
     fn fx_term(&mut self, st: &mut St, pc: usize, idx: u32) -> Result<Option<Word>, Stop> {
         let (func, env, a) = self.fx_term_call(st, pc, idx)?;
@@ -1541,10 +1575,11 @@ impl<'p> Interp<'p> {
         r
     }
 
-    /// エフェクトのブロックの終わりを、末尾で呼ぶ相手まで進める。
+    /// エフェクトの終端命令を、末尾呼び出しで呼ぶ関数が決まるところまで進める。
     ///
-    /// 印を立てて番兵で戻る終わり(`propagate`、`clause_value`、`clause_matched`、`tail_resume`)は `Err(Stop::Pending)` を返す。
-    /// 末尾で呼ぶ終わり(`tail_call_never`、`tail_call_clause`)は、呼ぶ関数、環境、引数を返す。
+    /// 番兵を返して戻る終端命令では、`Err(Stop::Pending)` を返す。
+    /// `clause_value`、`clause_matched`、`tail_resume` は、その前に状態ワードに目印を設定する。`propagate` は状態ワードを変えない。
+    /// 末尾呼び出しの終端命令(`tail_call_never`、`tail_call_clause`)では、呼ぶ関数、環境、引数を返す。
     fn fx_term_call(
         &mut self,
         st: &St,
@@ -1552,7 +1587,7 @@ impl<'p> Interp<'p> {
         idx: u32,
     ) -> Result<(FuncId, Word, Vec<Word>), Stop> {
         let _site = alloc::site(Site::CallArgs);
-        // SAFETY: Code は self.codes の Box の中にあり、動かない。
+        // SAFETY: Code は self.codes の Box の中にあり、移動しない。
         let code: &Code = unsafe { &*st.code };
         let w = &code.words;
         let n = w[pc + 1] as usize;
@@ -1603,9 +1638,9 @@ impl<'p> Interp<'p> {
 
     /// `cont_make hr`。自分宛ての `YIELD` から継続を作る。
     ///
-    /// 写しの領域は、状態語を下ろす前に確保の失敗を返す形(`try_reserve`)で取る。
-    /// 取れなければ [`Interp::fail_into_segment`] で、まだ値スタックに残る区間の最上段にメモリの不足を注入する。
-    /// 継続を表に入れて添字の箱を取れなかったときも同じである。
+    /// コピー領域は、状態ワードを消す前に確保する。確保には、失敗を `Err` で返す `try_reserve_exact` を使う。
+    /// 確保できなければ、[`Interp::fail_into_segment`] で、まだ値スタックに残っている区間(継続にするフレームの範囲)の最上段から、メモリ不足のエラーを伝播して巻き戻す。
+    /// 継続を表に入れるときに、添字を持つオブジェクトを確保できなかったときも同じである。
     fn cont_make(&mut self, st: &mut St, hr: Word) -> Result<Word, Stop> {
         let (t, top) = match &self.rt.pending {
             Pending::Yield { hr: t, top, .. } => (*t, *top),
@@ -1615,7 +1650,7 @@ impl<'p> Interp<'p> {
             return Err(bug("ほかの宛ての YIELD から継続を作ろうとしました"));
         }
         let h = st.depth();
-        // 1 回目の走査: フレームの数と語の総数を数える。
+        // 1 回目の走査: フレームの個数と、ワード数の合計を数える。
         let (mut count, mut total) = (0usize, 0usize);
         let mut pos = top;
         while pos != st.fpos {
@@ -1623,7 +1658,7 @@ impl<'p> Interp<'p> {
                 return Err(bug("継続のフレームがハンドラのフレームに届きません"));
             }
             let p = self.rt.stack.ptr_at(pos);
-            // SAFETY: p はフレームの見出しを指し、フレームは見出しの 2 番の語の大きさを持つ。
+            // SAFETY: p はフレームヘッダを指し、フレームのワード数はヘッダの 2 番のワードから求まる。
             let (words, caller) = unsafe { (frame_words(*p.add(2)), *p.add(3)) };
             count += 1;
             total += words;
@@ -1643,7 +1678,7 @@ impl<'p> Interp<'p> {
         }
         frames.resize(total, 0);
         sizes.resize(count, 0);
-        // 2 回目の走査: 最上段から順にたどり、後ろから詰める(最下段のフレームが先頭に来る)。
+        // 2 回目の走査: 最上段から順にたどり、バッファの後ろから詰める。最下段のフレームが先頭に来る。
         let (mut off, mut i) = (total, count);
         let mut delta = 0;
         let mut pos = top;
@@ -1654,7 +1689,7 @@ impl<'p> Interp<'p> {
             off -= words;
             i -= 1;
             let f = &mut frames[off..off + words];
-            // SAFETY: p から words 語はフレームの中にある。
+            // SAFETY: p から始まる words ワードは、フレームの中にある。
             f.copy_from_slice(unsafe { std::slice::from_raw_parts(p, words) });
             if i == count - 1 {
                 delta = f[1].wrapping_sub(h);
@@ -1663,10 +1698,10 @@ impl<'p> Interp<'p> {
             sizes[i] = words as u32;
             pos = f[3];
         }
-        // 状態語は継続を表に入れた後で下ろす。
-        // 表に入れる確保が回収を起こしても、区間のフレームは状態語の `YIELD` の根として値スタックに残る。
-        // 回収は生きているフレームより後ろの塊を返すので、下ろしてからだと、継続を作れなかったときに
-        // [`Interp::fail_into_segment`] が移る区間の最上段が、返した塊にあることになる。
+        // 状態ワードは、継続を表に入れた後で消す。
+        // 表に入れるときの確保が GC を起こしても、区間のフレームは、状態ワードの `YIELD` からたどる GC ルートとして値スタックに残る。
+        // GC は、生きているフレームより後ろのチャンクを解放する。
+        // 先に状態ワードを消すと、継続を作れなかったときに [`Interp::fail_into_segment`] が制御を移す区間の最上段が、解放したチャンクにあることになる。
         let Pending::Yield {
             clause, args, cut, ..
         } = self.rt.pending.clone()
@@ -1694,12 +1729,13 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// 再開した継続から外した写しの領域のうち、`total` 語と `count` 個のフレームに大きさの近い組を取り出す。
+    /// 再開した継続から外したコピー領域のうち、`total` ワードと `count` 個のフレームに容量の近い組を取り出す。
     ///
-    /// 要る量の 2 倍(小さな継続では下限の [`CONT_FIT_WORDS`] 語と [`CONT_FIT_FRAMES`] 個)を超える領域は選ばない。
-    /// 大きな領域を小さな継続が持ったまま生き続けると、生きている継続ごとに余分なメモリが残るからである。
-    /// 合う組が無ければ空の組を返す。
-    /// 振り分けのループの機械語の形を変えないように、展開させない。
+    /// 容量が必要な量の 2 倍を超える領域は選ばない。
+    /// 小さな継続では、2 倍の代わりに [`CONT_FIT_WORDS`] ワードと [`CONT_FIT_FRAMES`] 個を上限にする。
+    /// 小さな継続が大きな領域を持ったまま生き続けると、生きている継続ごとに余分なメモリが残るからである。
+    /// 合う組がなければ、空の組を返す。
+    /// ディスパッチループの機械語が変わらないように、インライン展開させない。
     #[inline(never)]
     fn take_cont_buf(&mut self, total: usize, count: usize) -> (Vec<u64>, Vec<u32>) {
         let fits = |(f, s): &(Vec<u64>, Vec<u32>)| {
@@ -1712,11 +1748,11 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// 再開した継続から外した写しの領域を、次の `cont_make` のために残す。
+    /// 再開した継続から外したコピー領域を、次の `cont_make` のために残す。
     ///
-    /// 残すのは [`CONT_BUFS`] 組までで、大きな領域([`CONT_BUF_WORDS`] 語を超えるもの)は返す。
-    /// 組が上限に達していれば、いちばん古い組を返して入れ替える。
-    /// 大きさの合わない組が残り続けて、使い回せる組が入れなくなることはない。
+    /// 残すのは [`CONT_BUFS`] 組までで、[`CONT_BUF_WORDS`] ワードを超える領域は残さずに解放する。
+    /// 組の数が上限に達していれば、最も古い組を解放して入れ替える。
+    /// そのため、容量の合わない組が残り続けて、再利用できる組を入れられなくなることはない。
     #[inline(never)]
     fn keep_cont_bufs(&mut self, frames: Vec<u64>, sizes: Vec<u32>) {
         if frames.capacity() > CONT_BUF_WORDS {
@@ -1728,19 +1764,19 @@ impl<'p> Interp<'p> {
         self.cont_bufs.push((frames, sizes));
     }
 
-    /// 継続を作れなかった。区間の最上段のフレーム `top`(まだ値スタックにある)にメモリの不足を注入して巻き戻す。
+    /// 継続を作れなかったときに呼ぶ。区間の最上段のフレーム `top`(まだ値スタックにある)に制御を移し、そこからメモリ不足のエラーを伝播して巻き戻す。
     ///
-    /// 区間の中のハンドラの cancel 節は、深さの限度の誤りを継続に注入するときと同じく内側から走る。
-    /// 巻き戻しがハンドラのフレームに戻ると、本体の呼び出しの再開点からほかの宛ての ERROR として扱う。
+    /// 区間の中にあるハンドラの `cancel` 節は、`depth_limit` のエラーを継続に注入するとき([`Interp::cont_inject`])と同じく、内側から順に実行される。
+    /// 巻き戻しがハンドラのフレームに達すると、そのフレームは、本体を呼び出した再開点で、このエラーをほかのハンドラ宛ての `ERROR` として受け取る。
     fn fail_into_segment(&mut self, st: &mut St, top: u64) -> Result<Word, Stop> {
         self.move_to(st, top)?;
         self.rt.pending = Pending::Error(Stop::OutOfMemory);
         Err(Stop::Pending)
     }
 
-    /// `cont_resume k v`。今のフレームの上に継続のフレームを写し戻し、最上段の `perform` に `v` を渡して続ける。
+    /// `cont_resume k v`。現在のフレームの上に継続のフレームを復元し、最上段の `perform` の結果を `v` にして実行を続ける。
     ///
-    /// `v` が退避した状態語なら、フレームを置き直さずに [`Interp::cont_inject`] で注入して巻き戻す。
+    /// `v` が退避した状態ワードなら、フレームを配置し直さずに、[`Interp::cont_inject`] で注入して巻き戻す。
     fn cont_resume(
         &mut self,
         st: &mut St,
@@ -1755,8 +1791,8 @@ impl<'p> Interp<'p> {
         let base = st.depth();
         let mut below = st.fpos;
         let mut top = st.fpos + st.code().frame_words as u64;
-        // フレームをすべて置けるまで継続は変えない。置けなければ継続をそのまま残してメモリの不足を返し、
-        // 使われていない継続として注入の道(中の cancel 節を走らせる)に任せる。
+        // フレームをすべて配置できるまで、継続を変えない。配置できなければ、継続をそのまま残してメモリ不足を返す。
+        // 継続はまだ使われていないので、その後は注入の経路(継続の中の cancel 節を実行する)で処理される。
         let mut placed = std::mem::take(&mut self.placed);
         placed.clear();
         alloc::handled(|| placed.try_reserve_exact(self.rt.conts[ki].sizes.len()))
@@ -1770,7 +1806,7 @@ impl<'p> Interp<'p> {
                 let sz = sz as usize;
                 let pos = rt.stack.place(top, sz)?;
                 let p = rt.stack.ptr_at(pos);
-                // SAFETY: p から sz 語は塊の中にある。
+                // SAFETY: p から始まる sz ワードは、チャンクの中にある。
                 unsafe {
                     std::ptr::copy_nonoverlapping(c.frames[off..].as_ptr(), p, sz);
                     *p.add(1) = base.wrapping_add(*p.add(1));
@@ -1788,11 +1824,11 @@ impl<'p> Interp<'p> {
         let sizes = std::mem::take(&mut c.sizes);
         let (hr, cut) = (c.hr, c.cut);
         self.keep_cont_bufs(frames, sizes);
-        // 写し戻したハンドラのフレームのハンドラ記録の深さを、新しい深さにする。
+        // 復元したフレームが $rt_handle のフレームなら、そのハンドラ記録の深さを新しい深さに書き直す。
         if let Some(rh) = self.rt_handle {
             for &pos in &placed {
                 let p = self.rt.stack.ptr_at(pos);
-                // SAFETY: p はフレームの見出しを指す。$rt_handle のフレームの any の区画の 0 番はハンドラ記録である。
+                // SAFETY: p はフレームヘッダを指す。$rt_handle のフレームでは、any の領域の 0 番のスロットがハンドラ記録である。
                 let (func, depth, h) =
                     unsafe { (*p as u32, *p.add(1), Word(*p.add(HEADER_WORDS))) };
                 if func == rh.0 {
@@ -1812,7 +1848,7 @@ impl<'p> Interp<'p> {
             return Err(bug("フレームの無い継続"));
         }
         self.move_to(st, below)?;
-        // SAFETY: fp は最上段のフレーム(G の節に取り出された perform)の見出しを指す。
+        // SAFETY: fp は最上段のフレーム(分類 G の操作節がキャプチャした perform のフレーム)のヘッダを指す。
         let trp = (unsafe { *st.fp } >> 32) as u32;
         if trp & YIELDED == 0 {
             return Err(bug("継続の最上段が取り出された perform でない"));
@@ -1823,13 +1859,14 @@ impl<'p> Interp<'p> {
         Ok(None)
     }
 
-    /// 継続 `ki` に退避した状態語 `v` を注入する(`cont_resume` の `v` が状態語のとき)。
+    /// 継続 `ki` に、退避した状態ワード `v` を注入する(`cont_resume` の `v` が状態ワードのとき)。
     ///
-    /// 使われていない継続にメモリの不足を注入するとき、継続のフレームを [`keleut_rt::stack::ValueStack::place`] で置き直すと塊の確保が要り、
-    /// それも取れなければ継続の中の `cancel` 節が走らない。
-    /// そこで、継続の写しの領域をそのまま 1 つの塊として値スタックにつなぎ([`keleut_rt::stack::ValueStack::link_copy`])、塊の領域を取らずに置く。
-    /// 写しのフレームの見出しの 1 番の語(深さ)と 3 番の語(呼び出し元の位置)は、ふつうの再開と同じく書き直す。
-    /// 塊の列を広げられなければ、継続を変えずにメモリの不足を返す。
+    /// 注入は、継続が持つフレームのコピーをチャンクのまま値スタックにつなぎ、最上段の `perform` のフレームから、退避した状態ワード(`DISCARD` か `ERROR`)を伝播する操作である。
+    /// 使われていない継続にメモリ不足を注入するときに、継続のフレームを [`keleut_rt::stack::ValueStack::place`] で配置し直すと、チャンクの確保が必要になる。
+    /// その確保にも失敗すると、継続の中の `cancel` 節を実行できない。
+    /// そこで、継続のコピー領域をそのまま 1 つのチャンクとして値スタックにつなぎ([`keleut_rt::stack::ValueStack::link_copy`])、チャンクを確保せずに配置する。
+    /// コピーしたフレームのヘッダの 1 番のワード(深さ)と 3 番のワード(呼び出し元の位置)は、通常の再開と同じように書き直す。
+    /// チャンクの配列を拡張できなければ、継続を変えずにメモリ不足を返す。
     fn cont_inject(
         &mut self,
         st: &mut St,
@@ -1855,15 +1892,15 @@ impl<'p> Interp<'p> {
         let (mut pos, mut below) = (at, st.fpos);
         for &sz in &sizes {
             let p = self.rt.stack.ptr_at(pos);
-            // SAFETY: p は写しの塊の中のフレームの見出しを指す。
+            // SAFETY: p は、コピーチャンクの中にあるフレームのヘッダを指す。
             let (func, depth) = unsafe {
                 *p.add(1) = base.wrapping_add(*p.add(1));
                 *p.add(3) = below;
                 (*p as u32, *p.add(1))
             };
-            // 写し戻したハンドラのフレームのハンドラ記録の深さを、新しい深さにする。
+            // 復元したフレームが $rt_handle のフレームなら、そのハンドラ記録の深さを新しい深さに書き直す。
             if Some(func) == rh {
-                // SAFETY: $rt_handle のフレームの any の区画の 0 番はハンドラ記録である。
+                // SAFETY: $rt_handle のフレームでは、any の領域の 0 番のスロットがハンドラ記録である。
                 let h = Word(unsafe { *p.add(HEADER_WORDS) });
                 self.rt.hr_mut(h)?.h = depth;
             }
@@ -1884,11 +1921,12 @@ impl<'p> Interp<'p> {
         Err(Stop::Pending)
     }
 
-    // ---- JIT のフレームのエフェクト(`crate::native` の実行時の関数から) ----
+    // ---- JIT のフレームのエフェクト(`crate::native` のランタイム関数が呼ぶ) ----
 
-    /// JIT のフレーム(位置 `fpos`、見出し `fp`)を、インタプリタの今のフレームの形にする(位置 `pc`)。
+    /// JIT のフレーム(位置 `fpos`、ヘッダのアドレス `fp`)を、インタプリタの現在のフレームとして扱うための `St` を作る。
+    /// `pc` は命令の位置である。
     fn native_st(&mut self, fpos: u64, fp: *mut u64, pc: usize) -> Result<St, Stop> {
-        // SAFETY: fp は JIT のフレームの見出しを指す。
+        // SAFETY: fp は JIT のフレームのヘッダを指す。
         let fid = FuncId(unsafe { *fp } as u32);
         let code = self.code(fid)?;
         Ok(St {
@@ -1900,15 +1938,15 @@ impl<'p> Interp<'p> {
         })
     }
 
-    /// JIT のフレームのエフェクトの命令(`idx` 番目)を 1 つ実行する。
+    /// JIT のフレームの、`idx` 番目のエフェクトの命令を 1 つ実行する。
     ///
-    /// JIT のコードは、命令の被演算子をすべてスロットに書いてから呼ぶ(呼び出しの一種なら、再開点で生きているレジスタも書き、見出しに再開点を書く)。
-    /// 命令の意味はインタプリタと同じで、結果は書き先のスロットに書く([`NativeFx::Next`])。
-    /// 呼び出しの一種は、呼ぶ相手を返す([`NativeFx::Enter`])。
-    /// 継続の再開は、写し戻した区間をこの起動の中のインタプリタで走らせ、区間の最下段の結果を返す([`NativeFx::Value`])。
-    /// 区間の最上段は取り出された `perform` のフレームで、JIT のコードはフレームを再開点から続けられないからである(計画 6.8 節)。
-    /// `cont_make` が継続を作れなかったときは、区間の最上段から巻き戻し、区間の最下段の結果を、
-    /// このフレームの見出しの再開点(本体の呼び出し)の結果として返す([`NativeFx::Redeliver`])。
+    /// JIT のコードは、命令のオペランドをすべてスロットに書いてから、この関数を呼ぶ。
+    /// 呼び出しを行う命令なら、再開点で生存しているレジスタもスロットに書き、ヘッダに再開点を書いておく。
+    /// 命令の意味はインタプリタと同じで、結果は書き込み先のスロットに書く([`NativeFx::Next`])。
+    /// 呼び出しを行う命令では、呼ぶ関数を返す([`NativeFx::Enter`])。
+    /// 継続の再開では、値スタックに復元した区間を、新しいループの呼び出し(`run_from`)でインタプリタが実行し、区間の最下段のフレームの結果を返す([`NativeFx::Value`])。
+    /// 区間の最上段は、分類 G の操作節がキャプチャした `perform` のフレームであり、JIT のコードはフレームを再開点から続けられないからである。
+    /// `cont_make` が継続を作れなかったときは、区間の最上段から巻き戻し、区間の最下段のフレームの結果を、このフレームのヘッダの再開点(本体の呼び出し)の結果として返す([`NativeFx::Redeliver`])。
     pub(crate) fn native_fx(
         &mut self,
         fpos: u64,
@@ -1918,7 +1956,7 @@ impl<'p> Interp<'p> {
         let mut st = self.native_st(fpos, fp, 0)?;
         let pc = st.code().fx_pc[idx as usize] as usize;
         st.pc = pc;
-        // SAFETY: Code は self.codes の Box の中にあり、動かない。
+        // SAFETY: Code は self.codes の Box の中にあり、移動しない。
         let code: &Code = unsafe { &*st.code };
         if !code.fx[idx as usize].is_call() {
             return match self.fx(&mut st, pc, idx) {
@@ -1957,12 +1995,12 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// 値スタックのフレーム `top` から呼び出し元の鎖をたどり、呼び出し元が `below` のフレームの位置を返す。
+    /// 値スタックのフレーム `top` から呼び出し元を順にたどり、呼び出し元が `below` であるフレームの位置を返す。
     fn segment_bottom(&mut self, top: u64, below: u64) -> Result<u64, Stop> {
         let mut pos = top;
         loop {
             let p = self.rt.stack.ptr_at_ro(pos);
-            // SAFETY: p はフレームの見出しを指す。
+            // SAFETY: p はフレームヘッダを指す。
             let caller = unsafe { *p.add(3) };
             if caller == below {
                 return Ok(pos);
@@ -1974,10 +2012,11 @@ impl<'p> Interp<'p> {
         }
     }
 
-    /// `st` を今のフレームにし、`bottom` を最下段にした起動を回す(`inject` があれば、それを状態語にして今のフレームから巻き戻す)。
+    /// `st` を現在のフレーム、`bottom` を最下段として、新しいループの呼び出しを始める。
     ///
-    /// 最下段のフレームが戻った値か番兵を返す。
-    /// 最下段のフレームが JIT の関数を末尾で呼んだら、その関数をネイティブに呼んで値を返す。
+    /// `inject` があれば、それを状態ワードに設定して、現在のフレームから巻き戻す。
+    /// 最下段のフレームが返した値か番兵を返す。
+    /// 最下段のフレームが JIT の関数を末尾呼び出しで呼んだら、その関数をネイティブの呼び出しで実行して、その値を返す。
     fn run_from(&mut self, st: &mut St, bottom: u64, inject: Option<Stop>) -> Result<Word, Stop> {
         self.check_native_stack()?;
         let saved = self.bottom;
@@ -2003,10 +2042,12 @@ impl<'p> Interp<'p> {
         Ok(v)
     }
 
-    /// JIT のフレームの `perform` の呼び出しが `r` で戻った(`doc/lir.md` の 16.5 節の手順 4)。
+    /// JIT のフレームの `perform` の呼び出しが `r` を返して戻ったときに呼ぶ(`doc/lir.md` の 16.5 節の `perform` の手順 4)。
     ///
-    /// 値なら連鎖と深さを `perform` の時点に戻して真を返す(JIT のコードは `r` を結果にする)。
-    /// 番兵なら、深さを書き戻し、節の選択の結果を状態語にして偽を返す(JIT のコードは番兵で戻る)。
+    /// `r` が値なら、連鎖と深さを `perform` の時点のものに戻して `true` を返す。
+    /// このとき、JIT のコードは `r` を `perform` の結果にする。
+    /// `r` が番兵なら、深さを書き戻し、節の選択の結果を状態ワードに設定して `false` を返す。
+    /// このとき、JIT のコードは番兵を返して戻る。
     pub(crate) fn native_perform_back(
         &mut self,
         fpos: u64,
@@ -2025,9 +2066,11 @@ impl<'p> Interp<'p> {
         Ok(true)
     }
 
-    /// JIT のフレームのエフェクトのブロックの終わり(`idx` 番目)。
+    /// JIT のフレームの、`idx` 番目のエフェクトの終端命令を実行する。
     ///
-    /// 印を立てて番兵で戻る終わりなら `None`(状態語は立ててある)、末尾で呼ぶ終わりなら、呼ぶ関数、環境、引数を返す。
+    /// 番兵を返して戻る終端命令なら、`None` を返す。
+    /// このとき、状態ワードは設定済みである。
+    /// 末尾呼び出しの終端命令なら、呼ぶ関数、環境、引数を返す。
     pub(crate) fn native_fx_term(
         &mut self,
         fpos: u64,
@@ -2043,8 +2086,9 @@ impl<'p> Interp<'p> {
         }
     }
 
-    // ---- 振り分けのループ ----
+    // ---- ディスパッチループ ----
 
+    /// `idx` 番目の `error` の命令の実行時エラーを作る。`operand` はオペランドのスロット番号で、`u32::MAX` ならオペランドはない。
     fn error(&self, st: &St, idx: u32, operand: u32) -> Stop {
         let kind = &st.code().errors[idx as usize];
         let opnd = if operand == u32::MAX {
@@ -2055,7 +2099,10 @@ impl<'p> Interp<'p> {
         runtime_error(self.prog, &self.rt, kind, opnd)
     }
 
-    /// 振り分けのループ。止まる理由が実行時エラーなら状態語にして巻き戻し、番兵を受け取るフレームから続ける。
+    /// ディスパッチループを実行する。
+    ///
+    /// 命令がエラーを返したら、そのエラーを状態ワードに設定して巻き戻し、番兵を受け取るフレームから実行を続ける。
+    /// 巻き戻さずに終了するエラーは、そのまま返す。
     fn exec(&mut self, st: &mut St) -> Result<Word, Stop> {
         loop {
             match self.exec_inner(st) {
@@ -2074,7 +2121,7 @@ impl<'p> Interp<'p> {
         use op::*;
         loop {
             let code = st.code;
-            // SAFETY: Code は self.codes の Box の中にあり、動かない。
+            // SAFETY: Code は self.codes の Box の中にあり、移動しない。
             let w: &[u32] = unsafe { &(*code).words };
             let pc = st.pc;
             let w0 = w[pc];
@@ -2158,7 +2205,7 @@ impl<'p> Interp<'p> {
                     st.pc += 3;
                 }
                 DEPTH_ENTER => {
-                    // SAFETY: fp は今のフレームの見出しを指す。
+                    // SAFETY: fp は現在のフレームのヘッダを指す。
                     unsafe { *st.fp.add(1) = self.rt.depth };
                     st.pc += 1;
                 }
@@ -2176,7 +2223,7 @@ impl<'p> Interp<'p> {
                     st.pc += 1;
                 }
                 DEPTH_RESTORE => {
-                    // SAFETY: fp は今のフレームの見出しを指す。
+                    // SAFETY: fp は現在のフレームのヘッダを指す。
                     self.rt.depth = unsafe { *st.fp.add(1) };
                     st.pc += 1;
                 }
@@ -2485,12 +2532,12 @@ impl<'p> Interp<'p> {
                     st.pc += 3;
                 }
                 REF_GET => {
-                    // SAFETY: 前提により値は Ref の箱である。
+                    // SAFETY: 命令の前提により、値は Ref のオブジェクトである。
                     put!(1, unsafe { keleut_rt::value::get(gw!(2), 1) });
                     st.pc += 3;
                 }
                 REF_SET => {
-                    // SAFETY: 前提により値は Ref の箱である。
+                    // SAFETY: 命令の前提により、値は Ref のオブジェクトである。
                     unsafe { keleut_rt::value::set(gw!(1), 1, g!(2)) };
                     st.pc += 3;
                 }
@@ -2566,9 +2613,9 @@ impl<'p> Interp<'p> {
                 CONSOLE_WRITE => {
                     let s = gw!(2);
                     let bytes = self.rt.str_bytes(s);
-                    // 文字列の箱は動かず回収されないので、写さずに渡す。
+                    // 文字列オブジェクトは移動せず、解放もされないので、コピーせずに渡す。
                     let bytes: &[u8] =
-                        // SAFETY: bytes は生きている文字列の箱の中を指す。
+                        // SAFETY: bytes は生きている文字列オブジェクトの中を指す。
                         unsafe { std::slice::from_raw_parts(bytes.as_ptr(), bytes.len()) };
                     self.rt.out.write(bytes)?;
                     put!(1, Word::UNIT.0);
@@ -2624,7 +2671,8 @@ impl<'p> Interp<'p> {
     }
 }
 
-/// `error` の命令の実行時エラー(付録 B の文面)。`opnd` は被演算子のスロットの語(無ければ何でもよい)。
+/// `error` の命令の実行時エラーを作る(メッセージは IRSpec 付録 B が定める)。
+/// `opnd` はオペランドのスロットのワードで、オペランドのないエラーでは使わない。
 pub(crate) fn runtime_error(prog: &Program, rt: &Rt<'_>, kind: &RtError, opnd: u64) -> Stop {
     let show = |w: Word| rt.show(w);
     let msg: Vec<u8> = match kind {
@@ -2666,7 +2714,7 @@ pub(crate) fn runtime_error(prog: &Program, rt: &Rt<'_>, kind: &RtError, opnd: u
     Stop::Runtime(msg)
 }
 
-/// 比べ方の細目 `sub` を順序の結果に当てる。
+/// 比較のサブコード `sub`(0 から順に eq、lt、le、gt、ge)を、順序 `o` に適用した結果を返す。
 #[inline]
 fn cmp(sub: u32, o: std::cmp::Ordering) -> bool {
     use std::cmp::Ordering::*;

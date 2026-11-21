@@ -1,86 +1,100 @@
-//! ネイティブの後段(M91 の LLVM の JIT)とインタプリタの境目(計画 261024-1 の 6.8 節、6.9 節)。
+//! ネイティブバックエンド(LLVM の JIT)とインタプリタの境界。
 //!
-//! JIT の関数は 2 つの入口を持つ。
-//! 値スタックで引数を受け取る入口 `tailcc i64 @f(ptr %ctx)` と、
-//! 環境と前の [`REG_ARGS`] 個の引数をレジスタで受け取る入口 `tailcc i64 @f.r(ptr %ctx, i64 %env, i64 %x0, …, i64 %x3)` である。
-//! 戻り値はどちらも一様な語か番兵(`0x2`)である。
-//! `ctx` は [`NativeCtx`] で、呼び出しの相手と、呼ばれた側のフレームの位置を運ぶ。
-//! フレームは分割値スタックに置き、形はインタプリタと同じである(`keleut_rt::stack`)。
+//! JIT の関数は 2 つのエントリを持つ。
+//! 値スタック渡しのエントリ `tailcc i64 @f(ptr %ctx)` は、引数を値スタックのスロットで受け取る。
+//! レジスタ渡しのエントリ `tailcc i64 @f.r(ptr %ctx, i64 %env, i64 %x0, …, i64 %x3)` は、環境と先頭の [`REG_ARGS`] 個の引数をレジスタで受け取る。
+//! 返り値はどちらも、一様表現の値(Rep `any` の値を持つ 1 ワード)か、番兵(`0x2`。状態ワードが設定されていることを表す値で、`doc/lir.md` の 16.1 節が定める)である。
+//! `ctx` は [`NativeCtx`] で、呼び出し先の関数の番号と、呼び出し先のフレームの位置を伝える。
+//! フレームは分割値スタックに置き、レイアウトはインタプリタと同じである(`keleut_rt::stack`)。
 //!
-//! ## 呼び出しの規約
+//! ## 呼び出し規約
 //!
-//! 呼ぶ側は、呼ばれた側のフレームを置いてから(JIT は [`krt_prep`] かその場の速い道、インタプリタは自分で置く)、
-//! [`NativeCtx`] の `callee`、`cur_pos`、`cur_fp` を書く。
-//! 値スタックの入口(入口の表 `entry[callee]`)を呼ぶときは、引数をすべてスロットに書き、`env` も文脈に書く。
-//! JIT の関数どうしの直接の呼び出しとクロージャの呼び出しは、レジスタの入口の表 `rentry[callee]` を呼ぶ。
-//! このときは、前の [`REG_ARGS`] 個の引数と環境をレジスタで渡し、残りの引数だけをスロットに書く。
-//! レジスタの入口の表は、はじめスタブ `interp_stub_r` を指す。
-//! `interp_stub_r` は [`krt_store_regs`] でレジスタの引数をスロットに、環境を文脈に書いてから `interp_stub` へ移る。
-//! 値スタックの入口は、スロットと文脈から引数と環境を読んでレジスタの入口へ移る。
-//! レジスタの入口は、引数をスロットに書かずに走る。
-//! インタプリタに移るとき(スタックの下限と `alternating`)はレジスタの引数をスロットに、環境を文脈に書いてから移る。
-//! `$rt_handle` は 0 番のスロットがどの点でも根なので(`doc/lir.md` の 1.8 節)、入口でレジスタの引数をスロットに書く。
-//! そのほかのスロットは、生きているレジスタを再開点と安全点の前に書くので、入口で書かなくてよい。
+//! 呼び出し元は、まず呼び出し先のフレームを置く。
+//! JIT のコードは、[`krt_prep`] を呼ぶか、その場で置く(後で述べる高速経路)。
+//! インタプリタは自分で置く。
+//! 次に、[`NativeCtx`] の `callee`、`cur_pos`、`cur_fp` を書く。
+//! 値スタック渡しのエントリ(エントリテーブル `entry[callee]`)を呼ぶときは、引数をすべてスロットに書き、環境もコンテキストの `env` に書く。
+//! JIT の関数どうしの直接呼び出しとクロージャの呼び出しは、レジスタ渡しのエントリテーブル `rentry[callee]` を呼ぶ。
+//! このときは、先頭の [`REG_ARGS`] 個の引数と環境をレジスタで渡し、残りの引数だけをスロットに書く。
+//! レジスタ渡しのエントリテーブルの項目は、はじめスタブ `interp_stub_r` を指す。
+//! `interp_stub_r` は、[`krt_store_regs`] でレジスタの引数をスロットに、環境をコンテキストに書いてから、`interp_stub` を `musttail` で呼ぶ。
+//! 値スタック渡しのエントリは、スロットとコンテキストから引数と環境を読んで、レジスタ渡しのエントリに制御を移す。
+//! レジスタ渡しのエントリは、引数をスロットに書かずに実行を始める。
+//! インタプリタでの実行に切り替えるとき(ネイティブスタックの残りが少ないときと、`alternating` で選ばれたとき)は、レジスタの引数をスロットに、環境をコンテキストに書いてから切り替える。
+//! `$rt_handle` は 0 番のスロットがどの点でもルートなので(`doc/lir.md` の 1.8 節)、入口でレジスタの引数をスロットに書く。
+//! それ以外の関数は、生存しているレジスタを再開点と安全点の前にスロットに書くので、入口では書かなくてよい。
 //!
-//! 呼ばれる側のフレームが値スタックの使っている最後の塊(文脈の `win`)に収まるとき、JIT のコードは [`krt_prep`] を呼ばずに、
-//! その場で見出しと文脈の欄を書く(速い道)。
-//! 自分のフレームも同じ塊にあることを確かめるので、置く位置は [`krt_prep`] と同じになる。
-//! 呼ぶ相手を実行時に知るクロージャの呼び出しは、フレームの語の数を文脈の `frames` の列から読む。
-//! 末尾の呼び出しは、自分のフレームの位置に置き直して `musttail` で呼ぶ。
+//! 呼び出し先のフレームが、値スタックの使用中の最後のチャンク(コンテキストの `win`)に収まるとき、JIT のコードは [`krt_prep`] を呼ばずに、その場でフレームヘッダとコンテキストのフィールドを書く。
+//! これを、フレームを置く高速経路(fast path)と呼ぶ。
+//! 高速経路は、自分のフレームも同じチャンクにあることを検査するので、フレームを置く位置は [`krt_prep`] と同じになる。
+//! 呼び出し先が実行時に決まるクロージャの呼び出しでは、呼び出し先のフレームのワード数をコンテキストの `frames` の配列から読む。
+//! 末尾呼び出しは、呼び出し先のフレームを自分のフレームの位置に置いて、`musttail` で呼ぶ。
 //!
-//! 箱(`box`)、`ctor_new`、`rec_new` の小さな箱は、JIT のコードが実行時の関数を呼ばずに、
-//! 文脈の `heap` のヒープの空きリストか切り出しの位置から 1 区画を取る(確保の速い道。`keleut_rt::heap` の冒頭)。
-//! 実行の役割の印(`keleut_rt::alloc`)が立っているとき、前の回収の後に確保した量が回収の時機に届いたとき、
-//! 区画が空きリストにも切り出し中のページにも無いときは、取らずに実行時の関数を呼ぶ。
-//! 速い道は回収を起こさないので、安全点を記録せず(フレームを置く速い道が `krt_prep` を呼ばないのと同じ)、
-//! 実行時の関数を呼ぶ道だけが安全点を記録する。
-//! `--gc-stress` のときは速い道を作らない。
-//! フレームの見出しの 3 番の語には、どの境目でも本当の呼び出し元のフレームの位置を書く。
-//! そのため、回収と継続は、インタプリタと JIT がネイティブのスタックの上で入れ子になっていても、
-//! 値スタックの呼び出し元の鎖だけをたどればよい。
-//! 鎖が [`keleut_rt::stack::NATIVE_CALLER`] で終わるのは、Rust から入る [`Interp::run`] の起動(初期化の駆動と、構造的な `Eq` の入れ子)だけである。
+//! `box`、`ctor_new`、`rec_new` が作る小さなオブジェクトは、JIT のコードがランタイム関数を呼ばずに確保する。
+//! コンテキストの `heap` が指すヒープの空きリストかバンプポインタから、セルを 1 個確保する。
+//! これを、確保の高速経路と呼ぶ(`keleut_rt::heap` のモジュールの説明を参照)。
+//! 次のどれかに当てはまるときは、その場で確保せずにランタイム関数を呼ぶ。
 //!
-//! 入口の表は、JIT の関数を翻訳したものと、インタプリタに入るスタブ `interp_stub` を指す。
-//! `interp_stub` は [`krt_interp_run`] を呼び、インタプリタの起動を始める。
-//! 起動の最下段のフレームが JIT の関数を末尾で呼ぶと、起動は [`TAILREQ`] を返し、スタブがその関数を `musttail` で呼ぶ。
-//! インタプリタが JIT の関数を末尾でなく呼ぶときは、スタブ `enter_tailcc`(ccc)を通して普通に呼ぶ。
+//! - 実行スレッドのフラグ(`keleut_rt::alloc`)が立っている。
+//! - 前の GC の後に確保した量が、GC を始めるしきい値に達している。
+//! - 空きリストにも、バンプ割り当て中のページにも、空きセルがない。
+//!
+//! 確保の高速経路は GC を起こさないので、安全点を記録しない。
+//! これは、フレームを置く高速経路が [`krt_prep`] を呼ばないのと同じである。
+//! ランタイム関数を呼ぶ経路だけが安全点を記録する。
+//! `--gc-stress` のときは、確保の高速経路を生成しない。
+//!
+//! フレームヘッダの 3 番のワードには、どの境界でも、実際の呼び出し元のフレームの位置を書く。
+//! そのため、GC と継続の処理は、インタプリタと JIT がネイティブスタックの上で入れ子になっていても、値スタックの呼び出し元を順にたどるだけでよい。
+//! この連鎖が [`keleut_rt::stack::NATIVE_CALLER`] で終わるのは、Rust から [`Interp::run`] で入ったフレームだけである。
+//! ネイティブバックエンドを付けた実行で [`Interp::run`] を呼ぶのは、トップレベルの初期化コードの実行と、構造的な `Eq` の比較(入れ子に呼ぶ)である。
+//!
+//! エントリテーブルの項目は、コンパイル済みの JIT の関数か、インタプリタに入るスタブ `interp_stub` を指す。
+//! `interp_stub` は [`krt_interp_run`] を呼び、インタプリタのディスパッチループを新しく呼び出す。
+//! その呼び出しの最下段のフレームが JIT の関数を末尾呼び出しで呼ぶと、ディスパッチループは [`TAILREQ`] を返し、スタブがその関数を `musttail` で呼ぶ。
+//! インタプリタが JIT の関数を非末尾呼び出しで呼ぶときは、スタブ `enter_tailcc`(呼び出し規約は `ccc`)を通して、通常の呼び出しで呼ぶ。
 //!
 //! ## 番兵とエフェクト
 //!
-//! JIT の関数は、ふつうの呼び出しの後に番兵を受け取ったら、呼び出し元の深さに書き戻して自分も番兵で戻る([`krt_sentinel`])。
-//! `YIELD` のときは、フレームは値スタックに残り、継続に写される。
-//! 写し戻した継続はインタプリタが続ける(脱最適化)。
-//! そのため JIT は、末尾でない呼び出しの前に、生きているレジスタをスロットに書き、見出しに再開点を書く。
+//! JIT の関数は、通常の呼び出しから番兵が返ったら、コンテキストの深さを自分のフレームの深さに書き戻して、自分も番兵を返す([`krt_sentinel`])。
+//! 状態ワード(`doc/lir.md` の 16.1 節)が `YIELD` のときは、フレームは値スタックに残り、継続にコピーされる。
+//! 値スタックに復元した継続のフレームは、インタプリタが続きを実行する(脱最適化)。
+//! そのため JIT のコードは、非末尾呼び出しの前に、生存しているレジスタをスロットに書き、フレームヘッダに再開点を書く。
 //!
-//! `handle`、`resume`、`perform` の下ろし(エフェクトの命令とブロックの終わり。`doc/lir.md` の 16 節)を含む関数も JIT にする。
-//! エフェクトの命令は、被演算子をスロットに書いてから実行時の関数 [`krt_fx`] を呼び、インタプリタの同じ命令を 1 つだけ走らせる。
-//! 呼び出しの一種(`perform`、番兵を受け取る呼び出し)は、[`krt_fx`] が呼ばれる側のフレームを置き、JIT のコードが入口の表から呼ぶ。
-//! 番兵を受け取る呼び出しは、番兵なら深さを書き戻して番兵を結果にする。
-//! `perform` は、戻りを [`krt_perform_back`] に渡して節の選択の結果を状態語にする。
-//! 継続の再開(`cont_resume`)は、写し戻した区間を [`krt_fx`] の中のインタプリタで走らせ、その結果を呼び出しの結果にする。
-//! JIT のコードは再開点の入口を持たないからである(計画 6.8 節)。
-//! エフェクトのブロックの終わりは [`krt_fx_term`] で、末尾で呼ぶ終わりは置いたフレームを `musttail` で呼ぶ。
+//! `handle`、`resume`、`perform` を LIR に変換して得られるエフェクトの命令と終端命令(`doc/lir.md` の 16 節)を含む関数も、JIT でコンパイルする。
+//! エフェクトの命令では、JIT のコードがオペランドをスロットに書いてからランタイム関数 [`krt_fx`] を呼び、[`krt_fx`] がインタプリタの同じ命令を 1 つだけ実行する。
+//! 呼び出しの一種である命令(`perform` と、番兵を受け取る呼び出し)では、[`krt_fx`] が呼び出し先のフレームを置き、JIT のコードがエントリテーブルを通して呼ぶ。
+//! 番兵を受け取る呼び出しは、番兵が返ったら深さを書き戻して、番兵を命令の結果にする。
+//! `perform` は、返り値を [`krt_perform_back`] に渡す。
+//! [`krt_perform_back`] は、番兵が返っていれば、節の選択の結果を状態ワードに設定する。
+//! 継続の再開(`cont_resume`)は、値スタックに復元した区間(継続にしたフレームの範囲)を [`krt_fx`] の中のインタプリタで実行し、その結果を呼び出しの結果にする。
+//! JIT のコードは、フレームを再開点から続けるためのエントリを持たないからである。
+//! エフェクトの終端命令は [`krt_fx_term`] を呼ぶ。
+//! 末尾呼び出しの終端命令では、[`krt_fx_term`] が置いたフレームを `musttail` で呼ぶ。
 //!
-//! 巻き戻さずに止まる誤り(未実装、内部の誤り、防壁の flush の失敗)は、[`Native::fatal`] に置いて番兵で戻る。
-//! インタプリタはネイティブの呼び出しから戻るたびにこれを確かめ、Rust の `Err` にして止まる。
+//! 巻き戻さずに終了するエラー(未実装、内部エラー、防壁の flush の失敗)は、[`Native::fatal`] に保存して番兵を返す。
+//! 防壁は、`cancel` 節の実行中に、伝播中の状態を退避して守る手順である(`doc/lir.md` の 16.4 節)。
+//! インタプリタは、ネイティブの呼び出しから戻るたびに [`Native::fatal`] を調べ、エラーがあれば Rust の `Err` として返して終了する。
 //!
-//! ## 段の切り替え(計画 6.9 節)
+//! ## ティアの切り替え
 //!
-//! 関数ごとに入口の表の項目と状態を持つ。
-//! 入口の表の項目は、はじめ `interp_stub` を指し、翻訳のスレッドが翻訳を終えたときに 1 回だけ原子的に書き換える。
-//! 段の設定([`TierMode`])は次のとおりである。
+//! 関数ごとに、エントリテーブルの項目と状態を持つ。
+//! エントリテーブルの項目は、はじめ `interp_stub` を指す。
+//! コンパイルスレッドは、関数のコンパイルを終えたときに、その項目を 1 回だけアトミックに書き換える。
+//! ティアの設定([`TierMode`]。コマンド行では `--tier`)は次のとおりである。
 //!
-//! | 設定 | 翻訳する関数 | 段の選び方 |
+//! | 設定 | コンパイルする関数 | ティアの選び方 |
 //! | --- | --- | --- |
-//! | `jit-only` | JIT にできるすべての関数を、初めて呼ぶときに | 翻訳した関数は JIT のコードで走る |
-//! | `threshold=N` | インタプリタで `N` 回呼んだ関数を、翻訳のスレッドで(待たずに) | 翻訳が済んだ後の呼び出しから JIT のコードで走る |
-//! | `alternating=SEED` | `jit-only` と同じ | JIT の関数の入口ごとに、種から決まる擬似乱数で、インタプリタに移るかを選ぶ |
-//! | `mixed=SEED` | 種で決まる半分の関数([`mixed_selects`])を、初めて呼ぶときに | 翻訳した関数は JIT のコードで走る |
+//! | `jit-only` | JIT でコンパイルできるすべての関数を、初めて呼ぶときに | コンパイルした関数は JIT のコードで実行する |
+//! | `threshold=N` | インタプリタで `N` 回呼んだ関数を、コンパイルスレッドで(完了を待たない) | コンパイルが済んだ後の呼び出しから JIT のコードで実行する |
+//! | `alternating=SEED` | `jit-only` と同じ | JIT の関数に入るたびに、シードから決まる擬似乱数で、インタプリタでの実行に切り替えるかどうかを選ぶ |
+//! | `mixed=SEED` | シードで決まるおよそ半分の関数([`mixed_selects`])を、初めて呼ぶときに | コンパイルした関数は JIT のコードで実行する |
 //!
-//! 回数は、インタプリタが関数に入るたびに 1 増やす(自己の末尾呼び出しでフレームを再利用する場合も数える)。
-//! `threshold=N` では、翻訳のスレッドの起動(LLJIT の作成とスタブの翻訳)を待たずに走り始める([`Native::set_pending_init`])。
-//! JIT の関数の入口でインタプリタに移るときは、文脈の `force_interp` に理由を書いて `interp_stub` を `musttail` で呼ぶ。
-//! 理由は、ネイティブのスタックが下限に近いこと([`SOFT_MARGIN`])と、`alternating` の選びである。
+//! 呼び出しの回数は、インタプリタが関数に入るたびに 1 増やす。
+//! 自分自身への末尾呼び出しでフレームを再利用する場合も数える。
+//! `threshold=N` では、コンパイルスレッドの起動(LLJIT の作成とスタブのコンパイル)を待たずにプログラムの実行を始める([`Native::set_pending_init`])。
+//! JIT の関数の入口でインタプリタでの実行に切り替えるときは、コンテキストの `force_interp` に理由を書いて、`interp_stub` を `musttail` で呼ぶ。
+//! 理由は、ネイティブスタックの残りが少ないこと([`SOFT_MARGIN`])か、`alternating` で選ばれたことである。
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -92,66 +106,72 @@ use keleut_rt::{CalleeView, DictView, Stop, Word};
 
 use crate::interp::{Interp, NativeFx, PHASE, runtime_error, unimpl_prim};
 
-/// 起動の最下段のフレームが JIT の関数を末尾で呼んだことを表す、[`krt_interp_run`] の戻り値(一様な語にも番兵にもならない語)。
+/// [`krt_interp_run`] の返り値の 1 つで、ディスパッチループの呼び出しの最下段のフレームが JIT の関数を末尾呼び出しで呼んだことを表す。
+///
+/// 一様表現の値とも番兵とも重ならないワードである。
 pub const TAILREQ: Word = Word(0x4);
 
-/// 引数の受け渡しの領域の語の数。これより多い引数を渡す関数は JIT にしない。
+/// 引数の受け渡し用のバッファのワード数。
+///
+/// これより多い引数を受け取る関数と、これより多いワードをこのバッファで渡す命令を含む関数は、JIT でコンパイルしない([`jit_eligible`])。
 pub const ARG_WORDS: usize = 1024;
 
-/// JIT のコードと実行時の関数が共有する文脈。JIT は欄を [`off`] の位置で読み書きする。
+/// JIT のコードとランタイム関数が共有するコンテキスト。JIT のコードは、[`off`] のオフセットでフィールドを読み書きする。
 #[repr(C)]
 pub struct NativeCtx {
-    /// インタプリタ(`*mut Interp`)。
+    /// インタプリタへのポインタ(`*mut Interp`)。
     pub interp: *mut std::ffi::c_void,
-    /// 呼ぶ関数の番号。
+    /// 呼び出し先の関数の番号。
     pub callee: u64,
-    /// 呼ぶ関数の環境(クロージャ。無ければ 0)。
+    /// 呼び出し先の環境(クロージャ)。なければ 0 である。
     pub env: u64,
-    /// 呼ばれた側のフレームの論理的な位置。
+    /// 呼び出し先のフレームの論理的な位置。
     pub cur_pos: u64,
-    /// 呼ばれた側のフレームの見出しへのポインタ。
+    /// 呼び出し先のフレームヘッダへのポインタ。
     pub cur_fp: *mut u64,
-    /// 文脈の深さ `ctx.depth` の場所。
+    /// コンテキストの深さ `ctx.depth` へのポインタ。
     pub depth: *mut u64,
-    /// 今の限度の場所。
+    /// 現在の深さの上限へのポインタ。
     pub limit: *mut u64,
-    /// ネイティブのスタックの下限の番地(予備の検査。0 なら検査しない)。
+    /// ネイティブスタックの下限のアドレス。スタック残量の検査に使い、0 なら検査しない。
     pub stack_low: u64,
-    /// 引数の受け渡しの領域([`ARG_WORDS`] 語)。
+    /// 引数の受け渡し用のバッファ([`ARG_WORDS`] ワード)。
     pub args: *mut u64,
-    /// 実行時の関数が返す値([`krt_dispatch`] の [`dispatch::VALUE`])。
+    /// ランタイム関数が返す値。
+    ///
+    /// [`krt_dispatch`] が [`dispatch::VALUE`] を返したときと、[`krt_fx`] が [`fx::VALUE`] か [`fx::REDELIVER`] を返したときに、JIT のコードが読む。
     pub result: u64,
-    /// 大域の値の列。
+    /// グローバルの値の配列。
     pub globals: *mut u64,
-    /// 大域の初期化済みの印の列(1 バイトずつ)。
+    /// グローバルの初期化済みフラグの配列(1 バイトずつ)。
     pub global_init: *mut u8,
-    /// 文字列の定数の箱の列。
+    /// 文字列定数のオブジェクトの配列。
     pub strings: *const u64,
-    /// ネイティブのスタックの、JIT の関数を走らせる下限の番地([`SOFT_MARGIN`]。0 なら検査しない)。
+    /// ネイティブスタックのアドレスで、スタックがこれを下回ったら JIT の関数をインタプリタで実行する([`SOFT_MARGIN`])。0 なら検査しない。
     pub stack_soft: u64,
-    /// `interp_stub` の番地。
+    /// `interp_stub` のアドレス。
     pub stub: u64,
-    /// 0 でなければ、[`krt_interp_run`] は関数を翻訳せずにインタプリタで走らせる。
+    /// 0 でなければ、[`krt_interp_run`] は関数をコンパイルせずにインタプリタで実行する。
     ///
-    /// 1 はネイティブのスタックが下限に近いこと、2 は `alternating` の選びである。
+    /// 1 はネイティブスタックの残りが少ないこと、2 は `alternating` で選ばれたことを表す。
     pub force_interp: u64,
-    /// `alternating` の擬似乱数の状態(xorshift64)。0 なら段を選ばない(ほかの設定)。
+    /// `alternating` の擬似乱数の状態(xorshift64)。`alternating` 以外の設定では 0 で、JIT の関数の入口でティアを選ばない。
     pub alt: u64,
-    /// 値スタックの使っている最後の塊の範囲([`keleut_rt::stack::StackWindow`])。
+    /// 値スタックの使用中の最後のチャンクの範囲([`keleut_rt::stack::StackWindow`])。
     ///
-    /// JIT のコードは、呼ばれる側のフレームがこの範囲に収まるとき、[`krt_prep`] を呼ばずにその場でフレームを置く。
+    /// JIT のコードは、呼び出し先のフレームがこの範囲に収まるとき、[`krt_prep`] を呼ばずにその場でフレームを置く。
     pub win: *mut keleut_rt::stack::StackWindow,
-    /// 関数の番号ごとの、フレームの語の数と見出しの 2 番の語の 2 語の列。
+    /// 関数の番号ごとに 2 ワードずつ並べた配列。2 ワードは、フレームのワード数と、フレームヘッダの 2 番のワードに書く値である。
     ///
-    /// 呼ぶ相手を実行時に知る呼び出し(クロージャ)も、JIT のコードがその場でフレームを置くために読む。
+    /// 呼び出し先が実行時に決まる呼び出し(クロージャ)でも、JIT のコードがその場でフレームを置けるように、この配列を読む。
     pub frames: *const u64,
     /// GC のヒープ(`keleut_rt::heap::Heap`)。
     ///
-    /// JIT のコードの確保の速い道が、`keleut_rt::heap::fast` の位置で欄を読み書きする。
+    /// JIT のコードの確保の高速経路が、`keleut_rt::heap::fast` のオフセットでフィールドを読み書きする。
     pub heap: *mut keleut_rt::heap::Heap,
 }
 
-/// [`NativeCtx`] の欄のバイトの位置。
+/// [`NativeCtx`] のフィールドのオフセット(バイト)。
 #[allow(missing_docs)]
 pub mod off {
     pub const CALLEE: u64 = 8;
@@ -175,99 +195,107 @@ pub mod off {
     pub const HEAP: u64 = 152;
 }
 
-/// ネイティブのスタックの残りがこの量(バイト)を予備の検査の余裕に足したものより少なくなったら、
-/// 関数を JIT のコードでなくインタプリタで走らせる。
+/// ネイティブスタックのアドレスが、スタック残量の検査の下限(コンテキストの `stack_low`)にこのバイト数を足したアドレス(`stack_soft`)を下回ったら、関数を JIT のコードでなくインタプリタで実行する。
 ///
-/// JIT の関数の末尾でない再帰はネイティブのスタックを使うが、インタプリタの中の呼び出しは使わない。
-/// 小さな `--native-stack` でも、論理的な深さの限度まで再帰できるようにする(計画 6.11 節の予備の検査に先に届かない)。
-/// JIT の関数の入口がこの下限を下回ったら、置いたフレームのままインタプリタの起動に移る(入口での脱最適化)。
+/// JIT の関数の非末尾の再帰はネイティブスタックを使うが、インタプリタの中の呼び出しは使わない。
+/// そのため、小さな `--native-stack` でも、スタック残量の検査で終了する前に、論理的な深さの上限まで再帰できる。
+/// JIT の関数は、入口でスタックが `stack_soft` を下回っていたら、置いてあるフレームのままインタプリタでの実行に切り替える(入口での脱最適化)。
 pub const SOFT_MARGIN: u64 = 64 * 1024;
 
-/// [`krt_dispatch`] の操作と結果。
+/// [`krt_dispatch`] に渡す操作の番号と、[`krt_dispatch`] が返す結果。
 pub mod dispatch {
-    /// 値を呼ぶ(`call_value`)。
+    /// 関数値を呼ぶ(`call_value`)。
     pub const OP_VALUE: u64 = 0;
     /// 辞書からメソッドを選んで呼ぶ(`call_method`)。
     pub const OP_METHOD: u64 = 1;
     /// 辞書を渡す(`dict_app`)。
     pub const OP_DICTAPP: u64 = 2;
-    /// 末尾の呼び出しの印。
+    /// 末尾呼び出しであることを表すフラグ。操作の番号に足す。
     pub const TAIL: u64 = 8;
-    /// 呼ぶ関数のフレームを置いた。`entry[ctx.callee]` を呼ぶ。
+    /// 呼び出し先のフレームを置いた。JIT のコードは `entry[ctx.callee]` を呼ぶ。
     pub const CALL: i64 = 0;
-    /// 実装の関数のフレームを置いた(末尾でなく呼ぶ)。戻った値を `OP_VALUE` でもう一度渡す。
+    /// メソッドの実装の関数のフレームを置いた。JIT のコードは非末尾呼び出しで呼び、返った値を `OP_VALUE` でもう一度渡す。
     pub const PHASE: i64 = 1;
-    /// 値が `ctx.result` にある(構造的な `Eq` の結果、`extern` への `dict_app`)。
+    /// 結果の値が `ctx.result` にある。構造的な `Eq` の比較の結果か、`extern` の値への `dict_app` の結果である。
     pub const VALUE: i64 = 2;
-    /// 状態語を立てた。番兵で戻る。
+    /// 状態ワードを設定したか、巻き戻さずに終了するエラーを保存した。JIT のコードは番兵を返す。
     pub const ERR: i64 = 3;
 }
 
-/// [`krt_fx`] と [`krt_fx_term`] の結果。
+/// [`krt_fx`] と [`krt_fx_term`] が返す結果。
 pub mod fx {
-    /// 結果を書き先のスロットに書いた。次の命令へ進む。
+    /// 結果を書き込み先のスロットに書いた。JIT のコードは次の命令へ進む。
     pub const NEXT: i64 = 0;
-    /// 状態語を立てたか、致命的な誤りを置いた。番兵で戻る。
+    /// 状態ワードを設定したか、巻き戻さずに終了するエラーを保存した。JIT のコードは番兵を返す。
     pub const ERR: i64 = 1;
-    /// 呼ぶ関数のフレームを置いた。`entry[ctx.callee]` を呼ぶ([`super::krt_fx_term`] では `musttail` で呼ぶ)。
+    /// 呼び出し先のフレームを置いた。JIT のコードは `entry[ctx.callee]` を呼ぶ([`super::krt_fx_term`] の結果なら `musttail` で呼ぶ)。
     pub const CALL: i64 = 2;
-    /// 呼び出しの結果が `ctx.result` にある(継続の再開)。
+    /// 呼び出しの結果が `ctx.result` にある。継続の再開(`cont_resume`)の結果である。
     pub const VALUE: i64 = 3;
-    /// 見出しの再開点の呼び出しの結果が `ctx.result` にある(`cont_make` の失敗。見出しの再開点から続ける)。
+    /// フレームヘッダの再開点が指す呼び出しの結果が `ctx.result` にある。
+    ///
+    /// `cont_make` が継続を作れなかったときの結果で、JIT のコードはフレームヘッダの再開点から続ける。
     pub const REDELIVER: i64 = 4;
 }
 
 /// Rust から tailcc の関数を呼ぶスタブ `enter_tailcc` の型。
 pub type EnterFn = unsafe extern "C" fn(*mut NativeCtx, usize) -> u64;
 
-/// 翻訳のスレッドの起動の結果(`interp_stub` と `enter_tailcc` の番地)を待って受け取る関数。
+/// コンパイルスレッドの起動が済むのを待ち、その結果(`interp_stub` と `enter_tailcc` のアドレス)を受け取る関数。
 pub type PendingInit = Box<dyn FnMut() -> Result<(u64, EnterFn), String> + Send>;
 
-/// 段の設定(計画 6.9 節の `--tier`。`interp-only` はネイティブの後段を付けないことで表す)。
+/// ティアの設定(`--tier`)。
+///
+/// `interp-only` に相当するバリアントはない。
+/// `interp-only` のときは、インタプリタにネイティブバックエンドを付けない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TierMode {
-    /// JIT にできる関数を、初めて呼ぶときにすべて翻訳する。
+    /// JIT でコンパイルできる関数はどれも、初めて呼ぶときにコンパイルする。
     JitOnly,
-    /// インタプリタで `N` 回呼んだ関数の翻訳を、翻訳のスレッドに頼む(待たない)。
+    /// インタプリタで `N` 回呼んだ関数のコンパイルを、コンパイルスレッドに依頼する。完了は待たない。
     Threshold(u64),
-    /// `jit-only` と同じに翻訳し、JIT の関数の入口ごとに、種から決まる擬似乱数で段を選ぶ。
+    /// `jit-only` と同じようにコンパイルし、JIT の関数に入るたびに、シードから決まる擬似乱数でティアを選ぶ。
     Alternating(u64),
-    /// 種で決まる半分の関数([`mixed_selects`])だけを、初めて呼ぶときに翻訳する。
+    /// シードで決まるおよそ半分の関数([`mixed_selects`])だけを、初めて呼ぶときにコンパイルする。
     Mixed(u64),
 }
 
-/// 翻訳のスレッドへの頼み口。
+/// コンパイルスレッドにコンパイルを依頼する関数と、失敗の通知。
 pub struct Translator {
-    /// 関数の翻訳を頼む。第 2 引数が真なら済むまで待って入口の番地を返し、偽なら待たずに `None` を返す。
+    /// 関数のコンパイルを依頼する。
     ///
-    /// 翻訳のスレッドは、翻訳を終えたら入口の表の項目を書き換える。
-    /// 次の 2 つのときは、翻訳のスレッドはその関数を翻訳せず、待つ頼みに番地 0 を返し、待たない頼みでは入口の表を書き換えない。
-    /// どちらの頼みの関数もインタプリタで続ける。
+    /// 第 2 引数が真なら、完了を待ってエントリのアドレスを返す(完了を待つ依頼)。
+    /// 偽なら、待たずに `None` を返す(完了を待たない依頼)。
+    /// コンパイルスレッドは、コンパイルを終えたらエントリテーブルの項目を書き換える。
     ///
-    /// - 翻訳のスレッドが翻訳をやめた後。
-    ///   翻訳の役割が大域の確保器の予備を使ったときと、翻訳の前に予備が無く取り直せないときにやめる(`keleut_rt::alloc`)。
-    ///   やめる前に翻訳した関数は、JIT のコードのまま走る。
-    /// - `RLIMIT_AS` が有限で、仮想の大きさの残りが `JIT_AS_ROOM`(64 MiB)を下回るとき。
-    ///   その関数だけを翻訳せず、次の頼みでまた残りを調べる。
+    /// 次の 2 つの場合、コンパイルスレッドはその関数をコンパイルしない。
+    /// 完了を待つ依頼にはアドレス 0 を返し、完了を待たない依頼ではエントリテーブルを書き換えない。
+    /// どちらの依頼でも、その関数はインタプリタで実行を続ける。
+    ///
+    /// - コンパイルスレッドがコンパイルをやめた後。
+    ///   コンパイルスレッドは、グローバルアロケータの予備領域を自分が使ったときと、コンパイルの前に予備領域がなく、確保し直すこともできないときに、コンパイルをやめる(`keleut_rt::alloc`)。
+    ///   やめる前にコンパイルした関数は、JIT のコードのまま実行する。
+    /// - `RLIMIT_AS` が有限で、仮想メモリの残りが `JIT_AS_ROOM`(64 MiB)を下回るとき。
+    ///   その関数だけをコンパイルせず、次の依頼でまた残りを調べる。
     pub request: Box<dyn FnMut(FuncId, bool) -> Result<Option<usize>, String>>,
-    /// 待たない頼みの翻訳が失敗したときの印と文面。
+    /// 完了を待たない依頼のコンパイルが失敗したことを表すフラグと、そのエラーメッセージ。
     pub failure: Arc<(AtomicBool, Mutex<Option<String>>)>,
 }
 
-/// 関数の段の状態。
+/// 関数ごとのティアの状態。
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
     /// まだ決めていない。
     Unknown,
-    /// インタプリタで走らせる。
+    /// インタプリタで実行する。
     Interp,
-    /// 翻訳を頼んだ(待たない頼み)。入口の表が書き換わったら翻訳済みになる。
+    /// コンパイルを依頼した(完了を待たない依頼)。エントリテーブルの項目が書き換わったらコンパイル済みになる。
     Requested,
-    /// 翻訳した(番地は入口の表にある)。
+    /// コンパイル済みである。エントリのアドレスはエントリテーブルにある。
     Compiled,
 }
 
-/// splitmix64 の 1 段。
+/// splitmix64 の 1 回分の計算。
 fn mix(mut z: u64) -> u64 {
     z = z.wrapping_add(0x9e37_79b9_7f4a_7c15);
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
@@ -275,85 +303,89 @@ fn mix(mut z: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// `mixed=SEED` で関数 `f` を翻訳するか(種と関数の番号から決まる、およそ半分の関数)。
+/// `mixed=SEED` で関数 `f` をコンパイルするなら真を返す。
+///
+/// 結果はシードと関数の番号だけで決まり、およそ半分の関数で真になる。
 pub fn mixed_selects(seed: u64, f: FuncId) -> bool {
     mix(mix(seed) ^ u64::from(f.0)) & 1 == 1
 }
 
-/// `alternating=SEED` の擬似乱数の初めの状態(0 にならない)。
+/// `alternating=SEED` の擬似乱数の初期状態を返す。0 にはならない。
 pub fn alternating_state(seed: u64) -> u64 {
     mix(seed ^ 0x5eed) | 1
 }
 
-/// ネイティブの後段の状態(インタプリタが持つ)。
+/// ネイティブバックエンドの状態。インタプリタが持つ。
 pub struct Native {
-    /// 文脈。
+    /// JIT のコードとランタイム関数に渡すコンテキスト。
     pub ctx: NativeCtx,
-    /// 入口の表(関数の番号ごとの番地)。JIT のコードはこの表の番地を定数として持つ。
+    /// エントリテーブル。関数の番号ごとにエントリのアドレスを持つ。JIT のコードは、この表のアドレスを定数として持つ。
     pub entry: Arc<[AtomicUsize]>,
     enter: EnterFn,
-    /// 翻訳のスレッドの起動を待たずに走り始めたとき、起動の結果(`interp_stub` と `enter_tailcc` の番地)を受け取る関数。
+    /// コンパイルスレッドの起動を待たずに実行を始めたときに、起動の結果(`interp_stub` と `enter_tailcc` のアドレス)を受け取る関数。
     ///
-    /// 入口の表の項目は、起動が済むまで 0 で、起動が済むと `interp_stub` を指す。
-    /// ミューテータは、頼んだ関数の項目が 0 でなくなったときに初めてこれを呼ぶ([`Native::set_pending_init`])。
+    /// エントリテーブルの項目は、起動が済むまでは 0 で、起動が済むと `interp_stub` を指す。
+    /// ミューテータは、コンパイルを依頼した関数の項目が 0 でなくなったのを見たときに、この関数を 1 回だけ呼ぶ([`Native::set_pending_init`])。
     pending: Option<PendingInit>,
     state: Vec<State>,
     eligible: Vec<bool>,
     counts: Vec<u64>,
-    /// 段の設定。
+    /// ティアの設定。
     pub mode: TierMode,
     translator: Translator,
     frames: Vec<(usize, u64)>,
-    /// `ctx.frames` が指す列。
+    /// `ctx.frames` が指す配列。
     _frame_tab: Box<[u64]>,
-    /// 巻き戻さずに止まる誤り。
+    /// 巻き戻さずに終了するエラー。ランタイム関数が保存し、インタプリタがネイティブの呼び出しから戻ったときに取り出す。
     pub fatal: Option<Stop>,
-    /// 引数の受け渡しの領域(`ctx.args` が指す)。
+    /// 引数の受け渡し用のバッファ。`ctx.args` が指す。
     _args: Box<[u64]>,
-    /// 翻訳した関数の数(終わるときに入口の表から数え直す)。
+    /// コンパイルした関数の個数。ドロップするときにエントリテーブルから数え直す。
     pub compiled: usize,
-    /// JIT の関数の入口がスタックの下限に近く、インタプリタに移った回数。
+    /// JIT の関数の入口でネイティブスタックの残りが少なく、インタプリタでの実行に切り替えた回数。
     pub low_stack_entries: u64,
-    /// JIT の関数の入口で、`alternating` の選びでインタプリタに移った回数。
+    /// JIT の関数の入口で、`alternating` で選ばれてインタプリタでの実行に切り替えた回数。
     pub alt_entries: u64,
-    /// `interp_stub` からインタプリタの起動に入った回数。
+    /// `interp_stub` から [`krt_interp_run`] に入った回数。
     pub stub_entries: u64,
-    /// 起動の最下段が JIT の関数を末尾で呼び、起動を抜けた回数([`TAILREQ`])。
+    /// ディスパッチループの呼び出しの最下段のフレームが JIT の関数を末尾呼び出しで呼び、ディスパッチループを抜けた回数([`TAILREQ`])。
     pub tail_requests: u64,
-    /// 実行時の関数とネイティブの呼び出しが見たネイティブのスタックの最も深い番地(計測用)。
+    /// ランタイム関数とネイティブの呼び出しが観測した、ネイティブスタックの最も深いアドレス(計測用)。
     pub min_sp: usize,
-    /// 同じ時点で見た文脈の深さの最大(計測用)。
+    /// 同じ時点で観測した、コンテキストの深さの最大値(計測用)。
     pub max_depth_seen: u64,
-    /// 最初のネイティブの呼び出しの直前のスタックの番地(計測用)。
+    /// 最初のネイティブの呼び出しの直前のスタックのアドレス(計測用)。
     pub sp0: usize,
 }
 
-/// 直近の実行の [`Native::low_stack_entries`](試験用)。
+/// 直近の実行の [`Native::low_stack_entries`](テスト用)。
 pub static LAST_LOW_STACK_ENTRIES: AtomicU64 = AtomicU64::new(0);
-/// 直近の実行の [`Native::compiled`](試験用)。
+/// 直近の実行の [`Native::compiled`](テスト用)。
 pub static LAST_COMPILED: AtomicU64 = AtomicU64::new(0);
-/// 直近の実行の [`Native::alt_entries`](試験用)。
+/// 直近の実行の [`Native::alt_entries`](テスト用)。
 pub static LAST_ALT_ENTRIES: AtomicU64 = AtomicU64::new(0);
-/// 直近の実行の [`Native::stub_entries`](試験用)。
+/// 直近の実行の [`Native::stub_entries`](テスト用)。
 pub static LAST_STUB_ENTRIES: AtomicU64 = AtomicU64::new(0);
-/// 直近の実行の [`Native::tail_requests`](試験用)。
+/// 直近の実行の [`Native::tail_requests`](テスト用)。
 pub static LAST_TAIL_REQUESTS: AtomicU64 = AtomicU64::new(0);
-/// 直近の実行で、ネイティブの呼び出しの入口から見たネイティブのスタックの使用量(バイト。試験用)。
+/// 直近の実行で、最初のネイティブの呼び出しの直前から測った、ネイティブスタックの使用量(バイト。テスト用)。
 pub static LAST_STACK_USED: AtomicU64 = AtomicU64::new(0);
 
-/// JIT にする関数の翻訳の重さの上限([`jit_cost`] の値)。
+/// JIT でコンパイルする関数に許す、コンパイルの重み([`jit_cost`] の値)の上限。
 ///
-/// これを超える関数はインタプリタに残す。
-/// 翻訳の時間は重さのおよそ 1.3 乗で増え、重さ 4 万から 9 万の関数で 0.6 秒から 1.7 秒かかった(`default<O2>`)。
-/// 上限は、上限の近くの関数の翻訳が 1 秒ほどで終わるように選んだ。
-/// `conformance/` の試験の関数の重さは 600 に届かない。
+/// これを超える関数はインタプリタで実行する。
+/// コンパイルの時間は重みのおよそ 1.3 乗に比例して増え、実測では、重み 4 万から 9 万の関数で 0.6 秒から 1.7 秒かかった(`default<O2>`)。
+/// 上限は、重みが上限に近い関数のコンパイルが 1 秒ほどで終わるように選んだ。
+/// `conformance/` のテストの関数の重みは 600 に満たない。
 pub const JIT_COST_MAX: u64 = 50_000;
 
-/// 関数の翻訳の重さの見積もり。
+/// 関数のコンパイルの重みを見積もる。
 ///
-/// 命令とブロックの終わりの数に、安全点と再開点の数とスロットの数の積を足したものである。
-/// 安全点と再開点のそれぞれで生きているレジスタをスロットに書くので、出す LLVM IR の大きさはおよそ後の項に比例する。
-/// 生きているレジスタの数はスロットの数を超えないので、後の項は書く数の上限である。
+/// 安全点と再開点の個数の合計にスロット数を掛け、それを命令と終端命令の個数に足した値である。
+/// JIT のコードは、安全点と再開点のそれぞれで、生存しているレジスタをスロットに書く。
+/// そのため、生成する LLVM IR のサイズは、およそ積の項に比例する。
+/// 生存しているレジスタの個数はスロット数を超えないので、積の項は、スロットに書く回数の上限である。
+/// フレームの情報(`frame`)がない関数の重みは 0 である。
 pub fn jit_cost(f: &Func) -> u64 {
     let Some(fr) = f.frame.as_ref() else {
         return 0;
@@ -364,10 +396,15 @@ pub fn jit_cost(f: &Func) -> u64 {
     insts.saturating_add(points.saturating_mul(slots))
 }
 
-/// 関数を JIT にできるか。
+/// 関数を JIT でコンパイルできるなら真を返す。
 ///
-/// 引数の受け渡しの領域に入らない呼び出しを含む関数と、翻訳が重すぎる関数([`JIT_COST_MAX`])はインタプリタに残す。
-/// エフェクトの命令とブロックの終わりを含む関数も JIT にする(冒頭の「番兵とエフェクト」)。
+/// 次の関数は偽で、インタプリタで実行する。
+///
+/// - フレームの情報(`frame`)がない関数。
+/// - 引数の個数が、受け渡し用のバッファのワード数([`ARG_WORDS`])を超える関数と、オペランドがこのバッファに入らない命令か終端命令を含む関数。
+/// - コンパイルの重みが上限([`JIT_COST_MAX`])を超える関数。
+///
+/// エフェクトの命令と終端命令を含む関数は、JIT でコンパイルできる(モジュールの説明の「番兵とエフェクト」)。
 pub fn jit_eligible(f: &Func) -> bool {
     if f.frame.is_none() || f.params.len() > ARG_WORDS {
         return false;
@@ -420,20 +457,20 @@ pub fn jit_eligible(f: &Func) -> bool {
 }
 
 impl Native {
-    /// 翻訳のスレッドの起動を待たずに走り始める(`threshold=N`)。
+    /// コンパイルスレッドの起動を待たずに実行を始めるときに、起動の結果を受け取る関数 `init` を設定する(`threshold=N`)。
     ///
-    /// 入口の表の項目は起動が済むまで 0 で、そのあいだは翻訳済みの関数が無い。
-    /// 頼んだ関数の項目が 0 でなくなったら、`init` で起動の結果を受け取ってから JIT のコードを呼ぶ。
+    /// エントリテーブルの項目は起動が済むまで 0 で、その間はコンパイル済みの関数がない。
+    /// コンパイルを依頼した関数の項目が 0 でなくなったら、`init` で起動の結果を受け取ってから JIT のコードを呼ぶ。
     pub fn set_pending_init(&mut self, init: PendingInit) {
         self.pending = Some(init);
     }
 }
 
 impl Drop for Native {
-    /// 環境変数 `KELEUT_JIT_STATS` があれば、翻訳した関数の数を標準エラーに書く。
+    /// テスト用の統計(`LAST_*`)を保存する。環境変数 `KELEUT_JIT_STATS` があれば、コンパイルした関数の個数などの統計を標準エラーに書く。
     fn drop(&mut self) {
         let used = self.sp0.saturating_sub(self.min_sp);
-        // 待たない頼みで翻訳した関数は、ミューテータが入口を調べる前に JIT のコードから呼ばれうるので、入口の表で数える。
+        // 完了を待たない依頼でコンパイルした関数は、ミューテータがエントリテーブルの項目を調べる前に JIT のコードから呼ばれることがあるので、エントリテーブルで数える。
         let stub = self.ctx.stub as usize;
         self.compiled = self
             .entry
@@ -467,9 +504,11 @@ impl Drop for Native {
 }
 
 impl Native {
-    /// プログラム `prog` のネイティブの後段の状態を作る。
+    /// プログラム `prog` のネイティブバックエンドの状態を作る。
     ///
-    /// `entry` は関数の数の長さの入口の表で、どの項目もはじめは `interp_stub` の番地を指す。
+    /// `entry` は、関数の個数と同じ長さのエントリテーブルである。
+    /// どの項目も、はじめは `interp_stub` を指す。
+    /// コンパイルスレッドの起動を待たないときは、起動が済むまで 0 である([`Native::set_pending_init`])。
     pub fn new(
         prog: &Program,
         entry: Arc<[AtomicUsize]>,
@@ -547,23 +586,24 @@ impl Native {
 }
 
 impl<'p> Interp<'p> {
-    /// ネイティブの後段を付ける。
+    /// インタプリタにネイティブバックエンドを付ける。
     pub fn set_native(&mut self, n: Box<Native>) {
         self.native = Some(n);
     }
 
-    /// 関数 `f` を JIT のコードで走らせるなら、入口の番地を返す。
+    /// 関数 `f` を JIT のコードで実行するなら、エントリのアドレスを返す。
     ///
-    /// インタプリタが関数に入るたびに呼ぶ(冒頭の「段の切り替え」)。
-    /// `threshold` では回数を数え、しきい値に届いたら翻訳を頼む。
-    /// ほかの設定では、翻訳する関数を初めて呼ぶときに翻訳し、済むまで待つ。
+    /// インタプリタが関数に入るたびに呼ぶ(モジュールの説明の「ティアの切り替え」)。
+    /// `threshold` では呼び出しの回数を数え、しきい値に達したらコンパイルを依頼する。
+    /// それ以外の設定では、コンパイルする関数を初めて呼ぶときにコンパイルを依頼し、完了を待つ。
+    /// ネイティブスタックの残りが少ないときは、コンパイル済みの関数でも `None` を返す([`SOFT_MARGIN`])。
     pub(crate) fn native_target(&mut self, f: FuncId) -> Result<Option<usize>, Stop> {
         let Some(n) = self.native.as_mut() else {
             return Ok(None);
         };
         if self.stack_low != 0 && crate::interp::approx_sp() < self.stack_low + SOFT_MARGIN as usize
         {
-            // ネイティブのスタックが下限に近い。JIT の関数もインタプリタで走らせる([`SOFT_MARGIN`])。
+            // ネイティブスタックの残りが少ない。JIT の関数もインタプリタで実行する([`SOFT_MARGIN`])。
             return Ok(None);
         }
         let i = f.index();
@@ -575,7 +615,7 @@ impl<'p> Interp<'p> {
                 if e != 0
                     && let Some(mut init) = n.pending.take()
                 {
-                    // 翻訳のスレッドの起動が済んだ。スタブと入口の番地を受け取る。
+                    // コンパイルスレッドの起動が済んだ。`interp_stub` と `enter_tailcc` のアドレスを受け取る。
                     let (stub, enter) = init().map_err(|m| {
                         Stop::Internal(format!("LLVM の JIT を始められません: {m}"))
                     })?;
@@ -635,7 +675,7 @@ impl<'p> Interp<'p> {
                 ))
             })?;
         if addr == 0 {
-            // 翻訳のスレッドが翻訳をやめた。この関数はインタプリタで続ける。
+            // コンパイルスレッドがこの関数をコンパイルしなかった。この関数はインタプリタで実行を続ける。
             n.state[i] = State::Interp;
             return Ok(None);
         }
@@ -644,10 +684,10 @@ impl<'p> Interp<'p> {
         Ok(Some(addr))
     }
 
-    /// 文脈のポインタの欄を今の `self` から書き直す。
+    /// コンテキストのポインタのフィールドを、現在の `self` から書き直す。
     ///
     /// ネイティブの呼び出しの直前に呼ぶ。
-    /// JIT と実行時の関数は、この呼び出しの間、ここで書いたポインタを通してインタプリタと実行時を読み書きする。
+    /// JIT のコードとランタイム関数は、その呼び出しの間、ここで書いたポインタを通してインタプリタとランタイムを読み書きする。
     fn native_ctx(&mut self) -> *mut NativeCtx {
         let me = self as *mut Interp<'p> as *mut std::ffi::c_void;
         let low = self.stack_low as u64;
@@ -670,7 +710,10 @@ impl<'p> Interp<'p> {
         &mut n.ctx
     }
 
-    /// 置いたフレーム(位置 `pos`、見出し `fp`)の関数 `func` を、入口 `addr` からネイティブに呼ぶ。
+    /// 関数 `func` の JIT のコードを、エントリ `addr` から呼ぶ。
+    ///
+    /// フレームは、位置 `pos`(フレームヘッダは `fp`)に置いてある。
+    /// 呼び出しの間に、巻き戻さずに終了するエラーが保存されていたら、それを `Err` で返す。
     pub(crate) fn call_native(
         &mut self,
         addr: usize,
@@ -681,7 +724,7 @@ impl<'p> Interp<'p> {
     ) -> Result<Word, Stop> {
         sample(self);
         let ctx = self.native_ctx();
-        // SAFETY: ctx は self.native の中の文脈で、ここで書いた欄は呼び出しの間生きている。
+        // SAFETY: ctx は self.native の中のコンテキストを指し、ここで書いたフィールドは呼び出しの間有効である。
         let r = unsafe {
             (*ctx).callee = u64::from(func.0);
             (*ctx).cur_pos = pos;
@@ -697,7 +740,9 @@ impl<'p> Interp<'p> {
         Ok(Word(r))
     }
 
-    /// 起動の最下段から JIT の関数 `func`(フレームは位置 `pos` に置いた)を末尾で呼ぶ依頼を文脈に書く。
+    /// ディスパッチループの呼び出しの最下段のフレームが JIT の関数 `func` を末尾呼び出しで呼ぶという依頼を、コンテキストに書く。
+    ///
+    /// 関数 `func` のフレームは、位置 `pos` に置いてある。
     pub(crate) fn native_request(&mut self, func: FuncId, env: Word, pos: u64, fp: *mut u64) {
         let n = self.native.as_mut().expect("ネイティブの後段がある");
         n.ctx.callee = u64::from(func.0);
@@ -706,7 +751,9 @@ impl<'p> Interp<'p> {
         n.ctx.env = env.0;
     }
 
-    /// [`Interp::run`] の起動の最下段が残した末尾呼び出しの依頼を、ネイティブに呼んで終える。
+    /// ディスパッチループの呼び出しの最下段のフレームが残した末尾呼び出しの依頼を実行する。
+    ///
+    /// 依頼された JIT の関数を呼び、その結果を返す。
     pub(crate) fn call_native_request(&mut self) -> Result<Word, Stop> {
         let n = self.native.as_mut().expect("ネイティブの後段がある");
         n.tail_requests += 1;
@@ -717,19 +764,19 @@ impl<'p> Interp<'p> {
     }
 }
 
-// ---- 実行時の関数(JIT のコードが呼ぶ) ----
+// ---- ランタイム関数(JIT のコードが呼ぶ) ----
 
-/// 実行時の関数の本体 `f` を走らせ、panic を JIT のフレームの手前で止める。
+/// ランタイム関数の本体 `f` を実行し、パニックが JIT のフレームに伝わらないようにする。
 ///
-/// JIT のフレームは巻き戻しの表を持たず、`extern "C"` の関数から panic が出ると Rust はプロセスを abort する。
-/// そこで panic を捕まえ、標準出力のバッファを吐き出し、インタプリタの後段で実行のスレッドが落ちたときと同じ診断を出して 70 で終わる。
-/// panic の後のインタプリタの状態は信用できないので、JIT のコードには戻らない。
+/// JIT のフレームはスタックのアンワインド用の表(unwind table)を持たず、`extern "C"` の関数からパニックが外に出ると、Rust はプロセスを abort する。
+/// そこでパニックを捕捉し、標準出力のバッファを flush し、インタプリタバックエンドで実行スレッドがパニックしたときと同じ診断を出して、終了コード 70 で終了する。
+/// パニックの後のインタプリタの状態は信用できないので、JIT のコードには戻らない。
 fn guarded<R>(ctx: *mut NativeCtx, f: impl FnOnce() -> R) -> R {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(r) => r,
         Err(_) => {
             let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                // SAFETY: ctx は呼び出しの最中の文脈で、この後 JIT のコードには戻らない。
+                // SAFETY: ctx はネイティブの呼び出しの最中のコンテキストで、この後 JIT のコードには戻らない。
                 let it = unsafe { interp(ctx) };
                 let _ = it.rt.out.flush();
             }));
@@ -739,13 +786,13 @@ fn guarded<R>(ctx: *mut NativeCtx, f: impl FnOnce() -> R) -> R {
     }
 }
 
-/// 文脈からインタプリタを取り出す。
+/// コンテキストからインタプリタへの参照を得る。
 ///
 /// # Safety
 ///
-/// `ctx` は [`Interp::native_ctx`] が書いた文脈で、ネイティブの呼び出しの最中である。
+/// `ctx` は [`Interp::native_ctx`] が書いたコンテキストで、ネイティブの呼び出しの最中である。
 unsafe fn interp<'a>(ctx: *mut NativeCtx) -> &'a mut Interp<'static> {
-    // SAFETY: 呼び出し側の約束による。インタプリタは呼び出しの間動かない。
+    // SAFETY: 事前条件により、ctx.interp は有効な Interp を指す。Interp は呼び出しの間移動しない。
     unsafe { &mut *((*ctx).interp as *mut Interp<'static>) }
 }
 
@@ -753,7 +800,7 @@ fn native<'a>(it: &'a mut Interp<'_>) -> &'a mut Native {
     it.native.as_mut().expect("ネイティブの後段がある")
 }
 
-/// ネイティブのスタックの番地と文脈の深さを記録する(計測用。`KELEUT_JIT_STATS`)。
+/// ネイティブスタックのアドレスとコンテキストの深さを記録する(計測用。`KELEUT_JIT_STATS`)。
 #[inline]
 fn sample(it: &mut Interp<'_>) {
     let sp = crate::interp::approx_sp();
@@ -763,7 +810,7 @@ fn sample(it: &mut Interp<'_>) {
     n.max_depth_seen = n.max_depth_seen.max(depth);
 }
 
-/// 致命的な誤りを置く(最初のものを残す)。
+/// 巻き戻さずに終了するエラーを保存する。すでに保存してあれば、最初のものを残す。
 fn set_fatal(it: &mut Interp<'_>, s: Stop) {
     let n = native(it);
     if n.fatal.is_none() {
@@ -771,7 +818,7 @@ fn set_fatal(it: &mut Interp<'_>, s: Stop) {
     }
 }
 
-/// 誤りを状態語にする。巻き戻さずに止まる誤りなら致命的な誤りにする。
+/// エラーを状態ワードに設定する。巻き戻さずに終了するエラーなら、[`set_fatal`] で保存する。
 fn fail(it: &mut Interp<'_>, s: Stop) {
     if let Err(f) = it.rt.raise(s) {
         set_fatal(it, f);
@@ -782,7 +829,10 @@ fn bug(m: &str) -> Stop {
     Stop::Internal(m.to_string())
 }
 
-/// フレームを位置 `at` に置き、見出しを書く。呼び出し元の今のフレームは位置 `me` にある。
+/// 関数 `fid` のフレームを位置 `at` に置き、フレームヘッダとコンテキストのフィールドを書く。
+///
+/// 呼び出し元の現在のフレームは位置 `me` にある。
+/// 値スタックを拡張できなければ、メモリ不足のエラーを状態ワードに設定して `None` を返す。
 fn place(
     it: &mut Interp<'_>,
     ctx: *mut NativeCtx,
@@ -797,7 +847,7 @@ fn place(
     match it.rt.stack.place(at, fw) {
         Ok(pos) => {
             let p = it.rt.stack.ptr_at(pos);
-            // SAFETY: p からフレームの語の数だけ塊の中にあり、ctx は呼び出しの最中の文脈である。
+            // SAFETY: p からフレームのワード数の分はチャンクの中にあり、ctx はネイティブの呼び出しの最中のコンテキストである。
             unsafe {
                 *p = fid;
                 *p.add(1) = 0;
@@ -817,15 +867,16 @@ fn place(
     }
 }
 
-/// JIT の関数が関数 `fid` を呼ぶ前に、そのフレームを位置 `at` に置く(見出しの 3 番の語は `caller`)。
+/// JIT の関数が関数 `fid` を呼ぶ前に、そのフレームを位置 `at` に置く。フレームヘッダの 3 番のワードには `caller` を書く。
 ///
-/// 呼ぶ側の今のフレームは位置 `me` にある。
-/// 置いたフレームの見出しへのポインタを返し、文脈の `callee`、`cur_pos`、`cur_fp`、`env` を書く。
-/// 値スタックを広げられなければメモリの不足を状態語にして空のポインタを返す(呼ぶ側の命令の失敗)。
+/// 呼び出し元の現在のフレームは位置 `me` にある。
+/// 置いたフレームのヘッダへのポインタを返し、コンテキストの `callee`、`cur_pos`、`cur_fp`、`env` を書く。
+/// 値スタックを拡張できなければ、メモリ不足のエラーを状態ワードに設定して null ポインタを返す。
+/// これは、呼び出し元の命令の失敗として扱う。
 ///
 /// # Safety
 ///
-/// JIT のコードから、ネイティブの呼び出しの最中に呼ぶ。
+/// JIT のコードが、ネイティブの呼び出しの最中に、その呼び出しのコンテキストを渡して呼ぶ。
 pub unsafe extern "C" fn krt_prep(
     ctx: *mut NativeCtx,
     fid: u64,
@@ -835,18 +886,20 @@ pub unsafe extern "C" fn krt_prep(
     env: u64,
 ) -> *mut u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         sample(it);
         place(it, ctx, fid, me, at, caller, env).unwrap_or(std::ptr::null_mut())
     })
 }
 
-/// レジスタの入口のスタブ `interp_stub_r` が、レジスタで渡された引数を置いたフレーム(文脈の `cur_fp`)のスロットに書き、環境を文脈に書く。
+/// レジスタで渡された引数を、置いてあるフレーム(コンテキストの `cur_fp`)のスロットに書き、環境をコンテキストに書く。
+///
+/// レジスタ渡しのエントリのスタブ `interp_stub_r` が呼ぶ。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_store_regs(
     ctx: *mut NativeCtx,
     env: u64,
@@ -856,9 +909,9 @@ pub unsafe extern "C" fn krt_store_regs(
     x3: u64,
 ) {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
-        // SAFETY: ctx は生きている文脈で、cur_fp は置いたフレームを指す。
+        // SAFETY: ctx は有効なコンテキストで、cur_fp は置いてあるフレームを指す。
         unsafe {
             let fid = (*ctx).callee as usize;
             let n = it.prog.funcs[fid].params.len().min(REG_ARGS);
@@ -871,25 +924,30 @@ pub unsafe extern "C" fn krt_store_regs(
     })
 }
 
-/// レジスタで渡す引数の数(`ctx` と環境とあわせて、x86-64 の引数のレジスタ 6 つに収まる)。
+/// レジスタで渡す引数の個数。`ctx` と環境を合わせて、x86-64 の引数レジスタ 6 個に収まる。
 pub const REG_ARGS: usize = 4;
 
-/// JIT のフレーム(見出しは `fp`)の末尾でない呼び出しが番兵で戻った。
+/// JIT のフレーム(フレームヘッダは `fp`)の非末尾呼び出しから番兵が返ったときに呼ぶ。
 ///
-/// 深さをこのフレームの深さに書き戻し、状態語がこのフレームに届いてよいものかを確かめる
-/// (`yields` が 0 の再開点に `YIELD` が届いたら内部の誤り。`doc/lir.md` の 16.1 節、17 節)。
+/// コンテキストの深さをこのフレームの深さに書き戻し、状態ワードがこのフレームに届いてよいものかを検査する。
+/// 次の場合は、内部エラーを巻き戻さずに終了するエラーとして保存する(`doc/lir.md` の 16.1 節、17 節)。
+///
+/// - `yields` が 0 の再開点に `YIELD` が届いた。
+/// - 操作節の関数とその呼び出し元の間だけで使う目印(`clause_matched`、`clause_value`、`tail_resume`)が、通常の呼び出しに届いた。
+///
+/// 巻き戻さずに終了するエラーがすでに保存されていれば、何もしない。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_sentinel(ctx: *mut NativeCtx, fp: *mut u64, yields: u64) {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         if native(it).fatal.is_some() {
             return;
         }
-        // SAFETY: fp はこのフレームの見出しを指す。
+        // SAFETY: fp はこのフレームのヘッダを指す。
         it.rt.depth = unsafe { *fp.add(1) };
         let e = match &it.rt.pending {
             keleut_rt::effect::Pending::Yield { .. } if yields == 0 => Some(bug(
@@ -908,19 +966,22 @@ pub unsafe extern "C" fn krt_sentinel(ctx: *mut NativeCtx, fp: *mut u64, yields:
     })
 }
 
-/// `interp_stub` から入るインタプリタの起動。
+/// `interp_stub` から入り、インタプリタのディスパッチループを呼び出す。
 ///
-/// フレームは呼び出し側が置き、文脈の `callee`、`cur_pos`、`cur_fp`、`env` に書いてある。
-/// 関数が JIT にできるものなら(`jit-only`)ここで翻訳し、[`TAILREQ`] を返してスタブに呼ばせる。
+/// フレームは呼び出し元が置き、コンテキストの `callee`、`cur_pos`、`cur_fp`、`env` を書いてある。
+/// `force_interp` が 0 で、関数を JIT のコードで実行できるなら、ディスパッチループを呼ばずに [`TAILREQ`] を返し、スタブにその関数を呼ばせる。
+/// `jit-only` などの設定では、このときに関数をコンパイルする。
+/// それ以外は、関数をインタプリタで実行し、最下段のフレームが返した値か番兵、または [`TAILREQ`] を返す。
+/// 巻き戻さずに終了するエラーが起きたら、それを保存して番兵を返す。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_interp_run(ctx: *mut NativeCtx) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
-        // SAFETY: ctx は生きている文脈である。
+        // SAFETY: ctx は有効なコンテキストである。
         let (func, env, pos, fp) = unsafe {
             (
                 FuncId((*ctx).callee as u32),
@@ -929,7 +990,7 @@ pub unsafe extern "C" fn krt_interp_run(ctx: *mut NativeCtx) -> u64 {
                 (*ctx).cur_fp,
             )
         };
-        // SAFETY: ctx は生きている文脈である。
+        // SAFETY: ctx は有効なコンテキストである。
         let forced = unsafe { std::mem::replace(&mut (*ctx).force_interp, 0) };
         native(it).stub_entries += 1;
         match forced {
@@ -951,8 +1012,8 @@ pub unsafe extern "C" fn krt_interp_run(ctx: *mut NativeCtx) -> u64 {
         if matches!(r, Ok(v) if v == TAILREQ) {
             native(it).tail_requests += 1;
         }
-        // 起動の中のネイティブの呼び出しが文脈のポインタを書き直したので、戻る前にこの起動のものに戻す必要は無い
-        // (どの欄も同じ Interp と Rt を指す)。
+        // ディスパッチループの中のネイティブの呼び出しがコンテキストのポインタを書き直しているが、
+        // どのフィールドも同じ Interp と Rt を指すので、戻る前に書き戻す必要はない。
         match r {
             Ok(v) => v.0,
             Err(e) => {
@@ -963,7 +1024,7 @@ pub unsafe extern "C" fn krt_interp_run(ctx: *mut NativeCtx) -> u64 {
     })
 }
 
-/// 値を呼ぶ相手を決める([`krt_dispatch`] の中)。
+/// [`krt_dispatch`] の処理の状態。呼び出し先を決めて、そのフレームを置く。
 struct Disp<'a, 'p> {
     it: &'a mut Interp<'p>,
     ctx: *mut NativeCtx,
@@ -974,10 +1035,10 @@ struct Disp<'a, 'p> {
 }
 
 impl Disp<'_, '_> {
-    /// 自分のフレームの見出し、関数、フレームの語の数、呼び出し元。
+    /// 自分のフレームについて、フレームヘッダへのポインタ、フレームの直後の位置、フレームヘッダの 3 番のワード(呼び出し元のフレームの位置)を返す。
     fn frame(&mut self) -> (*mut u64, u64, u64) {
         let fp = self.it.rt.stack.ptr_at(self.me);
-        // SAFETY: fp は今のフレームの見出しを指す。
+        // SAFETY: fp は現在のフレームのヘッダを指す。
         let (fid, w3) = unsafe { (*fp & 0xffff_ffff, *fp.add(3)) };
         let fw = native(self.it).frames[fid as usize].0 as u64;
         (fp, self.me + fw, w3)
@@ -985,11 +1046,11 @@ impl Disp<'_, '_> {
 
     fn set_row(&mut self, row: u32) {
         let (fp, _, _) = self.frame();
-        // SAFETY: fp は今のフレームの見出しを指す。
+        // SAFETY: fp は現在のフレームのヘッダを指す。
         unsafe { *fp = (*fp & 0xffff_ffff) | (u64::from(row) << 32) };
     }
 
-    /// 関数 `func` を環境 `env` と引数で呼ぶフレームを置く。
+    /// 関数 `func` のフレームを置き、環境 `env` を設定して引数を書く。末尾呼び出しなら、自分のフレームの位置に置く。
     fn call(&mut self, func: FuncId, env: Word) -> i64 {
         let (_, top, w3) = self.frame();
         let (at, caller) = if self.tail {
@@ -1009,7 +1070,7 @@ impl Disp<'_, '_> {
             return dispatch::ERR;
         };
         for (i, a) in self.args.iter().enumerate() {
-            // SAFETY: 置いたフレームは関数の引数の数以上のスロットを持つ。
+            // SAFETY: 置いたフレームは、関数の引数の個数以上のスロットを持つ。
             unsafe { *p.add(HEADER_WORDS + i) = a.0 };
         }
         dispatch::CALL
@@ -1021,7 +1082,7 @@ impl Disp<'_, '_> {
     }
 
     fn value(&mut self, w: Word) -> i64 {
-        // SAFETY: ctx は生きている文脈である。
+        // SAFETY: ctx は有効なコンテキストである。
         unsafe { (*self.ctx).result = w.0 };
         dispatch::VALUE
     }
@@ -1070,8 +1131,8 @@ impl Disp<'_, '_> {
                 let func = im.func;
                 let mut dicts = premises;
                 dicts.extend_from_slice(own);
-                // 実装の関数を末尾でなく評価する。その間、見出しの再開点に印 PHASE を付け、
-                // 呼び出しの命令の被演算子(JIT がスロットに書いた)を根にする(`doc/lir.md` の 1.8 節)。
+                // メソッドの実装の関数を非末尾呼び出しで評価する。その間は、フレームヘッダの再開点に PHASE フラグを付け、
+                // 呼び出しの命令のオペランド(JIT のコードがスロットに書いてある)をルートにする(`doc/lir.md` の 1.8 節)。
                 self.set_row(self.row | PHASE);
                 let (_, top, _) = self.frame();
                 let Some(p) = place(
@@ -1086,7 +1147,7 @@ impl Disp<'_, '_> {
                     return dispatch::ERR;
                 };
                 for (i, a) in dicts.iter().enumerate() {
-                    // SAFETY: 置いたフレームは関数の引数の数以上のスロットを持つ。
+                    // SAFETY: 置いたフレームは、関数の引数の個数以上のスロットを持つ。
                     unsafe { *p.add(HEADER_WORDS + i) = a.0 };
                 }
                 dispatch::PHASE
@@ -1097,7 +1158,7 @@ impl Disp<'_, '_> {
                     return dispatch::ERR;
                 }
                 let (a, b) = (self.args[0], self.args[1]);
-                // 比べ方は確保し、利用者のコードを呼ぶ。見出しの再開点は呼び出しのもの(set_row 済み)。
+                // 構造的な Eq の比較は、メモリを確保し、ユーザのコードを呼ぶ。フレームヘッダの再開点には、この呼び出しの再開点を書いてある(set_row)。
                 self.it.rt.gc.at_frame(self.me);
                 let (_, top, _) = self.frame();
                 match self.it.eq_struct(class, d, a, b, top) {
@@ -1117,16 +1178,19 @@ impl Disp<'_, '_> {
     }
 }
 
-/// JIT の関数の、相手を実行時に決める呼び出し(`call_value`、`call_method`、`dict_app` と末尾の形)。
+/// JIT の関数の、呼び出し先が実行時に決まる呼び出しを処理する。
 ///
-/// `op` は [`dispatch`] の操作(末尾なら [`dispatch::TAIL`] を足す)、`me` は今のフレームの位置、
-/// `row` は見出しに書く再開点(末尾の形では末尾の形の行)、`x` は呼ぶ値か辞書、
-/// `cm` は `クラス << 32 | メソッド`、引数 `nargs` 個とメソッド自身の辞書 `nown` 個は文脈の引数の領域に並べてある。
-/// 結果は [`dispatch`] の `CALL`、`PHASE`、`VALUE`、`ERR` である。
+/// 対象は、`call_value`、`call_method`、`dict_app` と、末尾呼び出し版の `tail_call_value`、`tail_call_method` である。
+/// `op` は [`dispatch`] の操作の番号で、末尾呼び出しなら [`dispatch::TAIL`] を足す。
+/// `me` は現在のフレームの位置である。
+/// `row` はフレームヘッダに書く再開点で、末尾呼び出し版では、再開点の表の末尾呼び出し版の項目である。
+/// `x` は呼ぶ値か辞書、`cm` は `クラス << 32 | メソッド` である。
+/// 引数 `nargs` 個とメソッド自身の辞書 `nown` 個は、この順に、コンテキストの引数の受け渡し用のバッファに並べてある。
+/// 結果は [`dispatch`] の `CALL`、`PHASE`、`VALUE`、`ERR` のどれかである。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn krt_dispatch(
     ctx: *mut NativeCtx,
@@ -1139,11 +1203,11 @@ pub unsafe extern "C" fn krt_dispatch(
     nargs: u64,
 ) -> i64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         sample(it);
         let (nargs, nown) = (nargs as usize, nown as usize);
-        // SAFETY: 引数の領域は ARG_WORDS 語で、JIT は nargs + nown 語を書いた。
+        // SAFETY: 引数の受け渡し用のバッファは ARG_WORDS ワードで、JIT のコードは nargs + nown ワードを書いてある。
         let (args, own): (Vec<Word>, Vec<Word>) = unsafe {
             let p = (*ctx).args;
             (
@@ -1180,28 +1244,28 @@ pub unsafe extern "C" fn krt_dispatch(
     })
 }
 
-/// 深さの限度を超えた(`depth_check`、`depth_push`)。
+/// 論理的な深さが上限を超えたときに呼ぶ(`depth_check`、`depth_push`)。`depth_limit` のエラーを状態ワードに設定する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_depth_error(ctx: *mut NativeCtx) {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let s = it.rt.depth_error();
         fail(it, s);
     })
 }
 
-/// 関数 `fid` のブロック `blk` の終わり `error` の実行時エラーを起こす。`opnd` は被演算子の語。
+/// 関数 `fid` のブロック `blk` を終える終端命令 `error` が表す実行時エラーを、状態ワードに設定する。`opnd` はオペランドのワードである。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_error(ctx: *mut NativeCtx, fid: u64, blk: u64, opnd: u64) {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let prog = it.prog;
         let s = match &prog.funcs[fid as usize].blocks[blk as usize].term {
@@ -1212,14 +1276,16 @@ pub unsafe extern "C" fn krt_error(ctx: *mut NativeCtx, fid: u64, blk: u64, opnd
     })
 }
 
-/// 未実装の機能に届いた(`unimplemented`、`unimplemented_value`)。`inst` が `u64::MAX` ならブロックの終わり。
+/// 未実装の機能に達したときに呼ぶ(`unimplemented`、`unimplemented_value`)。
+///
+/// `inst` はブロック `blk` の中の命令の番号で、`u64::MAX` なら終端命令を表す。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_unimpl(ctx: *mut NativeCtx, fid: u64, blk: u64, inst: u64) {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let b = &it.prog.funcs[fid as usize].blocks[blk as usize];
         let what = if inst == u64::MAX {
@@ -1237,7 +1303,10 @@ pub unsafe extern "C" fn krt_unimpl(ctx: *mut NativeCtx, fid: u64, blk: u64, ins
     })
 }
 
-/// 確保する実行時の関数の共通の形。安全点を置いてから `f` を呼び、失敗なら状態語にして 0 を返す。
+/// メモリを確保するランタイム関数に共通の処理。
+///
+/// 安全点(フレームの位置 `me` と安全点の番号 `sp`)を記録してから `f` を呼ぶ。
+/// `f` が失敗したら、エラーを状態ワードに設定して 0 を返す。
 fn alloc_with(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1245,10 +1314,10 @@ fn alloc_with(
     f: impl FnOnce(&mut Interp<'static>, &[u64]) -> Result<Word, Stop>,
 ) -> u64 {
     guarded(ctx, || {
-        // SAFETY: JIT のコードから、ネイティブの呼び出しの最中に呼ばれる。
+        // SAFETY: JIT のコードが、ネイティブの呼び出しの最中に呼ぶ。
         let it = unsafe { interp(ctx) };
         it.rt.gc.at_safepoint(me, sp as u32);
-        // SAFETY: 引数の領域は ARG_WORDS 語ある。
+        // SAFETY: 引数の受け渡し用のバッファは ARG_WORDS ワードある。
         let args = unsafe { std::slice::from_raw_parts((*ctx).args, ARG_WORDS) };
         match f(it, args) {
             Ok(w) => w.0,
@@ -1260,11 +1329,11 @@ fn alloc_with(
     })
 }
 
-/// `box`(`i64` は `kind` 0、`f64` は 1)。
+/// `box` を実行する。`kind` が 0 なら `i64`、1 なら `f64` をボックス化する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_box(ctx: *mut NativeCtx, me: u64, sp: u64, kind: u64, v: u64) -> u64 {
     alloc_with(ctx, me, sp, |it, _| {
         if kind == 0 {
@@ -1275,11 +1344,11 @@ pub unsafe extern "C" fn krt_box(ctx: *mut NativeCtx, me: u64, sp: u64, kind: u6
     })
 }
 
-/// `str.concat`。
+/// `str.concat` を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_str_concat(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1290,11 +1359,11 @@ pub unsafe extern "C" fn krt_str_concat(
     alloc_with(ctx, me, sp, |it, _| it.rt.str_concat(Word(a), Word(b)))
 }
 
-/// `str.sub`。
+/// `str.sub` を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_str_sub(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1308,11 +1377,11 @@ pub unsafe extern "C" fn krt_str_sub(
     })
 }
 
-/// `show.i32`(0)、`show.i64`(1)、`show.f64`(2)、`show.bool`(3)。
+/// `op` に応じて、`show.i32`(0)、`show.i64`(1)、`show.f64`(2)、`show.bool`(3)を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_show(ctx: *mut NativeCtx, me: u64, sp: u64, op: u64, x: u64) -> u64 {
     alloc_with(ctx, me, sp, |it, _| {
         let s = match op {
@@ -1329,11 +1398,11 @@ fn words(a: &[u64], n: u64) -> Vec<Word> {
     a[..n as usize].iter().map(|&w| Word(w)).collect()
 }
 
-/// `ctor_new`(フィールドは引数の領域に `n` 個)。
+/// `ctor_new` を実行する。フィールドは、引数の受け渡し用のバッファに `n` 個ある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_ctor_new(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1347,11 +1416,11 @@ pub unsafe extern "C" fn krt_ctor_new(
     })
 }
 
-/// `variant_new`。
+/// `variant_new` を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_variant_new(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1364,11 +1433,11 @@ pub unsafe extern "C" fn krt_variant_new(
     })
 }
 
-/// `rec_new`(フィールドは引数の領域に `n` 個)。
+/// `rec_new` を実行する。フィールドは、引数の受け渡し用のバッファに `n` 個ある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_rec_new(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1381,11 +1450,11 @@ pub unsafe extern "C" fn krt_rec_new(
     })
 }
 
-/// `rec_extend`(0)、`rec_restrict`(1)、`rec_update`(2)。
+/// `op` に応じて、`rec_extend`(0)、`rec_restrict`(1)、`rec_update`(2)を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn krt_rec_op(
     ctx: *mut NativeCtx,
@@ -1406,11 +1475,11 @@ pub unsafe extern "C" fn krt_rec_op(
     })
 }
 
-/// `closure_new`(捕獲は引数の領域に `n` 個)。
+/// `closure_new` を実行する。キャプチャは、引数の受け渡し用のバッファに `n` 個ある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_closure_new(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1423,11 +1492,11 @@ pub unsafe extern "C" fn krt_closure_new(
     })
 }
 
-/// `method_new`(メソッド自身の辞書は引数の領域に `n` 個)。
+/// `method_new` を実行する。メソッド自身の辞書は、引数の受け渡し用のバッファに `n` 個ある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn krt_method_new(
     ctx: *mut NativeCtx,
@@ -1448,11 +1517,11 @@ pub unsafe extern "C" fn krt_method_new(
     })
 }
 
-/// `dict_inst`(前提の辞書は引数の領域に `n` 個)。
+/// `dict_inst` を実行する。前提の辞書は、引数の受け渡し用のバッファに `n` 個ある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_dict_inst(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1466,11 +1535,13 @@ pub unsafe extern "C" fn krt_dict_inst(
     })
 }
 
-/// `dict_record`(`kind` 0)と `dict_variant`(1)。項目は引数の領域に(ラベル、辞書)の順で `n` 組。
+/// `kind` が 0 なら `dict_record`、1 なら `dict_variant` を実行する。
+///
+/// 項目は、引数の受け渡し用のバッファに、ラベル、辞書の順で `n` 組ある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_dict_struct(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1491,20 +1562,20 @@ pub unsafe extern "C" fn krt_dict_struct(
     })
 }
 
-/// `ref_new`。
+/// `ref_new` を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_ref_new(ctx: *mut NativeCtx, me: u64, sp: u64, x: u64) -> u64 {
     alloc_with(ctx, me, sp, |it, _| it.rt.ref_new(Word(x)))
 }
 
-/// `marray_new`(`n` は `i32`)。
+/// `marray_new` を実行する。`n` は `i32` として読み、負なら 0 として扱う。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_marray_new(
     ctx: *mut NativeCtx,
     me: u64,
@@ -1518,23 +1589,26 @@ pub unsafe extern "C" fn krt_marray_new(
     })
 }
 
-/// `marray_freeze`。
+/// `marray_freeze` を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_marray_freeze(ctx: *mut NativeCtx, me: u64, sp: u64, a: u64) -> u64 {
     alloc_with(ctx, me, sp, |it, _| it.rt.array_freeze(Word(a)))
 }
 
-/// `str.eq` などの比べ方(`op` は [`crate::bytecode::cmp_sub`] の細目)。真なら 1。
+/// `str.eq` などの文字列の比較を実行する。
+///
+/// `op` は [`crate::bytecode::cmp_sub`] が返すサブコードである。
+/// 比較の結果が真なら 1、偽なら 0 を返す。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_str_cmp(ctx: *mut NativeCtx, op: u64, a: u64, b: u64) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let o = keleut_rtcore::compare_bytes(it.rt.str_bytes(Word(a)), it.rt.str_bytes(Word(b)));
         use std::cmp::Ordering::*;
@@ -1548,11 +1622,11 @@ pub unsafe extern "C" fn krt_str_cmp(ctx: *mut NativeCtx, op: u64, a: u64, b: u6
     })
 }
 
-/// `rec_field`(`has` が 0)と `rec_has`(1)。
+/// `has` が 0 なら `rec_field`、1 なら `rec_has` を実行する。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_rec_field(
     ctx: *mut NativeCtx,
     has: u64,
@@ -1561,7 +1635,7 @@ pub unsafe extern "C" fn krt_rec_field(
     nth: u64,
 ) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let l = LabelId(label as u32);
         if has == 0 {
@@ -1572,14 +1646,14 @@ pub unsafe extern "C" fn krt_rec_field(
     })
 }
 
-/// インスタンスの命令。`op` は 0 が `inst_is_init`、1 が `inst_mark_init`、2 が `inst_set_value`、3 が `inst_get_value`。
+/// インスタンスの命令を実行する。`op` は 0 が `inst_is_init`、1 が `inst_mark_init`、2 が `inst_set_value`、3 が `inst_get_value` である。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_inst(ctx: *mut NativeCtx, op: u64, inst: u64, m: u64, x: u64) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let (i, m) = (inst as usize, m as usize);
         match op {
@@ -1597,14 +1671,14 @@ pub unsafe extern "C" fn krt_inst(ctx: *mut NativeCtx, op: u64, inst: u64, m: u6
     })
 }
 
-/// 配列の要素の読み書き。`op` は 0 が `array_get`(`marray_get`)、1 が `marray_set`。
+/// 配列の要素を読み書きする。`op` は 0 が `array_get` と `marray_get`、1 が `marray_set` である。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_array(ctx: *mut NativeCtx, op: u64, a: u64, i: u64, x: u64) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         if op == 0 {
             it.rt.array_get(Word(a), i as i32).0
@@ -1615,17 +1689,17 @@ pub unsafe extern "C" fn krt_array(ctx: *mut NativeCtx, op: u64, a: u64, i: u64,
     })
 }
 
-/// `console_write`。書けたら 0、失敗なら状態語を立てて 1 を返す。
+/// `console_write` を実行する。書けたら 0 を返し、失敗したらエラーを状態ワードに設定して 1 を返す。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_console_write(ctx: *mut NativeCtx, s: u64) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let bytes = it.rt.str_bytes(Word(s));
-        // SAFETY: 文字列の箱は動かず、書く間に回収は起きない。
+        // SAFETY: 文字列オブジェクトは移動せず、書いている間に GC は起きない。
         let bytes: &[u8] = unsafe { std::slice::from_raw_parts(bytes.as_ptr(), bytes.len()) };
         match it.rt.out.write(bytes) {
             Ok(()) => 0,
@@ -1637,9 +1711,11 @@ pub unsafe extern "C" fn krt_console_write(ctx: *mut NativeCtx, s: u64) -> u64 {
     })
 }
 
-/// フレーム(位置 `fpos`、見出し `fp`)の上に関数 `func` のフレームを置き、引数を書く。
+/// フレーム(位置 `fpos`、フレームヘッダ `fp`)の上に関数 `func` のフレームを置き、引数を書く。
 ///
-/// 末尾(`tail`)なら、今のフレームの位置に置き直し、呼び出し元と深さを引き継ぐ(インタプリタの末尾呼び出しと同じ)。
+/// 末尾呼び出し(`tail`)なら、現在のフレームの位置に置き、呼び出し元と深さを引き継ぐ。
+/// これはインタプリタの末尾呼び出しと同じである。
+/// フレームを置けなければ偽を返す。
 #[allow(clippy::too_many_arguments)]
 fn place_with_args(
     it: &mut Interp<'_>,
@@ -1651,7 +1727,7 @@ fn place_with_args(
     args: &[Word],
     tail: bool,
 ) -> bool {
-    // SAFETY: fp は今のフレームの見出しを指す。
+    // SAFETY: fp は現在のフレームのヘッダを指す。
     let (fid, caller, depth) = unsafe { (*fp & 0xffff_ffff, *fp.add(3), *fp.add(1)) };
     let (at, caller) = if tail {
         (fpos, caller)
@@ -1661,7 +1737,7 @@ fn place_with_args(
     let Some(p) = place(it, ctx, u64::from(func.0), fpos, at, caller, env.0) else {
         return false;
     };
-    // SAFETY: 置いたフレームは関数の引数の数以上のスロットを持つ。
+    // SAFETY: 置いたフレームは、関数の引数の個数以上のスロットを持つ。
     unsafe {
         if tail {
             *p.add(1) = depth;
@@ -1673,16 +1749,18 @@ fn place_with_args(
     true
 }
 
-/// JIT のフレーム(位置 `fpos`、見出し `fp`)のエフェクトの命令(関数の中の `idx` 番目)を実行する。
+/// JIT のフレーム(位置 `fpos`、フレームヘッダ `fp`)のエフェクトの命令を実行する。`idx` は、関数の中でのエフェクトの命令の番号である。
 ///
-/// JIT のコードは、被演算子をすべてスロットに書いてから呼ぶ。
-/// 確保する命令なら `sp` はその安全点の番号で(生きている `any` の区画も書いてある)、そうでなければ `u64::MAX` である。
-/// 呼び出しの一種なら、再開点で生きているレジスタも書き、見出しに再開点を書いてある。
-/// 結果は [`fx`] の値で、書き先のある命令の結果は書き先のスロットにある。
+/// JIT のコードは、オペランドをすべてスロットに書いてから呼ぶ。
+/// メモリを確保する命令なら、`sp` はその安全点の番号で、JIT のコードは、生存している、`any` の領域のレジスタもスロットに書いてある。
+/// それ以外の命令では、`sp` は `u64::MAX` である。
+/// 呼び出しの一種である命令なら、JIT のコードは、再開点で生存しているレジスタもスロットに書き、フレームヘッダに再開点を書いてある。
+/// 返り値は [`fx`] の定数のどれかである。
+/// 書き込み先のある命令では、命令の結果の値は書き込み先のスロットにある。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_fx(
     ctx: *mut NativeCtx,
     fpos: u64,
@@ -1691,7 +1769,7 @@ pub unsafe extern "C" fn krt_fx(
     sp: u64,
 ) -> i64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         sample(it);
         if sp != u64::MAX {
@@ -1705,12 +1783,12 @@ pub unsafe extern "C" fn krt_fx(
                 if placed { fx::CALL } else { fx::ERR }
             }
             Ok(NativeFx::Value(v)) => {
-                // SAFETY: ctx は生きている文脈である。
+                // SAFETY: ctx は有効なコンテキストである。
                 unsafe { (*ctx).result = v.0 };
                 fx::VALUE
             }
             Ok(NativeFx::Redeliver(v)) => {
-                // SAFETY: ctx は生きている文脈である。
+                // SAFETY: ctx は有効なコンテキストである。
                 unsafe { (*ctx).result = v.0 };
                 fx::REDELIVER
             }
@@ -1722,14 +1800,15 @@ pub unsafe extern "C" fn krt_fx(
     })
 }
 
-/// JIT のフレームのエフェクトのブロックの終わり(関数の中の `idx` 番目)。
+/// JIT のフレームのエフェクトの終端命令を実行する。`idx` は、関数の中でのエフェクトの終端命令の番号である。
 ///
-/// 被演算子はスロットにある。
-/// 印を立てて番兵で戻る終わりと誤りは [`fx::ERR`]、末尾で呼ぶ終わりはフレームを置き直して [`fx::CALL`] を返す。
+/// オペランドはスロットにある。
+/// 番兵を返す終端命令(`propagate` と、状態ワードに目印を設定する `clause_value`、`clause_matched`、`tail_resume`)のときと、エラーのときは、[`fx::ERR`] を返す。
+/// 末尾呼び出しの終端命令のときは、呼び出し先のフレームを現在のフレームの位置に置いて [`fx::CALL`] を返し、置けなければ [`fx::ERR`] を返す。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_fx_term(
     ctx: *mut NativeCtx,
     fpos: u64,
@@ -1737,7 +1816,7 @@ pub unsafe extern "C" fn krt_fx_term(
     idx: u64,
 ) -> i64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         sample(it);
         match it.native_fx_term(fpos, fp, idx as u32) {
@@ -1755,13 +1834,14 @@ pub unsafe extern "C" fn krt_fx_term(
     })
 }
 
-/// JIT のフレームの `perform` の呼び出しが `r` で戻った([`Interp::native_perform_back`])。
+/// JIT のフレームの `perform` の呼び出しが `r` を返したときに呼ぶ。処理は `Interp::native_perform_back` が行う。
 ///
-/// 1 なら `r` を結果にして続け、0 なら番兵で戻る。
+/// 1 を返したら、JIT のコードは `r` を `perform` の結果にして続ける。
+/// 0 を返したら、JIT のコードは番兵を返す。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_perform_back(
     ctx: *mut NativeCtx,
     fpos: u64,
@@ -1769,7 +1849,7 @@ pub unsafe extern "C" fn krt_perform_back(
     r: u64,
 ) -> u64 {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         if native(it).fatal.is_some() {
             return 0;
@@ -1784,14 +1864,16 @@ pub unsafe extern "C" fn krt_perform_back(
     })
 }
 
-/// JIT のコードが、起きないはずの道に入った(`what` は場所の番号)。内部の誤りにする。
+/// JIT のコードが、実行されないはずの経路に入ったときに呼ぶ。内部エラーを保存する。
+///
+/// `what` は、その箇所を表す番号である。
 ///
 /// # Safety
 ///
-/// [`krt_prep`] と同じ。
+/// 事前条件は [`krt_prep`] と同じである。
 pub unsafe extern "C" fn krt_bug(ctx: *mut NativeCtx, fid: u64, what: u64) {
     guarded(ctx, || {
-        // SAFETY: 呼び出し側の約束による。
+        // SAFETY: 事前条件により、ctx はネイティブの呼び出しの最中のコンテキストである。
         let it = unsafe { interp(ctx) };
         let sym = &it.prog.funcs[fid as usize].sym;
         set_fatal(
@@ -1803,7 +1885,7 @@ pub unsafe extern "C" fn krt_bug(ctx: *mut NativeCtx, fid: u64, what: u64) {
     })
 }
 
-/// JIT のコードが呼ぶ実行時の関数の名前と番地(LLJIT の絶対の記号として登録する)。
+/// JIT のコードが呼ぶランタイム関数の名前とアドレスを返す。LLJIT に、絶対アドレスのシンボルとして登録する。
 pub fn helper_symbols() -> Vec<(&'static str, usize)> {
     vec![
         ("krt_prep", krt_prep as *const () as usize),

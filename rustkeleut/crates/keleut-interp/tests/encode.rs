@@ -1,7 +1,10 @@
-//! バイトコードの符号化の試験。
+//! バイトコードの符号化のテスト。
 //!
-//! `crates/kir/tests/fixtures/` と `crates/keleut-cli/tests/fixtures/run/` の各 KIR のすべての関数を符号化し、
-//! 命令の語の数をたどると列の終わりにちょうど届くこと、再開点の表の各行が命令の先頭を指すことを確かめる。
+//! `crates/kir/tests/fixtures/` と `crates/keleut-cli/tests/fixtures/run/` にある KIR のすべての関数を符号化し、次のことを確かめる。
+//!
+//! - 命令のワード数を先頭から順に足していくと、ワードの並びの終わりにちょうど達する。
+//! - 再開点の表の各項目が、呼び出しの命令の先頭を指す。
+//! - 再開点の表の各項目が持つ、呼び出しの後に続ける位置が、命令の先頭かワードの並びの終わりである(位置を持たない項目を除く)。
 
 use keleut_interp::bytecode::{self, op};
 use keleut_lir::FuncId;
@@ -61,7 +64,7 @@ fn すべての関数の命令の列をたどれる() {
                     path.display()
                 );
                 if o == op::FX {
-                    // エフェクトの命令の再開点は、呼び出しの一種(perform と番兵を受け取る呼び出し)を指す。
+                    // エフェクトの命令を指す再開点は、呼び出しの一種である命令(perform と、番兵を受け取る呼び出し)を指す。
                     let sub = (code.words[r.call_pc as usize] >> 8) as usize;
                     assert!(code.fx[sub].is_call(), "{}: 関数 {i}", path.display());
                 }
