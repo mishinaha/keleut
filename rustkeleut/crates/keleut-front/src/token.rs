@@ -1,41 +1,44 @@
-//! トークンと数値リテラルの表記である(Diktor の lexer.ml の §2.1、§2.12、§2.13)。
+//! トークンと、数値リテラルの表記を定義する(Diktor の lexer.ml の §2.1、§2.12、§2.13)。
 
 use crate::escape::ocaml_escaped;
 
-/// 数値リテラルの接尾辞の解釈である。
-/// 幅を読めない接尾辞(桁あふれ、先頭のゼロ)は幅 -1 にする。
+/// 数値リテラルの接尾辞の種類と幅である。
+/// 幅 `N` を読めない接尾辞は、幅を -1 にする。
+/// 読めないのは、`N` が 2 桁以上で先頭が 0 のときと、`N` を OCaml の `int` として読めないときである。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NumSuffix {
-    /// `iN`。
+    /// 接尾辞 `iN`。フィールドは幅 `N` である。
     Int(i64),
-    /// `uN`。
+    /// 接尾辞 `uN`。フィールドは幅 `N` である。
     UInt(i64),
-    /// `fN`。
+    /// 接尾辞 `fN`。フィールドは幅 `N` である。
     Float(i64),
 }
 
 /// 数値リテラルの表記である。
-/// 値に変換せず、原文を運ぶ。
+/// 数値には変換せず、ソースに書かれた文字列のまま持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Number {
-    /// 本体の原文(負のリテラルに畳んだときは先頭に `-` が付く)。
+    /// 接尾辞を除いた本体の文字列。
+    /// 前置の `-` をリテラルにまとめたときは、先頭に `-` が付く。
     pub text: String,
-    /// 小数か。
+    /// 浮動小数点数のリテラルなら真。
+    /// 接尾辞が `fN` のときと、基数の接頭辞のない本体に `.`、`e`、`E` のどれかがあるときである。
     pub is_float: bool,
-    /// 接尾辞。
+    /// 接尾辞の種類と幅。接尾辞がなければ `None`。
     pub suffix: Option<NumSuffix>,
-    /// 接尾辞の原文(無ければ空)。
+    /// 接尾辞の文字列(なければ空)。
     pub suffix_text: String,
 }
 
 impl Number {
-    /// 原文の表記(本体と接尾辞をつないだもの)。
+    /// ソースに書かれた表記(本体と接尾辞をつないだ文字列)を返す。
     pub fn show(&self) -> String {
         format!("{}{}", self.text, self.suffix_text)
     }
 }
 
-/// 字句から数値リテラルの表記を作る(Diktor の `parse_number`)。
+/// 数値リテラルのトークンの文字列から、表記を作る(Diktor の `parse_number`)。
 pub fn parse_number(text: &str) -> Number {
     let b = text.as_bytes();
     let len = b.len();
@@ -80,8 +83,8 @@ pub fn parse_number(text: &str) -> Number {
     }
 }
 
-/// 10 進の数字だけの綴りを OCaml の `int`(63 ビット)として読む。
-/// 範囲を超えれば `None` である。
+/// 10 進の数字だけの文字列を、OCaml の `int`(63 ビット)として読む。
+/// 空の文字列、数字以外の文字を含む文字列、範囲を超える値には `None` を返す。
 pub fn ocaml_int_of_string_opt(digits: &str) -> Option<i64> {
     if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
         return None;
@@ -97,7 +100,8 @@ pub fn ocaml_int_of_string_opt(digits: &str) -> Option<i64> {
 }
 
 /// トークンである。
-/// 名前は Diktor の parser.mly の `%token` と同じにしてあり、[`Tok::name`] が LR の表の終端記号を引く鍵になる。
+/// バリアントの名前は Diktor の parser.mly の `%token` と同じである。
+/// [`Tok::name`] が返す名前を、LR の表から終端記号を引くキーに使う。
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 pub enum Tok {
@@ -172,7 +176,7 @@ pub enum Tok {
 }
 
 impl Tok {
-    /// parser.mly の終端記号の名前。
+    /// parser.mly の終端記号の名前を返す。
     pub fn name(&self) -> &'static str {
         use Tok::*;
         match self {
@@ -247,7 +251,7 @@ impl Tok {
         }
     }
 
-    /// `--dump-tokens` の表記(Diktor の `show_token`)。
+    /// Diktor の `--dump-tokens` と同じ表記を返す(Diktor の `show_token`)。
     pub fn show(&self) -> String {
         use Tok::*;
         let s = match self {
@@ -330,7 +334,8 @@ impl Tok {
     }
 }
 
-/// 識別子を読んだ後でキーワードの表を引く(Diktor の `keyword_or_ident`)。
+/// 識別子として読んだ文字列がキーワードならそのトークンを、そうでなければ識別子のトークンを返す
+/// (Diktor の `keyword_or_ident`)。
 pub fn keyword_or_ident(id: &str) -> Tok {
     use Tok::*;
     match id {
@@ -367,7 +372,8 @@ pub fn keyword_or_ident(id: &str) -> Tok {
     }
 }
 
-/// トークンが予約語なら、その綴りを返す(Diktor の `reserved_word`)。
+/// トークンが予約語なら、その表記を返す(Diktor の `reserved_word`)。
+/// `_` は予約語として扱わない。
 pub fn reserved_word(tok: &Tok) -> Option<String> {
     let s = tok.show();
     match keyword_or_ident(&s) {

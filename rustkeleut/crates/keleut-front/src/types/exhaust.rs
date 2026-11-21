@@ -1,4 +1,5 @@
-//! 網羅性と到達不能の検査である(Diktor の exhaust.ml、第10章。Maranget の usefulness)。
+//! 網羅性と到達不能の検査である(Diktor の exhaust.ml、第10章に当たる)。
+//! 判定には Maranget の usefulness のアルゴリズムを使う。
 
 use super::fx::HashMap;
 use super::{Fail, Oid, R, Resolved, TVar, Tc, Ty, TyNode, bug, guard};
@@ -6,7 +7,9 @@ use crate::ast::{Pat, PatKind};
 use crate::escape::ocaml_escaped;
 use std::rc::Rc;
 
-/// リテラルである(変種の順は Diktor の `lit` と同じで、比較の順になる)。
+/// パターンのリテラルである。
+/// バリアントは Diktor の `lit` と同じ順に宣言する。
+/// 導出した `Ord` は、この宣言の順で値を比較する。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Lit {
     Bool(bool),
@@ -14,10 +17,10 @@ enum Lit {
     Num(String),
 }
 
-/// 照合の検査に使うパターンである。
+/// 網羅性と到達不能の検査に使う、内部表現のパターンである。
 ///
-/// 部分のパターンは `Rc` で共有する。
-/// 行列を特殊化するたびに部分を写すと、深いパターンで時間と記憶が深さの 2 乗に比例するからである。
+/// 部分パターンは `Rc` で共有する。
+/// パターン行列を特殊化するたびに部分パターンをコピーすると、深いパターンでは時間とメモリが深さの 2 乗に比例するからである。
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum IPat {
     Wild,
@@ -27,7 +30,9 @@ enum IPat {
     Record(Rc<[(Oid, IPat)]>, bool),
 }
 
-/// 構成子である(変種の順は Diktor の `ctor` と同じで、比較の順になる)。
+/// パターンの先頭のコンストラクタである。パターン行列は、このコンストラクタごとに特殊化する。
+/// バリアントは Diktor の `ctor` と同じ順に宣言する。
+/// 導出した `Ord` は、この宣言の順で値を比較する。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Ctor {
     Variant(Oid),
@@ -36,16 +41,18 @@ enum Ctor {
     Record(Vec<Oid>),
 }
 
-/// 待ち行列の項目である。
+/// 検査キューの項目である。
+/// 検査するパターンとガードの有無の並び `rows` と、照合対象の型 `ty` を持つ。
+/// `rows` は、`match` では節ごとに 1 行、関数の引数や `let` などのパターンではガードなしの 1 行である。
 #[derive(Clone)]
 pub struct Entry {
     rows: Vec<(Pat, bool)>,
     ty: Ty,
 }
 
-// ---- OCaml の数の読み ----
+// ---- OCaml の数値の読み取り ----
 
-/// OCaml の `parse_intnat`(`Int32.of_string` と `Int64.of_string`)。
+/// `nbits` ビットの整数を、OCaml の `parse_intnat`(`Int32.of_string` と `Int64.of_string` の実装)と同じ規則で読む。
 fn ocaml_parse_int(s: &str, nbits: u32) -> Option<i64> {
     let b = s.as_bytes();
     let mut p = 0;
@@ -139,17 +146,17 @@ fn ocaml_parse_int(s: &str, nbits: u32) -> Option<i64> {
     })
 }
 
-/// `Int32.of_string_opt`。
+/// OCaml の `Int32.of_string_opt` と同じ結果を返す。
 pub(crate) fn ocaml_int32_opt(s: &str) -> Option<i32> {
     ocaml_parse_int(s, 32).map(|v| v as i32)
 }
 
-/// `Int64.of_string_opt`。
+/// OCaml の `Int64.of_string_opt` と同じ結果を返す。
 pub(crate) fn ocaml_int64_opt(s: &str) -> Option<i64> {
     ocaml_parse_int(s, 64)
 }
 
-/// `float_of_string_opt`(桁区切りの `_` を除いてから読む)。
+/// OCaml の `float_of_string_opt` に当たる。桁区切りの `_` を取り除いてから読む。
 fn ocaml_float_opt(s: &str) -> Option<f64> {
     let t: String = s.chars().filter(|c| *c != '_').collect();
     if t.is_empty() {
@@ -197,10 +204,12 @@ fn ocaml_float_opt(s: &str) -> Option<f64> {
     body.parse::<f64>().ok().map(|v| if neg { -v } else { v })
 }
 
-/// 数値の字面の鍵(Diktor の `norm_text`)。
+/// 数値リテラルの表記から、比較に使うキーを作る(Diktor の `norm_text`)。
 ///
-/// Int32、Int64、Float64 の 3 通りの読みを並べる。
-/// 浮動小数の成分は ±0.0 を 1 つにまとめたビット列で表す(Diktor の `%.17g` と同じく値を一意に決める)。
+/// Int32、Int64、Float64 の 3 通りで読んだ結果を `|` で区切って並べる。
+/// 読めなかった型の位置には `X` を書く。
+/// Float64 として読んだ値は、±0.0 を 1 つにまとめたうえで、値のビット列で書く。
+/// Diktor の `%.17g` と同じく、値ごとに一意な文字列になる。
 fn norm_text(s: &str) -> String {
     let a = ocaml_int32_opt(s).map_or("X".to_string(), |v| v.to_string());
     let b = ocaml_int64_opt(s).map_or("X".to_string(), |v| v.to_string());
@@ -669,7 +678,7 @@ impl Tc {
         }
     }
 
-    /// 検査を待ち行列に足す(Diktor の `Exhaust.queue`)。
+    /// 検査を検査キューに追加する(Diktor の `Exhaust.queue`)。
     pub(crate) fn ex_queue(&mut self, rows: Vec<(Pat, bool)>, ty: Ty) {
         self.pending.push(Entry { rows, ty });
     }
@@ -870,7 +879,8 @@ impl Tc {
         })
     }
 
-    /// 待ち行列を検査して警告を返す(Diktor の `Exhaust.drain`)。
+    /// 検査キューの項目を検査して、警告を返す(Diktor の `Exhaust.drain`)。
+    /// 節のない `match` で照合対象の型がまだ未束縛の型変数である項目は、外側の束縛の検査まで遅らせるために検査キューに残すことがある。
     pub(crate) fn ex_drain(&mut self, level: i32, tys: &[Ty], gen_: bool) -> R<Vec<String>> {
         let entries = std::mem::take(&mut self.pending);
         let mut later = Vec::new();
@@ -917,7 +927,8 @@ impl Tc {
         }
     }
 
-    /// 照合の検査に使う型の網羅性(Diktor の `Exhaust.missing` を、パターンの列に当てたもの)。
+    /// パターンの並び `pats` が型 `tys` の値を網羅していれば真を返す。
+    /// Diktor の `Exhaust.missing` を、1 行のパターン行列に適用したものである。
     pub(crate) fn ex_missing_pats(&mut self, pats: &[&Pat], tys: &[Ty]) -> R<bool> {
         let mut row = Vec::new();
         for p in pats {

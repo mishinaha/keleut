@@ -1,7 +1,9 @@
-//! `--type-check` の手順である(Diktor の driver.ml の `type_check_files_units` と elab.ml の `type_check_units`)。
+//! Diktor の `--type-check` と同じ型検査の手順である
+//! (Diktor の driver.ml の `type_check_files_units` と elab.ml の `type_check_units`)。
 //!
-//! 入力を読む手段([`SourceFs`])を受け取り、Diktor と同じ順に、プレリュードの構文解析、プレリュードの平坦化、
-//! コマンド行のファイルと import 先の読み込み([`super::load`])、単位ごとの型検査([`super::units`])を行う。
+//! 入力を読む手段([`SourceFs`])を受け取り、Diktor と同じ順に次の処理を行う。
+//! プレリュードの構文解析、プレリュードの平坦化、コマンド行のファイルと import 先の読み込み([`super::load`])、
+//! 単位ごとの型検査([`super::units`])である。
 
 use super::decls::{ROOT_UNIT, STD_UNIT};
 use super::fx::HashMap;
@@ -13,24 +15,24 @@ use crate::ast::{Decl, ImportDecl};
 use crate::pos::{Files, Span};
 use crate::{Limits, ParseError, parse_with};
 
-/// 埋め込んだプレリュード(Diktor の lib/prelude.kel の写し)である。
+/// バイナリに埋め込んだプレリュードである(Diktor の lib/prelude.kel のコピー)。
 pub const PRELUDE: &str = include_str!("prelude.kel");
 
-/// 型検査の誤り(Diktor の `Elab.error`)である。
+/// 型検査が報告するエラーである(Diktor の `Elab.error`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheckError {
-    /// 位置(`ファイル:行:桁`)。
+    /// エラーの位置(`ファイル:行:桁`)。位置のないエラーでは `None`。
     pub loc: Option<String>,
-    /// 種別の語。
+    /// 種別名(`型エラー`、`未実装`、`import エラー`、`処理系の限度`)。
     pub word: String,
-    /// 終了状態。
+    /// 終了コード。
     pub exit: u8,
-    /// 文面。
+    /// メッセージ。
     pub msg: String,
 }
 
 impl CheckError {
-    /// 表示(Diktor の `render_error`)。
+    /// 出力する 1 行の文字列にする(Diktor の `render_error`)。
     pub fn render(&self) -> String {
         match &self.loc {
             Some(p) => format!("! {p}: {}: {}", self.word, self.msg),
@@ -39,91 +41,95 @@ impl CheckError {
     }
 }
 
-/// 型検査に進む前に止まった理由である。
+/// 型検査を始める前に処理を終えた理由である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stop {
-    /// 入力を読めない(終了状態 64)。中身は `パス: 理由`。
+    /// 入力を読めない(終了コード 64)。内容は `パス: 理由` の形式のメッセージである。
     Input(String),
-    /// 字句エラー(終了状態 2。Diktor は終わるときに標準エラーへ書く)。
+    /// 字句エラー(終了コード 2)。Diktor は、終了するときに標準エラーに書く。
     Lex(String),
-    /// 構文エラーと構文解析の限度(終了状態 2。Diktor はその場で標準エラーへ書く)。
+    /// 構文エラーか、入れ子が構文解析の上限を超えたときの `処理系の限度` の行(終了コード 2)。
+    /// Diktor は、検出した時点で標準エラーに書く。
     Syntax(String),
-    /// 内部の誤り(終了状態 3)。
+    /// 内部エラー(終了コード 3)。
     Internal(String),
 }
 
 /// 型検査の結果である。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CheckOutput {
-    /// 出力の行(型の行と警告)。
+    /// 出力する行(束縛の型を表示する行と警告)。
     pub lines: Vec<OutLine>,
-    /// 誤り。
+    /// 型検査が報告したエラー。なければ `None`。
     pub error: Option<CheckError>,
-    /// 内部の誤り(Diktor の `Panic`。行を出さずに標準エラーへ書いて 3 で終わる)。
+    /// 内部エラー(Diktor の `Panic`)。
+    /// このときは出力する行を持たない。呼び出し元はメッセージを標準エラーに書き、終了コード 3 で終了する。
     pub panic: Option<String>,
 }
 
-/// 型検査の選択肢である。
+/// 型検査のオプションである。
 pub struct CheckOptions {
     /// `--no-prelude`。
     pub no_prelude: bool,
     /// `--prelude PATH`。
     pub prelude: Option<String>,
-    /// 入力のファイル。
+    /// 入力ファイル。
     pub files: Vec<String>,
     /// `--import-path DIR` の並び(書いた順)。
     pub import_path: Vec<String>,
-    /// 構文解析の限度。
+    /// 構文解析の上限(作る木の深さの上限)。
     pub max_nest: usize,
 }
 
-/// 木の深さ 1 段あたりに見込む型検査のスタックのバイト数である。
+/// 木の深さ 1 段あたりに見積もる、型検査のスタックのバイト数である。
 ///
-/// 測った値の約 1.5 倍にしてある。
-/// 式の入れ子、演算子の鎖、ブロック、`else if` の鎖、`match` の入れ子、レコード、パターン、型の入れ子のどれでも、
-/// 型検査に通る最小のスタックは、1 段あたりリリースの構築で約 1.3 KiB、最適化なしの構築で約 20 KiB だった。
+/// 実測では、式の入れ子、演算子の連鎖、ブロック、`else if` の連鎖、`match` の入れ子、レコード、パターン、型の入れ子のどれでも、
+/// 型検査を終えられる最小のスタックは、1 段あたりリリースビルドで約 1.3 KiB、デバッグビルドで約 20 KiB である。
+/// この定数は、その約 1.5 倍にしてある。
 pub const CHECK_STACK_BYTES_PER_LEVEL: usize = if cfg!(debug_assertions) {
     32 << 10
 } else {
     2 << 10
 };
 
-/// `--native-stack` で下げた構文解析の深さの限度の下限である。
+/// `--native-stack` に合わせて構文解析の深さの上限を下げるときの、下限である。
 ///
-/// 埋め込んだプレリュードの木の深さはこれより浅い(試験で確かめる)。
-/// これより浅い限度にしかならない小さいスタックは、プレリュードも構文解析できないので、使い方の誤りにする。
+/// 埋め込んだプレリュードは、この上限で構文解析できる(テストで確かめている)。
+/// 上限がこれより小さくなるスタックでは、プレリュードを構文解析できないことがあるので、使い方のエラーにする。
 pub const MIN_CHECK_NEST: usize = 64;
 
-/// 深さに依らずに見込む型検査のスタック(プレリュードの検査など)のバイト数である。
+/// 木の深さによらず必要になると見積もる、型検査のスタックのバイト数である(プレリュードの検査などに使う分)。
 const CHECK_STACK_BASE: usize = 64 << 20;
 
-/// 型検査の専用のスレッドのスタックの既定の大きさで、上限でもある(8 GiB)。
+/// 型検査専用のスレッドのスタックサイズの既定値で、上限でもある(8 GiB)。
 ///
-/// 推論した型の深さは木の深さで抑えられない(`let` 多相の合成は、数行で深さ 2^n の型を作る)。
-/// そこで、深さの上限から見積もった大きさではなく、作れる最大のスタックを既定にする。
-/// スタックは使った分だけ実際の記憶を使う。
+/// 推論した型の深さは、木の深さでは抑えられない(`let` 多相を重ねると、数行で深さ 2^n の型ができる)。
+/// そこで、深さの上限から見積もったサイズではなく、作れる最大のスタックを既定にする。
+/// スタックは、使った分だけ実際のメモリを使う。
 pub const CHECK_STACK_BYTES: usize = 8 << 30;
 
-/// 深さの上限 `max_nest` の木の型検査に見込むスタックのバイト数である。
+/// 木の深さの上限が `max_nest` のときに、型検査に必要なスタックのバイト数の見積もりを返す。
+/// 計算がオーバーフローするときは `None` を返す。
 fn stack_for_nest(max_nest: usize) -> Option<usize> {
     max_nest
         .checked_mul(CHECK_STACK_BYTES_PER_LEVEL)?
         .checked_add(CHECK_STACK_BASE)
 }
 
-/// 型検査の限度(構文解析の深さの上限と、専用のスレッドのスタックの大きさ)を決める。
+/// 型検査の上限(構文解析の深さの上限と、専用のスレッドのスタックサイズ)を決める。
 ///
-/// `native_stack` が無ければ、スタックは [`CHECK_STACK_BYTES`] にする。
-/// `max_nest` の木に見込むスタックが [`CHECK_STACK_BYTES`] を超えるときは誤りである。
+/// `native_stack` がなければ、スタックサイズを [`CHECK_STACK_BYTES`] にする。
+/// `max_nest` が 0 のときと、`max_nest` の木に必要と見積もったスタックが [`CHECK_STACK_BYTES`] を超えるときはエラーである。
 ///
 /// `native_stack` があれば、そのスタックで型検査を終えられる深さまで `max_nest` を下げる。
-/// [`guard`](super::guard) の余白を除いた残りを、1 段あたり [`CHECK_STACK_BYTES_PER_LEVEL`] で割った深さである。
-/// その深さが [`MIN_CHECK_NEST`] に満たない小さいスタックと、[`CHECK_STACK_BYTES`] を超えるスタックは誤りである。
+/// その深さは、スタックサイズから [`guard`](super::guard) の余裕を引いた残りを、
+/// 1 段あたりの [`CHECK_STACK_BYTES_PER_LEVEL`] で割った値である。
+/// その深さが [`MIN_CHECK_NEST`] に満たない小さいスタックと、[`CHECK_STACK_BYTES`] を超えるスタックはエラーである。
 ///
-/// 限度を下げるのは、[`guard`](super::guard) で調べない再帰(木を捨てることなど)も、スタックに収めるためである。
-/// 下げずに `guard` だけに頼ると、深い木を捨てるときに小さいスタックがあふれる。
+/// 上限を下げるのは、[`guard`](super::guard) が調べない再帰(木のドロップなど)も、スタックに収めるためである。
+/// 下げずに `guard` だけに頼ると、深い木をドロップするときに小さいスタックがオーバーフローする。
 ///
-/// 誤りの文面は、コマンド行の使い方の誤りとしてそのまま出せる形にしてある。
+/// エラーのメッセージは、コマンド行の使い方のエラーとしてそのまま出力できる形式にしてある。
 pub fn check_limits(max_nest: usize, native_stack: Option<usize>) -> Result<Limits, String> {
     match native_stack {
         None => {
@@ -152,15 +158,16 @@ pub fn check_limits(max_nest: usize, native_stack: Option<usize>) -> Result<Limi
     }
 }
 
-/// `f` を型検査の専用のスレッドで走らせる。
+/// `f` を型検査専用のスレッドで実行する。
 ///
-/// スレッドのスタックの大きさは `limits.stack_bytes` で、入口でスタックの下端を決めてから `f` を呼ぶ。
+/// スレッドのスタックサイズは `limits.stack_bytes` である。
+/// スレッドの入口で、使ってよいスタックの下端を決めてから `f` を呼ぶ。
 /// 型検査([`check_files`])は、このスレッドの中で呼ぶ。
-/// ほかのスレッドでは、スタックの検査がつねに失敗し、型検査は限度の診断で止まる。
+/// ほかのスレッドでは、スタックの検査がつねに失敗し、型検査は `処理系の限度` の診断で終了する。
 ///
-/// 既定の大きさ([`CHECK_STACK_BYTES`])のスタックを作れない環境では、
-/// `limits.max_nest` の木に見込む大きさで作り直す。
-/// スレッドを作れないときと、`f` が落ちたときは `Err` に文面を入れて返す。
+/// 既定のサイズ([`CHECK_STACK_BYTES`])のスタックを持つスレッドを作れない環境では、
+/// `limits.max_nest` の木に必要と見積もったサイズで作り直す。
+/// スレッドを作れないときと、`f` がパニックしたときは、`Err` にメッセージを入れて返す。
 pub fn on_check_stack<T: Send>(limits: Limits, f: impl FnOnce() -> T + Send) -> Result<T, String> {
     let slot = std::sync::Mutex::new(Some(f));
     let mut sizes = vec![limits.stack_bytes];
@@ -267,34 +274,35 @@ pub(crate) fn fail_to_error(files: &Files, f: Fail) -> Result<CheckError, String
     })
 }
 
-/// 型検査を済ませたプログラムである。
+/// 型検査を終えたプログラムである。
 ///
 /// `keleut check` は [`output`](Checked::output) だけを使う。
-/// KIR の書き出しと対話的な実行は、型検査の文脈、ノードごとの注釈、平坦化した宣言を使う。
-/// 文脈 [`Tc`] は `Rc` を持つので、この値は [`on_check_stack`] のスレッドの中で使い切る。
+/// KIR の書き出しと対話的な実行は、型検査のコンテキスト、ノードごとの注釈、平坦化した宣言を使う。
+/// 型検査のコンテキスト [`Tc`] は `Rc` を持つので、この値は [`on_check_stack`] のスレッドの中で使い終える。
 pub struct Checked {
-    /// 型検査の文脈(宣言表、型、ノードごとの注釈)。
+    /// 型検査のコンテキスト(宣言表、型、ノードごとの注釈)。
     pub tc: Tc,
-    /// 位置の表示に使うファイルの表。
+    /// 位置の表示に使うファイル名の表。
     pub files: Files,
     /// 平坦化したプレリュード。
     pub prelude: Vec<Decl>,
-    /// 読み込んだ単位(宣言列は型検査に渡したので空)。
+    /// 読み込んだ単位。宣言の並びは型検査に渡したので空である。
     pub loaded: Loaded,
-    /// 平坦化した単位ごとの宣言列。依存する単位の帰りがけ順で、最後が起点である。
-    /// 型検査が途中で止まったときは、そこまでの単位だけを持つ。
+    /// 平坦化した、単位ごとの宣言の並び。
+    /// 依存する単位が帰りがけ順に並び、最後が起点である。
+    /// 型検査が途中で終わったときは、そこまでの単位だけを持つ。
     pub units: Vec<Vec<Decl>>,
-    /// 出力の行と誤り。
+    /// 出力する行とエラー。
     pub output: CheckOutput,
-    /// 構文解析の文脈。
+    /// 構文解析のコンテキスト。
     ///
-    /// 後から別の入力(REPL の入力)を構文解析するときは、この文脈を使ってノードの番号を続きから振る。
-    /// 型検査の文脈の表はノードの番号で引くので、番号が重なってはならない。
+    /// 後から別の入力(REPL の入力)を構文解析するときは、このコンテキストを使ってノードの番号を続きから振る。
+    /// 型検査のコンテキストが持つ表はノードの番号をキーにするので、番号が重なってはならない。
     pub cx: Ctx,
 }
 
 impl Checked {
-    /// 依存する単位の KIR の鍵と表示の列(Diktor の `unit_keys`)。
+    /// 依存する単位ごとに、KIR の単位のキーと表示用のパスの組を返す(Diktor の `unit_keys`)。
     pub fn unit_keys(
         &self,
         fs: &mut dyn SourceFs,
@@ -319,20 +327,20 @@ fn failed(files: &Files, lines: Vec<OutLine>, f: Fail) -> CheckOutput {
     }
 }
 
-/// `diktor --type-check` と同じ手順で型検査し、出力の行と誤りを返す。
+/// `diktor --type-check` と同じ手順で型検査し、出力する行とエラーを返す。
 ///
 /// [`on_check_stack`] のスレッドの中で呼ぶ。
 pub fn check_files(opts: &CheckOptions, fs: &mut dyn SourceFs) -> Result<CheckOutput, Stop> {
     check_program(opts, fs).map(|c| c.output)
 }
 
-/// `diktor --type-check` と同じ手順で型検査し、型検査を済ませたプログラムを返す
+/// `diktor --type-check` と同じ手順で型検査し、型検査を終えたプログラムを返す
 /// (Diktor の driver.ml の `type_check_files_units`)。
 ///
 /// 手順は、プレリュードの構文解析と平坦化、コマンド行のファイルと import 先の読み込み、型検査の順である。
-/// 読めない入力、字句と構文の誤り、構文解析の内部の誤りは `Err` で返す。
+/// 読めない入力、字句エラー、構文エラー、構文解析の内部エラーは `Err` で返す。
 /// 型エラー、import エラー、未実装、処理系の限度は [`CheckOutput::error`] に、
-/// 平坦化と型検査の内部の誤りは [`CheckOutput::panic`] に入れて返す。
+/// 平坦化と型検査の内部エラーは [`CheckOutput::panic`] に入れて返す。
 /// [`on_check_stack`] のスレッドの中で呼ぶ。
 pub fn check_program(opts: &CheckOptions, fs: &mut dyn SourceFs) -> Result<Checked, Stop> {
     let mut cx = Ctx::new(opts.max_nest);
@@ -452,17 +460,19 @@ pub fn check_program(opts: &CheckOptions, fs: &mut dyn SourceFs) -> Result<Check
     done(cx, tc, files, prelude_flat, loaded, units, output)
 }
 
-/// 型検査に渡す単位(Diktor の `src_unit`)である。
+/// 型検査に渡す単位である(Diktor の `src_unit`)。
 struct UnitIn {
     id: UnitId,
-    /// import 文の添字、行き先の単位、import を書いた単位の添字(起点の単位ではコマンド行の何番目のファイルか)。
+    /// import 文ごとの 3 つ組。
+    /// import 文の添字、解決先の単位、その import 文を書いたファイルの添字である。
+    /// 3 つ目は起点の単位でだけ使い、コマンド行の何番目のファイルかを表す。
     imports: Vec<(usize, UnitId, usize)>,
     decls: Vec<Decl>,
 }
 
-/// 単位の列を型検査する(Diktor の `type_check_units`)。
+/// 単位の並びを順に型検査する(Diktor の `type_check_units`)。
 ///
-/// 起点の束縛だけを出力の行に出し、警告はどの単位のものも出す。
+/// 束縛の型を表示する行は起点の単位のものだけを出し、警告はどの単位のものも出す。
 fn check_units(
     tc: &mut Tc,
     prelude: &[Decl],
@@ -499,7 +509,9 @@ fn check_units(
             .filter(|b| matches!(b.1, PubEntry::Type(..) | PubEntry::Effect(..)))
             .map(|b| b.0.clone())
             .collect();
-        // 骨組みは、公開表(起点でない単位)と、import した名前との衝突の検査にだけ使う。
+        // 宣言の骨組みは `skeleton` が作る。
+        // 宣言の位置、ノードの番号、名前、`pub` の有無など、公開表の作成と衝突の検査に使う情報をコピーしたものである。
+        // 起点でない単位の公開表を作るときと、import した名前との衝突を検査するときにだけ使う。
         let skel = if unit != ROOT_UNIT || !seen.is_empty() {
             skeleton(&su.decls)
         } else {
@@ -518,7 +530,7 @@ fn check_units(
     Ok(())
 }
 
-/// 行の表示(Diktor の `render_line`)。
+/// 出力の行を文字列にする(Diktor の `render_line`)。
 pub fn render_line(l: &OutLine) -> String {
     match l {
         OutLine::Binding(s) => s.clone(),
@@ -531,7 +543,7 @@ mod tests {
     use super::*;
 
     /// 埋め込んだプレリュードが Diktor のものと同じであることを確かめる。
-    /// diktor のサブモジュールが無ければ調べない。
+    /// diktor のサブモジュールがなければ調べない。
     #[test]
     fn プレリュードは_diktor_のものと同じ() {
         let p = concat!(

@@ -1,23 +1,28 @@
-//! 対話的な実行の型検査の側である(Diktor の driver.ml の §16.6b と elab.ml の §11.44)。
+//! 対話的な実行(REPL)のうち、型検査を行う部分である(Diktor の driver.ml の `repl` と、elab.ml の `check_input`、`type_of_expr` に対応する)。
 //!
-//! [`Session`] は、プレリュードを 1 回だけ処理し、その後は入力ごとに次を行う。
+//! [`Session`] は、プレリュードを 1 回だけ処理し、その後は入力ごとに次の処理を行う。
 //!
 //! 1. 入力を構文解析する([`Session::parse`])。
 //!    文法に合わなかったトークンが `EOF` なら、続きの行を待つ。
-//! 2. 平坦化して型検査し、型検査に通った入力なら、その入力を 1 つの単位として KIR に書き、
-//!    セッションのプログラムの後ろに足す([`Session::check`]。[`ReplWriter`])。
-//!    プログラムは、組み込みの単位、プレリュードの単位、足した入力の単位(鍵は `repl/1`、`repl/2` …)からなる。
-//!    入力の単位は、結果の表示に使う隠れた大域(式文の値と、`Show.show` を呼ぶ関数)を持つ。
-//! 3. 呼び出し側が足した単位だけを実行し、その結果で入力を受理するか捨てるかを決める([`Session::finish`])。
+//! 2. 入力を平坦化して型検査する([`Session::check`])。
+//!    平坦化は、module の中の宣言を、修飾名を付けたトップレベルの宣言に展開する処理である。
+//!    型検査に通った入力は、1 つの単位として KIR に書き、セッションのプログラムの末尾に追加する([`ReplWriter`])。
+//!    プログラムは、組み込みの単位、プレリュードの単位、追加した入力の単位(キーは `repl/1`、`repl/2` …)からなる。
+//!    入力の単位は、結果の表示に使う、ソースにはないグローバルを持つ。
+//!    式文の値を入れるグローバルと、`Show.show` を呼ぶ関数を入れるグローバルである。
+//! 3. 呼び出し側が、追加した単位だけを実行する。
+//!    その結果を受け取って、入力を受理するか捨てるかを決める([`Session::finish`])。
 //!
-//! 受理しなかった入力(構文エラー、型エラー、実行時エラー)は捨てる。
-//! 型検査の文脈は入力の前に印を取り(`Tc::snapshot`)、捨てるときは印の時点に戻す。
-//! 入力の数とともに伸びる表(型、セル、穴、木の注釈、宣言表、名前の表など)は、印の後の書き換えの記録で戻し、
-//! 入力ごとに初めに戻す小さな欄だけを写しから戻す。
+//! 受理しなかった入力(構文エラー、型エラー、実行時エラーになった入力)は捨てる。
+//! 型検査のコンテキストは、入力の前にマークを取り(`Tc::snapshot`)、入力を捨てるときにマークの時点に戻す。
+//! 入力の数とともに大きくなる表(型、セル、穴、木の注釈、宣言表、名前の表など)は、マークの後の書き換えの記録を使って戻す。
+//! 入力ごとに初期状態に戻す小さなフィールドだけは、マークを取るときにコピーしておき、そのコピーから戻す。
 //! そのため、捨てた入力の宣言、束縛、インスタンスと、一般化しなかった束縛の型変数に決めた型は、後の入力から見えない。
-//! 印に戻しても、通し番号と名前の表(Diktor が戻さないもの)は捨てた入力の後のものを残す(`Session::restore`)。
-//! KIR の書き手の名前の表も同じく印で入力の前に戻すが、実行した単位はプログラムに残す
-//! (関数と大域の番号を詰め直さないためである。実行時エラーで止まった入力の大域の値は、実行する側が捨てる)。
+//! ただし、通し番号と名前の表は Diktor が戻さないので、マークの時点に戻しても、捨てた入力の後の状態を残す(`Session::restore`)。
+//! KIR のライタの名前の表も、同じようにマークを取って入力の前に戻す。
+//! 一方、実行した単位は、入力を捨てるときもプログラムに残す。
+//! 関数とグローバルの番号を詰め直さずに済ませるためである。
+//! 実行時エラーになった入力のグローバルの値は、呼び出し側が捨てる。
 
 use super::check::{PRELUDE, Stop, fail_to_error, parse_unit, render_line};
 use super::decls::{ROOT_UNIT, STD_UNIT};
@@ -31,36 +36,36 @@ use crate::ast::{Decl, DeclKind, PatKind};
 use crate::parser::{InputParse, parse_input};
 use crate::pos::{FileId, Files};
 
-/// 対話的な実行の選択肢である。
+/// 対話的な実行のオプションである。
 #[derive(Clone, Debug)]
 pub struct SessionOptions {
-    /// `--no-prelude`。
+    /// `--no-prelude` を指定したら真。プレリュードを読まない。
     pub no_prelude: bool,
-    /// `--prelude PATH`。
+    /// `--prelude PATH` で指定した、プレリュードのファイルのパス。指定がなければ、組み込みのプレリュードを使う。
     pub prelude: Option<String>,
-    /// 構文解析の限度。
+    /// 構文解析で作る木の深さの上限。
     pub max_nest: usize,
 }
 
 /// 入力を構文解析した結果である(Diktor の `parse_result`)。
 #[derive(Debug)]
 pub enum Parsed {
-    /// 入力が終わった。宣言の列である。
+    /// 入力が完結している。値は宣言の並びである。
     Complete(Vec<Decl>),
-    /// 続きの行を待つ。
+    /// 入力が途中で終わっているので、続きの行を待つ。
     Incomplete,
-    /// 誤り。報告する 1 行である。
+    /// エラー。値は報告する 1 行である。
     Failed(String),
 }
 
 /// セッションを始められなかった理由である([`Session::new`])。
 #[derive(Debug)]
 pub enum StartError {
-    /// プレリュードを読めない、字句と構文の誤り、内部の誤り(終了状態は `keleut check` の [`Stop`] と同じ)。
+    /// プレリュードの読み込みエラー、字句エラー、構文エラー、内部エラー。終了コードは `keleut check` の [`Stop`] と同じである。
     Stop(Stop),
-    /// プレリュードの型エラー(終了状態 1)。報告する 1 行である。
+    /// プレリュードの型エラー(終了コード 1)。値は報告する 1 行である。
     Type(String),
-    /// プレリュードを KIR に書き出せない(内部の誤り。終了状態 70)。報告する 1 行である。
+    /// プレリュードを KIR に書き出せない。内部エラーで、終了コードは 70 である。値は報告する 1 行である。
     Emit(String),
 }
 
@@ -70,125 +75,127 @@ impl From<Stop> for StartError {
     }
 }
 
-/// 結果を表示する束縛(Diktor の `exec_input` の `shown` の項目)である。
+/// 結果を表示する束縛である(Diktor の `exec_input` の `shown` の項目)。
 #[derive(Clone, Debug)]
 pub struct Shown {
-    /// `名前 : 型` の部分。
+    /// 表示する行のうち、`名前 : 型` の部分。
     pub label: String,
-    /// 値を持つ大域(KIR の添字)。
+    /// 値を持つグローバル(KIR の添字)。
     pub global: kir::GlobalId,
-    /// 型が `{}` の式文か(何も表示しない)。
+    /// 型が `{}` の式文なら真。このときは何も表示しない。
     pub unit_exp: bool,
-    /// 値を `Show.show` で表示するときの、`$show` の大域。
+    /// 値を `Show.show` で表示するときに使う、`$show` のグローバル。
     pub show: Option<kir::GlobalId>,
-    /// 値の型の配置([`Layouts`] の添字)。
+    /// 値の型のレイアウト([`Layouts`] の添字)。
     pub layout: usize,
 }
 
-/// 値の表示に使う、型から読んだ配置である。
+/// 値の表示に使うレイアウトである。値の型から作る。
 ///
-/// 実行時のレコードはフィールドを正準の配置(ラベルの番号の順)で持つ。
-/// 表示は、値の表示の順を型の表示(`名前 : 型 = 値` の型)の順にそろえるため、レコードのフィールドを型の行の順に並べ替える。
-/// ラベルの番号は受理しなかった入力を含むセッションの履歴で決まるので、表示に正準の配置の順を使わない。
-/// 配置は再帰する型のために表の添字で指し合う。
-/// 0 番は型の分からない値である。
-/// 型の分からない値のレコードは、フィールドをラベルの綴りの順で書く(`keleut repl` の `show_value`)。
+/// 実行時のレコードは、フィールドを正準なレイアウト(ラベルの番号の順)で持つ。
+/// 値を表示するときは、フィールドの順序を型の表示(`名前 : 型 = 値` の型)にそろえるために、レコードのフィールドをレコード型の行(フィールドの並び)の順に並べ替える。
+/// ラベルの番号は、受理しなかった入力を含むセッションの履歴で決まるので、正準なレイアウトの順序は表示に使わない。
+/// 再帰する型を表せるように、レイアウトは子のレイアウトを表の添字で参照する。
+/// 0 番は、型の分からない値のレイアウトである。
+/// 型の分からない値のレコードは、フィールドをラベル名の順に表示する(`keleut repl` の `show_value`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
-    /// 型の分からない値(型変数、関数など)。子も型が分からないものとして表示する。
+    /// 型の分からない値(型変数、関数など)。子も型の分からない値として表示する。
     Any,
-    /// レコードとタプル。ラベル(KIR の綴り)と子の配置の、型の行の順の列。
+    /// レコードとタプル。ラベル(KIR での名前)と子のレイアウトの組を、レコード型の行の順に並べたもの。
     Record(Vec<(String, usize)>),
-    /// ヴァリアント。ラベルと積載値の配置。
+    /// ヴァリアント。ラベルとペイロードのレイアウトの組の並び。
     Variant(Vec<(String, usize)>),
-    /// データ。コンストラクタの名前(表示の綴り)と、フィールドの配置の列。
+    /// データ。コンストラクタの表示名と、各フィールドのレイアウトの並びの組を並べたもの。
     Data(Vec<(String, Vec<usize>)>),
-    /// `Array` と `MutableArray`。要素の配置。
+    /// `Array` と `MutableArray`。値は要素のレイアウトである。
     Array(usize),
 }
 
 /// [`Layout`] の表である。
 #[derive(Clone, Debug, Default)]
 pub struct Layouts {
-    /// 配置。0 番は [`Layout::Any`] である。
+    /// レイアウトの並び。0 番は [`Layout::Any`] である。
     pub nodes: Vec<Layout>,
 }
 
-/// 配置の表に置く項目の数の上限(正則でない再帰型で表が限りなく伸びないようにする)。
-/// 届いた後の型は型の分からない値として表示する。
+/// レイアウトの表に置く項目数の上限である。正則でない再帰型で、表が際限なく大きくならないようにする。
+/// 項目数が上限に達した後の型は、型の分からない値として表示する。
 const LAYOUT_BUDGET: usize = 4096;
-/// 配置を作る型の大きさの上限(`Session::layout_key` の数え方で、この値を含む)。
+/// レイアウトを作る型のサイズの上限である。サイズは `Session::layout_key` が数え、サイズがこの値以下の型にレイアウトを作る。
 ///
-/// 超えた型は型の分からない値として表示する。
-/// 上限は表示する値全体の型に掛かり、外側の型の大きさが上限を超えると、内側のレコードにも配置を作らない。
-/// `Int32` のフィールド N 個のレコードの大きさは 2N + 1 なので、表示する値全体がレコードのとき、配置を使うのはフィールド 409 個までである。
-/// 大きさは型の構造だけで決まり、通し番号の桁数に依らないので、配置を使うかどうかは受理しなかった入力に依らない。
+/// 上限を超えた型は、型の分からない値として表示する。
+/// 上限は表示する値全体の型に適用するので、外側の型のサイズが上限を超えると、内側のレコードにもレイアウトを作らない。
+/// `Int32` のフィールドが N 個のレコードのサイズは 2N + 1 なので、表示する値全体がそのレコードのとき、レイアウトを使うのはフィールドが 409 個までである。
+/// サイズは型の構造だけで決まり、通し番号の桁数によらないので、レイアウトを使うかどうかは、受理しなかった入力に影響されない。
 const LAYOUT_SIZE_MAX: usize = 820;
 
 /// [`Session::check`] の結果である。
 pub enum Outcome {
-    /// 受理しなかった。報告する行(警告と誤り)である。
+    /// 受理しなかった。値は報告する行(警告とエラー)である。
     Rejected(Vec<String>),
-    /// 型検査に通った。呼び出し側は警告の行を出し、足した単位を実行してから [`Session::finish`] を呼ぶ。
+    /// 型検査に通った。呼び出し側は警告の行を出力し、追加した単位を実行してから [`Session::finish`] を呼ぶ。
     Run {
         /// 警告の行。
         lines: Vec<String>,
         /// セッションのプログラム。最後の単位がこの入力である。
-        /// [`Session::finish`] で返す。
+        /// 実行した後、[`Session::finish`] に渡してセッションに返す。
         program: Box<kir::Program>,
-        /// 結果を表示する束縛(入力の順)。
+        /// 結果を表示する束縛。入力に書いた順に並ぶ。
         shown: Vec<Shown>,
-        /// 値の配置。
+        /// 値のレイアウトの表。
         layouts: Layouts,
     },
 }
 
-/// 型検査に通り、実行を待つ入力である。
+/// 型検査に通り、実行を待っている入力である。
 struct PendingInput {
     snapshot: Snapshot,
     flat: Vec<Decl>,
     env: Env,
-    /// 書き手の名前の表の、入力の前の写し。
+    /// 入力の前に取った、ライタの名前の表のマーク。
     writer: WriterMark,
-    /// 入力の単位を足す前のプログラムの大きさ。
+    /// 入力の単位を追加する前のプログラムのサイズ。
     program: ProgramMark,
 }
 
-/// 実行した結果([`Session::finish`])。
+/// 入力の単位を実行した結果である([`Session::finish`] に渡す)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Finish {
     /// 最後まで実行した。入力を受理する。
     Accepted,
-    /// 実行時エラーで止まった。入力を捨てるが、実行した単位はプログラムに残す。
+    /// 実行時エラーなどで、実行が最後まで進まなかった。入力を捨てるが、実行した単位はプログラムに残す。
     Failed,
-    /// 実行しなかった(KIR の限度に当たった)。入力を捨て、足した単位をプログラムから除く。
+    /// 実行しなかった。入力を捨て、追加した単位をプログラムから取り除く。
+    /// 入力の単位が処理系の限度に当たったときと、実行の前に標準出力へ書けなかったときである。
+    /// 処理系の限度に当たるのは、入れ子が KIR の上限を超えたときと、KIR を処理するスレッドを作れなかったときである。
     Unrun,
 }
 
-/// 対話的な実行の型検査の状態である。
+/// 対話的な実行のうち、型検査を行う部分の状態である。
 pub struct Session {
     opts: SessionOptions,
     tc: Tc,
     files: Files,
-    /// 入力の `<stdin>` のファイルの添字(入力ごとに足さない)。
+    /// 入力を表すファイル `<stdin>` の添字。入力ごとに新しいファイルを追加せず、同じ添字を使う。
     stdin: FileId,
     cx: Ctx,
-    /// プレリュードだけを処理した後の環境に、受理した入力の束縛を足した環境。
+    /// プレリュードだけを処理した後の環境に、受理した入力の束縛を追加した環境。
     env: Env,
-    /// KIR の書き手。
+    /// KIR のライタ。
     writer: ReplWriter,
-    /// セッションのプログラム(入力の実行の間は呼び出し側が持つ)。
+    /// セッションのプログラム。入力を実行している間は呼び出し側が持つ。
     program: Option<Box<kir::Program>>,
-    /// 次に足す単位の番号(受理しなかった入力の単位の鍵も使い直さない)。
+    /// 次に追加する単位の番号。受理しなかった入力の単位のキーも再利用しない。
     next_unit: u32,
     /// 受理した入力のトップレベルの値の名前(Diktor の `session_vals`)。
     session_vals: HashSet<String>,
-    /// `Print` をプレリュードが所有するか。
+    /// エフェクト `Print` がプレリュードの宣言なら真。
     print_owned: bool,
     pending: Option<PendingInput>,
 }
 
-/// 型検査の誤りの 1 行。内部の誤りは `[BUG]` の文面のまま返す。
+/// 型検査のエラーを、報告する 1 行にする。内部エラーは `[BUG]` の付いたメッセージのまま返す。
 fn render_fail(files: &Files, f: Fail) -> String {
     match fail_to_error(files, f) {
         Ok(e) => e.render(),
@@ -199,8 +206,9 @@ fn render_fail(files: &Files, f: Fail) -> String {
 impl Session {
     /// プレリュードを処理したセッションを作る(Diktor の `repl` の `start`)。
     ///
-    /// 型検査と同じ [`on_check_stack`](super::check::on_check_stack) のスレッドの中で呼ぶ。
-    /// プレリュードの型エラーは [`StartError::Type`] で返す(Diktor は標準エラーに書いて 1 で終わる)。
+    /// 型検査と同じく、[`on_check_stack`](super::check::on_check_stack) が作るスレッドの中で呼ぶ。
+    /// プレリュードの型エラーは [`StartError::Type`] で返す。
+    /// Diktor は、同じエラーを標準エラーに書いて終了コード 1 で終了する。
     pub fn new(opts: SessionOptions) -> Result<Session, StartError> {
         let mut cx = Ctx::new(opts.max_nest);
         let mut files = Files::new();
@@ -273,14 +281,16 @@ impl Session {
         })
     }
 
-    /// プレリュードまでを書いたプログラムを取り出す(始めるときと `:reset` の後の、プレリュードの初期化)。
+    /// プレリュードまでを書いたプログラムを取り出す。
     ///
-    /// 実行した後で [`Session::put_program`] で返す。
+    /// セッションの開始時と `:reset` の後に、プレリュードの初期化を実行するために使う。
+    ///
+    /// 実行した後、[`Session::put_program`] でセッションに返す。
     pub fn take_program(&mut self) -> Option<Box<kir::Program>> {
         self.program.take()
     }
 
-    /// [`Session::take_program`] で取り出したプログラムを返す。
+    /// [`Session::take_program`] で取り出したプログラムをセッションに返す。
     pub fn put_program(&mut self, p: Box<kir::Program>) {
         self.program = Some(p);
     }
@@ -293,7 +303,7 @@ impl Session {
 
     /// 入力を構文解析する(Diktor の `try_parse`)。
     ///
-    /// `src` の 1 行目を `line` 行目とし、1 行目の桁を `col0` だけずらす。
+    /// `src` の 1 行目を `line` 行目として扱い、1 行目の桁を `col0` だけずらす。
     pub fn parse(&mut self, src: &[u8], line: u32, col0: u32) -> Parsed {
         match parse_input(src, self.stdin, &self.files, &mut self.cx, line, col0) {
             InputParse::Complete(p) => match p.imports.first() {
@@ -314,14 +324,14 @@ impl Session {
         }
     }
 
-    /// 型検査の文脈を印の時点に戻す。通し番号と名前の表は今のものを残す。
+    /// 型検査のコンテキストをマークの時点に戻す。通し番号と名前の表は、現在のものを残す。
     fn restore(&mut self, snap: Snapshot) {
         self.tc.rollback_with(snap, true);
     }
 
     /// 1 つの入力を平坦化して型検査し、受理できれば KIR を書く(Diktor の `repl` の `process` の前半)。
     ///
-    /// 受理しなかったときは、型検査の文脈を入力の前に戻してから返す。
+    /// 受理しなかったときは、型検査のコンテキストを入力の前に戻してから返す。
     /// [`Outcome::Run`] を返したときは、呼び出し側が [`Session::finish`] を呼ぶ。
     pub fn check(&mut self, decls: Vec<Decl>) -> Outcome {
         let snap = self.tc.snapshot();
@@ -386,11 +396,11 @@ impl Session {
         }
     }
 
-    /// 結果を表示する束縛を集め、入力の単位を KIR に書いて `program` の後ろに足す。
+    /// 結果を表示する束縛を集め、入力の単位を KIR に書いて `program` の末尾に追加する。
     ///
-    /// 誤りのときは、書き手が足しかけた項目を除き、書き手の表を戻してある。
+    /// エラーを返すときは、ライタが途中まで追加した項目を取り除き、ライタの表を元に戻してある。
     fn prepare(&mut self, flat: &[Decl], program: &mut kir::Program) -> R<(Vec<Shown>, Layouts)> {
-        // 束縛ごとの (表示の名前, 型, 大域を引く鍵)。
+        // 束縛ごとの (表示名, 型, グローバルを引くキー, 式文なら真)。
         let mut items: Vec<(String, Ty, (crate::ast::NodeId, String), bool)> = Vec::new();
         for d in flat {
             match &d.kind {
@@ -420,7 +430,7 @@ impl Session {
             }
         }
         let mut shows: Vec<(Evidence, Vec<DKey>)> = Vec::new();
-        // (表示の名前と型, 大域を引く鍵, 型が {} の式文か, shows の添字, 配置)。
+        // (表示名と型, グローバルを引くキー, 型が {} の式文なら真, shows の添字, レイアウト)。
         type Pre = (
             String,
             (crate::ast::NodeId, String),
@@ -486,12 +496,14 @@ impl Session {
         Ok((shown, layouts))
     }
 
-    /// 型の構造の鍵。型変数は `?` にする(型変数の位置の値は型の分からない値として表示する)。
+    /// 型の構造を表すキーを `out` に書く。
     ///
-    /// `size` に型の大きさを足していき、[`LAYOUT_SIZE_MAX`] を超えたところでたどるのをやめて `false` を返す。
-    /// 大きさは、たどった型の節(型構成子、レコード、ヴァリアント、`?`)の数とレコードとヴァリアントのフィールドの数の和で、
-    /// 通し番号の綴りの長さを含めない。
-    /// 上限の内側の型では鍵を最後まで作るので、別の型が同じ鍵になることはない。
+    /// 型変数は `?` にする。型変数の位置の値は、型の分からない値として表示するからである。
+    ///
+    /// `size` に型のサイズを加算していき、[`LAYOUT_SIZE_MAX`] を超えたら、たどるのをやめて `false` を返す。
+    /// サイズは、たどった型のノード(型構成子、レコード、ヴァリアント、`?`)の個数と、レコードとヴァリアントのフィールドの個数の和である。
+    /// 通し番号の表記の長さは含めない。
+    /// サイズが上限以下の型ではキーを最後まで作るので、別の型が同じキーになることはない。
     fn layout_key(&mut self, t: Ty, out: &mut String, size: &mut usize) -> R<bool> {
         super::guard()?;
         *size += 1;
@@ -535,7 +547,7 @@ impl Session {
         Ok(true)
     }
 
-    /// 型 `t` の配置を表に置き、その添字を返す。
+    /// 型 `t` のレイアウトを表に追加し、その添字を返す。レイアウトを作らない型には 0 を返す。
     fn layout(&mut self, t: Ty, ls: &mut Layouts, memo: &mut HashMap<String, usize>) -> R<usize> {
         super::guard()?;
         let t = self.tc.repr(t);
@@ -606,10 +618,11 @@ impl Session {
         Ok(id)
     }
 
-    /// 型の頭が newtype で、その型が `Show` を満たすか(Diktor の `show_value` の `shows`)。
+    /// 型の先頭の型構成子が newtype で、その型が `Show` を満たせば真を返す(Diktor の `show_value` の `shows`)。
     ///
-    /// 満たすかどうかは、型検査の文脈に `Show` の制約を足して確かめ、文脈を足す前に戻す
-    /// (足した制約が、後の束縛の確かめと表示に効かないようにする)。
+    /// 満たすかどうかは、型検査のコンテキストに `Show` の制約を追加して調べる。
+    /// 調べた後で、コンテキストを制約を追加する前の状態に戻す。
+    /// 追加した制約が、後の束縛の検査と表示に影響しないようにするためである。
     fn shows_newtype(&mut self, t: Ty) -> R<bool> {
         let r = self.tc.repr(t);
         let TyNode::Con(c, _) = self.tc.node(r) else {
@@ -620,7 +633,7 @@ impl Session {
         }
         let show = self.tc.intern("Show");
         if self.tc.find_instance(show, c).is_none() {
-            // インスタンスが無ければ、制約を足すと必ず失敗する。
+            // インスタンスがなければ、制約を追加しても失敗するだけなので、追加せずに偽を返す。
             return Ok(false);
         }
         let snap = self.tc.snapshot();
@@ -629,9 +642,10 @@ impl Session {
         Ok(ok)
     }
 
-    /// 結果の表示に使う証拠(Diktor の `Unify.display_evidence`)。
+    /// 結果の表示に使う証拠を作る(Diktor の `Unify.display_evidence`)。
     ///
-    /// 決まっていない部分は、辞書の引数にして `pend` に足す(Diktor の解けていない穴)。
+    /// 決まっていない部分は辞書の引数にして、そのキーを `pend` に追加する。
+    /// これは Diktor の解けていない穴に相当する。
     fn display_evidence(&mut self, c: super::Oid, t: Ty, pend: &mut Vec<DKey>) -> R<Evidence> {
         super::guard()?;
         let t = self.tc.repr(t);
@@ -674,11 +688,11 @@ impl Session {
         Evidence::Param(k)
     }
 
-    /// 実行の結果で、入力を受理するか捨てるかを決める(Diktor の `repl` の `process` の後半)。
+    /// 実行の結果に従って、入力を受理するか捨てるかを決める(Diktor の `repl` の `process` の後半)。
     ///
     /// `program` は [`Outcome::Run`] で渡したプログラムである。
-    /// 受理しなければ、型検査の文脈と書き手の名前の表を入力の前に戻す。
-    /// [`Finish::Unrun`] なら、足した単位もプログラムから除く。
+    /// 受理しないときは、型検査のコンテキストとライタの名前の表を入力の前に戻す。
+    /// [`Finish::Unrun`] のときは、追加した単位もプログラムから取り除く。
     pub fn finish(&mut self, mut program: Box<kir::Program>, r: Finish) {
         let Some(p) = self.pending.take() else {
             self.program = Some(program);
@@ -714,9 +728,9 @@ impl Session {
         }
     }
 
-    /// `:type` の式の型を表示する 1 行(Diktor の `repl` の `type_of_expr`)。
+    /// `:type` に書いた式の型を表示する 1 行を返す(Diktor の `repl` の `type_of_expr`)。
     ///
-    /// 型検査の書き換えは必ず戻す。
+    /// 型検査が行った書き換えは、成功しても失敗しても元に戻す。
     pub fn type_of(&mut self, src: &[u8], line: u32, col0: u32) -> String {
         let decls = match self.parse(src, line, col0) {
             Parsed::Complete(ds) => ds,
@@ -742,7 +756,7 @@ impl Session {
 }
 
 impl Tc {
-    /// 入力ごとの状態を初めに戻す(Diktor の `start_input`)。
+    /// 入力ごとの状態を初期状態に戻す(Diktor の `start_input`)。
     pub(crate) fn start_input(&mut self) {
         self.current_out.clear();
         self.warnings.clear();
@@ -756,8 +770,8 @@ impl Tc {
 
     /// 対話的な実行の入力を平坦化する(Diktor の `flatten_modules ~session_vals`)。
     ///
-    /// 入力のトップレベルの値が、前の入力の module の中の値と同名でないかを確かめ、
-    /// 前の入力のトップレベルの値の名前を、この入力の module の中の値と突き合わせる。
+    /// 入力のトップレベルの値が、前の入力の module の中の値と同名でないことを検査する。
+    /// 前の入力のトップレベルの値の名前は、この入力の module の中の値と照合する。
     pub(crate) fn flatten_input(
         &mut self,
         session_vals: &HashSet<String>,
@@ -787,8 +801,8 @@ impl Tc {
                 }
             }
         }
-        // 前の入力のトップレベルの値の名前は、この入力の module の中の値と突き合わせるだけに使う。
-        // module の無い入力では渡さない(入力ごとに前の入力の数だけ手間がかからないようにする)。
+        // 前の入力のトップレベルの値の名前は、この入力の module の中の値と照合するためだけに使う。
+        // module のない入力では渡さない。入力のたびに、前の入力の数に比例する時間がかからないようにするためである。
         let prev: Vec<String> = if decls.iter().any(|d| matches!(d.kind, DeclKind::Module(..))) {
             let mut v: Vec<String> = session_vals.iter().cloned().collect();
             v.sort();
@@ -799,10 +813,10 @@ impl Tc {
         self.flatten_modules(&prev, &[], ROOT_UNIT, decls)
     }
 
-    /// 1 入力分の宣言を型検査する(Diktor の `check_input`)。
+    /// 1 つの入力の宣言を型検査する(Diktor の `check_input`)。
     ///
-    /// トップレベルの行に `Print` を足す(プレリュードが所有するときだけ効く)。
-    /// 型の行と警告は [`Tc::current_out`] に積む。
+    /// `Print` がプレリュードの宣言であるときだけ、トップレベルのエフェクト行に `Print` を追加する。
+    /// 型を表示する行と警告は、[`Tc::current_out`] に追加する。
     pub(crate) fn check_input(&mut self, env: &Env, decls: &[Decl]) -> R<Env> {
         self.start_input();
         let saved = self.d.current_unit;
@@ -812,8 +826,9 @@ impl Tc {
         r
     }
 
-    /// 式を let の右辺と同じく 1 段深いレベルで推論し、let と同じ値制限で一般化した型を返す
-    /// (Diktor の `type_of_expr`。対話的な実行の `:type`)。
+    /// 式を `let` の右辺と同じく 1 段深いレベルで推論し、`let` と同じ値制限で一般化した型を返す。
+    ///
+    /// Diktor の `type_of_expr` に対応し、対話的な実行の `:type` が使う。
     pub(crate) fn type_of_expr(&mut self, env: &Env, e: &crate::ast::Exp) -> R<Ty> {
         self.start_input();
         let eff0 = self.toplevel_eff(&["Print".to_string()]);
@@ -835,19 +850,19 @@ impl Tc {
     }
 }
 
-/// 型検査の文脈の印([`Tc::snapshot`])。
+/// 型検査のコンテキストのマークである([`Tc::snapshot`] が返す)。
 pub(crate) struct Snapshot {
-    /// 書き換えを記録する表を除いた文脈の写し(入力ごとに初めに戻す、小さな欄だけが残る)。
+    /// 書き換えを記録する表を除いた、コンテキストのコピー。入力ごとに初期状態に戻す小さなフィールドだけが入っている。
     rest: Box<Tc>,
     /// 型の表の長さ。
     tys: usize,
-    /// 宣言表の、表でない欄。
+    /// 宣言表のうち、表でないフィールドのマーク。
     decls: super::decls::DeclsMark,
 }
 
-/// 型検査の文脈のうち、印を取るときに写さず、印の後の書き換えの記録で戻す欄である。
+/// 型検査のコンテキストのうち、マークを取るときにコピーせず、マークの後の書き換えの記録を使って戻すフィールドである。
 ///
-/// 入力の数とともに伸びる表(型、セル、カインド、穴、木の注釈、宣言表、名前の表など)をすべて含む。
+/// 入力の数とともに大きくなる表(型、セル、カインド、穴、木の注釈、宣言表、名前の表など)をすべて含む。
 struct Big {
     tys: Vec<super::TyNode>,
     cells: Vec<super::TVar>,
@@ -903,14 +918,14 @@ impl Tc {
         self.name_map = b.name_map;
     }
 
-    /// 文脈の印を取る(対話的な実行の入力の取り消し。計画 7 節の snapshot)。
+    /// コンテキストのマークを取る。対話的な実行が、入力を取り消すために使う。
     ///
-    /// 入力の数とともに伸びる表([`Big`])は写さず、印の後の書き換えを記録する。
-    /// 型の表は足すだけなので長さを覚え、ほかの表は書き換える前の値を覚える。
-    /// 残りの欄は写すが、どれも入力ごとに初めに戻す小さなものである。
-    /// そのため、印を取る手間は、それまでの入力の数と大きさに依らない。
-    /// 印は入れ子にできる。
-    /// 取った印は、[`Tc::rollback`] で戻すか [`Tc::commit`] で外す。
+    /// 入力の数とともに大きくなる表([`Big`])はコピーせず、マークの後の書き換えを記録する。
+    /// 型の表は末尾に追加するだけなので長さを記録し、それ以外の表は書き換える前の値を記録する。
+    /// 残りのフィールドはコピーするが、どれも入力ごとに初期状態に戻す小さなものである。
+    /// そのため、マークを取るのにかかる時間は、それまでの入力の数とサイズによらない。
+    /// マークは入れ子にできる。
+    /// 取ったマークは、[`Tc::rollback`] でその時点に戻すか、[`Tc::commit`] で外す。
     pub(crate) fn snapshot(&mut self) -> Snapshot {
         let big = self.take_big();
         let rest = Box::new(self.clone());
@@ -932,7 +947,7 @@ impl Tc {
         }
     }
 
-    /// 印 `s` を外し、印の後の書き換えを残す。
+    /// マーク `s` を外し、マークの後の書き換えを残す。
     pub(crate) fn commit(&mut self, s: Snapshot) {
         drop(s);
         self.cell_trail.commit();
@@ -947,12 +962,12 @@ impl Tc {
         self.d.commit();
     }
 
-    /// 文脈を印 `s` の時点に戻す(通し番号と名前の表も戻す)。
+    /// コンテキストをマーク `s` の時点に戻す。通し番号と名前の表も戻す。
     pub(crate) fn rollback(&mut self, s: Snapshot) {
         self.rollback_with(s, false);
     }
 
-    /// 文脈を印 `s` の時点に戻す。`keep_names` なら、通し番号と名前の表は今のものを残す。
+    /// コンテキストをマーク `s` の時点に戻す。`keep_names` が真なら、通し番号と名前の表は現在のものを残す。
     pub(crate) fn rollback_with(&mut self, s: Snapshot, keep_names: bool) {
         let next_oid = self.next_oid;
         self.cell_trail.rollback(&mut self.cells);
@@ -963,7 +978,7 @@ impl Tc {
         self.dict.rollback();
         self.rigid_tparams.rollback();
         if keep_names {
-            // 外側の印のために記録は残す。
+            // 外側のマークのために、書き換えの記録は残す。
             self.intern_map.commit();
             self.name_map.commit();
         } else {

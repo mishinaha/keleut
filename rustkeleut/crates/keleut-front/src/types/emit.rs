@@ -1,24 +1,26 @@
-//! 型検査を済ませた単位の列から KIR への書き出しである(Diktor の ir_write.ml、第18章)。
+//! 型検査を済ませた単位の並びを KIR として書き出す(Diktor の ir_write.ml、第18章に当たる)。
+//! 単位はコンパイル単位で、プレリュード、import したファイル、起点、REPL の入力のそれぞれが 1 つの単位になる。
 //!
-//! 規範は親リポジトリの `doc/IRSpec.md` で、出力は `diktor --emit-ir` と `--emit-ir-text` とバイト単位で同じにする。
-//! 名前の振り方、スロットと捕獲の番号、表の並びは、どれも Diktor の書き手と同じ規則で決める。
+//! 仕様は親リポジトリの `doc/IRSpec.md` が定める。
+//! 出力は、`diktor --emit-ir` と `--emit-ir-text` の出力にバイト単位で一致させる。
+//! 名前の付け方、スロットとキャプチャの番号、表の順序は、どれも Diktor のライタ(KIR を書き出す側)と同じ規則で決める。
+//! 本ファイルの区切りのコメントにある §18.N は、ir_write.ml の節の番号である。
 //!
-//! 書き出しは Diktor と同じく 2 段で行う。
-//! 1 段目は、すべての単位の宣言をたどって、型、エフェクト、クラス、インスタンス、大域を表に置き、
-//! 単位ごとの初期化の手順と、根の関数を書く仕事の列を作る。
-//! 2 段目は、仕事を順に行い、根の関数とその持ち上げた関数を関数の表に足す。
+//! 書き出しは Diktor と同じく 2 段階で行う。
+//! 第 1 段階では、すべての単位の宣言をたどって、型、エフェクト、クラス、インスタンス、グローバルを表に置き、単位ごとの初期化手順と、ルート関数を書き出すジョブの並びを作る。
+//! 第 2 段階では、ジョブを順に実行し、ルート関数と、そこから持ち上げた関数(ラムダリフティングで取り出した関数)を関数表に追加する。
 //!
-//! Diktor は記号の文字列で表の項目を指す KIR を作ってから、符号化のときに添字を引く。
-//! 本モジュールは [`kir::Program`] の添字を直に書く。
-//! 型、エフェクト、クラス、インスタンス、大域の添字は 1 段目で決まるので、その場で書く。
-//! 関数の添字は、根の関数を書き終えて持ち上げた関数を場所の番号の順に並べるまで決まらない。
-//! そこで、持ち上げた関数を作る式(`closure`、`dictabs`、`handle`)の部分には枠の番号を仮に書き、
-//! 根の関数を書き終えてから関数の添字と捕獲の列に書き換える。
-//! 捕獲の番号も、Diktor と同じく枠をまたいで一意の仮の番号で書き、根の関数の終わりに書き換える。
-//! 書き換える式と辞書は、作ったときに列に記録しておくので、木をたどり直さない。
+//! Diktor は、表の項目をシンボルの文字列で指す KIR を作ってから、符号化のときにシンボルを添字に直す。
+//! 本モジュールは [`kir::Program`] の添字を直接書く。
+//! 型、エフェクト、クラス、インスタンス、グローバルの添字は第 1 段階で決まるので、その場で書く。
+//! 関数の添字は、ルート関数を書き終えて、持ち上げた関数を生成箇所の番号の順に並べるまで決まらない。
+//! そこで、持ち上げた関数を作る式(`closure`、`dictabs`、`handle`)の `Part` には、書き出し中の関数(`Frame`)の番号を仮に書いておく。
+//! ルート関数を書き終えてから、この番号を関数の添字とキャプチャの並びに書き換える。
+//! キャプチャの番号も、Diktor と同じく、書き出し中の関数をまたいで一意な仮の番号で書いておき、ルート関数を書き終えたときに確定した番号に書き換える。
+//! 書き換える式と辞書は、作ったときに配列に記録しておくので、木をたどり直す必要はない。
 //!
-//! 式、辞書、パターンのノードを [`kir::Nodes`] に置く順は出力に現れない
-//! (テキストとバイナリの書き手は、関数の本体から木をたどる)。
+//! 式、辞書、パターンのノードを [`kir::Nodes`] に置く順は、出力に影響しない。
+//! テキストとバイナリのライタは、関数の本体から木をたどって書くからである。
 
 use super::check::{CheckOptions, Checked};
 use super::exhaust::{ocaml_int32_opt, ocaml_int64_opt};
@@ -33,55 +35,58 @@ use kir::{
 };
 use std::rc::Rc;
 
-/// 書き出す単位(Diktor の `unit_src`)である。
+/// 書き出す単位である(Diktor の `unit_src`)。
 pub struct UnitSrc<'a> {
-    /// 単位の鍵。
+    /// 単位のキー。
     pub key: String,
-    /// 元のファイルの綴り。
+    /// 元のファイルのパスの並び。
     pub paths: Vec<Vec<u8>>,
-    /// 平坦化と型検査を済ませた宣言の列。
+    /// 平坦化と型検査を済ませた宣言の並び。
     pub decls: &'a [Decl],
-    /// 対話的な実行の入力の単位の書き出し方(ファイルの単位では `None`)。
+    /// REPL の入力の単位を書き出すときの設定。ファイルの単位では `None` である。
     pub repl: Option<&'a ReplUnit>,
 }
 
-/// 対話的な実行の入力の単位の書き出し方である(Diktor の driver.ml の §16.6b)。
+/// REPL の入力の単位を書き出すときの設定である(Diktor の driver.ml の §16.6b に当たる)。
 ///
-/// Diktor の対話的な実行は、トップレベルの行に `Print` を足し、最も外側のハンドラが `Print.print` を出力先へ送る。
-/// KIR には実行時が持つ最も外側のハンドラが無いので、この単位の初期化式と式文の `thunk` と、
-/// 辞書を受け取らないメソッドの値の初期化を、書き手が作る `Print` のハンドラ式で包む。
-/// ハンドラは `print(s)` を `resume(perform Console.write(s))` に翻訳するので、印字される文字列は同じである。
-/// プレリュードの `with_stdout` は使わないので、`--prelude` のプレリュードが `with_stdout` を持たなくても、
-/// 違う `with_stdout` を持っても、結果は同じである。
+/// Diktor の REPL は、トップレベルのエフェクト行に `Print` を追加し、最も外側のハンドラが `Print.print` を出力先へ送る。
+/// KIR には、ランタイムが持つ最も外側のハンドラがない。
+/// そこで、この単位の初期化式と式文の `thunk`、および辞書を受け取らないメソッドの値の初期化を、ライタが作る `Print` のハンドラ式で囲む。
+/// このハンドラは `print(s)` を `resume(perform Console.write(s))` に置き換えるので、出力される文字列は同じである。
+/// プレリュードの `with_stdout` は使わない。
+/// そのため、`--prelude` で渡したプレリュードに `with_stdout` がなくても、別の定義の `with_stdout` があっても、結果は変わらない。
 #[derive(Clone, Debug, Default)]
 pub struct ReplUnit {
-    /// `Print` をハンドラ式で処理する(プレリュードが、引数 1 個の操作 `print` を持つ `Print` と、
-    /// 実行時が処理する `Console.write` を持つときだけ効く)。
+    /// 真なら、`Print` をハンドラ式で処理する。
+    /// プレリュードに、引数 1 個の操作 `print` を持つ `Print` と、ランタイムが処理する `Console.write` があるときだけ有効である。
     pub print: bool,
-    /// 結果を表示する入力か。
-    /// 真なら、式文の値を隠れた大域(`$it`)に束縛し、辞書を受け取る式文は辞書を受け取る大域にする。
+    /// 結果を表示する入力なら真である。
+    /// 真のとき、式文の値を内部用のグローバル(`$it`)に束縛する。
+    /// 辞書を受け取る式文は、辞書を受け取るグローバル(種類 `dictabs`)にする。
     pub display: bool,
-    /// `Show.show` で表示する値ごとの、`Show` の証拠と、証拠の中の決まっていない部分の辞書の引数。
-    /// 値ごとに隠れた大域(`$show`)を作る。
-    /// 辞書の引数が無ければ種類 `fn` の関数(値を受け取って文字列を返す)、あれば種類 `dictabs` の関数
-    /// (辞書を受け取って、値を受け取る関数を返す)である。
+    /// `Show.show` で表示する値ごとの、`Show` の証拠(どのインスタンスの辞書を使うかを表す項)と、証拠のうちまだ決まっていない部分に渡す辞書の引数。
+    /// 値ごとに内部用のグローバル(`$show`)を作る。
+    /// 辞書の引数がなければ、種類 `fn` のグローバルにする。その関数は、値を受け取って文字列を返す。
+    /// 辞書の引数があれば、種類 `dictabs` のグローバルにする。その関数は、辞書を受け取って、値を受け取る関数を返す。
     pub shows: Vec<(Evidence, Vec<DKey>)>,
 }
 
-/// 対話的な実行の入力の単位を書き出した結果である。
+/// REPL の入力の単位を書き出した結果である。
 #[derive(Clone, Debug, Default)]
 pub struct ReplOut {
-    /// 束縛のノードの番号と名前から大域へ(式文はノードの番号と `$it`)。
+    /// (束縛のノードの番号, 名前)の組から、グローバルへの対応。
+    /// 式文は、式文のノードの番号と `$it` の組で登録する。
+    /// [`ReplUnit::display`] が真のときだけ記録する。
     pub globals: Vec<((NodeId, String), GlobalId)>,
-    /// [`ReplUnit::shows`] の順の、`$show` の大域。
+    /// `$show` のグローバル。[`ReplUnit::shows`] と同じ順に並ぶ。
     pub shows: Vec<GlobalId>,
 }
 
-/// 型検査を済ませたプログラムを KIR にする(Diktor の driver.ml の `ir_program`)。
+/// 型検査を済ませたプログラムを KIR に変換する(Diktor の driver.ml の `ir_program`)。
 ///
 /// `keys` は [`Checked::unit_keys`] の結果である。
-/// 単位はプレリュード、import した単位(初期化の順)、起点の順に並べる。
-/// 型検査が誤りなく終わった `checked` を渡す。
+/// 単位は、プレリュード、import した単位(初期化の順)、起点の順に並べる。
+/// `checked` には、型検査がエラーなく終わったものを渡す。
 /// 型検査と同じ [`check::on_check_stack`](super::check::on_check_stack) のスレッドの中で呼ぶ。
 pub fn program_of_checked(
     checked: &mut Checked,
@@ -131,7 +136,7 @@ pub fn program_of_checked(
 // 表(§18.2、§18.3)
 // ---------------------------------------------------------------------------
 
-/// 記号の名前の部分。記号の最後の `/` より後ろである。
+/// シンボルのうち、最後の `/` より後ろの名前の部分を返す。
 fn sym_name(s: &str) -> &str {
     match s.rfind('/') {
         Some(i) => &s[i + 1..],
@@ -139,7 +144,7 @@ fn sym_name(s: &str) -> &str {
     }
 }
 
-/// 綴りを最後の `.` で 2 つに分ける。
+/// 修飾名を最後の `.` で 2 つに分ける。
 fn split_last_dot(s: &str) -> R<(String, String)> {
     match s.rfind('.') {
         Some(i) => Ok((s[..i].to_string(), s[i + 1..].to_string())),
@@ -147,7 +152,7 @@ fn split_last_dot(s: &str) -> R<(String, String)> {
     }
 }
 
-/// パターンの型注釈を外す。
+/// パターンの型注釈を取り除く。
 fn strip_annot(p: &Pat) -> &Pat {
     let mut p = p;
     while let PatKind::Annot(q, _) = &p.kind {
@@ -156,7 +161,7 @@ fn strip_annot(p: &Pat) -> &Pat {
     p
 }
 
-/// 大域の種類(関数は記号で指し、最後に添字に直す)。
+/// グローバルの種類である。関数はシンボルで指しておき、最後に添字に直す。
 enum PendingGlobal {
     Extern { abi: Abi, name: String, dicts: u32 },
     Fn(String),
@@ -164,7 +169,7 @@ enum PendingGlobal {
     Value(Rep),
 }
 
-/// 大域を足すときの種類。
+/// グローバルを追加するときに指定する種類である。
 enum GKind {
     Fn,
     Dictabs,
@@ -172,7 +177,7 @@ enum GKind {
     Extern(Abi, String, u32),
 }
 
-/// 初期化の手順(関数は記号で指す)。
+/// 初期化手順である。関数はシンボルで指す。
 enum PendingStep {
     DefValue(GlobalId, String),
     DefPattern(String, Vec<GlobalId>, PatId),
@@ -182,7 +187,7 @@ enum PendingStep {
     RunExp(String),
 }
 
-/// インスタンス(実装の関数は記号で指す)。
+/// インスタンスである。メソッドを実装する関数はシンボルで指す。
 struct PendingInstance {
     sym: String,
     class: ClassId,
@@ -191,30 +196,31 @@ struct PendingInstance {
     methods: Vec<(u32, u32, String)>,
 }
 
-/// 書き出しの表(Diktor の `tables` と、符号化の索引)。
+/// 書き出しに使う表である(Diktor の `tables` と、符号化のときにシンボルから添字を求める表に当たる)。
 #[derive(Default)]
 struct Tables {
-    /// 型の名前の oid から記号へ。
+    /// 名前の番号(`Oid`)からシンボルへの表(型、エフェクト、クラス)。
     type_syms: JMap<Oid, String>,
     effect_syms: JMap<Oid, String>,
     class_syms: JMap<Oid, String>,
-    /// 記号を置いたが、まだ添字を決めていない名前([`W::add_units`] が添字を決めて空にする)。
+    /// シンボルを置いたが、まだ添字を決めていない名前。[`W::add_units`] が添字を決めて空にする。
     new_syms: [Vec<Oid>; 3],
-    /// 名前の oid から添字へ(記号の最初の項目の添字)。
+    /// 名前の番号(`Oid`)から添字への表(型、エフェクト、クラス)。
+    /// 同じシンボルの項目が複数あれば、最初の項目の添字である。
     type_ids: JMap<Oid, TypeId>,
     effect_ids: JMap<Oid, EffectId>,
     class_ids: JMap<Oid, ClassId>,
-    /// (持ち主の添字, 短い名前) から持ち主の中の位置へ。
+    /// (属する型、エフェクト、クラスの添字, 修飾しない名前)から、その中での位置への表(コンストラクタ、操作、メソッド)。
     ctor_idx: HashMap<(u32, String), u32>,
     op_idx: HashMap<(u32, String), u32>,
     meth_idx: HashMap<(u32, String), u32>,
     instances: JMap<(Oid, Oid), InstanceId>,
     globals: HashMap<(NodeId, String), GlobalId>,
-    /// 組み込みの値の名前から添字へ。
+    /// 組み込みの値の名前から添字への表。
     builtin_globals: HashMap<String, GlobalId>,
 }
 
-/// [`Tables`] の、印で戻す表に同じ操作をする([`ReplWriter::mark`])。
+/// [`Tables`] の表のうち、マークの時点に戻せるものすべてに同じ操作をする([`ReplWriter::mark`])。
 macro_rules! each_marked {
     ($tb:expr, $op:ident) => {
         $tb.type_syms.$op();
@@ -228,7 +234,7 @@ macro_rules! each_marked {
 }
 
 impl Tables {
-    /// 名前 `o` の記号を置く。`k` は型(0)、エフェクト(1)、クラス(2)である。
+    /// 名前 `o` のシンボルを置く。`k` は種類で、型が 0、エフェクトが 1、クラスが 2 である。
     fn set_sym(&mut self, k: usize, o: Oid, s: String) {
         match k {
             0 => self.type_syms.insert(o, s),
@@ -240,27 +246,27 @@ impl Tables {
 }
 
 // ---------------------------------------------------------------------------
-// 枠(§18.5)
+// 書き出し中の関数(§18.5)
 // ---------------------------------------------------------------------------
 
-/// 書き出しの途中の関数(枠)である。
+/// 書き出している途中の関数である(Diktor の `frame`)。以下では「書き出し中の関数」と呼ぶ。
 struct Frame {
     parent: Option<usize>,
     sym: String,
     kind: FnKind,
     params: Vec<Rep>,
     locals: Vec<Rep>,
-    /// 仮の番号と、持ち主の枠での読み方。足した順。
+    /// キャプチャの(仮の番号, 親の関数での読み方)の並び。追加した順である。
     caps: Vec<(u32, Cap)>,
     cap_index: HashMap<Cap, u32>,
-    /// resume が指す操作節の枠。
+    /// `resume` の持ち主(その `resume` が再開する継続を受け取る操作節)である、書き出し中の関数の番号。
     owner: Option<usize>,
     ntail_resumes: u32,
     final_caps: Vec<Cap>,
     cap_reps: Vec<Rep>,
 }
 
-/// 書き終えた関数の中身(Diktor の `pending`)。
+/// 書き終えた関数の内容である(Diktor の `pending`)。
 struct Pending {
     yields: bool,
     dicts: u32,
@@ -270,17 +276,17 @@ struct Pending {
     body: ExpId,
 }
 
-/// 根の関数ごとの状態である。
+/// ルート関数ごとの状態である。
 #[derive(Default)]
 struct Root {
     sym: String,
     sites: u32,
     frames: Vec<Frame>,
     fns: Vec<((u32, u32), usize, Pending)>,
-    /// 捕獲を読む式と辞書(仮の番号を書いたもの)。
+    /// キャプチャを読む式と辞書。仮の番号を書いてあり、後で確定した番号に書き換える。
     env_exps: Vec<ExpId>,
     env_dicts: Vec<DictId>,
-    /// 部分に枠の番号を仮に書いた式。
+    /// `Part` に書き出し中の関数の番号を仮に書いた式。
     part_exps: Vec<ExpId>,
 }
 
@@ -290,20 +296,20 @@ struct Binding {
     var: Cap,
 }
 
-/// 書き出しの環境(Diktor の `genv`)である。
+/// 書き出しの環境である(Diktor の `genv`)。
 #[derive(Clone)]
 struct GEnv {
     fr: usize,
     names: PMap<Rc<str>, Binding>,
     dkeys: PMap<DKey, Binding>,
-    /// 末尾位置か。
+    /// 末尾位置にあれば真である。
     tail: bool,
-    /// 操作節の背骨の上か。
+    /// 操作節の背骨(操作節の本体から末尾位置だけをたどった経路)の上にあれば真である。
     spine: bool,
 }
 
 impl GEnv {
-    /// 末尾位置になく、背骨の外にある子の環境。
+    /// 末尾位置になく、背骨の外にある子を書くための環境を返す。
     fn nt(&self) -> GEnv {
         GEnv {
             tail: false,
@@ -343,27 +349,27 @@ impl GEnv {
     }
 }
 
-/// 関数の本体の書き方である(Diktor が閉包で渡すもの)。
+/// 関数の本体の書き出し方である(Diktor はクロージャで渡す)。
 enum Body<'b> {
-    /// 式をそのまま書く(`nt` なら末尾位置の外で)。
+    /// 式をそのまま書く。2 番目の値が真なら、末尾位置の外で書く。
     Exp(&'b Exp, bool),
-    /// ラムダの場所にする。
+    /// 無名関数の生成箇所として書く。
     Lambda(&'b [Pat], &'b Exp, NodeId),
-    /// 仮引数のパターンを写して本体を書く(根の関数の lambda)。
+    /// 仮引数のパターンを変換してから本体を書く(種類 `lambda` のルート関数)。
     Params(&'b [Pat], &'b Exp),
-    /// 辞書を受け取る関数の場所にして、その中で式を書く。
+    /// 辞書を受け取る関数の生成箇所として書き、その中で式を書く。
     DictabsExp(Vec<DKey>, Rep, &'b Exp),
-    /// 束縛の値(Diktor の `binding_value`)。
+    /// 束縛の値を書く(Diktor の `binding_value`)。
     Binding(&'b LetBinding),
-    /// let rec の群を書き、その中の名前 `x` を読む(インスタンスのメソッド)。
+    /// `let rec` のグループを書き、その中の名前 `x` を読む(インスタンスのメソッド)。
     RecGroup(&'b [LetBinding], String),
-    /// 対話的な実行の表示:引数のスロット 0 の値に、証拠の辞書の `Show.show` を末尾で呼ぶ(種類 `fn` の根の関数)。
+    /// REPL が値を表示するときに使う。スロット 0 の引数の値を、証拠の辞書の `Show.show` に末尾呼び出しで渡す(グローバルの種類が `fn` のルート関数)。
     ReplShowCall(Evidence),
-    /// 対話的な実行の表示:[`Body::ReplShowCall`] を本体とするラムダを作る(種類 `dictabs` の根の関数)。
+    /// REPL が値を表示するときに使う。[`Body::ReplShowCall`] を本体とする無名関数を作る(グローバルの種類が `dictabs` のルート関数)。
     ReplShowLambda(Evidence),
 }
 
-/// 根の関数を書く仕事である。
+/// ルート関数を 1 つ書き出すジョブである。
 struct Job<'b> {
     sym: String,
     kind: FnKind,
@@ -373,38 +379,41 @@ struct Job<'b> {
     yields: bool,
     result: Rep,
     body: Body<'b>,
-    /// 書いた本体に辞書を適用する(インスタンスのメソッドの適合器)。
+    /// 書いた本体に適用する辞書。インスタンスのメソッドのアダプタに使う。
     adapter: Vec<HoleId>,
-    /// 本体を `Print` のハンドラ式で包む([`ReplUnit::print`])。
+    /// 真なら、本体を `Print` のハンドラ式で囲む([`ReplUnit::print`])。
     print: bool,
 }
 
-/// 書き手の状態である。
+/// ライタの状態である。
 struct W<'t> {
     tc: &'t mut Tc,
     tb: Tables,
     nodes: Nodes,
     root: Root,
-    /// 捕獲の仮の番号の数え上げ。
+    /// キャプチャの仮の番号のカウンタ。
     provisional: u32,
-    /// 仮の番号から確定した番号へ。
+    /// キャプチャの仮の番号から確定した番号への表。
     final_cap: HashMap<u32, u32>,
     functions: Vec<(kir::Function, String)>,
-    /// 関数の記号から、その記号の最初の関数の添字へ(Diktor の符号化の索引と同じく、最初の項目を指す)。
+    /// 関数のシンボルから、そのシンボルを持つ最初の関数の添字への表。
+    /// Diktor が符号化のときに使う表と同じく、最初の項目を指す。
     fn_first: HashMap<String, FnId>,
-    /// 対話的な実行で `Print` を処理するハンドラ式が使う、エフェクトと操作([`ReplUnit::print`])。
+    /// REPL で `Print` を処理するハンドラ式が使う、エフェクトと操作([`ReplUnit::print`])。
     repl_print: Option<ReplPrint>,
-    /// 対話的な実行の入力の単位を書き出した結果。
+    /// REPL の入力の単位を書き出した結果。
     repl_out: ReplOut,
-    /// この書き出しで足す大域、インスタンス、関数の最初の添字(前の書き出しが置いた項目の数)。
+    /// この書き出しで追加するグローバル、インスタンス、関数の最初の添字。
+    /// それまでの書き出しが置いた項目の個数に等しい。
     gbase: u32,
     ibase: u32,
     fbase: u32,
-    /// 型、エフェクト、クラスの記号から添字へ([`ReplWriter`] の同名の欄)。
+    /// 型、エフェクト、クラスのシンボルから添字への表。
+    /// [`ReplWriter`] の `type_index`、`effect_index`、`class_index` を、書き出しの間だけ移してきたものである。
     index: [HashMap<String, u32>; 3],
 }
 
-/// 対話的な実行で `Print` を処理するハンドラ式が使う、エフェクトと操作の位置である。
+/// REPL で `Print` を処理するハンドラ式が使う、エフェクトの添字と、そのエフェクトの中での操作の位置である。
 #[derive(Clone, Copy, Debug)]
 struct ReplPrint {
     /// エフェクト `Print` と、その操作 `print`。
@@ -413,12 +422,12 @@ struct ReplPrint {
     write: (EffectId, u32),
 }
 
-/// 型検査を済ませた単位の列を KIR にする(Diktor の `program`)。
+/// 型検査を済ませた単位の並びを KIR に変換する(Diktor の `program`)。
 pub fn program(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<kir::Program> {
     program_repl(tc, units).map(|(p, _)| p)
 }
 
-/// [`program`] と同じで、対話的な実行の入力の単位([`UnitSrc::repl`])を書き出した結果も返す。
+/// [`program`] と同じ変換を行い、REPL の入力の単位([`UnitSrc::repl`])を書き出した結果も返す。
 pub fn program_repl(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<(kir::Program, ReplOut)> {
     let mut rw = ReplWriter::default();
     let mut kp = empty_program();
@@ -430,7 +439,7 @@ pub fn program_repl(tc: &mut Tc, units: &[UnitSrc<'_>]) -> R<(kir::Program, Repl
     Ok((kp, out))
 }
 
-/// 表の空の KIR のプログラム。
+/// どの表も空である KIR のプログラムを作る。
 fn empty_program() -> kir::Program {
     kir::Program {
         version: kir::VERSION,
@@ -445,37 +454,39 @@ fn empty_program() -> kir::Program {
     }
 }
 
-/// 単位を後ろに足していく KIR の書き手(対話的な実行。Diktor の driver.ml の §16.6b)。
+/// 単位を後ろに追加していく KIR のライタである。REPL が使う(Diktor の driver.ml の §16.6b に当たる)。
 ///
-/// 対話的な実行は、受理した入力ごとに単位を 1 つプログラムの後ろに足し、前の単位は実行時に残したまま使う。
-/// [`ReplWriter::add`] は、[`program`] と同じ規則で 1 つの単位を書き出し、プログラムの各表の後ろに項目を足す。
-/// 前の項目の添字は変わらず、足した単位の式は前の単位の大域と型を同じ添字で指す。
-/// 書き出しの表(名前から型、エフェクト、クラス、インスタンスへ)は、足した単位の宣言を後から見えるように書き換える。
-/// 手間は足した単位の大きさに比例する。
+/// REPL は、受理した入力ごとに単位を 1 つプログラムの後ろに追加し、それまでの単位はランタイムに残したまま使う。
+/// [`ReplWriter::add`] は、[`program`] と同じ規則で単位を 1 つ書き出し、プログラムの各表の後ろに項目を追加する。
+/// それまでの項目の添字は変わらない。
+/// 追加した単位の式は、それまでの単位のグローバルと型を同じ添字で指す。
+/// 書き出しに使う表(名前から型、エフェクト、クラス、インスタンスを引く表)は、追加した単位の宣言が以後の単位から見えるように書き換える。
+/// 処理時間は、追加した単位のサイズに比例する。
 ///
-/// 表の書き換えは、[`ReplWriter::mark`] で取った印に [`ReplWriter::rollback`] で戻せる
-/// (入力を受理しなかったとき)。
-/// 戻しても、プログラムに足した項目は残す(関数と大域の番号を詰め直さないためである)。
-/// 名前の衝突しない鍵を使うので、残した項目が後の単位と重なることは無い。
+/// 入力を受理しなかったときは、表の書き換えを取り消せる。
+/// [`ReplWriter::mark`] で置いたマークの時点に、[`ReplWriter::rollback`] で戻す。
+/// 戻しても、プログラムに追加した項目は残す。関数とグローバルの番号を詰め直さずに済ませるためである。
+/// 単位には名前の衝突しないキーを使うので、残した項目が後の単位の項目と重なることはない。
 #[derive(Default)]
 pub struct ReplWriter {
     tb: Tables,
     fn_first: HashMap<String, FnId>,
     repl_print: Option<ReplPrint>,
-    /// 型、エフェクト、クラスの記号から添字へ(記号ごとの最初の項目)。
+    /// 型、エフェクト、クラスのシンボルから添字への表。
+    /// 同じシンボルの項目が複数あれば、最初の項目を指す。
     type_index: HashMap<String, u32>,
     effect_index: HashMap<String, u32>,
     class_index: HashMap<String, u32>,
 }
 
-/// [`ReplWriter::mark`] で取る、名前で引く表の印である。
+/// [`ReplWriter::mark`] が返す、名前で引く表のマークである。
 ///
-/// [`ReplWriter::commit`] で外すか [`ReplWriter::rollback`] で戻す。
+/// [`ReplWriter::commit`] で外すか、[`ReplWriter::rollback`] でマークの時点に戻す。
 #[must_use]
 pub struct WriterMark(());
 
-/// プログラムの表の大きさ。書き出しが途中で止まったときと、足した単位を実行せずに捨てるときに、
-/// 足した項目を除く([`ProgramMark::truncate`])。
+/// プログラムの各表のサイズを記録したマークである。
+/// 書き出しが途中で失敗したときと、追加した単位を実行せずに捨てるときに、追加した項目を取り除くために使う([`ProgramMark::truncate`])。
 pub struct ProgramMark {
     types: usize,
     effects: usize,
@@ -490,7 +501,7 @@ pub struct ProgramMark {
 }
 
 impl ProgramMark {
-    /// プログラム `kp` の今の大きさ。
+    /// プログラム `kp` の現在のサイズを記録する。
     pub fn of(kp: &kir::Program) -> ProgramMark {
         ProgramMark {
             types: kp.types.len(),
@@ -506,7 +517,7 @@ impl ProgramMark {
         }
     }
 
-    /// `kp` を、印を取ったときの大きさに戻す(実行した単位には使わない)。
+    /// `kp` を、マークを取ったときのサイズに戻す。実行した単位には使わない。
     pub fn truncate(&self, kp: &mut kir::Program) {
         kp.types.truncate(self.types);
         kp.effects.truncate(self.effects);
@@ -536,10 +547,10 @@ impl ReplWriter {
         Ok((rw, kp))
     }
 
-    /// 単位 `u` を書き出して `kp` の後ろに足す。
+    /// 単位 `u` を書き出して `kp` の後ろに追加する。
     ///
-    /// `kp` は、この書き手が前に書き出したプログラムである。
-    /// 誤りのときは、足しかけた項目を除き、表をこの呼び出しの前に戻す。
+    /// `kp` は、このライタがそれまでに書き出したプログラムである。
+    /// エラーのときは、追加しかけた項目を取り除き、表をこの呼び出しの前の状態に戻す。
     pub fn add(&mut self, tc: &mut Tc, kp: &mut kir::Program, u: UnitSrc<'_>) -> R<ReplOut> {
         let lens = ProgramMark::of(kp);
         let mark = self.mark();
@@ -559,22 +570,23 @@ impl ReplWriter {
         }
     }
 
-    /// 名前で引く表の印を取る。
+    /// 名前で引く表にマークを置く。
     ///
-    /// 表は写さず、印の後の書き換えを記録する(手間は表の大きさに依らない)。
-    /// 印は入れ子にできる。
+    /// 表はコピーせず、マークの後の書き換えを記録する。そのため、処理時間は表のサイズによらない。
+    /// マークは入れ子にできる。
     pub fn mark(&mut self) -> WriterMark {
         each_marked!(self.tb, begin);
         WriterMark(())
     }
 
-    /// 印 `m` を外し、印の後の書き換えを残す(入力を受理したとき)。
+    /// マーク `m` を外し、マークの後の書き換えを残す。入力を受理したときに呼ぶ。
     pub fn commit(&mut self, m: WriterMark) {
         let WriterMark(()) = m;
         each_marked!(self.tb, commit);
     }
 
-    /// 名前で引く表を印に戻す(受理しなかった入力の型、エフェクト、クラス、インスタンスを後から見えなくする)。
+    /// 名前で引く表をマーク `m` の時点に戻す。
+    /// 受理しなかった入力の型、エフェクト、クラス、インスタンスは、以後の入力から見えなくなる。
     pub fn rollback(&mut self, m: WriterMark) {
         let WriterMark(()) = m;
         each_marked!(self.tb, rollback);
@@ -628,7 +640,7 @@ impl ReplWriter {
 }
 
 impl<'t> W<'t> {
-    // ---- 記号 ----
+    // ---- シンボル ----
 
     fn type_id(&self, c: Oid) -> R<TypeId> {
         match self.tb.type_ids.get(&c) {
@@ -719,7 +731,7 @@ impl<'t> W<'t> {
         }
     }
 
-    /// 束縛の名前のパターンの Rep。パターンに型が無ければ束縛のノードの型を使う。
+    /// 束縛の名前のパターンの Rep を返す。パターンに型がなければ、束縛のノードの型を使う。
     fn rep_of_name(&mut self, name: &Pat, b: &LetBinding) -> Rep {
         match self.ty_opt(name.meta.id) {
             Some(t) => self.rep_of_ty(t),
@@ -759,7 +771,7 @@ impl<'t> W<'t> {
         }
     }
 
-    /// 辞書パラメータの鍵。インスタンスのメソッドでは実装の型の辞書パラメータを使う。
+    /// 辞書パラメータのキーを返す。インスタンスのメソッドでは、実装の型の辞書パラメータを使う。
     fn dict_params_of(&self, id: NodeId) -> Vec<DKey> {
         match self.tc.dict.get(&id) {
             Some(DictInfo::Abs(ks)) | Some(DictInfo::Method(ks, _, _)) => ks.clone(),
@@ -767,7 +779,7 @@ impl<'t> W<'t> {
         }
     }
 
-    // ---- 枠 ----
+    // ---- 書き出し中の関数 ----
 
     fn new_frame(
         &mut self,
@@ -800,7 +812,8 @@ impl<'t> W<'t> {
         i as u32
     }
 
-    /// 枠 fr から束縛 b を読む方法。b の枠が fr の外にあれば、間の枠に捕獲を足す。
+    /// 書き出し中の関数 `fr` から束縛 `b` を読む方法を返す。
+    /// `b` が `fr` より外側の関数の束縛なら、間にある関数にキャプチャを追加する。
     fn access(&mut self, fr: usize, b: Binding) -> R<Cap> {
         if fr == b.frame {
             return Ok(b.var);
@@ -839,7 +852,7 @@ impl<'t> W<'t> {
         self.nodes.push_exp(e)
     }
 
-    /// 捕獲を読む式(仮の番号)。
+    /// ローカルかキャプチャを読む式を作る。キャプチャには仮の番号を書く。
     fn push_var(&mut self, c: Cap) -> R<ExpId> {
         Ok(match c {
             Cap::Local(i) => self.push(kir::Exp::Local(i)),
@@ -958,7 +971,7 @@ impl<'t> W<'t> {
         Ok(self.nodes.push_pat(q))
     }
 
-    /// 関数の中のパターン。変数ごとにスロットを振り、名前を環境に足す。
+    /// 関数の中のパターンを変換する。変数ごとにスロットを振り、名前を環境に追加する。
     fn local_pat(&mut self, env: &GEnv, p: &Pat) -> R<(PatId, GEnv)> {
         let fr = env.fr;
         let mut binds: Vec<(String, u32)> = Vec::new();
@@ -1063,7 +1076,7 @@ impl<'t> W<'t> {
         }
     }
 
-    /// クラスのメソッドの参照。
+    /// クラスのメソッドを参照する式を作る。
     fn method_ref(&mut self, env: &GEnv, id: NodeId, q: &str) -> R<ExpId> {
         let (cls_name, m) = split_last_dot(q)?;
         let co = self.tc.intern(&cls_name);
@@ -1417,11 +1430,11 @@ impl<'t> W<'t> {
         }
     }
 
-    /// 本体を、`Print` のハンドラ式で包む([`ReplUnit::print`])。
+    /// 本体を `Print` のハンドラ式で囲む([`ReplUnit::print`])。
     ///
-    /// プレリュードの `with_stdout` と同じく、`print(s)` の操作節は `resume(perform Console.write(s))` である
-    /// (操作節の `resume` は末尾にあるので、分類は T である)。
-    /// ハンドラ式は、本体を書く前に場所の番号を取り、本体、操作節の順に関数を作る。
+    /// `print(s)` の操作節は、プレリュードの `with_stdout` と同じく `resume(perform Console.write(s))` である。
+    /// この `resume` は末尾位置にあるので、操作節の分類は T になる。
+    /// ハンドラ式は、本体を書く前に生成箇所の番号を取り、本体、操作節の順に関数を作る。
     fn print_wrapped(&mut self, env: &GEnv, rp: ReplPrint, b: &Body<'_>, result: Rep) -> R<ExpId> {
         let n = self.next_site();
         let base = format!("{}$h{n}", self.root.sym);
@@ -1497,7 +1510,7 @@ impl<'t> W<'t> {
         }))))
     }
 
-    /// 束縛の値(Diktor の `binding_value`)。
+    /// 束縛の値を書く(Diktor の `binding_value`)。
     fn binding_value(&mut self, env: &GEnv, b: &LetBinding) -> R<ExpId> {
         let plain = match &b.params {
             Some(ps) => Body::Lambda(ps, &b.body, b.meta.id),
@@ -1551,7 +1564,7 @@ impl<'t> W<'t> {
         Ok(self.push(e))
     }
 
-    /// let rec の群。群の名前にスロットを先に振ってから、各項目を書く。
+    /// `let rec` のグループを書く。グループのすべての名前に先にスロットを振ってから、各束縛を書く。
     fn rec_group(&mut self, env: &GEnv, bs: &[LetBinding]) -> R<(GEnv, Vec<(u32, ExpId)>)> {
         let mut names = Vec::with_capacity(bs.len());
         for b in bs {
@@ -1586,7 +1599,7 @@ impl<'t> W<'t> {
         Ok((env2, items))
     }
 
-    // ---- 持ち上げた関数の場所(§18.10) ----
+    // ---- 持ち上げた関数の生成箇所(§18.10) ----
 
     fn lambda_site(&mut self, env: &GEnv, params: &[Pat], body: &Exp, fn_node: NodeId) -> R<ExpId> {
         let n = self.next_site();
@@ -1612,7 +1625,7 @@ impl<'t> W<'t> {
         Ok(self.push_part_exp(kir::Exp::Closure(Self::part(fr))))
     }
 
-    /// 仮引数のパターンを写し、本体を書く。
+    /// 仮引数のパターンを変換し、本体を書く。
     fn lambda_body(&mut self, env: &GEnv, params: &[Pat], body: &Exp) -> R<ExpId> {
         let mut env = env.clone();
         let mut wraps: Vec<(PatId, u32)> = Vec::new();
@@ -1640,7 +1653,7 @@ impl<'t> W<'t> {
         Ok(b)
     }
 
-    /// 辞書を受け取る関数の場所。
+    /// 辞書を受け取る関数の生成箇所を書く。
     fn dictabs_site(&mut self, env: &GEnv, ks: &[DKey], result: Rep, body: &Body<'_>) -> R<ExpId> {
         let n = self.next_site();
         let sym = format!("{}${n}", self.root.sym);
@@ -1668,7 +1681,8 @@ impl<'t> W<'t> {
         Ok(self.push_part_exp(kir::Exp::Dictabs(Self::part(fr))))
     }
 
-    /// ハンドラ式の場所。本体、操作節(書いた順)、return 節、cancel 節の順に関数を作る。
+    /// ハンドラ式の生成箇所を書く。
+    /// 本体、操作節(ソースに書いた順)、`return` 節、`cancel` 節の順に関数を作る。
     fn handle_site(&mut self, env: &GEnv, body: &Exp, clauses: &[Clause]) -> R<ExpId> {
         let n = self.next_site();
         let base = format!("{}$h{n}", self.root.sym);
@@ -1883,7 +1897,7 @@ impl<'t> W<'t> {
         }))))
     }
 
-    // ---- 捕獲の番号の確定と根の関数(§18.11) ----
+    // ---- キャプチャの番号の確定とルート関数(§18.11) ----
 
     fn var_key(v: &Cap) -> (u8, u32) {
         match v {
@@ -1941,7 +1955,7 @@ impl<'t> W<'t> {
         Ok(())
     }
 
-    /// 根の関数を 1 つ書き出し、持ち上げた関数とともに関数の表に足す。
+    /// ルート関数を 1 つ書き出し、そこから持ち上げた関数とともに関数表に追加する。
     fn root_fn(&mut self, job: Job<'_>) -> R<()> {
         self.root = Root {
             sym: job.sym.clone(),
@@ -1970,7 +1984,7 @@ impl<'t> W<'t> {
                 dicts: ds,
             });
         }
-        // 捕獲の並びを、作った順(持ち主が先)に決める。
+        // キャプチャの並びを、関数を作った順(親の関数が先)に決める。
         for i in 0..self.root.frames.len() {
             self.fix_caps(i)?;
         }
@@ -1985,7 +1999,7 @@ impl<'t> W<'t> {
                 *t = self.final_cap[t];
             }
         }
-        // 根の関数に続けて、持ち上げた関数を場所の番号の順に並べる。
+        // ルート関数に続けて、持ち上げた関数を生成箇所の番号の順に並べる。
         let mut lifted = std::mem::take(&mut root.fns);
         lifted.sort_by_key(|(o, _, _)| *o);
         let mk = |f: &Frame, pd: Pending| kir::Function {
@@ -2022,7 +2036,7 @@ impl<'t> W<'t> {
             let sym = root.frames[f].sym.clone();
             push_fn(self, mk(&root.frames[f], pd), sym);
         }
-        // 部分の関数は記号で引く(同じ記号の関数が前にあれば、Diktor の符号化と同じくそれを指す)。
+        // `Part` の関数はシンボルで引く。同じシンボルの関数が前にあれば、Diktor の符号化と同じく、その関数を指す。
         let fn_first = &self.fn_first;
         let fix = |p: &mut Part| -> R<()> {
             let f = &root.frames[p.func.index()];
@@ -2058,7 +2072,8 @@ impl<'t> W<'t> {
 
     // ---- 宣言(§18.12) ----
 
-    /// インスタンスの頭(宣言の出身の module と単位で、クラスと型構成子の名前を解く)。
+    /// インスタンスのクラスと、対象の型の型構成子を返す。
+    /// 名前は、宣言を書いた module と単位のスコープで解決する。
     fn instance_head(&mut self, d: &Decl, i: &crate::ast::InstanceDecl) -> R<(Oid, Oid)> {
         self.tc.with_decl_scope(d.meta.id, |tc| {
             let co = tc.intern(&i.class);
@@ -2079,7 +2094,7 @@ impl<'t> W<'t> {
         })
     }
 
-    /// 組み込みの型、クラス、値と、組み込みの単位を `kp` に置く(空のプログラムに 1 回だけ行う)。
+    /// 組み込みの型、クラス、値と、組み込みの単位を `kp` に置く。空のプログラムに 1 回だけ行う。
     fn builtins(&mut self, kp: &mut kir::Program) {
         use kir::builtins;
         for t in builtins::TYPES {
@@ -2131,13 +2146,12 @@ impl<'t> W<'t> {
         });
     }
 
-    /// 単位の列 `units` を書き出し、`kp` の各表の後ろに足す(Diktor の `program`)。
+    /// 単位の並び `units` を書き出し、`kp` の各表の後ろに追加する(Diktor の `program`)。
     ///
-    /// 1 回で書き出すプログラム([`program`])は、空のプログラムに組み込みの項目を置き([`W::builtins`])、
-    /// すべての単位を 1 回で足したものである。
+    /// [`program`] が 1 回で書き出すプログラムは、空のプログラムに組み込みの項目を置き([`W::builtins`])、すべての単位を 1 回の呼び出しで追加したものである。
     fn add_units(&mut self, kp: &mut kir::Program, units: &[UnitSrc<'_>]) -> R<()> {
         let (t0, e0, c0) = (kp.types.len(), kp.effects.len(), kp.classes.len());
-        // 1 段目の前半:型、エフェクト、クラス。
+        // 第 1 段階の前半:型、エフェクト、クラス。
         for u in units {
             self.collect_types(u, &mut kp.types, &mut kp.effects, &mut kp.classes)?;
         }
@@ -2152,7 +2166,8 @@ impl<'t> W<'t> {
             for (i, t) in kp.classes.iter().enumerate().skip(c0) {
                 ci.entry(t.sym.clone()).or_insert(i as u32);
             }
-            // 添字は、この呼び出しまでに記号を置いた名前の分だけ決める(前の単位の名前の添字は変わらない)。
+            // 添字を決めるのは、この呼び出しまでにシンボルを置いて、まだ添字を決めていない名前だけである。
+            // それまでの単位の名前の添字は変わらない。
             let [nt, ne, nc] = std::mem::take(&mut self.tb.new_syms);
             for o in nt {
                 if let Some(s) = self.tb.type_syms.get(&o) {
@@ -2200,7 +2215,7 @@ impl<'t> W<'t> {
                 }
             }
         }
-        // 1 段目の後半:大域、インスタンス、手順。
+        // 第 1 段階の後半:グローバル、インスタンス、初期化手順。
         self.gbase = kp.globals.len() as u32;
         self.ibase = kp.instances.len() as u32;
         let mut globals: Vec<(String, PendingGlobal)> = Vec::new();
@@ -2212,7 +2227,7 @@ impl<'t> W<'t> {
             unit_steps.push(steps);
         }
         if self.repl_print.is_none() && units.iter().any(|u| u.repl.is_some_and(|r| r.print)) {
-            // 引数 1 個の操作 `print` を持つ `Print` と、実行時が処理する `Console.write` があるときだけ包む。
+            // 引数 1 個の操作 `print` を持つ `Print` と、ランタイムが処理する `Console.write` があるときだけ囲む。
             let effects = &kp.effects;
             let find = |sym: &str, op: &str| -> Option<(EffectId, u32)> {
                 let e = effects.iter().position(|e| e.sym == sym)?;
@@ -2229,12 +2244,12 @@ impl<'t> W<'t> {
                 _ => None,
             };
         }
-        // 2 段目:根の関数。
+        // 第 2 段階:ルート関数。
         self.fbase = kp.functions.len() as u32;
         for job in jobs {
             self.root_fn(job)?;
         }
-        // 関数を記号で引く。
+        // 関数をシンボルで引いて、添字に直す。
         let functions = std::mem::take(&mut self.functions);
         let fi = &self.fn_first;
         let fn_id = |s: &str| -> R<FnId> {
@@ -2314,7 +2329,7 @@ impl<'t> W<'t> {
         Ok(())
     }
 
-    /// 単位の型、エフェクト、クラスの表を作る(1 段目の前半)。
+    /// 単位の型、エフェクト、クラスの表を作る(第 1 段階の前半)。
     fn collect_types(
         &mut self,
         u: &UnitSrc<'_>,
@@ -2414,7 +2429,7 @@ impl<'t> W<'t> {
         Ok(())
     }
 
-    /// 単位の大域、インスタンス、手順を決める(1 段目の後半)。
+    /// 単位のグローバル、インスタンス、初期化手順を決める(第 1 段階の後半)。
     fn collect_unit<'b>(
         &mut self,
         u: &UnitSrc<'b>,
@@ -2600,7 +2615,7 @@ impl<'t> W<'t> {
                     steps.push(PendingStep::DefFns(vec![g]));
                 }
                 DeclKind::Exp(e) if display => {
-                    // 対話的な実行の表示のため、式文の値を隠れた大域に束縛する。
+                    // REPL で結果を表示するため、式文の値を内部用のグローバルに束縛する。
                     let result = self.rep_of_node(e.meta.id);
                     match self.tc.dict.get(&d.meta.id) {
                         Some(DictInfo::Abs(ks)) => {
@@ -2733,7 +2748,7 @@ impl<'t> W<'t> {
             }
         }
         if let Some(r) = u.repl.filter(|r| r.display) {
-            // 対話的な実行の表示に使う、Show.show を呼ぶ関数。
+            // REPL の表示に使う、`Show.show` を呼ぶ関数。
             for (ev, ks) in &r.shows {
                 let (kind, gk, body) = if ks.is_empty() {
                     (FnKind::Lambda, GKind::Fn, Body::ReplShowCall(ev.clone()))
@@ -2772,7 +2787,7 @@ impl<'t> W<'t> {
         Ok(steps)
     }
 
-    /// 関数の定義の根の関数の仕事(Diktor の `fn_def_root`)。
+    /// 関数定義のルート関数を書き出すジョブを作る(Diktor の `fn_def_root`)。
     fn fn_def_job<'b>(
         &mut self,
         sym: String,
@@ -2813,7 +2828,7 @@ impl<'t> W<'t> {
     }
 }
 
-/// 種類が thunk の根の関数の仕事。
+/// 種類 `thunk` のルート関数を書き出すジョブを作る。
 fn thunk_job(sym: String, result: Rep, body: Body<'_>) -> Job<'_> {
     Job {
         sym,
@@ -2829,7 +2844,8 @@ fn thunk_job(sym: String, result: Rep, body: Body<'_>) -> Job<'_> {
     }
 }
 
-/// 呼び出しと perform の引数。引数は `_item` のレコードの式で、外側の要素が先頭の引数である。
+/// 呼び出しと `perform` の引数を取り出す。
+/// 引数は `_item` のレコードの式になっていて、最も外側の要素が先頭の引数である。
 fn args_of(e: &Exp) -> R<Vec<&Exp>> {
     let mut v = Vec::new();
     let mut cur = e;
@@ -2845,12 +2861,14 @@ fn args_of(e: &Exp) -> R<Vec<&Exp>> {
     }
 }
 
-/// OCaml の `float_of_string` である。
+/// OCaml の `float_of_string` と同じ値を返す。
 ///
-/// 桁区切りの `_` を除き、符号の後ろが `0x` か `0X` なら 16 進(OCaml の実行時の `caml_float_of_hex`)で、
-/// ほかは C の `strtod` で読み、全体を読み切れなければ失敗する。
-/// `strtod` は正しく丸めるので、10 進は Rust の `parse` と同じ値になる。
-/// 字句の上で数値リテラルになる綴り(数字、`.`、`e`、`E`、`+`、`-`、`x`、`o`、`b` と 16 進の数字)だけを考える。
+/// OCaml は、桁区切りの `_` を取り除いたうえで、符号の後ろが `0x` か `0X` なら 16 進数として読む(OCaml のランタイムの `caml_float_of_hex`)。
+/// それ以外は C の `strtod` で読む。
+/// どちらの場合も、全体を読み切れなければ失敗する。
+/// 本関数は、10 進数を Rust の `parse` で読む。
+/// `strtod` も `parse` も正しく丸めるので、同じ値になる。
+/// 入力は、字句解析で数値リテラルになる表記(数字、`.`、`e`、`E`、`+`、`-`、`x`、`o`、`b` と 16 進の数字)だけを想定する。
 pub(crate) fn ocaml_float_of_string(s: &str) -> Option<f64> {
     let t: String = s.chars().filter(|c| *c != '_').collect();
     let (neg, body) = match t.strip_prefix('-') {
@@ -2873,7 +2891,7 @@ pub(crate) fn ocaml_float_of_string(s: &str) -> Option<f64> {
     Some(if neg { -v } else { v })
 }
 
-/// OCaml の実行時の `caml_float_of_hex`(指数の `p` を除く)。
+/// OCaml のランタイムの `caml_float_of_hex` と同じ計算をする。指数部(`p`)は扱わない。
 fn float_of_hex(s: &str) -> Option<f64> {
     let mut m: u64 = 0;
     let mut n_bits: i64 = 0;
@@ -2911,13 +2929,13 @@ fn float_of_hex(s: &str) -> Option<f64> {
     if dec_point >= 0 {
         exp += dec_point - n_bits;
     }
-    // ldexp。2 の冪を掛けるのは、桁あふれと桁落ちのとき以外は正確である。
+    // `ldexp` に当たる。2 のべき乗を掛ける演算は、オーバーフローとアンダーフローのとき以外は正確である。
     while exp > 1000 {
         f *= 2f64.powi(1000);
         exp -= 1000;
     }
     while exp < -1000 {
-        // 正規化数のうちに掛け終えるよう、まず仮数を正規化数の範囲で下げる。
+        // 最後に掛ける `2f64.powi(exp)` が正規化数になるよう、先に 2 の -1000 乗を繰り返し掛けて `f` を小さくし、`exp` を -1000 以上にする。
         f *= 2f64.powi(-1000);
         exp += 1000;
     }
@@ -2937,7 +2955,7 @@ mod tests {
         assert_eq!(ocaml_float_of_string("0o17"), None);
         assert_eq!(ocaml_float_of_string("0b1"), None);
         assert_eq!(ocaml_float_of_string("0x"), None);
-        // 60 ビットを超える 16 進は奇数に丸めてから double にする。
+        // 60 ビットを超える 16 進数は、あふれた桁に 0 でない桁があれば最下位ビットを 1 にしてから(奇数への丸め)、double に変換する。
         assert_eq!(
             ocaml_float_of_string("0x1000000000000001"),
             Some(1152921504606846976.0)

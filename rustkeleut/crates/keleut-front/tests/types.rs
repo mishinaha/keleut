@@ -1,9 +1,8 @@
-//! 型検査の核(`keleut_front::types`)の試験である。
+//! 型検査の中核(`keleut_front::types`)のテストである。
 //!
-//! 期待の文字列は Diktor の `--type-check` の出力(diktor/test の typecheck.t などの記録)を写したものである。
-//! 環境変数 `KELEUT_FRONT_DIKTOR` に本物の diktor を与えると、
-//! `KELEUT_FRONT_CORPUS`(既定は `conformance/corpus`)の全件でも、
-//! プレリュードありの `--type-check` の出力(標準出力と標準エラーを 1 本にしたもの)と終了状態を Diktor と比べる。
+//! 期待する文字列は、Diktor の `--type-check` の出力(diktor/test の typecheck.t などの期待出力)をコピーしたものである。
+//! 環境変数 `KELEUT_FRONT_DIKTOR` に本物の diktor のパスを設定すると、`KELEUT_FRONT_CORPUS`(既定は `conformance/corpus`)のすべての `.kel` ファイルでも Diktor と比較する。
+//! 比較するのは、プレリュードありの `--type-check` の出力(標準出力の後ろに標準エラーをつないだもの)と終了コードである。
 
 use keleut_front::types::check::{
     CheckOptions, Stop, check_files, check_limits, check_program, on_check_stack, render_line,
@@ -11,10 +10,11 @@ use keleut_front::types::check::{
 use keleut_front::types::load::{SourceFs, StdFs, normalize_display};
 use std::collections::HashMap;
 
-/// 名前から中身を引く表を読む手段である。
+/// ファイル名から内容を引く表を、ファイルシステムの代わりに読む `SourceFs` の実装である。
 struct MemFs(HashMap<String, Vec<u8>>);
 
-/// 表の鍵は、`.` と `..` を相殺した綴りで引く。
+/// 表は、`normalize_display` で正規化したパスをキーにして引く。
+/// 正規化では、`.` を取り除き、`..` を直前の要素とともに取り除く。
 impl SourceFs for MemFs {
     fn read(&mut self, p: &str) -> Result<Vec<u8>, String> {
         self.0
@@ -35,7 +35,9 @@ impl SourceFs for MemFs {
     }
 }
 
-/// 相対パスを `base` からのパスとして読む手段である(作業のディレクトリを変えずに、別のディレクトリで走らせる)。
+/// 相対パスを、フィールド `0` のディレクトリからのパスとして読む `SourceFs` の実装である。
+/// プロセスの作業ディレクトリを変えずに、別のディレクトリで実行したのと同じ結果を得るために使う。
+/// エラーメッセージの中のパスは、渡された相対パスに戻す。
 struct DirFs(std::path::PathBuf);
 
 impl DirFs {
@@ -73,7 +75,7 @@ impl SourceFs for DirFs {
     }
 }
 
-/// 型検査の結果を、Diktor の `--type-check` の標準出力と終了状態の形にする。
+/// `files` を型検査し、その結果を Diktor の `--type-check` と同じ形式の出力と終了コードにして返す。
 fn run(fs: &mut dyn SourceFs, files: Vec<String>, no_prelude: bool) -> (String, u8) {
     let opts = CheckOptions {
         no_prelude,
@@ -105,7 +107,7 @@ fn run(fs: &mut dyn SourceFs, files: Vec<String>, no_prelude: bool) -> (String, 
     }
 }
 
-/// 型検査の結果を、Diktor の `--type-check` の標準出力と終了状態の形にする。
+/// (ファイル名, ソース)の並びをメモリ上のファイルとして型検査し、[`run`] と同じ形式の出力と終了コードを返す。
 fn check(files: &[(&str, &str)], no_prelude: bool) -> (String, u8) {
     let files: Vec<(String, String)> = files
         .iter()
@@ -118,7 +120,8 @@ fn check(files: &[(&str, &str)], no_prelude: bool) -> (String, u8) {
             .map(|(n, s)| (n.clone(), s.as_bytes().to_vec()))
             .collect();
         let mut fs = MemFs(map);
-        // 最初のファイルだけをコマンド行に渡す(残りは import 先)。
+        // 最初のファイルだけをコマンド行のファイルとして渡す。
+        // 残りのファイルは import 先として読まれる。
         run(&mut fs, vec![files[0].0.clone()], no_prelude)
     })
     .unwrap()
@@ -252,7 +255,7 @@ fn プレリュードは下げた限度の下限で構文解析できる() {
 
 #[test]
 fn 長い_import_の鎖の単位の鍵を小さいスタックで決める() {
-    // f0 が f1 を、f1 が f2 を、… と検索パスで import する 3,000 段の鎖である。
+    // f0 が f1 を、f1 が f2 を、というように検索パスで import する、3,000 段の連鎖を作る。
     let n = 3000;
     let mut map: HashMap<String, Vec<u8>> = HashMap::new();
     for i in 0..n {
@@ -287,7 +290,7 @@ fn 長い_import_の鎖の単位の鍵を小さいスタックで決める() {
         c.unit_keys(&mut fs, &opts).unwrap()
     })
     .unwrap();
-    // 依存される側が先に並ぶ。
+    // キーは、依存される側の単位が先になる順に並ぶ。
     let want: Vec<(String, String)> = (0..n)
         .rev()
         .map(|i| (format!("@1/f{i}.kel"), format!("f{i}.kel")))
@@ -295,7 +298,7 @@ fn 長い_import_の鎖の単位の鍵を小さいスタックで決める() {
     assert_eq!(keys, want);
 }
 
-/// 本物の diktor が与えられたら、コーパスの全件で `--type-check` の出力を比べる。
+/// `KELEUT_FRONT_DIKTOR` が設定されていれば、コーパスのすべてのファイルで、`--type-check` の出力と終了コードを Diktor と比較する。
 #[test]
 fn コーパスで_diktor_と同じ() {
     let Some(diktor) = std::env::var_os("KELEUT_FRONT_DIKTOR") else {
@@ -342,7 +345,7 @@ fn コーパスで_diktor_と同じ() {
     assert!(diffs.is_empty(), "Diktor と違う: {diffs:?}");
 }
 
-/// 本物の diktor が与えられたら、KIR の単位の鍵を `diktor --emit-ir-text` の単位の行と比べる。
+/// `KELEUT_FRONT_DIKTOR` が設定されていれば、KIR の単位のキーを、`diktor --emit-ir-text` が出力する単位の行(`(unit ...)`)と比較する。
 #[test]
 fn 単位の鍵が_diktor_と同じ() {
     let Some(diktor) = std::env::var_os("KELEUT_FRONT_DIKTOR") else {
@@ -416,7 +419,8 @@ fn 単位の鍵が_diktor_と同じ() {
             c.unit_keys(&mut fs, &opts).unwrap()
         })
         .unwrap();
-        // builtin、prelude、依存する単位、main の順に並ぶ。
+        // Diktor の単位の行は、builtin、prelude、依存する単位、main の順に並ぶ。
+        // 先頭の 2 行と最後の 1 行を除いた部分が、`unit_keys` の返すキーに対応する。
         let got: Vec<String> = got
             .iter()
             .map(|(k, p)| format!("(unit \"{k}\" (paths \"{p}\"))"))

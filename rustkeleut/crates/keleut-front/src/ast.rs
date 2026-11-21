@@ -1,61 +1,63 @@
-//! 脱糖した AST である(Diktor の syntax.ml の `Syntax.Make`)。
+//! 脱糖した AST である(Diktor の syntax.ml の `Syntax.Make` に対応する)。
 //!
-//! 形は Diktor の木と 1 対 1 に対応する。
-//! Diktor の木の各ノードに付く注釈(`Data.t`)は、本 crate では [`Meta`] で、
-//! ノードの番号 [`NodeId`] と範囲を持つ。
-//! 後の段(精緻化)の注釈は、番号で引く別表に置く。
-//! Diktor が注釈をそのまま借りる箇所(`block_of_items` の `Let`、`with` の `Apply`)では、
-//! 本 crate も [`Meta`] を写すので、同じ番号の 2 つのノードはできない
-//! (借りた元のノードはその場で捨てる)。
+//! 木の構造は、Diktor の木と 1 対 1 に対応する。
+//! Diktor の木の各ノードに付く注釈(`Data.t`)に相当するのは、本 crate の [`Meta`] である。
+//! [`Meta`] は、ノードの番号 [`NodeId`]、範囲、部分木の深さを持つ。
+//! 構文解析より後の段階(精緻化)が付ける注釈は、ノードの番号で引く別の表に置く。
+//! Diktor が別のノードの注釈をそのまま使う箇所(`block_of_items` の `Let` と `LetRec`、`append_last_arg` の `Apply` と `RecordExtend`)では、本 crate も元のノードの番号と範囲を引き継ぐ。
+//! 元のノードはその場で破棄するので、同じ番号のノードが 2 つできることはない。
 
 use crate::pos::Span;
 pub use crate::token::{NumSuffix, Number};
 
 /// ノードの番号である。
+///
+/// 構文解析のコンテキスト(`crate::actions::Ctx`)が、0 から順に振る。
+/// 別のノードの番号を引き継いで作るノード(モジュールの説明を参照)には、新しい番号を振らない。
 pub type NodeId = u32;
 
-/// ノードの注釈である。
+/// ノードの注釈である。番号、範囲、部分木の深さを持つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Meta {
-    /// 番号。
+    /// ノードの番号。
     pub id: NodeId,
-    /// 範囲。
+    /// ソース上の範囲。
     pub span: Span,
-    /// このノードを根とする部分木の深さ(葉が 1)。
+    /// このノードを根とする部分木の深さ。葉は 1 である。
     ///
-    /// 構文解析は、作るノードの深さが限度を超えたら「処理系の限度」で止まる。
-    /// そのため、後の段は木の深さが限度の内側にあることを前提に、再帰で木をたどってよい。
+    /// 構文解析は、作るノードの深さが上限を超えたら、`処理系の限度` の診断を返して失敗する。
+    /// そのため、構文解析より後の段階は、木の深さが上限以下であることを前提に、再帰で木をたどってよい。
     pub depth: u32,
 }
 
-/// 名前のパス(`A.B.c`)である。
+/// `.` で区切った名前(`A.B.c`)である。要素を先頭から順に持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LongId(pub Vec<String>);
 
 impl LongId {
-    /// `.` でつないだ表示。
+    /// 要素を `.` でつないだ文字列を返す。
     pub fn show(&self) -> String {
         self.0.join(".")
     }
 }
 
-/// import の名前である。
+/// import 文が取り込む名前 1 個である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImportName {
-    /// パス(1 段か 2 段)。
+    /// 名前の要素。`x` の形なら 1 個、`M.x` の形なら 2 個である。
     pub path: Vec<String>,
-    /// 範囲。
+    /// ソース上の範囲。
     pub span: Span,
 }
 
 /// import 文である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImportDecl {
-    /// `from` の後ろの文字列。
+    /// `from` の後ろに書いた文字列。
     pub source: String,
-    /// 名前。
+    /// 取り込む名前の並び。
     pub names: Vec<ImportName>,
-    /// 範囲。
+    /// ソース上の範囲。
     pub span: Span,
 }
 
@@ -78,7 +80,7 @@ pub enum BinOp {
 }
 
 impl BinOp {
-    /// 字面(Diktor の `Prims.show_bin_op`)。
+    /// ソース上の表記を返す(Diktor の `Prims.show_bin_op` に対応する)。
     pub fn show(self) -> &'static str {
         use BinOp::*;
         match self {
@@ -102,22 +104,22 @@ impl BinOp {
 /// 型パラメータの束縛子である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeParam {
-    /// 名前(大文字も小文字も取る)。
+    /// 名前。大文字で始まる名前も、小文字で始まる名前も書ける。
     pub name: String,
-    /// `F[_]` の穴の数(0 ならカインドは推論)。
+    /// `F[_]` の形で書いた穴の個数。0 のときは、カインドを推論する。
     pub arity: u32,
-    /// クラス制約。
+    /// クラス制約に書いたクラスの名前。
     pub classes: Vec<LongId>,
 }
 
-/// 型式である。
+/// 型の式である。注釈 `meta` と種類 `kind` を持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeExp {
     pub meta: Meta,
     pub kind: TypeExpKind,
 }
 
-/// 型式の形である。
+/// 型の式の種類である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeExpKind {
     Ident(LongId),
@@ -129,21 +131,21 @@ pub enum TypeExpKind {
     Hole,
 }
 
-/// `{ ... }` の型の要素である。
+/// `{ ... }` で書いた型の要素 1 個である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BraceElem {
     Field(String, TypeExp),
     Label(LongId, Vec<TypeExp>),
 }
 
-/// パターンである。
+/// パターンである。注釈 `meta` と種類 `kind` を持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pat {
     pub meta: Meta,
     pub kind: PatKind,
 }
 
-/// パターンの形である。
+/// パターンの種類である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PatKind {
     Wildcard,
@@ -157,21 +159,21 @@ pub enum PatKind {
     Annot(Box<Pat>, TypeExp),
 }
 
-/// コンストラクタのパターンの引数である。
+/// コンストラクタのパターンの引数 1 個である。`label` は引数に付けたラベルで、ラベルのない引数では `None` である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CtorArgPat {
     pub label: Option<String>,
     pub pat: Pat,
 }
 
-/// 式である。
+/// 式である。注釈 `meta` と種類 `kind` を持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Exp {
     pub meta: Meta,
     pub kind: ExpKind,
 }
 
-/// 式の形である。
+/// 式の種類である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExpKind {
     Bool(bool),
@@ -201,21 +203,23 @@ pub enum ExpKind {
     Run(String, Box<Exp>),
 }
 
-/// コンストラクタの引数である。
+/// コンストラクタの引数 1 個である。`label` は引数に付けたラベルで、ラベルのない引数では `None` である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CtorArg {
     pub label: Option<String>,
     pub exp: Exp,
 }
 
-/// 無名関数である。
+/// 無名関数である。仮引数のパターンと本体を持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lambda {
     pub params: Vec<Pat>,
     pub body: Box<Exp>,
 }
 
-/// `case` の節である。
+/// `case` の節である。パターン、ガード、本体を持つ。
+///
+/// `match` の節([`ExpKind::Match`])と `handle` の節([`ExpKind::Handle`])に使う。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Clause {
     pub meta: Meta,
@@ -224,21 +228,21 @@ pub struct Clause {
     pub body: Exp,
 }
 
-/// `let` の束縛である。
+/// `let` の束縛 1 個である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LetBinding {
     pub meta: Meta,
     pub is_pub: bool,
     pub name: Pat,
     pub tparams: Vec<TypeParam>,
-    /// `None` は値の束縛、`Some` は関数の定義。
+    /// 仮引数。`None` なら値の束縛、`Some` なら関数の定義である。
     pub params: Option<Vec<Pat>>,
     pub ret: Option<TypeExp>,
     pub eff: Option<TypeExp>,
     pub body: Exp,
 }
 
-/// 型の別名の宣言である。
+/// 型エイリアスの宣言である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeAlias {
     pub is_pub: bool,
@@ -255,7 +259,7 @@ pub struct CtorDecl {
     pub fields: Vec<FieldDecl>,
 }
 
-/// コンストラクタのフィールドである。
+/// コンストラクタのフィールドの宣言である。`label` はフィールドに付けたラベルで、ラベルのないフィールドでは `None` である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FieldDecl {
     pub label: Option<String>,
@@ -268,7 +272,7 @@ pub struct Newtype {
     pub is_pub: bool,
     pub name: String,
     pub params: Vec<TypeParam>,
-    /// コンストラクタの並び(`Never` は空)。
+    /// コンストラクタの並び。右辺を書かない宣言(`Never` の宣言)では空である。
     pub ctors: Vec<CtorDecl>,
 }
 
@@ -281,7 +285,7 @@ pub struct Effect {
     pub ops: Vec<(String, TypeExp)>,
 }
 
-/// クラスの `val` である。
+/// `type class` の本体に書く `val` の宣言である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClassVal {
     pub name: String,
@@ -313,7 +317,7 @@ pub struct ExternDecl {
     pub is_pub: bool,
     pub abi: String,
     pub name: String,
-    /// 実装名(非修飾の元の名前)。
+    /// 実装名。宣言に書いた、修飾しない名前である。
     pub prim: String,
     pub tparams: Vec<TypeParam>,
     pub params: Vec<Pat>,
@@ -321,14 +325,14 @@ pub struct ExternDecl {
     pub eff: Option<TypeExp>,
 }
 
-/// 宣言である。
+/// 宣言である。注釈 `meta` と種類 `kind` を持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Decl {
     pub meta: Meta,
     pub kind: DeclKind,
 }
 
-/// 宣言の形である。
+/// 宣言の種類である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum DeclKind {
@@ -339,13 +343,13 @@ pub enum DeclKind {
     Instance(InstanceDecl),
     Let(LetBinding),
     LetRec(Vec<LetBinding>),
-    /// pub、名前、本体。
+    /// モジュールの宣言。`pub` の有無、名前、本体の宣言をこの順に持つ。
     Module(bool, String, Vec<Decl>),
     Extern(ExternDecl),
     Exp(Exp),
 }
 
-/// 1 つのファイルの構文解析の結果である。
+/// ファイル 1 つを構文解析した結果である。import 文と宣言を持つ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     pub imports: Vec<ImportDecl>,
@@ -354,7 +358,8 @@ pub struct Program {
 
 // ---- 部分木の深さ ----
 //
-// どの関数も、子のノードが持つ深さだけを見て、子の深さの最大を返す(再帰しない)。
+// どの関数も、子のノードに記録してある深さだけを読み、その最大値を返す。
+// 再帰はしない。
 
 fn mx(a: u32, b: u32) -> u32 {
     a.max(b)
@@ -369,7 +374,7 @@ fn tyb_opt(t: &Option<Box<TypeExp>>) -> u32 {
 }
 
 impl TypeExpKind {
-    /// 子の深さの最大。
+    /// 子の深さの最大値を返す。
     pub fn child_depth(&self) -> u32 {
         use TypeExpKind::*;
         match self {
@@ -389,7 +394,7 @@ impl TypeExpKind {
 }
 
 impl PatKind {
-    /// 子の深さの最大。
+    /// 子の深さの最大値を返す。
     pub fn child_depth(&self) -> u32 {
         use PatKind::*;
         match self {
@@ -407,7 +412,7 @@ impl PatKind {
 }
 
 impl ExpKind {
-    /// 子の深さの最大。
+    /// 子の深さの最大値を返す。
     pub fn child_depth(&self) -> u32 {
         use ExpKind::*;
         let clauses = |cs: &[Clause]| cs.iter().fold(0, |d, c| mx(d, c.meta.depth));
@@ -438,7 +443,7 @@ impl ExpKind {
 }
 
 impl Clause {
-    /// 子(パターン、ガード、本体)の深さの最大。
+    /// 子(パターン、ガード、本体)の深さの最大値を返す。
     pub fn child_depth(&self) -> u32 {
         mx(
             mx(self.pat.meta.depth, self.body.meta.depth),
@@ -448,7 +453,7 @@ impl Clause {
 }
 
 impl LetBinding {
-    /// 子の深さの最大。
+    /// 子の深さの最大値を返す。
     pub fn child_depth(&self) -> u32 {
         let ps = self
             .params
@@ -462,7 +467,7 @@ impl LetBinding {
 }
 
 impl DeclKind {
-    /// 子の深さの最大。
+    /// 子の深さの最大値を返す。
     pub fn child_depth(&self) -> u32 {
         use DeclKind::*;
         let decls = |ds: &[Decl]| ds.iter().fold(0, |d, x| mx(d, x.meta.depth));
@@ -493,14 +498,14 @@ impl DeclKind {
     }
 }
 
-// ---- 深い木を捨てること ----
+// ---- 深い木のドロップ ----
 
-/// 再帰で捨ててよい部分木の深さの上限である。
+/// 再帰でドロップしてよい部分木の深さの上限である。
 ///
-/// これより深い部分木は、[`dismantle`] が作業の列でほどいてから捨てる。
+/// これより深い部分木は、[`dismantle`] がワークリストを使って分解してからドロップする。
 const SHALLOW_DEPTH: u32 = 64;
 
-/// [`dismantle`] がほどく木のノードである。
+/// [`dismantle`] が分解する木のノードである。
 pub(crate) enum Node {
     Exp(Exp),
     Pat(Pat),
@@ -521,12 +526,12 @@ impl Node {
     }
 }
 
-/// 木を、深さに比例するスタックを使わずに捨てる。
+/// 木を、深さに比例するスタックを使わずにドロップする。
 ///
-/// 構文解析が限度で止まったとき、最後の還元で作ったノードは限度より深いことがある
-/// (ブロックの `let` の鎖は、ブロックを閉じる 1 回の還元で作る)。
-/// その木を再帰で捨てると、小さいスタックではあふれるので、子を作業の列に移しながらほどく。
-/// 深さが [`SHALLOW_DEPTH`] 以下の部分木は、そのまま捨てる。
+/// 構文解析が深さの上限を超えて失敗したとき、最後の還元で作ったノードは上限より深いことがある。
+/// ブロックの中の `let` の連鎖は、ブロックを閉じる 1 回の還元でまとめて作るからである。
+/// その木を再帰でドロップすると、スタックが小さいときにスタックオーバーフローになるので、子をワークリストに移しながら分解する。
+/// 深さが [`SHALLOW_DEPTH`] 以下の部分木は、分解せずにそのままドロップする。
 pub(crate) fn dismantle(mut work: Vec<Node>) {
     fn push_ty(work: &mut Vec<Node>, t: TypeExp) {
         work.push(Node::Ty(t));

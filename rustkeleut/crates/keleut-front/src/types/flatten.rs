@@ -1,11 +1,15 @@
-//! module の平坦化である(Diktor の elab.ml の §11.42 の `flatten_modules`)。
+//! module の平坦化である(Diktor の elab.ml の §11.42 の `flatten_modules` に当たる)。
+//!
+//! module の中の宣言を、名前を修飾名(`M.x`)に変えたトップレベルの宣言に展開する。
 
 use super::decls::{mark_spelling, marks_unit, unit_of_spelling};
 use super::fx::{HashMap, HashSet};
 use super::{R, Tc, UnitId, at, display, noimpl, terr};
 use crate::ast::{Decl, DeclKind, LetBinding, Newtype, Pat, PatKind};
 
-/// 綴りを付ける表である。
+/// `spell` が内部名(単位の接頭辞 `%N.` を付けた名前)を登録する表の種類である。
+///
+/// 型、型エイリアス、エフェクトの名前は `Synonyms`、コンストラクタの名前は `Ctors`、型クラスの名前は `Classes` の表に登録する。
 #[derive(Clone, Copy)]
 enum SpellTable {
     Synonyms,
@@ -72,8 +76,8 @@ impl Tc {
 
     /// module を平坦化する(Diktor の `flatten_modules`)。
     ///
-    /// 宣言は値で受け取り、写さずに結果へ移す。
-    /// 木を写す再帰は型検査のスタックの検査を通らず、深い木では時間もかかるからである。
+    /// 宣言は値で受け取り、コピーせずに結果へムーブする。
+    /// 木をコピーする再帰は型検査のスタック残量の検査(`guard`)を通らないうえ、深い木では時間もかかるからである。
     pub(crate) fn flatten_modules(
         &mut self,
         imported_vals: &[String],

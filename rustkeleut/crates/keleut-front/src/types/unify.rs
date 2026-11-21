@@ -1,4 +1,8 @@
-//! 単一化、行、一般化、制約、辞書の穴である(Diktor の unify.ml、第8章)。
+//! 単一化、行の書き換え、一般化、クラス制約、辞書の穴を実装する(Diktor の unify.ml、第8章)。
+//!
+//! 辞書の穴は、`instantiate_ev` が型スキームを具体化するときに、予約述語を除く制約ごとに 1 つ作る。
+//! 証拠を作る途中で、型がまだ決まっていない単一化変数か、囲む束縛の辞書パラメータにキーのないスコーレム定数に行き当たったときにも、`evidence_of` が穴を作る。
+//! 穴の型が決まった後で、`solve_holes` が証拠(どのインスタンスの辞書を使うかを表す項)を穴に入れる。
 
 use super::fx::{HashMap, HashSet};
 use super::{
@@ -7,7 +11,8 @@ use super::{
 };
 use crate::pos::Span;
 
-/// 単一化の失敗の文面だけを取り出す(`try ... with Type_error msg`)。
+/// 失敗が位置のない型エラー([`Fail::Type`])のときだけ、そのメッセージを返す。
+/// Diktor の `try ... with Type_error msg` に相当する。
 pub(crate) fn type_msg<T>(r: &R<T>) -> Option<&str> {
     match r {
         Err(Fail::Type(m)) => Some(m.as_str()),
@@ -15,10 +20,16 @@ pub(crate) fn type_msg<T>(r: &R<T>) -> Option<&str> {
     }
 }
 
-/// 領域の形(Diktor の `unify_region` の `shape`)。
+/// リージョンの位置にある 2 つの型の分類である(Diktor の `unify_region` の `shape`)。
+/// 単一化に失敗したときに、どのメッセージで報告するかをこの分類で決める。
 enum Shape {
+    /// 両方がスコーレム定数(`TVar::Rigid`)である。
     Rigids,
+    /// 少なくとも一方が単一化変数(`TVar::Unbound`)であるか、両方が型変数である(両方がスコーレム定数の場合を除く)。
     Vars,
+    /// `Rigids` でも `Vars` でもない。
+    /// このとき、2 つの型の少なくとも一方は型変数でない。
+    /// 値は、型変数でない型である(両方が型変数でなければ 1 つ目の型)。
     NonRegion(Ty),
 }
 
@@ -45,7 +56,8 @@ impl Tc {
         Ok(k)
     }
 
-    /// セルの型変数の情報(Diktor の `var_info_of`)。
+    /// セル `c` の型変数の情報を返す(Diktor の `var_info_of`)。
+    /// リンク(`TVar::Link`)になっているセルを渡すと、内部エラーになる。
     pub(crate) fn var_info_of(&self, c: Cell) -> R<VarInfo> {
         match self.cell(c) {
             TVar::Unbound(i) | TVar::Generic(i) | TVar::Rigid(i) => Ok(i.clone()),
@@ -53,7 +65,7 @@ impl Tc {
         }
     }
 
-    /// 型のカインド(Diktor の `kind_of`)。
+    /// 型 `t` のカインドを返す(Diktor の `kind_of`)。
     pub(crate) fn kind_of(&mut self, t: Ty) -> R<Kind> {
         guard()?;
         let t = self.repr(t);
@@ -72,7 +84,7 @@ impl Tc {
         }
     }
 
-    // ---- occurs と脱出 ----
+    // ---- occurs check とスコープからの脱出 ----
 
     fn escape_message(&mut self, v: Cell, i: &VarInfo) -> R<String> {
         let tv = self.tvar(v);
@@ -138,6 +150,7 @@ impl Tc {
 
     // ---- クラス制約 ----
 
+    /// クラス `c` が予約述語(数値リテラルの型に付ける `Integral` と `Fractional`)であれば真を返す。
     pub(crate) fn is_predicate(&self, c: Oid) -> bool {
         c == self.cls_integral || c == self.cls_fractional
     }
@@ -147,19 +160,23 @@ impl Tc {
         self.class_vars.push((self.class_seq, v));
     }
 
-    /// クラス制約の記録の印(Diktor の `class_mark`)。
+    /// 制約の付いた型変数の一覧 `class_vars` に最後に振った通し番号を返す(Diktor の `class_mark`)。
+    /// この後で一覧に追加する項目は、これより大きい番号を持つ。
     pub(crate) fn class_mark(&self) -> i64 {
         self.class_seq
     }
 
-    /// リテラルの由来を記録する(Diktor の `note_literal`)。
+    /// リテラルが制約を付けた型変数について、変数、制約のクラス、リテラルの位置を記録する(Diktor の `note_literal`)。
+    /// 数値の既定化に失敗したときに、報告する位置を探すのに使う。
+    /// `t` が型変数でなければ何もしない。
     pub(crate) fn note_literal(&mut self, loc: Span, t: Ty, c: Oid) {
         if let Some(r) = self.var_cell(t) {
             self.literal_origins.push((r, c, loc));
         }
     }
 
-    /// 制約つきの新しい型変数(Diktor の `new_class_var`)。
+    /// 制約 `classes` の付いた新しい型変数を作る(Diktor の `new_class_var`)。
+    /// 制約が 1 つでもあれば、作った変数を一覧 `class_vars` に追加する。
     pub(crate) fn new_class_var(&mut self, kind: Kind, classes: Vec<Oid>, level: i32) -> Ty {
         let has = !classes.is_empty();
         let v = self.new_var_k(kind, classes, level);
@@ -169,7 +186,8 @@ impl Tc {
         v
     }
 
-    /// `ty` の中の未束縛の `v` を `t` に置き換える(Diktor の `subst_unbound`)。
+    /// 型 `ty` の中の単一化変数 `v` を `t` に置き換えた型を返す(Diktor の `subst_unbound`)。
+    /// 診断に表示する型を作るためだけに使い、セルは書き換えない。
     fn subst_unbound(&mut self, v: Cell, t: Ty, ty: Ty) -> R<Ty> {
         guard()?;
         let ty = self.repr(ty);
@@ -211,7 +229,15 @@ impl Tc {
         })
     }
 
-    /// クラス制約を付ける(Diktor の `add_class`)。
+    /// 型 `t` にクラス `c` の制約を付ける(Diktor の `add_class`)。
+    ///
+    /// `t` が単一化変数なら、変数に制約を記録する。
+    /// 型構成子(`TyNode::Con`)なら、インスタンスがあることを確かめ、インスタンスの前提を型引数に再帰的に要求する。
+    /// 構造的導出のあるクラスでは、閉じたレコードとヴァリアントの各フィールドの型に同じ制約を要求する。
+    /// 制約を満たせないときは型エラーにする。
+    ///
+    /// `via` は、インスタンスの前提をたどって生じた要求のときだけ値を持つ。
+    /// 値は、たどり始めた型とクラスの組(元の要求)で、型エラーのメッセージに添える。
     pub(crate) fn add_class(&mut self, via: Option<(Ty, Oid)>, t: Ty, c: Oid) -> R<()> {
         guard()?;
         let ci = match self.find_class(c) {
@@ -323,7 +349,10 @@ impl Tc {
         }
     }
 
-    /// `add_class` の `fail`。
+    /// `add_class` の型エラーを作る(Diktor の `add_class` の中の `fail`)。
+    ///
+    /// `ty` を文字列にして `mk` に渡し、メッセージを作る。
+    /// `via` があれば元の要求を、`advice` があれば直し方を、メッセージの後ろに続ける。
     fn class_fail(
         &mut self,
         via: Option<(Ty, Oid)>,
@@ -392,7 +421,11 @@ impl Tc {
         }
     }
 
-    /// 行からラベルを取り出す(Diktor の `rewrite_row`)。
+    /// 行 `row` から、最も左にあるラベル `label` のフィールドを取り出し、(フィールドの型, 残りの行)を返す(Diktor の `rewrite_row`)。
+    ///
+    /// ラベルが見つからないまま行の末尾の単一化変数に達したときは、その変数を、`label` のフィールドと新しい行変数からなる行に束縛する。
+    /// 新しい変数は、元の行変数と同じレベルで作る。
+    /// 行が閉じているときと、末尾がスコーレム定数の行変数のときは、型エラーにする。
     pub(crate) fn rewrite_row(&mut self, row: Ty, label: Oid) -> R<(Ty, Ty)> {
         let mut prefix: Vec<(Oid, Ty)> = Vec::new();
         let mut cur = row;
@@ -445,7 +478,9 @@ impl Tc {
         Ok((f, acc))
     }
 
-    /// 引数の個数(Diktor の `item_arity`)。
+    /// 型 `t` が閉じたレコードで、ラベルがすべて `_item` であれば、フィールドの個数を返す(Diktor の `item_arity`)。
+    /// 関数の引数の型に対しては、位置引数の個数になる。
+    /// それ以外の型には `None` を返す。
     pub(crate) fn item_arity(&mut self, t: Ty) -> Option<usize> {
         let t = self.repr(t);
         match self.node(t) {
@@ -461,7 +496,7 @@ impl Tc {
         }
     }
 
-    /// 単一化(Diktor の `unify`)。
+    /// 型 `a` と `b` を単一化する(Diktor の `unify`)。
     pub(crate) fn unify(&mut self, a: Ty, b: Ty) -> R<()> {
         self.unify_in(false, a, b)
     }
@@ -560,7 +595,9 @@ impl Tc {
         }
     }
 
-    /// 引数の個数を比べる(Diktor の `check_arity`)。
+    /// 関数の型 `t1` と `t2` の引数の型 `p1` と `p2` について、引数の個数を比較する(Diktor の `check_arity`)。
+    /// 個数は [`Tc::item_arity`] で求める。
+    /// 両方の個数が求まり、かつ異なるときだけ、型エラーにする。
     pub(crate) fn check_arity(&mut self, t1: Ty, t2: Ty, p1: Ty, p2: Ty) -> R<()> {
         match (self.item_arity(p1), self.item_arity(p2)) {
             (Some(n1), Some(n2)) if n1 != n2 => {
@@ -626,7 +663,7 @@ impl Tc {
 
     // ---- 数値の既定化と一般化 ----
 
-    /// `repr (TVar r)` が `v` か。
+    /// セル `r` の型変数をリンクの先までたどった結果が、セル `v` の型変数であれば真を返す。
     fn cell_is(&mut self, r: Cell, v: Cell) -> bool {
         match self.cell(r).clone() {
             TVar::Link(t) => {
@@ -685,7 +722,10 @@ impl Tc {
         None
     }
 
-    /// 一般化(Diktor の `generalize`)。
+    /// 型 `t` を一般化する(Diktor の `generalize`)。
+    ///
+    /// `level` より深いレベルの単一化変数を、その場で `TVar::Generic` に書き換える。
+    /// ただし、予約述語の付いた変数は一般化せず、`Integral` なら `Int32` に、`Fractional` なら `Float64` に決める。
     pub(crate) fn generalize(&mut self, level: i32, t: Ty) -> R<()> {
         guard()?;
         let t = self.repr(t);
@@ -771,7 +811,8 @@ impl Tc {
         }
     }
 
-    /// 一般化しない束縛のレベルを下げる(Diktor の `lower_levels`)。
+    /// 一般化しない束縛の型 `t` に残った、`level` より深い単一化変数のレベルを `level` まで下げる(Diktor の `lower_levels`)。
+    /// 一覧 `class_vars` のうち、通し番号が `since` より大きい項目の変数も同じように下げる。
     pub(crate) fn lower_levels(&mut self, since: i64, level: i32, t: Ty) -> R<()> {
         let vs: Vec<Cell> = self
             .class_vars
@@ -786,7 +827,12 @@ impl Tc {
         self.lower_go(level, t)
     }
 
-    /// 数値の既定化(Diktor の `default_numerics`)。
+    /// 一覧 `class_vars` に残っている、予約述語の付いた単一化変数を、既定の型に決める(Diktor の `default_numerics`)。
+    ///
+    /// `Integral` の付いた変数は `Int32` に、`Fractional` の付いた変数は `Float64` に決める。
+    /// 一覧を古い順にたどるので、既定化の失敗が 2 つ以上あるときは、先に作った変数の失敗を報告する。
+    /// 終わりに、`class_vars` とリテラルの位置の記録を空にする。
+    /// あわせて `decl_hole_floor` を新しい番号に進め、これより前に作った穴を、既定化の失敗を報告する位置の候補から外す。
     pub(crate) fn default_numerics(&mut self) -> R<()> {
         let vs: Vec<Cell> = self.class_vars.iter().map(|(_, v)| *v).collect();
         for v in vs {
@@ -840,7 +886,12 @@ impl Tc {
         }
     }
 
-    /// 曖昧な制約を調べる(Diktor の `check_ambiguity`)。
+    /// 曖昧な制約を検査する(Diktor の `check_ambiguity`)。
+    ///
+    /// 制約の付いた単一化変数のうち、`tys` のどの型にも現れないものがあれば、型エラーにする。
+    /// 対象は `level` より深い変数で、`all` が真のときはレベルによらずすべての変数である。
+    /// 予約述語の付いた変数は、既定化で型が決まるので対象にしない。
+    /// 検査に通ったときは、一覧 `class_vars` に単一化変数のままの項目だけを残す。
     pub(crate) fn check_ambiguity(&mut self, all: bool, level: i32, tys: &[Ty]) -> R<()> {
         let mut reach = HashSet::default();
         for &t in tys {
@@ -873,7 +924,8 @@ impl Tc {
 
     // ---- 具体化 ----
 
-    /// 一般化された型変数を置き換える(Diktor の `map_generics_with`)。
+    /// 型 `t` の中の一般化された型変数(`TVar::Generic`)を、`f` が返す型に置き換えた型を返す(Diktor の `map_generics_with`)。
+    /// 置き換え先は変数の番号ごとに `memo` に記録するので、`f` は変数 1 つにつき 1 回だけ呼ばれる。
     pub(crate) fn map_generics_with(
         &mut self,
         memo: &mut HashMap<Oid, Ty>,
@@ -929,7 +981,8 @@ impl Tc {
         })
     }
 
-    /// 具体化(Diktor の `instantiate`)。
+    /// 型スキーム `t` を具体化する(Diktor の `instantiate`)。
+    /// 一般化された型変数を、カインドと制約を引き継いだ、レベル `level` の新しい型変数に置き換える。
     pub(crate) fn instantiate(&mut self, level: i32, t: Ty) -> R<Ty> {
         let mut memo = HashMap::default();
         self.map_generics_with(
@@ -939,7 +992,8 @@ impl Tc {
         )
     }
 
-    /// 型引数を当てる(Diktor の `subst_params`)。
+    /// 一般化された型変数のうち、`args` に番号があるものを、対応する型に置き換える(Diktor の `subst_params`)。
+    /// `args` にない変数は、[`Tc::instantiate`] と同じように新しい型変数に置き換える。
     pub(crate) fn subst_params(&mut self, level: i32, args: &[(Oid, Ty)], t: Ty) -> R<Ty> {
         let mut memo = HashMap::default();
         self.map_generics_with(
@@ -954,7 +1008,8 @@ impl Tc {
 
     // ---- 辞書の穴 ----
 
-    /// 穴の記録の印(Diktor の `hole_mark`)。
+    /// 辞書の穴の一覧 `holes` に最後に振った通し番号を返す(Diktor の `hole_mark`)。
+    /// この後で一覧に追加する穴は、これより大きい番号を持つ。
     pub(crate) fn hole_mark(&self) -> i64 {
         self.hole_seq
     }
@@ -964,6 +1019,7 @@ impl Tc {
         self.holes.push((self.hole_seq, h));
     }
 
+    /// 型 `t` のクラス `c` の証拠を入れる辞書の穴を作り、一覧 `holes` に追加する。
     pub(crate) fn new_hole(&mut self, loc: Span, c: Oid, t: Ty) -> HoleId {
         let h_id = self.new_oid();
         let h = self.add_hole(Hole {
@@ -981,12 +1037,18 @@ impl Tc {
         self.row_fields(t)
     }
 
+    /// フィールドを、ラベル名のバイト列の昇順に並べ替える。
+    /// 同じラベルのフィールドは、元の順序を保つ。
     pub(crate) fn sort_row_fields(&self, fields: &mut [(Oid, Ty)]) {
         fields
             .sort_by(|(a, _), (b, _)| self.name_of(*a).as_bytes().cmp(self.name_of(*b).as_bytes()));
     }
 
-    /// 型の制約の並び(Diktor の `constraints_of`)。
+    /// 型スキーム `t` の制約を、正準順(canonical。型だけから一意に決まる順序)に並べて返す(Diktor の `constraints_of`)。
+    ///
+    /// 型を左から右へたどり、一般化された型変数が初めて現れた順に、その変数の制約を並べる。
+    /// 行は、フィールドをラベル名のバイト列の昇順にたどる。
+    /// 1 つの変数の制約は `class_rank` の昇順に並べ、予約述語は取り除く。
     pub(crate) fn constraints_of(&mut self, t: Ty) -> R<Vec<(VarInfo, Oid)>> {
         let mut seen = HashSet::default();
         let mut acc = Vec::new();
@@ -1049,7 +1111,7 @@ impl Tc {
         }
     }
 
-    /// 辞書の鍵の並び(Diktor の `dkeys_of`)。
+    /// 型スキーム `t` の辞書のキー(型変数の番号とクラスの組)を、正準順に並べて返す(Diktor の `dkeys_of`)。
     pub(crate) fn dkeys_of(&mut self, t: Ty) -> R<Vec<DKey>> {
         Ok(self
             .constraints_of(t)?
@@ -1058,7 +1120,8 @@ impl Tc {
             .collect())
     }
 
-    /// 具体化して、制約ごとに穴を作る(Diktor の `instantiate_ev`)。
+    /// 型スキーム `t` を [`Tc::instantiate`] と同じように具体化し、制約ごとに辞書の穴を作る(Diktor の `instantiate_ev`)。
+    /// 具体化した型と、正準順に並べた穴を返す。
     pub(crate) fn instantiate_ev(&mut self, loc: Span, level: i32, t: Ty) -> R<(Ty, Vec<HoleId>)> {
         let cs = self.constraints_of(t)?;
         let mut memo = HashMap::default();
@@ -1146,12 +1209,15 @@ impl Tc {
         }
     }
 
-    /// 印より後の穴を解く(Diktor の `solve_holes`)。
+    /// 一覧 `holes` のうち、通し番号が `since` より大きい穴を解く(Diktor の `solve_holes`)。
     pub(crate) fn solve_holes(&mut self, since: i64, params: &[DKey]) -> R<()> {
         self.solve_holes_range(since, i64::MAX, params)
     }
 
-    /// 範囲の穴を解く(Diktor の `solve_holes_range`)。
+    /// 一覧 `holes` のうち、通し番号が `lo` より大きく `hi` 以下の穴を解き、一覧から外す(Diktor の `solve_holes_range`)。
+    ///
+    /// `params` は、囲む束縛の辞書パラメータのキーである。
+    /// 型がまだ単一化変数である穴と、`params` にキーのないスコーレム定数の穴は、解かずに新しい番号で一覧に追加し直す。
     pub(crate) fn solve_holes_range(&mut self, lo: i64, hi: i64, params: &[DKey]) -> R<()> {
         let all = std::mem::take(&mut self.holes);
         let (mine, older): (Vec<_>, Vec<_>) =
@@ -1177,7 +1243,7 @@ impl Tc {
         Ok(())
     }
 
-    /// 解けていない穴(古い順。Diktor の `List.rev (unsolved_holes ())`)。
+    /// 一覧 `holes` にある解けていない穴を、古い順に返す(Diktor の `List.rev (unsolved_holes ())`)。
     pub(crate) fn unsolved_holes_oldest_first(&self) -> Vec<HoleId> {
         self.holes
             .iter()
@@ -1186,7 +1252,11 @@ impl Tc {
             .collect()
     }
 
-    /// 単一化の状態を戻す(Diktor の `Unify.reset`)。
+    /// 単一化の状態を初期の状態に戻す(Diktor の `Unify.reset`)。
+    ///
+    /// 制約の付いた型変数の一覧、リテラルの位置の記録、元の要求の表、辞書の穴の一覧を空にする。
+    /// あわせて `decl_hole_floor` を新しい番号に進め、これより前に作った穴を、既定化の失敗を報告する位置の候補から外す。
+    /// 通し番号は戻さない。
     pub(crate) fn unify_reset(&mut self) {
         self.class_vars.clear();
         self.literal_origins.clear();

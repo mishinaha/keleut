@@ -1,4 +1,5 @@
-//! 宣言の精緻化と、宣言列の処理である(Diktor の elab.ml の §11.31〜§11.41 と §11.43。§11.42 は flatten.rs)。
+//! 宣言の精緻化と、宣言の並びの処理である
+//! (Diktor の elab.ml の §11.31〜§11.41 と §11.43。§11.42 に当たる処理は flatten.rs にある)。
 
 use super::decls::{ClassInfo, CtorInfo, DataInfo, EffectInfo, FieldInfo, UnitTable};
 use super::elab::{pat_var_names, show_long_id};
@@ -14,7 +15,7 @@ use crate::ast::{
 };
 use std::rc::Rc;
 
-/// クラスのメソッドの後で走らせる検査の材料(メソッドの名前、型、メソッドの型パラメータ)である。
+/// クラスのメソッド 1 つについて、後で実行する検査に使うデータである(メソッドの名前、型、メソッドの型パラメータ)。
 type ClassCheck = (String, Ty, Vec<(String, Ty)>);
 
 /// クラスのメソッドの名前と型の並びである。
@@ -27,7 +28,8 @@ fn binding_name(b: &LetBinding) -> Option<String> {
     }
 }
 
-/// 投機の失敗を捨てる(Diktor の `with Type_error _ | Type_error_at _ | NotImplemented _ | NotImplemented_at _ -> ()`)。
+/// 試しに行った検査が型エラーか未実装で失敗したとき、その失敗を捨てる
+/// (Diktor の `with Type_error _ | Type_error_at _ | NotImplemented _ | NotImplemented_at _ -> ()`)。
 fn swallow(r: R<()>) -> R<()> {
     match r {
         Err(Fail::Type(_) | Fail::TypeAt(..) | Fail::NotImpl(_) | Fail::NotImplAt(..)) => Ok(()),
@@ -215,7 +217,8 @@ impl Tc {
 
     /// 型クラスを登録する(Diktor の `register_class`)。
     ///
-    /// メソッドの並びと、後で走らせる検査(メソッドの型に現れない型パラメータの制約)を返す。
+    /// メソッドの並びと、後で実行する検査に使うデータを返す。
+    /// この検査(`run_class_check`)は、メソッドの型に現れない型パラメータに付いた制約をエラーにする。
     fn register_class(&mut self, env: &Env, c: &ClassDecl) -> R<(Methods, Vec<ClassCheck>)> {
         let cls = self.intern(&c.name);
         let dn = display(&c.name).to_string();
@@ -353,7 +356,8 @@ impl Tc {
         Ok((methods, checks))
     }
 
-    /// クラスのメソッドの型に現れない型パラメータの制約を調べる(`register_class` が返す検査)。
+    /// クラスのメソッドの型パラメータに付いた制約のうち、メソッドの型から決められないものをエラーにする。
+    /// `register_class` が返すデータを使って実行する検査である。
     fn run_class_check(&mut self, name: &str, ty: Ty, mt_params: &[(String, Ty)]) -> R<()> {
         let dks = self.dkeys_of(ty)?;
         for (pn, t) in mt_params {
@@ -528,7 +532,8 @@ impl Tc {
         self.add_instance(false, cls, con, premises)
     }
 
-    /// 完全な注釈を持つ束縛の署名(Diktor の `signature_of_binding`)。
+    /// 完全な注釈を持つ束縛のシグネチャを返す(Diktor の `signature_of_binding`)。
+    /// 注釈が完全でなければ `None` を返す。
     fn signature_of_binding(&mut self, env: &Env, b: &LetBinding) -> R<Option<Ty>> {
         let params_annotated = match &b.params {
             None => true,
@@ -953,7 +958,8 @@ impl Tc {
         if let Some(x) = binding_name(b)
             && let Some(t) = env.values.get(x.as_str()).copied()
         {
-            // 起点でない単位でも、Diktor と同じく型を表示する(表示の限度の診断を同じにする)。
+            // 起点でない単位でも、Diktor と同じく型を文字列にする。
+            // 型の表示が上限を超えたときの診断を、Diktor と同じにするためである。
             let s = self.show(t)?;
             if emit == Emit::All {
                 self.current_out
@@ -963,7 +969,7 @@ impl Tc {
         Ok(())
     }
 
-    /// 宣言列を処理する(Diktor の `process_decls`)。
+    /// 宣言の並びを処理する(Diktor の `process_decls`)。
     pub(crate) fn process_decls(
         &mut self,
         toplevel_extra: &[String],
@@ -972,7 +978,7 @@ impl Tc {
         emit: Emit,
     ) -> R<Env> {
         let eff0 = self.toplevel_eff(toplevel_extra);
-        // パス 1a: 型の名前とカインドの頭、エフェクトの名前。
+        // パス 1a: 型の名前、型パラメータの個数から決まるカインドの形、エフェクトの名前を登録する。
         for node in decls {
             let r = self.with_decl_scope(node.meta.id, |tc| match &node.kind {
                 DeclKind::Type(t) => {
@@ -1036,7 +1042,7 @@ impl Tc {
             });
             at(node.meta.span, r)?;
         }
-        // パス 1a の 2 周目: カインドが決まるまで投機する。
+        // パス 1a の 2 回目の走査: 決まったカインドが増えなくなるまで、newtype と型エイリアスを試しに検査する。
         let mut prev = self.kinds_settled(decls)?;
         loop {
             for node in decls {
@@ -1054,7 +1060,7 @@ impl Tc {
                 break;
             }
         }
-        // パス 1b: newtype、effect、type class の登録。
+        // パス 1b: newtype、effect、type class を登録する。
         let mut class_checks: Vec<(usize, Vec<ClassCheck>)> = Vec::new();
         let mut env = env.clone();
         for (idx, node) in decls.iter().enumerate() {
@@ -1080,7 +1086,8 @@ impl Tc {
                 class_checks.push((idx, checks));
             }
         }
-        // 1b の後始末: クラス名の検査と、エイリアスの投機。
+        // パス 1b の後処理: メソッドの型パラメータのクラス名を検査し、register_class が返した検査(run_class_check)を実行し、
+        // 型エイリアスを試しに検査する。
         for (idx, node) in decls.iter().enumerate() {
             let r = self.with_decl_scope(node.meta.id, |tc| match &node.kind {
                 DeclKind::Class(c) => {
@@ -1101,7 +1108,8 @@ impl Tc {
             });
             at(node.meta.span, r)?;
         }
-        // 1b の後始末の 2 周目: カインドの既定化。
+        // パス 1b の後処理の 2 回目の走査: newtype と型エイリアスの、決まらなかったカインドを既定化する。
+        // 型パラメータへの適用が行として使われていれば、エラーにする。
         for node in decls {
             let r = self.with_decl_scope(node.meta.id, |tc| -> R<()> {
                 match &node.kind {
@@ -1150,7 +1158,7 @@ impl Tc {
             });
             at(node.meta.span, r)?;
         }
-        // パス 1c: インスタンスと署名。
+        // パス 1c: インスタンスを登録し、完全な注釈を持つ束縛のシグネチャを環境に入れる。
         for node in decls {
             let r = self.with_decl_scope(node.meta.id, |tc| -> R<Option<Env>> {
                 match &node.kind {
@@ -1203,10 +1211,10 @@ impl Tc {
         Ok(env)
     }
 
-    /// カインドの値域が行か(Diktor の `codomain k = KRow`)。
+    /// カインドの値域が行なら真を返す(Diktor の `codomain k = KRow`)。
     ///
-    /// Diktor の `codomain` は末尾再帰なので、循環したカインドでは止まらない。
-    /// ここでは辿る回数に上限を置き、超えたらスタックの不足と同じ処理系の限度にする。
+    /// Diktor の `codomain` は末尾再帰なので、循環したカインドでは終了しない。
+    /// ここでは矢印をたどる回数に上限(2^24 回)を置き、超えたらスタックが足りないときと同じ `処理系の限度` のエラーにする。
     fn codomain_is_row(&mut self, k: Kind) -> R<bool> {
         let mut cur = k;
         for _ in 0..(1u32 << 24) {
@@ -1219,7 +1227,7 @@ impl Tc {
         Err(Fail::Limit)
     }
 
-    /// 矢印のカインドの、決まった引数のカインドの数(Diktor の `settled` の `count`)。
+    /// 矢印のカインドの引数のうち、カインドが決まっているものの個数を返す(Diktor の `settled` の `count`)。
     fn count_known(&mut self, k: Kind) -> R<usize> {
         super::guard()?;
         match self.kview(k) {
@@ -1260,7 +1268,7 @@ impl Tc {
         Ok(acc)
     }
 
-    /// 宣言の 1 歩(Diktor の `process_decls` の `step`)。
+    /// 宣言を 1 つ処理する(Diktor の `process_decls` の `step`)。
     fn step(&mut self, env: &Env, eff0: Ty, node: &Decl, emit: Emit) -> R<Env> {
         let wbefore = self.warnings.len();
         let r = self.with_decl_scope(node.meta.id, |tc| -> R<Env> {
@@ -1281,7 +1289,7 @@ impl Tc {
                 }
             }
             Emit::Warnings(u) => {
-                // 起点でない単位の警告には、どのファイルのものかを前置する。
+                // 起点でない単位の警告には、どのファイルの警告かを示すパスを先頭に付ける。
                 let p = self.unit_path(u);
                 for i in wbefore..self.warnings.len() {
                     let w = format!("{p}: {}", self.warnings[i]);
@@ -1501,7 +1509,7 @@ impl Tc {
         }
     }
 
-    /// プログラムの初めの状態にする(Diktor の `start_program`)。
+    /// 型検査の状態を、プログラムの検査を始めるときの状態に戻す(Diktor の `start_program`)。
     pub(crate) fn start_program(&mut self) {
         self.warnings.clear();
         self.unify_reset();
@@ -1523,7 +1531,7 @@ impl Tc {
 
     /// 単位を検査する(Diktor の `check_unit`)。
     ///
-    /// 起点の単位は型の行と警告を出し、起点でない単位は警告だけを出す。
+    /// 起点の単位では束縛の型を表示する行と警告を出し、起点でない単位では警告だけを出す。
     pub(crate) fn check_unit(&mut self, unit: super::UnitId, env: &Env, decls: &[Decl]) -> R<Env> {
         let saved = self.d.current_unit;
         self.d.current_unit = unit;
@@ -1545,6 +1553,7 @@ fn row_failure_msg(msg: &str) -> bool {
         || super::elab::has_sub("は注釈で固定された行変数", msg)
 }
 
-/// 未使用の警告を避ける。
+/// `ClassDecl` の import に未使用の警告が出ないようにするための関数である。どこからも呼ばない。
+/// `ClassDecl` は `register_class` が引数の型に使っているので、この関数がなくても警告は出ない。
 #[allow(dead_code)]
 fn _unused(_: &ClassDecl) {}

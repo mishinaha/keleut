@@ -1,18 +1,18 @@
-//! ファイルの名前空間である(Diktor の elab.ml の §11.45)。
+//! ファイルごとの名前空間を扱う(Diktor の elab.ml の §11.45)。
 //!
-//! import のあるプログラムは、単位(ソースファイル)の列として型検査する。
-//! 単位の列は依存される側が先で、最後が起点である([`super::load`])。
+//! import のあるプログラムは、単位(ソースファイル 1 つ)の並びとして型検査する。
+//! 単位は依存される側が先になる順に並び、最後が起点(コマンド行で渡したファイル)である([`super::load`])。
 //! 各単位は次の順に処理する([`super::check`] の `check_units`)。
 //!
-//! 1. import の名前を、import 先の単位の公開表で引き([`Tc::resolve_import_names`])、import どうしの衝突を検査する([`import_claims`])。
+//! 1. import する名前を import 先の単位の公開表から探し([`Tc::resolve_import_names`])、import どうしの衝突を検査する([`import_claims`])。
 //! 2. 単位の宣言を平坦化する。
-//! 3. import した名前とファイルのトップレベルの宣言の衝突を検査する([`Tc::check_own_clashes`])。
-//! 4. 標準環境だけを処理した環境に import した名前を足して、単位のスコープを作る([`Tc::apply_imports`])。
+//! 3. import した名前と、ファイルのトップレベルの宣言との衝突を検査する([`Tc::check_own_clashes`])。
+//! 4. 標準環境だけを処理した環境に import した名前を追加して、単位のスコープを作る([`Tc::apply_imports`])。
 //! 5. 宣言を型検査する。
 //! 6. 起点でない単位なら、公開表を作る([`Tc::public_table`])。
 //!
-//! 公開表と衝突の検査は平坦化の前の宣言を読むが、平坦化は宣言を値で移す。
-//! そこで、平坦化の前に、名前と公開の印と節点の番号だけを写した骨組み([`Skel`])を作っておく。
+//! 公開表の作成と衝突の検査には平坦化の前の宣言が必要だが、平坦化は宣言の所有権を受け取って消費する。
+//! そこで、平坦化の前に、宣言の位置、ノードの番号、`pub` の有無、宣言した名前(コンストラクタとメソッドの名前を含む)だけをコピーした骨組み([`Skel`])を作っておく。
 
 use super::decls::mark_spelling;
 use super::elab::pat_var_names;
@@ -21,7 +21,8 @@ use super::{Env, Fail, GRef, Oid, R, Tc, Ty, UnitId, at, terr};
 use crate::ast::{Decl, DeclKind, ImportDecl, NodeId};
 use crate::pos::Span;
 
-/// 束縛 1 つの骨組みである。
+/// `let` の束縛 1 つの骨組みである。
+/// ノードの番号、`pub` の有無、パターンが束縛する名前を持つ。
 #[derive(Clone, Debug)]
 pub(crate) struct SkelBind {
     id: NodeId,
@@ -29,7 +30,8 @@ pub(crate) struct SkelBind {
     names: Vec<String>,
 }
 
-/// 平坦化の前の宣言の骨組みである。
+/// 平坦化の前の宣言 1 つの骨組みである。
+/// 公開表の作成と衝突の検査に使う情報だけを持つ。
 #[derive(Clone, Debug)]
 pub(crate) struct Skel {
     span: Span,
@@ -49,7 +51,7 @@ enum SkelKind {
     Other,
 }
 
-/// 宣言列の骨組みを作る。
+/// 宣言の並びから骨組みを作る。
 pub(crate) fn skeleton(decls: &[Decl]) -> Vec<Skel> {
     decls
         .iter()
@@ -90,26 +92,34 @@ pub(crate) fn skeleton(decls: &[Decl]) -> Vec<Skel> {
 /// 公開表の項目(Diktor の `pub_entry`)である。
 #[derive(Clone, Debug)]
 pub(crate) enum PubEntry {
+    /// 値の型と、参照先の宣言。
     Value(Ty, GRef),
-    /// 型の綴りと、コンストラクタの(名前, 綴り)。
+    /// 型の内部名と、コンストラクタごとの(名前, 内部名)の並び。
     Type(Oid, Vec<(String, Oid)>),
+    /// エフェクトの内部名。
     Effect(Oid),
-    /// クラスの綴りと、メソッドの(名前, 型)。
+    /// クラスの内部名と、メソッドごとの(名前, 型)の並び。
     Class(Oid, Vec<(String, Ty)>),
-    /// 綴り、公開のメンバー、全メンバーの名前。
+    /// module の内部名、公開のメンバーの項目、公開でないものも含めた全メンバーの名前。
     Module(String, Vec<(String, PubEntry)>, Vec<String>),
 }
 
 /// 単位の公開表(Diktor の `unit_table`)である。
+/// `pubs` は公開の宣言の(名前, 項目)の並びで、`all` は公開でないものも含めた、トップレベルで宣言した名前の並びである。
+/// `all` は、import できない理由が「公開されていない」か「宣言がない」かを診断で区別するために使う。
 #[derive(Clone, Debug, Default)]
 pub(crate) struct UnitTable {
     pubs: Vec<(String, PubEntry)>,
     all: Vec<String>,
 }
 
-/// import で束縛する名前 1 つ(名前, 項目, 位置, import 元のパス)である。
+/// import で束縛する名前 1 つである。
+/// (名前, 公開表の項目, import 文の中でのその名前の位置, import 文に書いた import 元のパス)の組で表す。
 pub(crate) type Bind = (String, PubEntry, Span, String);
 
+/// import した名前の種類である。
+/// 衝突はこの種類ごとに検査する。
+/// エフェクトの名前は `Type` に含める。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ImportKind {
     Value,
@@ -119,7 +129,9 @@ pub(crate) enum ImportKind {
     Module,
 }
 
-/// import した名前の表。(種類, 名前) → (実体の鍵, import 元, 型の名前)。
+/// import した名前の表である。
+/// キーは(種類, 名前)で、値は(参照先の宣言を識別する文字列, import 元のパス, 持ち主)である。
+/// 持ち主は、コンストラクタなら型の名前、クラスのメソッドの修飾しない名前なら `"method"`、それ以外は空文字列である。
 pub(crate) type Claims = HashMap<(ImportKind, String), (String, String, String)>;
 
 fn gref_key(g: &GRef) -> String {
@@ -130,7 +142,8 @@ fn gref_key(g: &GRef) -> String {
     }
 }
 
-/// 1 つの import 文の名前を数える文脈である。
+/// import する名前 1 つを [`Claims`] に登録する間の状態である。
+/// 登録先の表、診断に付ける位置、import 元のパスを持つ。
 struct Claimer<'a> {
     seen: Claims,
     loc: Span,
@@ -163,7 +176,10 @@ impl Claimer<'_> {
     }
 }
 
-/// import した名前を種類ごとに数え、import どうしの衝突を検査する(Diktor の `import_claims`)。
+/// import した名前を種類ごとに [`Claims`] に登録し、import どうしの衝突を検査する(Diktor の `import_claims`)。
+///
+/// 同じ種類の同じ名前が別の宣言を指していれば、import エラーにする。
+/// 同じ宣言を 2 回 import するのはエラーにしない。
 pub(crate) fn import_claims(tc: &Tc, binds: &[Bind]) -> R<Claims> {
     let mut seen: Claims = HashMap::default();
     for (x, e, loc, src) in binds {
@@ -182,7 +198,7 @@ pub(crate) fn import_claims(tc: &Tc, binds: &[Bind]) -> R<Claims> {
             PubEntry::Class(o, methods) => {
                 let q = tc.name_of(*o).to_string();
                 c.claim(ImportKind::Class, x, q.clone(), "")?;
-                // メソッドの非修飾名も値の名前として数える。
+                // メソッドの修飾しない名前も、値の名前として登録する。
                 for (m, _) in methods {
                     c.claim(ImportKind::Value, m, format!("m:{q}.{m}"), "method")?;
                 }
@@ -191,7 +207,7 @@ pub(crate) fn import_claims(tc: &Tc, binds: &[Bind]) -> R<Claims> {
                 c.claim(ImportKind::Module, x, sm.clone(), "")?;
                 for (y, e) in members {
                     if let PubEntry::Type(o, cs) = e {
-                        // module と同名の型(コンパニオン)は、module 名で型として引ける。
+                        // module と同名の型(コンパニオン型)は module 名で型として参照できるので、型の名前としても登録する。
                         if y == x {
                             c.claim(ImportKind::Type, x, tc.name_of(*o).to_string(), "")?;
                         }
@@ -209,7 +225,7 @@ impl Tc {
     /// 単位の公開表を作る(Diktor の `public_table`)。
     pub(crate) fn public_table(&mut self, unit: UnitId, env: &Env, raw: &[Skel]) -> UnitTable {
         let mut entries = self.scan_public(unit, env, "", raw);
-        // 同じ名前の pub の値が 2 回宣言されていれば、後の宣言を公開する。
+        // 同じ名前の `pub` の値が 2 回以上宣言されていれば、最後の宣言だけを公開する。
         let mut kept = Vec::new();
         for i in 0..entries.len() {
             let (p, x, e) = &entries[i];
@@ -234,7 +250,11 @@ impl Tc {
         }
     }
 
-    /// `prefix` は module の中なら綴りの頭(`%3.M.`)で、トップレベルなら空である。
+    /// 骨組みを走査し、宣言した名前ごとに(`pub` の有無, 名前, 公開表の項目)を返す。
+    ///
+    /// `prefix` は内部名の接頭辞である。
+    /// module の中では module の内部名に `.` を付けたもの(`%3.M.` など)で、トップレベルでは空である。
+    /// 値の型が登録されていない束縛は、項目が `None` になる。
     fn scan_public(
         &mut self,
         unit: UnitId,
@@ -273,7 +293,9 @@ impl Tc {
                     out.push((*p, name.clone(), e));
                 }
                 SkelKind::Newtype(p, name, ctors) => {
-                    // OCaml の評価の順(構成子の引数は右から)に合わせ、コンストラクタを先に intern する。
+                    // Diktor は `PType (intern …, ctors n)` と書いている。
+                    // OCaml は値コンストラクタ `PType` の引数を右から評価するので、newtype のコンストラクタが型より先に intern される。
+                    // 同じ順序になるように、ここでもコンストラクタを先に intern する。
                     let cs: Vec<(String, Oid)> = ctors
                         .iter()
                         .map(|c| (c.clone(), self.intern(&mark_spelling(unit, c))))
@@ -321,7 +343,9 @@ impl Tc {
         out
     }
 
-    /// import 文の名前を公開表で引き、束縛する名前の列を返す(Diktor の `resolve_import_names`)。
+    /// import 文の名前を import 先の公開表から探し、束縛する名前の並びを返す(Diktor の `resolve_import_names`)。
+    ///
+    /// 名前が公開されていないときと、その名前の宣言がないときは、それぞれのメッセージで import エラーにする。
     pub(crate) fn resolve_import_names(tbl: &UnitTable, im: &ImportDecl) -> R<Vec<Bind>> {
         let src = &im.source;
         let mut out = Vec::new();
@@ -378,7 +402,9 @@ impl Tc {
         Ok(out)
     }
 
-    /// ファイルのトップレベルの宣言が、import した名前と衝突していないかを確かめる(Diktor の `check_own_clashes`)。
+    /// ファイルのトップレベルの宣言が、import した名前と衝突していないかを検査する(Diktor の `check_own_clashes`)。
+    ///
+    /// クラスのメソッドとして import された修飾しない名前は、同じ名前の値を宣言しても衝突にしない。
     pub(crate) fn check_own_clashes(seen: &Claims, raw: &[Skel]) -> R<()> {
         let clash = |kind: ImportKind, name: &str| -> R<()> {
             match seen.get(&(kind, name.to_string())) {
@@ -431,7 +457,7 @@ impl Tc {
         Ok(())
     }
 
-    /// import した名前を単位のスコープに張る(Diktor の `apply_imports`)。
+    /// import した名前を単位のスコープに登録し、値の束縛を追加した環境を返す(Diktor の `apply_imports`)。
     pub(crate) fn apply_imports(&mut self, unit: UnitId, env: &Env, binds: &[Bind]) -> Env {
         let mut env = env.clone();
         for (x, e, _, _) in binds {
@@ -451,7 +477,8 @@ impl Tc {
                     let k = self.intern(x);
                     self.d.unit_classes.insert((unit, k), *o);
                     self.d.unit_qualifiers.insert((unit, x.clone()), q.clone());
-                    // メソッドは修飾名と非修飾名の両方で引ける。非修飾名は先勝ち。
+                    // メソッドは修飾名と修飾しない名前の両方で参照できる。
+                    // 修飾しない名前がすでに環境にあれば、先にある束縛を残す。
                     for (m, t) in methods {
                         let g = GRef::Method(format!("{q}.{m}"));
                         env = self.add_top(&env, &format!("{q}.{m}"), *t, g.clone());
@@ -468,7 +495,7 @@ impl Tc {
                                 env = self.add_top(&env, &format!("{sm}.{y}"), *t, g.clone())
                             }
                             PubEntry::Type(o, cs) => {
-                                // module と同名の型(コンパニオン)は、module 名だけで型として引ける。
+                                // module と同名の型(コンパニオン型)は、module 名だけで型として参照できる。
                                 if y == x {
                                     let k = self.intern(x);
                                     self.d.unit_synonyms.insert((unit, k), *o);

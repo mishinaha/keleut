@@ -1,15 +1,15 @@
-//! KIR の書き出し(`types::emit`)の試験である。
+//! KIR の書き出し(`types::emit`)のテストである。
 //!
-//! 環境変数 `KELEUT_FRONT_DIKTOR` で本物の diktor を与えたときは、
-//! `KELEUT_FRONT_CORPUS`(既定は `conformance/corpus`)の全件で、
-//! 書き出したテキストとバイナリを `diktor --emit-ir-text` と `--emit-ir` の出力とバイト単位で比べる。
-//! 旗はプレリュードありと `--no-prelude` の 2 通りで、Diktor が 0 で終わる組だけを比べる。
+//! 環境変数 `KELEUT_FRONT_DIKTOR` に本物の diktor のパスを設定したときは、`KELEUT_FRONT_CORPUS`(既定は `conformance/corpus`)のすべての `.kel` ファイルで Diktor と比較する。
+//! 比較するのは書き出したテキストとバイナリで、`diktor --emit-ir-text` と `--emit-ir` の出力とバイト単位で一致することを確かめる。
+//! オプションはプレリュードありと `--no-prelude` の 2 通りを試し、Diktor が終了コード 0 で終了した組み合わせだけを比較する。
 
 use keleut_front::types::check::{CheckOptions, check_limits, check_program, on_check_stack};
 use keleut_front::types::emit::program_of_checked;
 use keleut_front::types::load::{SourceFs, StdFs};
 
-/// 作業のディレクトリを `0` とみなすファイルシステムである。
+/// フィールド `0` のディレクトリを作業ディレクトリとみなして、相対パスを解決するファイルシステムである。
+/// 絶対パスはそのまま使う。
 struct DirFs(std::path::PathBuf);
 
 impl DirFs {
@@ -37,7 +37,8 @@ impl SourceFs for DirFs {
     }
 }
 
-/// `dir` を作業のディレクトリとして `files` を書き出す。型検査か鍵で止まれば `None`。
+/// `dir` を作業ディレクトリとみなして `files` を型検査し、KIR のプログラムを作る。
+/// 型検査がエラーになったときと、単位のキーを決められないときは `None` を返す。
 fn emit(dir: std::path::PathBuf, files: Vec<String>, no_prelude: bool) -> Option<kir::Program> {
     let opts = CheckOptions {
         no_prelude,
@@ -84,7 +85,7 @@ fn 書いた_kir_は検証を通り往復する() {
     std::fs::remove_dir_all(&d).unwrap();
 }
 
-/// 本物の diktor が与えられたら、コーパスの全件で書き出しを比べる。
+/// `KELEUT_FRONT_DIKTOR` が設定されていれば、コーパスのすべてのファイルで、書き出した KIR を Diktor の出力と比較する。
 #[test]
 fn コーパスで_diktor_と同じ_kir_を書く() {
     let Some(diktor) = std::env::var_os("KELEUT_FRONT_DIKTOR") else {

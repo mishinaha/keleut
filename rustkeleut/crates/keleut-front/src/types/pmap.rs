@@ -1,14 +1,14 @@
-//! 永続的な順序つきの写像である(OCaml の `Map.Make`)。
+//! キーの順序を保つ永続マップである(OCaml の `Map.Make` に相当する)。
 //!
-//! 精緻化の環境は、束縛を足すたびに新しい環境を作り、古い環境もそのまま使い続ける。
-//! 写像を丸ごと写すと深い `let` の鎖で 2 乗の手間になるので、
-//! 節点を `Rc` で共有する AVL 木にして、足すことと除くことを対数の手間にする。
-//! 列挙はキーの昇順で、OCaml の `Map.bindings` と同じ順である。
+//! 精緻化の環境は、束縛を追加するたびに新しい環境を作り、古い環境もそのまま使い続ける。
+//! マップ全体をコピーすると、深い `let` の連鎖では、連鎖の長さの 2 乗に比例する時間がかかる。
+//! そこで、ノードを `Rc` で共有する AVL 木にして、追加と削除にかかる時間を要素数の対数に比例する程度にする。
+//! キーは昇順に列挙する。OCaml の `Map.bindings` と同じ順序である。
 
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-/// 木の節点である。
+/// AVL 木のノードである。キーと値、左右の部分木、このノードを根とする部分木の高さを持つ。
 struct Node<K, V> {
     key: K,
     val: V,
@@ -19,7 +19,7 @@ struct Node<K, V> {
 
 type Tree<K, V> = Option<Rc<Node<K, V>>>;
 
-/// 永続的な写像である。
+/// 永続マップである。追加と削除は元のマップを書き換えず、新しいマップを返す。
 pub struct PMap<K, V> {
     root: Tree<K, V>,
 }
@@ -175,19 +175,19 @@ where
 }
 
 impl<K: Ord + Clone, V: Clone> PMap<K, V> {
-    /// 空の写像。
+    /// 空のマップを作る。
     pub fn new() -> Self {
         PMap { root: None }
     }
 
-    /// `key` を `val` に写す写像を足した写像を返す。
+    /// `key` に `val` を対応させたマップを返す。`key` がすでにあれば、値を `val` に置き換える。
     pub fn add(&self, key: K, val: V) -> Self {
         PMap {
             root: add(&self.root, key, val),
         }
     }
 
-    /// `key` を除いた写像を返す。
+    /// `key` を取り除いたマップを返す。`key` がなければ、同じマップを返す。
     pub fn remove<Q: ?Sized + Ord>(&self, key: &Q) -> Self
     where
         K: std::borrow::Borrow<Q>,
@@ -200,7 +200,7 @@ impl<K: Ord + Clone, V: Clone> PMap<K, V> {
         }
     }
 
-    /// `key` の値。
+    /// `key` に対応する値を返す。`key` がなければ `None` を返す。
     pub fn get<Q: ?Sized + Ord>(&self, key: &Q) -> Option<&V>
     where
         K: std::borrow::Borrow<Q>,
@@ -216,7 +216,7 @@ impl<K: Ord + Clone, V: Clone> PMap<K, V> {
         None
     }
 
-    /// `key` があるか。
+    /// `key` があれば真を返す。
     pub fn contains<Q: ?Sized + Ord>(&self, key: &Q) -> bool
     where
         K: std::borrow::Borrow<Q>,
@@ -224,7 +224,7 @@ impl<K: Ord + Clone, V: Clone> PMap<K, V> {
         self.get(key).is_some()
     }
 
-    /// キーの昇順の列。
+    /// すべてのキーを昇順に並べて返す。
     pub fn keys(&self) -> Vec<K> {
         let mut out = Vec::new();
         let mut stack: Vec<&Rc<Node<K, V>>> = Vec::new();

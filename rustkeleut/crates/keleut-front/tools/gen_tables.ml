@@ -1,6 +1,6 @@
-(* keleut-front の LR(1) の表 src/tables.rs を、Diktor の文法から作る。
+(* keleut-front の LR(1) の表 src/tables.rs を、Diktor の文法から生成する。
 
-   使い方(rustkeleut/crates/keleut-front で):
+   使い方(rustkeleut/crates/keleut-front で実行する):
 
      mkdir -p /tmp/kf
      menhir --cmly --table --explain --strict ../../../diktor/lib/parser.mly --base /tmp/kf/parser
@@ -9,12 +9,12 @@
      /tmp/kf/gen /tmp/kf/parser.cmly ../../../diktor/lib/parser.mly > src/tables.rs
      cargo fmt
 
-   ocamlopt は .cmi、.cmx、.o を元のファイルの隣に書くので、写しを /tmp/kf で翻訳する。
-   Diktor の dune と同じ旗で menhir を走らせ、出てきた .cmly(menhirSdk の形式)から、
-   状態ごとの動作、goto、既定の還元と、規則の一覧を Rust の定数に書き出す。
-   表は menhir の表の形の後段(--table)と同じ自動機械を表すので、
-   受理する言語、誤りに気づくトークン、トークンを読む時機が Diktor と一致する。
-   規則の意味の動作は src/actions.rs に手で写し、規則の綴り(KEY)で結びつける。 *)
+   ocamlopt は .cmi、.cmx、.o をソースファイルと同じディレクトリに書くので、このファイルを /tmp/kf にコピーしてからコンパイルする。
+   menhir は Diktor の dune と同じオプション(--explain --strict --table)で実行し、--cmly で .cmly(menhirSdk が読む形式)も出力させる。
+   このプログラムは .cmly を読み、状態ごとの動作、goto、既定の還元と、規則の一覧を、Rust の定数として標準出力に書き出す。
+   表は、menhir の表形式のバックエンド(--table)が使うものと同じオートマトンを表す。
+   そのため、受理する言語、エラーを検出するトークン、トークンを読むタイミングが Diktor と一致する。
+   規則の意味動作は src/actions.rs に手で移植し、規則を表す文字列(Prod の key)で規則と対応づける。 *)
 
 module G = MenhirSdk.Cmly_read.Read (struct
   let filename = Sys.argv.(1)
@@ -78,7 +78,8 @@ let () =
         (G.Production.kind p = `START)
         (escape (prod_key p)));
   pr "];\n\n";
-  (* 動作の表。0 は誤り、1..=0x7fff は (状態 + 1) への shift、0x8000 | p は規則 p の還元 *)
+  (* 動作の表を書き出す。
+     値 0 はエラー、1..=0x7fff は値から 1 を引いた番号の状態への shift、0x8000 | p は規則 p の還元を表す。 *)
   pr "/// 動作の表(状態 × 終端記号)である。\n";
   pr "/// 0 は誤り、`1..=0x7fff` は値から 1 を引いた状態への shift、`0x8000 | p` は規則 p の還元である。\n";
   pr "pub static ACTION: [u16; N_STATES * N_TERMINALS] = [\n";

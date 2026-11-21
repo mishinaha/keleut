@@ -1,14 +1,14 @@
-//! 規則の意味の動作と脱糖である(Diktor の parser.mly の §3.3〜§3.10 の補助関数と、各規則の動作)。
+//! 規則の意味動作と脱糖である(Diktor の parser.mly の §3.3〜§3.10 の補助関数と、各規則の意味動作に対応する)。
 //!
-//! 動作は規則の綴り(`tables.rs` の `Prod::key`)で引く。
-//! menhir の `%inline` は規則を展開するので、同じ動作を持つ綴りが複数ある。
+//! 意味動作は、規則を表す文字列(`tables.rs` の `Prod::key`)をキーにして引く。
+//! menhir の `%inline` は規則を展開するので、同じ意味動作を持つキーが複数ある。
 //!
-//! 意味の値の列(`cons` で前に足していく列)は、逆順の `Vec` で持つ。
-//! `x :: l` は末尾への `push` で、使うときに逆にする。
-//! こうすると、右再帰で長い列を作っても仕事が列の長さに比例する。
+//! Diktor がリストの先頭に要素を追加して作る意味値(`x :: l`)は、逆順の `Vec` で持つ。
+//! `x :: l` に相当する操作は末尾への `push` で、使うときに正順に直す。
+//! こうすると、右再帰の規則で長いリストを作っても、処理時間がリストの長さに比例する。
 //!
-//! 意味の動作が 2 つ以上の誤りを投げうるときは、Diktor(OCaml)の評価の順に合わせる。
-//! OCaml は関数の引数を右から評価するので、`f a (g b)` では `g b` の誤りが先に出る。
+//! 1 つの意味動作が 2 つ以上のエラーを出すことがあるときは、Diktor(OCaml)の評価順序に合わせる。
+//! OCaml は関数の引数を右から評価するので、`f a (g b)` では `g b` のエラーが先に出る。
 
 use crate::ast::*;
 use crate::pos::{Pos, Span};
@@ -16,14 +16,15 @@ use crate::tables::PRODS;
 use crate::token::{Tok, ocaml_int_of_string_opt};
 use std::sync::OnceLock;
 
-/// 意味の動作の失敗である。
+/// 意味動作の失敗の種類である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActErr {
-    /// 位置を付けた構文エラー(Diktor の `Syntax_error_at`)。
+    /// 位置を付けた構文エラー(Diktor の `Syntax_error_at` に対応する)。
     Syntax(Pos, String),
-    /// 内部エラー(Diktor が受け皿の外の例外で終わる場合)。
+    /// 内部エラー。Diktor が、最上位の例外ハンドラで捕捉しない例外で終了する場合に対応する。
     Internal(String),
-    /// 構文解析の限度を超えた。
+    /// 木の深さの上限を超えた。
+    /// `._N` の形の選択の `N` が木の深さの上限より大きいときに返す。
     Limit,
 }
 
@@ -33,24 +34,25 @@ fn syntax_error<T>(pos: Pos, msg: impl Into<String>) -> Result<T, ActErr> {
     Err(ActErr::Syntax(pos, msg.into()))
 }
 
-/// 構文解析の文脈である(ノードの番号を振り、木の深さを数える)。
+/// 構文解析のコンテキストである。ノードの番号を振り、木の深さを数える。
 ///
-/// ノードの番号は文脈ごとに 0 から振る。
-/// 複数のファイルや REPL の入力を 1 つの文脈で続けて解析すると、番号はそれらの全体で重ならない。
-/// 限度を超えたという印は解析ごとに消すので、限度で失敗した後の文脈も次の解析に使える。
+/// ノードの番号は、コンテキストごとに 0 から振る。
+/// 複数のファイルや REPL の入力を 1 つのコンテキストで続けて解析すると、番号はそれらの全体で重ならない。
+/// 深さの上限を超えたことを表すフラグは解析のたびに下ろすので、上限を超えて失敗した後のコンテキストも次の解析に使える。
 #[derive(Debug)]
 pub struct Ctx {
     next_id: NodeId,
-    /// 構文解析の限度(診断に出す値)。
+    /// `new` に渡した木の深さの上限。診断にはこの値を表示する。
     max_nest: usize,
-    /// 木の深さの限度(`max_nest` を `u32` に収めた値)。
+    /// 深さの比較に使う上限。`max_nest` を `u32` に収まるように切り詰めた値である。
     limit: u32,
-    /// 限度を超える深さのノードを作ったか。
+    /// 上限を超える深さのノードを作ったら立てるフラグ。
     pub(crate) over: bool,
 }
 
 impl Ctx {
-    /// 番号を 0 から振る文脈。`limit` は構文解析の限度(作る木の深さの限度)である。
+    /// 番号を 0 から振るコンテキストを作る。
+    /// `limit` は、作る木の深さの上限である。
     pub fn new(limit: usize) -> Ctx {
         Ctx {
             next_id: 0,
@@ -60,12 +62,12 @@ impl Ctx {
         }
     }
 
-    /// 構文解析の限度である。
+    /// 木の深さの上限(`new` に渡した値)を返す。
     pub fn limit(&self) -> usize {
         self.max_nest
     }
 
-    /// 次に振るノードの番号である。
+    /// 次に振るノードの番号を返す。
     pub fn next_id(&self) -> NodeId {
         self.next_id
     }
@@ -89,7 +91,8 @@ impl Ctx {
         Exp { meta, kind }
     }
 
-    /// 既にある注釈を借りて式を作る(深さは作り直す)。
+    /// すでにある注釈の番号と範囲を引き継いで、式を作る。
+    /// 深さは、新しい子から計算し直す。
     fn reuse_exp(&mut self, m: Meta, kind: ExpKind) -> Exp {
         let meta = self.meta_with(m.id, m.span, kind.child_depth());
         Exp { meta, kind }
@@ -155,7 +158,8 @@ impl Ctx {
     }
 }
 
-/// `newtype` の右辺の生の形である。
+/// `newtype` の宣言の右辺を、脱糖する前の形で表す。
+/// 右辺を書かない形、フィールドだけを書く省略形、コンストラクタを並べる形がある。
 #[derive(Debug)]
 pub enum RhsRaw {
     None,
@@ -163,7 +167,8 @@ pub enum RhsRaw {
     Ctors(Vec<CtorDecl>),
 }
 
-/// 末尾ブロックの位置に来た、末尾ブロックにならない波括弧の形である。
+/// 末尾ブロックを書ける位置に現れた、末尾ブロックにならない波括弧の種類である。
+/// 種類ごとに別の構文エラーを報告する。
 #[derive(Debug)]
 pub enum TrailingOther {
     Record,
@@ -171,7 +176,8 @@ pub enum TrailingOther {
     Annot(Pos),
 }
 
-/// `extern` の頭(名前、型パラメータ、引数、返り値の型とエフェクト)である。
+/// `extern` の宣言のシグネチャである。
+/// 名前、型パラメータ、仮引数、返り値の型とエフェクトの組をこの順に持つ。
 type ExternSigT = (
     String,
     Vec<TypeParam>,
@@ -179,17 +185,18 @@ type ExternSigT = (
     (Option<TypeExp>, Option<TypeExp>),
 );
 
-/// レコードのパターンの欄と残りである。
+/// レコードパターンに書いたフィールドの並びと、残りのフィールドを受けるパターンの組である。
 type RpItemsT = (Vec<(String, Pat)>, Option<Pat>);
 
-/// 意味の値である。列は逆順に持つ(モジュールの説明)。
+/// 意味動作が右辺から受け取り、結果として返す意味値である。
+/// リストは、モジュールの説明のとおり逆順に持つ。
 #[derive(Debug)]
 pub enum Sv {
     None,
     Tok(Tok),
     Str(String),
     OptStr(Option<String>),
-    /// 正順の列(`upper_path`)。
+    /// 文字列の並び。`upper_path` の意味値で、ほかのリストと違って正順に持つ。
     Strs(Vec<String>),
     LongId(LongId),
     Int(u32),
@@ -245,9 +252,9 @@ pub enum Sv {
 }
 
 impl Sv {
-    /// 意味の値を、木の深さに比例するスタックを使わずに捨てる([`dismantle`])。
+    /// 意味値を、木の深さに比例するスタックを使わずにドロップする([`dismantle`])。
     ///
-    /// 構文解析が限度で止まったときの、最後の還元の値に使う。
+    /// 構文解析が深さの上限を超えて失敗したときに、最後の還元で作った意味値に使う。
     pub(crate) fn dismantle(self) {
         let work: Vec<Node> = match self {
             Sv::Exp(e) => vec![Node::Exp(*e)],
@@ -290,7 +297,7 @@ impl Sv {
                     v
                 })
                 .collect(),
-            // ほかの値は、限度の内側の深さの子しか持たない。
+            // それ以外の意味値が持つ子は、深さが上限以下である。
             _ => Vec::new(),
         };
         dismantle(work);
@@ -302,8 +309,10 @@ fn bad(want: &str, got: &Sv) -> ! {
     panic!("keleut-front: 意味の値の型が合いません({want} を期待したが {got:?})")
 }
 
-/// 値を取り出す関数を作る。
-/// 1 つ目の形は変種の中身をそのまま返し、`box` を前に付けた 2 つ目の形は箱から出して返す。
+/// 意味値から内容を取り出す関数を作る。
+/// 1 つ目の形は、バリアントが持つ値をそのまま返す。
+/// 先頭に `box` を書く 2 つ目の形は、バリアントが持つ `Box` から値を取り出して返す。
+/// どちらの関数も、意味値が期待したバリアントでなければパニックする。
 macro_rules! accessors {
     ($($name:ident : $var:ident => $t:ty),* $(,)?) => {
         impl Sv {
@@ -392,7 +401,7 @@ accessors! {
 }
 
 impl Sv {
-    /// 受理した値を構文解析の結果にする。
+    /// オートマトンが受理したときの意味値を、構文解析の結果にする。
     pub fn into_program(self) -> Program {
         match self {
             Sv::Program(p) => *p,
@@ -407,7 +416,7 @@ impl Sv {
         }
     }
 
-    /// 識別子、文字列、`#` の名前のトークンの中身。
+    /// 識別子、文字列、`#` で始まる名前のトークンが持つ文字列を返す。
     fn text(self) -> String {
         match self.tok() {
             Tok::LOWER_IDENTIFIER(s)
@@ -433,25 +442,27 @@ impl Sv {
     }
 }
 
-/// 逆順の列を正順にする。
+/// 逆順のリストを正順に直す。
 fn fwd<T>(mut v: Vec<T>) -> Vec<T> {
     v.reverse();
     v
 }
 
-/// 規則の右辺の値と位置である。添字は 1 から数える(`$1`、`$2`、…)。
+/// 規則の右辺の意味値と位置である。
+/// 添字は、menhir の `$1`、`$2` と同じく 1 始まりである。
 pub struct Args {
     v: Vec<(Sv, Pos, Pos)>,
     sloc: (Pos, Pos),
 }
 
 impl Args {
-    /// 右辺の値と位置の列と、規則全体の範囲から作る。
+    /// 右辺の意味値と位置の並びと、規則全体の範囲から作る。
     pub fn new(v: Vec<(Sv, Pos, Pos)>, sloc: (Pos, Pos)) -> Args {
         Args { v, sloc }
     }
 
-    /// 右辺の列を返す(呼び出し側が割り付けを使い回す)。
+    /// 右辺の並びを持つ `Vec` を返す。
+    /// 呼び出し元は、この `Vec` の確保済みの領域を次の還元で再利用する。
     pub fn into_vec(self) -> Vec<(Sv, Pos, Pos)> {
         self.v
     }
@@ -477,7 +488,7 @@ impl Args {
     }
 }
 
-// ---- 脱糖の補助関数(Diktor の parser.mly の §3.4〜§3.10) ----
+// ---- 脱糖の補助関数(Diktor の parser.mly の §3.4〜§3.10 に対応する) ----
 
 fn is_upper(s: &str) -> bool {
     s.as_bytes().first().is_some_and(|c| c.is_ascii_uppercase())
@@ -590,9 +601,9 @@ fn call(
     }
 }
 
-/// ブロックの宣言の列を式にする(Diktor の `block_of_items`)。
+/// ブロックの中の宣言の並びを、1 つの式に変換する(Diktor の `block_of_items` に対応する)。
 fn block_of_items(cx: &mut Ctx, sloc: (Pos, Pos), items: Vec<Decl>) -> Result<Exp, ActErr> {
-    // 左から見て最初の誤りを報告する(Diktor の再帰は左から順に誤りを調べる)。
+    // 左から調べて、最初に見つけたエラーを報告する(Diktor の再帰も、左から順にエラーを調べる)。
     for d in &items {
         match &d.kind {
             DeclKind::Exp(_) => {}
@@ -620,8 +631,9 @@ fn block_of_items(cx: &mut Ctx, sloc: (Pos, Pos), items: Vec<Decl>) -> Result<Ex
             }
         }
     }
-    // 後ろから畳む。`Seq` を前に伸ばす間は、要素を逆順の列に溜めておき、
-    // 使うときに 1 つのノードにする(Diktor は伸ばすたびに新しいノードを作るが、形は同じである)。
+    // 後ろの宣言から順にまとめていく。
+    // `Seq` の先頭に式を追加している間は、要素を逆順の `Vec` にためておき、使うときに 1 つのノードにする。
+    // Diktor は式を追加するたびに新しいノードを作るが、できる木は同じである。
     enum Acc {
         Empty,
         One(Exp),
@@ -666,9 +678,9 @@ fn block_of_items(cx: &mut Ctx, sloc: (Pos, Pos), items: Vec<Decl>) -> Result<Ex
     Ok(close(cx, acc))
 }
 
-/// 引数の行の最も内側に `k` を足す(Diktor の `append_last_arg`)。
+/// 引数のレコードの最も内側に、`k` を最後の引数として追加する(Diktor の `append_last_arg` に対応する)。
 ///
-/// 行の鎖をほどいてから内側から組み直し、各ノードの深さを作り直す。
+/// `RecordExtend` の連鎖を外側から分解し、内側から作り直して、各ノードの深さを計算し直す。
 fn append_last_arg(
     cx: &mut Ctx,
     sloc: (Pos, Pos),
@@ -881,11 +893,11 @@ fn check_instance_body(pos: Pos, items: Vec<Decl>) -> Result<Vec<Decl>, ActErr> 
     }
 }
 
-// ---- 規則の動作 ----
+// ---- 規則の意味動作 ----
 
 type ActFn = fn(&mut Ctx, &mut Args) -> Res;
 
-/// 規則の番号の動作を実行する。
+/// 番号 `p` の規則の意味動作を実行する。
 pub fn run(p: usize, cx: &mut Ctx, a: &mut Args) -> Res {
     static TABLE: OnceLock<Vec<ActFn>> = OnceLock::new();
     let table = TABLE.get_or_init(|| {
@@ -905,7 +917,7 @@ fn missing(_: &mut Ctx, _: &mut Args) -> Res {
     panic!("keleut-front: 動作の無い規則を還元しました(tables.rs と actions.rs が合っていません)")
 }
 
-/// 動作の無い規則の綴りを返す(試験用)。
+/// 意味動作を登録していない規則のキーを返す(テスト用)。
 pub fn unmapped_keys() -> Vec<&'static str> {
     PRODS
         .iter()
@@ -1711,7 +1723,7 @@ fn lookup(key: &str) -> Option<ActFn> {
         "record_exp: LBRACE_RECORD field_list EXTENDS exp RBRACE" => f!(|c, a| {
             let mut row = a.t(4).exp();
             let fs = a.t(2).rfields();
-            // 逆順の列なので、そのまま回すと末尾のフィールドから積める。
+            // 逆順のリストなので、先頭から順に処理すると、末尾のフィールドから順に追加できる。
             for (l, v) in fs {
                 row = c.exp(a.sloc, ExpKind::RecordExtend(Box::new(row), l, Box::new(v)));
             }

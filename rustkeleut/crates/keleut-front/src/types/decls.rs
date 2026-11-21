@@ -1,14 +1,14 @@
-//! 宣言表である(Diktor の decls.ml、第6章)。
+//! 宣言表を定義する(Diktor の `decls.ml`、第 6 章に対応する)。
 //!
-//! 型の名前空間、別名、データ型、エフェクト、型クラス、インスタンス、単位と module の同義語、可視性の表と、
-//! 組み込みの登録を持つ。
+//! 宣言表は、型の名前空間、型エイリアス、データ型、エフェクト、型クラス、インスタンス、単位と module の別名、可視性の表を持つ。
+//! 組み込みの型、エフェクト、型クラス、操作の登録もここで行う。
 
 use super::fx::{HashMap, JMap, JSet};
 use super::{GRef, Kind, Oid, R, Tc, Ty, TyNode, UnitId, VarInfo, display, terr};
 use crate::ast::{NodeId, TypeExp, TypeParam};
 use std::rc::Rc;
 
-/// 型の別名の情報(Diktor の `alias_info`)である。
+/// 型エイリアス 1 つの宣言の内容を持つ(Diktor の `alias_info` に対応する)。
 #[derive(Clone, Debug)]
 pub struct AliasInfo {
     pub al_name: Oid,
@@ -20,21 +20,21 @@ pub struct AliasInfo {
     pub al_unit: UnitId,
 }
 
-/// コンストラクタのフィールドの情報である。
+/// コンストラクタのフィールド 1 つの、ラベルと型を持つ。
 #[derive(Clone, Debug)]
 pub struct FieldInfo {
     pub fi_label: Option<Oid>,
     pub fi_ty: Ty,
 }
 
-/// コンストラクタの情報である。
+/// コンストラクタ 1 つの、名前とフィールドの並びを持つ。
 #[derive(Clone, Debug)]
 pub struct CtorInfo {
     pub ct_name: Oid,
     pub ct_fields: Vec<FieldInfo>,
 }
 
-/// データ型の情報(Diktor の `data_info`)である。
+/// データ型(`newtype` で宣言する型と、組み込みの `Ref`、`Array`、`MutableArray`、`Never`)1 つの宣言の内容を持つ(Diktor の `data_info` に対応する)。
 #[derive(Clone, Debug)]
 pub struct DataInfo {
     pub dd_name: Oid,
@@ -43,14 +43,14 @@ pub struct DataInfo {
     pub dd_opaque: bool,
 }
 
-/// エフェクトの情報である。
+/// エフェクト 1 つの、名前と、操作の名前と型の並びを持つ。
 #[derive(Clone, Debug)]
 pub struct EffectInfo {
     pub ef_name: Oid,
     pub ef_ops: Vec<(Oid, Ty)>,
 }
 
-/// 型クラスの情報である。
+/// 型クラス 1 つの宣言の内容を持つ。
 #[derive(Clone, Debug)]
 pub struct ClassInfo {
     pub ci_name: Oid,
@@ -61,26 +61,26 @@ pub struct ClassInfo {
     pub ci_methods: Vec<(String, Ty)>,
 }
 
-/// インスタンスの情報である。
+/// インスタンス 1 つの、前提の並びと、組み込みかどうかを持つ。
 #[derive(Clone, Debug)]
 pub struct InstanceInfo {
     pub ii_premises: Vec<(usize, Oid)>,
     pub ii_builtin: bool,
 }
 
-/// 可視性である。
+/// 名前の可視性。宣言した module の名前(`vis_module`)と、`pub` を付けたかどうか(`vis_pub`)を持つ。
 #[derive(Clone, Debug)]
 pub struct Visibility {
     pub vis_module: String,
     pub vis_pub: bool,
 }
 
-/// 単位の番号の定数である。
+/// 起点の単位の番号(Diktor の `root_unit` に対応する)。
 pub const ROOT_UNIT: UnitId = 0;
-/// 標準環境の単位である。
+/// 標準環境の単位の番号(Diktor の `std_unit` に対応する)。
 pub const STD_UNIT: UnitId = -1;
 
-/// 宣言表である。
+/// 宣言表の本体。型、エフェクト、型クラス、インスタンスなどの宣言を、種類ごとの表に持つ。
 #[derive(Clone, Default)]
 pub struct Decls {
     pub in_prelude: bool,
@@ -111,7 +111,8 @@ pub struct Decls {
     pub effects: JMap<Oid, Rc<EffectInfo>>,
     pub op_index: JMap<Oid, Vec<Oid>>,
     pub classes: JMap<Oid, Rc<ClassInfo>>,
-    /// クラスを登録した順(Diktor の `Hashtbl` の走査の代わりに、登録の順で走査する)。
+    /// 型クラスを登録した順に並べたもの。
+    /// Diktor は `Hashtbl` を走査するが、ここでは登録した順に走査する。
     pub class_order: Vec<Oid>,
     pub class_ranks: JMap<Oid, i64>,
     pub class_count: i64,
@@ -120,7 +121,8 @@ pub struct Decls {
     pub builtin_ops: Vec<(String, Ty)>,
 }
 
-/// [`Decls::begin`] で取る、表でない欄の値である。
+/// [`Decls::begin`] が返す値で、マークを置いた時点の、表でないフィールドの値を持つ。
+/// [`Decls::rollback`] がこの値でフィールドを元に戻す。
 pub struct DeclsMark {
     in_prelude: bool,
     current_module: Option<String>,
@@ -130,7 +132,7 @@ pub struct DeclsMark {
     builtin_ops: Vec<(String, Ty)>,
 }
 
-/// 宣言表のすべての表に同じ操作をする([`JMap`] と [`JSet`] の印)。
+/// 宣言表のすべての表([`JMap`] と [`JSet`])に対して、マークの操作 `$op`(`begin`、`commit`、`rollback` のどれか)を呼ぶ。
 macro_rules! each_table {
     ($self:ident, $op:ident) => {
         $self.prelude_keys.$op();
@@ -165,10 +167,12 @@ macro_rules! each_table {
 }
 
 impl Decls {
-    /// 書き換えの記録の印を置く(対話的な実行の入力の取り消し。[`Tc::snapshot`])。
+    /// 書き換えの記録を始めるマークを置く。
     ///
-    /// 表は書き換えを記録し、表でない欄は値を写す。
-    /// 手間は表の大きさに依らない(`class_order` は長さだけを覚える。足すだけだからである)。
+    /// 対話的な実行で入力を取り消すために、[`Tc::snapshot`] が使う。
+    /// 表は以後の書き換えを記録し、表でないフィールドは値をコピーする。
+    /// `class_order` は追加しかしないので、長さだけを記録する。
+    /// そのため、処理時間は表のサイズによらない。
     pub fn begin(&mut self) -> DeclsMark {
         each_table!(self, begin);
         DeclsMark {
@@ -181,12 +185,12 @@ impl Decls {
         }
     }
 
-    /// 最も内側の印を外し、印の後の書き換えを残す。
+    /// 最も内側のマークを外し、マークの後の書き換えを残す。
     pub fn commit(&mut self) {
         each_table!(self, commit);
     }
 
-    /// 印 `m` の時点に戻す。
+    /// マーク `m` の時点の状態に戻す。
     pub fn rollback(&mut self, m: DeclsMark) {
         each_table!(self, rollback);
         self.in_prelude = m.in_prelude;
@@ -198,7 +202,8 @@ impl Decls {
     }
 }
 
-/// 単位の印の付いた綴りの単位(Diktor の `unit_of_spelling`)。
+/// 内部名の接頭辞 `%N.` から単位の番号を求める(Diktor の `unit_of_spelling` に対応する)。
+/// 接頭辞のない名前には `None` を返す。
 pub fn unit_of_spelling(name: &str) -> Option<UnitId> {
     if name.len() > 1 && name.starts_with('%') {
         let i = name.find('.')?;
@@ -208,17 +213,20 @@ pub fn unit_of_spelling(name: &str) -> Option<UnitId> {
     }
 }
 
-/// OCaml の `int_of_string_opt` の 10 進の部分(符号つき)。
+/// OCaml の `int_of_string_opt` に相当する。
+/// 符号付きの 10 進表記だけを読む。
 fn ocaml_int_opt(s: &str) -> Option<i32> {
     s.parse::<i32>().ok()
 }
 
-/// 単位が印を付けるか。
+/// 単位 `u` で宣言した名前に接頭辞 `%N.` を付けるなら真を返す。
+/// 接頭辞を付けるのは、番号が起点の単位より大きい単位である。
 pub fn marks_unit(u: UnitId) -> bool {
     u > ROOT_UNIT
 }
 
-/// 単位の印の綴り。
+/// 単位 `u` で宣言した名前 `name` の内部名を返す。
+/// 接頭辞を付けない単位では `name` をそのまま返す。
 pub fn mark_spelling(u: UnitId, name: &str) -> String {
     if marks_unit(u) {
         format!("%{u}.{name}")
@@ -234,12 +242,13 @@ impl Tc {
         }
     }
 
-    /// プレリュードが持つ名前か(Diktor の `prelude_owned`)。
+    /// 種類 `kind` の名前 `name` を、組み込みかプレリュードが登録していれば真を返す(Diktor の `prelude_owned` に対応する)。
     pub(crate) fn prelude_owned(&self, kind: &'static str, name: Oid) -> bool {
         self.d.prelude_keys.contains(&(kind, name))
     }
 
-    /// 型の名前空間に名前を取る(Diktor の `claim_type_name`)。
+    /// 型の名前空間に、種類 `kind` の名前 `name` を登録する(Diktor の `claim_type_name` に対応する)。
+    /// 同じ名前が別の種類で登録済みなら型エラーにする。
     pub(crate) fn claim_type_name(&mut self, kind: &'static str, name: Oid) -> R<()> {
         if let Some(prev) = self.d.type_namespace.get(&name)
             && *prev != kind
@@ -255,7 +264,7 @@ impl Tc {
         Ok(())
     }
 
-    /// extern を登録する(Diktor の `add_extern`)。
+    /// extern の宣言を登録する(Diktor の `add_extern` に対応する)。
     pub(crate) fn add_extern(&mut self, unit: UnitId, prim: &str, name: &str) -> R<()> {
         let spelled = if unit > 0 {
             format!("%{unit}.{name}")
@@ -275,7 +284,8 @@ impl Tc {
         }
     }
 
-    /// extern "C" の既知の署名(Diktor の `c_known_signature`)。
+    /// `extern "C"` で宣言できる既知の関数 `name` のシグネチャを返す(Diktor の `c_known_signature` に対応する)。
+    /// 返すのは、引数の型、返り値の型、表示用の文字列の組である。
     pub(crate) fn c_known_signature(
         &mut self,
         name: &str,
@@ -289,7 +299,8 @@ impl Tc {
         }
     }
 
-    /// 型構成子のカインド(Diktor の `con_kind`)。
+    /// 型構成子 `c` のカインドを返す(Diktor の `con_kind` に対応する)。
+    /// カインドの登録がなければ、引数が `nargs` 個の型構成子のカインドを返す。
     pub(crate) fn con_kind(&mut self, c: Oid, nargs: usize) -> Kind {
         match self.d.con_kinds.get(&c) {
             Some(k) => *k,
@@ -331,22 +342,24 @@ impl Tc {
         *tbl.get(&(self.d.current_unit, c)).unwrap_or(&c)
     }
 
-    /// 単位の同義語を解く(Diktor の `resolve_unit`)。
+    /// 型の名前空間の名前 `c` を、現在の単位の別名の表で内部名に解決する(Diktor の `resolve_unit` に対応する)。
+    /// 表になければ `c` をそのまま返す。
     pub(crate) fn resolve_unit(&self, c: Oid) -> Oid {
         self.resolve_in(&self.d.unit_synonyms, c)
     }
 
-    /// コンストラクタの同義語を解く(Diktor の `resolve_ctor`)。
+    /// コンストラクタの名前 `c` を、現在の単位の別名の表で内部名に解決する(Diktor の `resolve_ctor` に対応する)。
     pub(crate) fn resolve_ctor(&self, c: Oid) -> Oid {
         self.resolve_in(&self.d.unit_ctors, c)
     }
 
-    /// クラスの同義語を解く(Diktor の `resolve_class`)。
+    /// 型クラスの名前 `c` を、現在の単位の別名の表で内部名に解決する(Diktor の `resolve_class` に対応する)。
     pub(crate) fn resolve_class(&self, c: Oid) -> Oid {
         self.resolve_in(&self.d.unit_classes, c)
     }
 
-    /// 修飾の頭を単位の綴りにする(Diktor の `qualify`)。
+    /// 修飾名の先頭の要素を、現在の単位の表で内部名に置き換える(Diktor の `qualify` に対応する)。
+    /// `%` で始まる名前と、先頭の要素が表にない名前は、そのまま返す。
     pub(crate) fn qualify(&self, name: &str) -> String {
         if name.starts_with('%') {
             return name.to_string();
@@ -364,7 +377,9 @@ impl Tc {
         }
     }
 
-    /// いまの単位から見えるか(Diktor の `visible_in_unit`)。
+    /// 名前 `oid` が現在の単位から見えるなら真を返す(Diktor の `visible_in_unit` に対応する)。
+    /// 接頭辞のない名前は、どの単位からも見える。
+    /// 接頭辞のある名前は、現在の単位の別名の表(`which` で選ぶ)がその名前を指しているときだけ見える。
     pub(crate) fn visible_in_unit(&mut self, which: UnitTable, oid: Oid) -> bool {
         let name = self.name_of(oid);
         match unit_of_spelling(&name) {
@@ -380,7 +395,8 @@ impl Tc {
         }
     }
 
-    /// 型の同義語を足す(Diktor の `add_con_synonym`)。
+    /// 型の名前 `short` のグローバルな別名の表に、解決先 `qual` を追加する(Diktor の `add_con_synonym` に対応する)。
+    /// 解決先が 1 つだけのとき、`short` はその解決先に解決される。
     pub(crate) fn add_con_synonym(&mut self, short: Oid, qual: Oid) {
         let prev = self.d.con_synonyms.get_or_insert_with(short, Vec::new);
         if !prev.contains(&qual) {
@@ -395,7 +411,7 @@ impl Tc {
         }
     }
 
-    /// 大域の型の名前を解く(Diktor の `resolve_con_global`)。
+    /// 型の名前を、単位の別名、グローバルな別名の順に引いて解決する(Diktor の `resolve_con_global` に対応する)。
     pub(crate) fn resolve_con_global(&mut self, c: Oid) -> Oid {
         let q = self.qualify(&self.name_of(c));
         let c = self.intern(&q);
@@ -405,7 +421,7 @@ impl Tc {
         }
     }
 
-    /// 型の名前を解く(Diktor の `resolve_con`)。
+    /// 型の名前を、module スコープの別名、単位の別名、グローバルな別名の順に引いて解決する(Diktor の `resolve_con` に対応する)。
     pub(crate) fn resolve_con(&mut self, c: Oid) -> Oid {
         let q = self.qualify(&self.name_of(c));
         let c = self.intern(&q);
@@ -418,7 +434,8 @@ impl Tc {
         }
     }
 
-    /// 型の候補の手掛かりを足す(Diktor の `add_con_hint`)。
+    /// 型の名前 `short` について、未知の型と未知のエフェクトの診断で示す修飾名の候補に `qual` を追加する(Diktor の `add_con_hint` に対応する)。
+    /// この表は診断だけに使い、名前の解決には使わない。
     pub(crate) fn add_con_hint(&mut self, short: Oid, qual: Oid) {
         let prev = self.d.con_hints.get_or_insert_with(short, Vec::new);
         if !prev.contains(&qual) {
@@ -433,7 +450,9 @@ impl Tc {
         }
     }
 
-    /// 型の修飾の候補(Diktor の `con_synonym_candidates`)。
+    /// 型の名前 `c` について、診断で示す修飾名の候補を返す(Diktor の `con_synonym_candidates` に対応する)。
+    /// 接頭辞 `%N.` が現在の単位と違う単位を指す名前は、候補から取り除く。
+    /// 接頭辞のない名前は残す。
     pub(crate) fn con_synonym_candidates(&self, c: Oid) -> Vec<Oid> {
         self.d
             .con_hints
@@ -445,7 +464,7 @@ impl Tc {
             .collect()
     }
 
-    /// 値の同義語を足す(Diktor の `add_val_synonym`)。
+    /// 値の名前 `short` について、未束縛の変数の診断で示す修飾名の候補に `qual` を追加する(Diktor の `add_val_synonym` に対応する)。
     pub(crate) fn add_val_synonym(&mut self, short: Oid, qual: Oid) {
         let prev = self.d.val_synonyms.get_or_insert_with(short, Vec::new);
         if !prev.contains(&qual) {
@@ -453,7 +472,9 @@ impl Tc {
         }
     }
 
-    /// 値の修飾の候補(Diktor の `val_synonym_candidates`)。
+    /// 値の名前 `short` について、診断で示す修飾名の候補を返す(Diktor の `val_synonym_candidates` に対応する)。
+    /// 接頭辞 `%N.` が現在の単位と違う単位を指す名前は、候補から取り除く。
+    /// 接頭辞のない名前は残す。
     pub(crate) fn val_synonym_candidates(&self, short: Oid) -> Vec<Oid> {
         self.d
             .val_synonyms
@@ -465,7 +486,7 @@ impl Tc {
             .collect()
     }
 
-    /// 宣言の module と単位の中で `f` を走らせる(Diktor の `with_decl_scope`)。
+    /// 宣言 `id` を書いた module と単位を現在のものにして `f` を実行し、終わったら元に戻す(Diktor の `with_decl_scope` に対応する)。
     pub(crate) fn with_decl_scope<T>(
         &mut self,
         id: NodeId,
@@ -485,7 +506,9 @@ impl Tc {
         v.vis_pub || self.d.current_module.as_deref() == Some(v.vis_module.as_str())
     }
 
-    /// 可視性で見える型か(`Decls.visible_here` を可視性の表に当てたもの)。
+    /// 型 `oid` が現在の module から見えるなら真を返す。
+    /// 可視性の登録がない型には `None` を返す。
+    /// Diktor の `Decls.visible_here` を、型の可視性の表に適用したものに相当する。
     pub(crate) fn con_visible_here(&self, oid: Oid) -> Option<bool> {
         self.d
             .con_visibility
@@ -493,7 +516,7 @@ impl Tc {
             .map(|v| self.visible_here(v))
     }
 
-    /// 型の可視性を調べる(Diktor の `check_con_visible`)。
+    /// 型 `oid` を現在の module から参照できなければ、型エラーにする(Diktor の `check_con_visible` に対応する)。
     pub(crate) fn check_con_visible(&self, oid: Oid) -> R<()> {
         match self.d.con_visibility.get(&oid) {
             Some(v) if !self.visible_here(v) => terr(format!(
@@ -505,7 +528,7 @@ impl Tc {
         }
     }
 
-    /// 値の可視性を調べる(Diktor の `check_value_visible`)。
+    /// 値 `oid` を現在の module から参照できなければ、型エラーにする(Diktor の `check_value_visible` に対応する)。
     pub(crate) fn check_value_visible(&self, oid: Oid) -> R<()> {
         match self.d.value_visibility.get(&oid) {
             Some(v) if !self.visible_here(v) => terr(format!(
@@ -517,7 +540,7 @@ impl Tc {
         }
     }
 
-    /// コンストラクタの可視性を調べる(Diktor の `check_ctor_visible`)。
+    /// コンストラクタ `ctor` を持つ型 `owner` を現在の module から参照できなければ、型エラーにする(Diktor の `check_ctor_visible` に対応する)。
     pub(crate) fn check_ctor_visible(&self, ctor: Oid, owner: Oid) -> R<()> {
         match self.d.con_visibility.get(&owner) {
             Some(v) if !self.visible_here(v) => terr(format!(
@@ -530,9 +553,9 @@ impl Tc {
         }
     }
 
-    // ---- 別名、データ、エフェクト ----
+    // ---- 型エイリアス、データ型、エフェクト ----
 
-    /// 型の別名を登録する(Diktor の `add_alias`)。
+    /// 型エイリアスを登録する(Diktor の `add_alias` に対応する)。
     #[allow(clippy::map_entry)]
     pub(crate) fn add_alias(&mut self, info: AliasInfo) -> R<()> {
         let name = info.al_name;
@@ -564,7 +587,7 @@ impl Tc {
         }
     }
 
-    /// データ型を登録する(Diktor の `add_data`)。
+    /// データ型を登録する(Diktor の `add_data` に対応する)。
     pub(crate) fn add_data(&mut self, info: DataInfo) -> R<()> {
         let name = info.dd_name;
         if self.d.reserved_type_names.contains(&name) && !self.d.in_prelude {
@@ -605,7 +628,7 @@ impl Tc {
         Ok(())
     }
 
-    /// エフェクトの名前を登録する(Diktor の `declare_effect`)。
+    /// エフェクトの名前を登録する(Diktor の `declare_effect` に対応する)。
     #[allow(clippy::map_entry)]
     pub(crate) fn declare_effect(&mut self, name: Oid) -> R<()> {
         if self.d.reserved_type_names.contains(&name) && !self.d.in_prelude {
@@ -642,7 +665,7 @@ impl Tc {
         }
     }
 
-    /// エフェクトの操作を登録する(Diktor の `set_effect_ops`)。
+    /// エフェクトの操作を登録する(Diktor の `set_effect_ops` に対応する)。
     pub(crate) fn set_effect_ops(&mut self, info: EffectInfo) {
         let name = info.ef_name;
         let ops: Vec<Oid> = info.ef_ops.iter().map(|(o, _)| *o).collect();
@@ -662,7 +685,7 @@ impl Tc {
         self.d.effects.get(&e).cloned()
     }
 
-    /// 操作の候補のエフェクト(Diktor の `op_candidates`)。
+    /// 操作 `op` を持つエフェクトのうち、現在の単位から見えるものを返す(Diktor の `op_candidates` に対応する)。
     pub(crate) fn op_candidates(&mut self, op: Oid) -> Vec<Oid> {
         let cands = self.d.op_index.get(&op).cloned().unwrap_or_default();
         cands
@@ -671,7 +694,7 @@ impl Tc {
             .collect()
     }
 
-    // ---- クラスとインスタンス ----
+    // ---- 型クラスとインスタンス ----
 
     pub(crate) fn find_class(&self, c: Oid) -> Option<Rc<ClassInfo>> {
         self.d.classes.get(&c).cloned()
@@ -707,7 +730,8 @@ impl Tc {
         }
     }
 
-    /// 実体の単位(Diktor の `entity_unit`)。
+    /// 名前 `oid` を宣言した単位を返す(Diktor の `entity_unit` に対応する)。
+    /// 接頭辞のない名前には、組み込みかプレリュードの名前なら標準環境の単位を、それ以外なら起点の単位を返す。
     pub(crate) fn entity_unit(&self, oid: Oid) -> UnitId {
         match unit_of_spelling(&self.name_of(oid)) {
             Some(u) => u,
@@ -721,7 +745,8 @@ impl Tc {
         }
     }
 
-    /// 単位のパスの表示(Diktor の `unit_path`)。
+    /// 単位 `u` の表示用のパスを返す(Diktor の `unit_path` に対応する)。
+    /// 標準環境には `標準環境` を、パスの登録がない単位には `?` を返す。
     pub(crate) fn unit_path(&self, u: UnitId) -> String {
         if u == STD_UNIT {
             "標準環境".to_string()
@@ -734,7 +759,7 @@ impl Tc {
         }
     }
 
-    /// 利用者の型クラスを登録する(Diktor の `add_class_decl`)。
+    /// ユーザが宣言した型クラスを登録する(Diktor の `add_class_decl` に対応する)。
     pub(crate) fn add_class_decl(&mut self, info: ClassInfo) -> R<()> {
         let s = self.name_of(info.ci_name);
         let ds = display(&s).to_string();
@@ -765,7 +790,7 @@ impl Tc {
         self.d.reserved_predicates.contains(&c)
     }
 
-    /// インスタンスを登録する(Diktor の `add_instance`)。
+    /// インスタンスを登録する(Diktor の `add_instance` に対応する)。
     pub(crate) fn add_instance(
         &mut self,
         builtin: bool,
@@ -868,7 +893,7 @@ impl Tc {
         let i32t = self.t_int32;
         let empty = self.row_empty;
         let heap_row = |tc: &mut Tc, h: Ty| tc.extend(heap, h, empty);
-        // OCaml の `let h = generic () and a = generic ()` は右から評価するので、a を先に作る。
+        // OCaml の `let h = generic () and a = generic ()` は右から評価するので、`a` を先に作る。
         macro_rules! ha {
             () => {{
                 let a = self.generic(star, Vec::new());
@@ -946,7 +971,7 @@ impl Tc {
         self.d.builtin_ops.push(("pinned".into(), t));
     }
 
-    /// 組み込みを登録する(Diktor の `register_builtins`)。
+    /// 組み込みの型、エフェクト、型クラス、インスタンス、操作を登録する(Diktor の `register_builtins` に対応する)。
     pub(crate) fn register_builtins(&mut self) {
         let saved = self.d.in_prelude;
         self.d.in_prelude = true;
@@ -1097,7 +1122,8 @@ impl Tc {
         self.d.in_prelude = saved;
     }
 
-    /// 組み込みの値(名前、型、実体)の名簿(Diktor の `builtin_value_refs`)。
+    /// 組み込みの値の一覧を返す(Diktor の `builtin_value_refs` に対応する)。
+    /// 各項目は、名前、型、参照先の組である。
     pub(crate) fn builtin_value_refs(&self) -> Vec<(String, Ty, GRef)> {
         let mut acc: Vec<(String, Ty, GRef)> = Vec::new();
         for c in &self.d.class_order {
@@ -1114,19 +1140,20 @@ impl Tc {
         acc
     }
 
-    /// 組み込みが値環境に置く名前か(Diktor の `is_builtin_value`)。
+    /// `name` が、組み込みが値環境に置く名前なら真を返す(Diktor の `is_builtin_value` に対応する)。
     pub(crate) fn is_builtin_value(&self, name: &str) -> bool {
         self.builtin_value_refs().iter().any(|(n, _, _)| n == name)
     }
 
-    /// 型の形が `TCon (c, [])` か。
+    /// 型 `t` が、引数のない型構成子 `c`(Diktor の `TCon (c, [])`)なら真を返す。
     pub(crate) fn is_con0(&mut self, t: Ty, c: Oid) -> bool {
         let t = self.repr(t);
         matches!(self.node_ref(t), TyNode::Con(c2, args) if *c2 == c && args.is_empty())
     }
 }
 
-/// [`Tc::visible_in_unit`] が引く表である。
+/// [`Tc::visible_in_unit`] が調べる単位の別名の表を選ぶ。
+/// `Synonyms` は型の名前空間の表、`Classes` は型クラスの表である。
 #[derive(Clone, Copy)]
 pub enum UnitTable {
     Synonyms,

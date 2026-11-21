@@ -1,47 +1,48 @@
-//! 字句解析である(Diktor の lexer.ml、第2章)。
+//! 字句解析である(Diktor の lexer.ml に対応する)。
 //!
 //! Diktor と同じ 3 つの層を持つ。
 //!
-//! | 層 | 入口 | 処理 |
+//! | 層 | 関数 | 処理 |
 //! |---|---|---|
 //! | 1. 生トークン | [`Lexer::read_raw_token`] | 文字をトークンに変える。`{` は分類しない |
 //! | 2. 再分類 | `pop_reclassified` | `{` をブロック、レコード、レコード型のどれかに決める |
-//! | 3. ASI | `read_token` | region スタックを見て、改行を文区切りに昇格させるか捨てる |
+//! | 3. ASI | `read_token` | region スタックを調べて、改行を文の区切りのトークンとして残すか、捨てるかを決める |
 //!
-//! 層 1 は sedlex が作る自動機械と同じ順に文字を読む。
-//! sedlex は、最も長い一致を探すあいだ、受理の状態からさらに伸ばせる限り次の文字を読み、
-//! 伸ばせなくなったら最後の受理の位置へ戻る(`mark` と `backtrack`)。
-//! 先読みで読んだ文字が不正な UTF-8 なら、その時点で誤りになる。
-//! 本モジュールの各読み取りは、この読み方を手で写したもので、`mark` を受理の状態で、
-//! `backtrack` を伸ばせなくなったときに呼ぶ。
-//! こうすると、不正な UTF-8 の誤りが出る時機と位置が Diktor と一致する。
+//! 層 1 は、sedlex が作るオートマトンと同じ順に文字を読む。
+//! sedlex は最長一致を探すので、受理状態に達した後も、一致を伸ばせる限り次の文字を読む。
+//! 伸ばせなくなったら、最後に受理状態だった位置に戻る(`mark` と `backtrack`)。
+//! この先読みで読んだ文字が不正な UTF-8 なら、その時点で字句エラーになる。
+//! 本モジュールの各読み取りは、この読み方を手で移植したもので、受理状態に達したときに `mark` を、一致を伸ばせなくなったときに `backtrack` を呼ぶ。
+//! こうすると、不正な UTF-8 の字句エラーが出るタイミングと位置が Diktor と一致する。
 //!
-//! 入力は先に全文を UTF-8 として読み、正しい前置部分のコードポイントの列にする。
-//! 前置部分の後ろを読もうとした時点で「不正な UTF-8 バイト列です」の字句エラーにする。
-//! sedlex のデコーダも、正しい前置部分を先に渡し、不正なバイトに読み進んだときに失敗する。
+//! 入力は、最初に全体を UTF-8 として検査し、正しい UTF-8 である先頭部分をコードポイントの配列にする。
+//! その先頭部分より後ろを読もうとした時点で、`不正な UTF-8 バイト列です` の字句エラーを返す。
+//! sedlex のデコーダも、正しい先頭部分の文字を先に渡し、不正なバイトまで読み進んだときに失敗する。
 
 use crate::pos::{FileId, Pos};
 use crate::token::{Tok, keyword_or_ident, parse_number};
 use std::collections::VecDeque;
 
-/// 閉じていない文字列リテラルの文面(対話的な実行が続きの行を待つ印にする)。
+/// 文字列リテラルが閉じていないときの字句エラーのメッセージ。
+/// REPL は、このメッセージの字句エラーを、入力がまだ途中であることを示す目印として使い、続きの行を待つ。
 pub const UNTERMINATED_TEXT_MSG: &str = "文字列リテラルが閉じていません";
-/// 閉じていないブロックコメントの文面。
+/// ブロックコメントが閉じていないときの字句エラーのメッセージ。
+/// REPL は、このメッセージの字句エラーも、入力がまだ途中であることを示す目印として使う。
 pub const UNTERMINATED_COMMENT_MSG: &str = "ブロックコメントが閉じていません";
-/// 不正な UTF-8 の文面。
+/// 入力が不正な UTF-8 を含むときの字句エラーのメッセージ。
 pub const MALFORMED_MSG: &str = "不正な UTF-8 バイト列です";
 
-/// 字句エラーである(Diktor の `Lex_error`)。
+/// 字句エラーである(Diktor の `Lex_error` に対応する)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LexError {
-    /// 文面。
+    /// エラーメッセージ。
     pub msg: String,
-    /// 位置。
+    /// エラーを報告する位置。
     pub pos: Pos,
 }
 
-/// 層 1 の内側の失敗である。
-/// 不正な UTF-8 は、層 1 の入口で位置を付けて [`LexError`] にする。
+/// 層 1 の内部で使う失敗の種類である。
+/// 不正な UTF-8 の失敗(`Malformed`)は位置を持たず、[`Lexer::read_raw_token`] が位置を付けて [`LexError`] に変換する。
 enum Fail {
     Lex(String, Pos),
     Malformed,
@@ -49,10 +50,10 @@ enum Fail {
 
 type R<T> = Result<T, Fail>;
 
-/// sedlex の lexbuf に当たる、読み取りの位置の状態である。
+/// sedlex の lexbuf に相当する、読み取り位置の状態である。
 struct LexBuf {
     chars: Vec<char>,
-    /// 不正な UTF-8 が正しい前置部分の後ろにあるか。
+    /// 正しい UTF-8 である先頭部分の後ろに、不正な UTF-8 が続いていれば真。
     malformed: bool,
     file: FileId,
     pos: usize,
@@ -64,7 +65,8 @@ struct LexBuf {
     marked_pos: usize,
     marked_line: u32,
     marked_bol: usize,
-    /// 1 行目の桁の始まり(対話的な実行の `:type` の後ろの式。位置の表示を行の中の桁にする)。
+    /// 1 行目の桁に加えるずれ。
+    /// REPL の `:type` の後ろに書いた式を読むときに、位置の表示を入力行の中の桁にするために使う。
     col0: u32,
 }
 
@@ -73,7 +75,7 @@ impl LexBuf {
         let (valid, malformed) = match std::str::from_utf8(src) {
             Ok(s) => (s, false),
             Err(e) => (
-                // valid_up_to までは正しい UTF-8 である。
+                // `valid_up_to` までは正しい UTF-8 である。
                 std::str::from_utf8(&src[..e.valid_up_to()]).unwrap_or(""),
                 true,
             ),
@@ -95,7 +97,8 @@ impl LexBuf {
         }
     }
 
-    /// 次の文字を読む。終わりなら `None`、不正な UTF-8 に読み進んだら誤りである。
+    /// 次の文字を読む。
+    /// 入力の終わりなら `None` を返し、不正な UTF-8 まで読み進んだら `Fail::Malformed` を返す。
     fn next(&mut self) -> R<Option<char>> {
         if self.pos == self.chars.len() {
             return if self.malformed {
@@ -119,7 +122,7 @@ impl LexBuf {
         self.marked_bol = self.bol;
     }
 
-    /// 一致を探し始める(sedlex の `start`)。
+    /// 一致を探し始める(sedlex の `start` に対応する)。
     fn start(&mut self) {
         self.start_pos = self.pos;
         self.start_line = self.line;
@@ -139,7 +142,8 @@ impl LexBuf {
         self.bol = self.start_bol;
     }
 
-    /// 位置。1 行目の桁は `col0` だけずらす(Diktor の対話的な実行が `pos_bol` を `-col` にするのと同じ)。
+    /// 行番号、行頭の位置、読み取り位置から [`Pos`] を作る。
+    /// 1 行目の桁は `col0` だけずらす(Diktor の REPL が `pos_bol` を `-col` にするのと同じ結果になる)。
     fn pos_at(&self, line: u32, bol: usize, pos: usize) -> Pos {
         Pos {
             file: self.file,
@@ -165,8 +169,9 @@ impl LexBuf {
         self.chars[self.start_pos + i]
     }
 
-    /// 文字が条件を満たす限り読み進める(受理の状態の自己ループ)。
-    /// 呼ぶ時点の位置は受理の状態である。
+    /// 文字が条件 `ok` を満たす限り読み進める。
+    /// オートマトンでは、受理状態から同じ状態に戻る遷移に相当する。
+    /// 呼び出す時点の位置が受理状態であることを前提にする。
     fn star(&mut self, ok: impl Fn(char) -> bool) -> R<()> {
         loop {
             self.mark();
@@ -192,7 +197,7 @@ fn is_hex(c: char) -> bool {
 /// トークンと、その開始位置と終了位置である。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
-    /// トークン。
+    /// トークンの種類と内容。
     pub tok: Tok,
     /// 開始位置。
     pub sp: Pos,
@@ -200,25 +205,27 @@ pub struct Entry {
     pub ep: Pos,
 }
 
-/// ASI の region である。
+/// ASI の region の種類である。
+/// 層 3 は、最も内側の region が `Suppress` か `Clause` のとき、改行のトークンを捨てる。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Region {
     Top,
     Block,
     Suppress,
-    /// まだ矢印の来ていない `fn` の本数を持つ。
+    /// `case` から、その節の `=>` までの範囲。
+    /// 対応する `=>` がまだ現れていない `fn` の個数を持つ。
     Clause(u32),
 }
 
-/// 直前に渡したトークンの種類(`prev`)である。
-/// ASI の判定に使うのはトークンの種類だけなので、中身を持たない。
+/// 直前に渡したトークンの分類(`prev`)である。
+/// ASI の判定に使うのはトークンの分類だけなので、トークンの内容は持たない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Prev {
     Nl,
     /// 文を終えられるトークン。
     End,
     Import,
-    /// そのほかのトークン。
+    /// それ以外のトークン。
     Other,
 }
 
@@ -281,7 +288,7 @@ fn prev_of(t: &Tok) -> Prev {
     }
 }
 
-/// 字句解析器の状態である(Diktor の `Lexer.Make(...).t`)。
+/// 字句解析器の状態である(Diktor の `Lexer.Make(...).t` に対応する)。
 pub struct Lexer {
     lb: LexBuf,
     pending: VecDeque<Entry>,
@@ -292,11 +299,11 @@ pub struct Lexer {
     pub(crate) last_ep: Pos,
     pub(crate) before_ep: Pos,
     pub(crate) before_cont: bool,
-    /// 直前に渡したトークンから遡って高々 3 個(新しいものが先頭)。
+    /// 直前に渡したトークンからさかのぼって、最大 3 個のトークン。新しいものが先頭である。
     pub(crate) recent: Vec<Entry>,
 }
 
-/// `Lexing.dummy_pos` に当たる位置(行 0)。表示されることはない。
+/// `Lexing.dummy_pos` に相当する位置である。行番号は 0 で、診断に表示されることはない。
 const DUMMY: Pos = Pos {
     file: 0,
     line: 0,
@@ -310,8 +317,8 @@ impl Lexer {
         Lexer::with_start(src, file, 1, 0)
     }
 
-    /// 1 行目を `line` 行目とし、1 行目の桁を `col0` だけずらした字句解析器を作る
-    /// (Diktor の対話的な実行の `try_parse` の `Sedlexing.set_position`)。
+    /// ソースの 1 行目を `line` 行目として扱い、1 行目の桁を `col0` だけずらす字句解析器を作る。
+    /// Diktor の REPL の `try_parse` が呼ぶ `Sedlexing.set_position` に対応する。
     pub fn with_start(src: &[u8], file: FileId, line: u32, col0: u32) -> Lexer {
         Lexer {
             lb: LexBuf::new(src, file, line, col0),
@@ -340,7 +347,8 @@ impl Lexer {
 
     // ---- 生トークン層 ----
 
-    /// 入れ子のブロックコメントを読み、改行を含んでいたかを返す。
+    /// 入れ子にできるブロックコメントを終わりまで読み、改行を含んでいたら真を返す。
+    /// 呼び出す時点で、先頭の `/*` を読み終えている。
     fn read_block_comment(&mut self) -> R<bool> {
         let mut saw_nl = false;
         let mut depth = 1u64;
@@ -462,8 +470,9 @@ impl Lexer {
         }
     }
 
-    /// 数値の字句を、4 つの正規表現(10 進、16 進、8 進、2 進)を並べて走らせて読む。
-    /// 呼ぶ時点で先頭の数字を読み終えている。
+    /// 数値のトークンを読む。
+    /// 4 つの正規表現(10 進、16 進、8 進、2 進)のオートマトンを同時に進め、どれかが受理した最も長い一致を採る。
+    /// 呼び出す時点で、先頭の数字 `first` を読み終えている。
     fn read_number(&mut self, first: char) -> R<()> {
         #[derive(Clone, Copy, PartialEq, Eq)]
         enum D {
@@ -478,19 +487,19 @@ impl Lexer {
         }
         #[derive(Clone, Copy, PartialEq, Eq)]
         enum P {
-            /// `0` を読んだ(基数の文字を待つ)。
+            /// `0` を読んだ状態。次に基数の文字を待つ。
             Zero,
-            /// 基数の文字を読んだ(最初の桁を待つ)。
+            /// 基数の文字を読んだ状態。次に最初の桁を待つ。
             Prefix,
-            /// 桁の列(受理)。
+            /// 桁の並びを読んでいる状態。受理状態である。
             Digits,
-            /// 接尾辞の文字を読んだ。
+            /// 接尾辞の文字を読んだ状態。
             Suf,
-            /// 接尾辞の桁(受理)。
+            /// 接尾辞の桁を読んでいる状態。受理状態である。
             SufD,
         }
         let mut dec = Some(D::Int);
-        // (16 進、8 進、2 進) の状態と、基数ごとの桁の判定。
+        // 16 進、8 進、2 進の順に並べた状態と、基数ごとの桁の判定。
         let mut radix: [Option<P>; 3] = if first == '0' {
             [Some(P::Zero); 3]
         } else {
@@ -549,7 +558,7 @@ impl Lexer {
             let Some(c) = self.lb.next()? else {
                 return Ok(self.here(EOF));
             };
-            // 1 文字で決まり、それ以上伸ばせないトークン。
+            // 1 文字で決まり、それ以上は伸ばせないトークン。
             let single = match c {
                 '(' => Some(LPAREN),
                 ')' => Some(RPAREN),
@@ -702,7 +711,8 @@ impl Lexer {
         }
     }
 
-    /// `any` の分岐(予期しない文字)である。
+    /// どの規則にも一致しない文字を読んだときの字句エラーを作る(sedlex の `any` の分岐に相当する)。
+    /// 目に見えない文字は、`U+XXXX` の形式で表示する。
     fn unexpected<T>(&self) -> R<T> {
         let cp = self.lb.lexeme_char(0) as u32;
         let invisible = cp == 0xFEFF
@@ -720,7 +730,8 @@ impl Lexer {
         self.lex_err(&format!("予期しない文字です: {shown}"))
     }
 
-    /// 生トークンを 1 つ読む。不正な UTF-8 は、不正なバイトの位置を付けた字句エラーにする。
+    /// 生トークンを 1 つ読む。
+    /// 不正な UTF-8 まで読み進んだときは、その時点の読み取り位置を付けた字句エラーを返す。
     pub fn read_raw_token(&mut self) -> Result<Entry, LexError> {
         self.read_raw_token_inner().map_err(|f| match f {
             Fail::Lex(msg, pos) => LexError { msg, pos },
@@ -741,7 +752,7 @@ impl Lexer {
         Ok(&self.pending[i])
     }
 
-    /// NL を飛ばして k 個目(0 始まり)の有意トークンを覗く。
+    /// `NL` を読み飛ばして数えた、0 始まりで `k` 番目のトークンを先読みする。
     fn peek_sig(&mut self, k: usize) -> Result<Tok, LexError> {
         let mut i = 0;
         let mut k = k;
@@ -844,9 +855,9 @@ impl Lexer {
         }
     }
 
-    // ---- 消費者 API ----
+    // ---- パーサ向けの API ----
 
-    /// パーサに渡す次のトークンを読む(Diktor の `read`)。
+    /// パーサに渡す次のトークンを読む(Diktor の `read` に対応する)。
     pub fn read(&mut self) -> Result<Entry, LexError> {
         self.before_ep = self.last_ep;
         self.before_cont = matches!(
@@ -863,7 +874,9 @@ impl Lexer {
         Ok(e)
     }
 
-    /// 文法に合わなかったトークンの報告位置(Diktor の `error_positions`)。
+    /// 文法に合わなかったトークンについて、構文エラーを報告する位置を返す(Diktor の `error_positions` に対応する)。
+    /// 直前のトークンの後の改行が文の区切りにならない状態(`before_cont`)で、行が変わってからそのトークンが現れたときは、直前のトークンの終了位置と、そのトークンの開始位置の両方を返す。
+    /// それ以外は、そのトークンの開始位置だけを返す。
     pub fn error_positions(&self) -> (Pos, Option<Pos>) {
         if self.before_cont && self.last_sp.line > self.before_ep.line {
             (self.before_ep, Some(self.last_sp))
@@ -872,7 +885,8 @@ impl Lexer {
         }
     }
 
-    /// `--dump-tokens` の列。ASI を適用した後のトークン列を EOF まで集める。
+    /// ASI を適用した後のトークン列を、EOF まで集めて返す。
+    /// `keleut dump tokens`(Diktor の `--dump-tokens`)の出力に使う。
     pub fn all_tokens(&mut self) -> Result<Vec<Entry>, LexError> {
         let mut v = Vec::new();
         loop {
@@ -885,8 +899,8 @@ impl Lexer {
         }
     }
 
-    /// 数値の綴り間違いが割ったトークンを見分ける(Diktor の `glued_number`)。
-    /// 数値、その開始位置、数値の直後に続く綴りを返す。
+    /// 数値リテラルの表記の誤りによって、数値とその直後のトークンに分かれた入力を検出する(Diktor の `glued_number` に対応する)。
+    /// 検出したときは、数値、その開始位置、数値の直後に続く文字列を返す。
     pub fn glued_number(&self) -> Option<(crate::token::Number, Pos, String)> {
         let touches = |a: &Entry, b: &Entry| a.ep.cnum == b.sp.cnum;
         let wordlike = |t: &Tok| {
@@ -913,7 +927,7 @@ impl Lexer {
         None
     }
 
-    /// `read` が更新する状態のうち、直前のトークンと位置に関わるものを控える。
+    /// `read` が更新する状態のうち、直前のトークンと位置に関わるものを保存する。
     pub(crate) fn save(&self) -> Saved {
         Saved {
             prev: self.prev,
@@ -925,7 +939,7 @@ impl Lexer {
         }
     }
 
-    /// [`Lexer::save`] で控えた状態に戻す。
+    /// [`Lexer::save`] で保存した状態に戻す。
     pub(crate) fn restore(&mut self, s: Saved) {
         self.prev = s.prev;
         self.last_sp = s.last_sp;
@@ -936,7 +950,7 @@ impl Lexer {
     }
 }
 
-/// [`Lexer::save`] が控える状態である。
+/// [`Lexer::save`] が保存する状態である。
 pub(crate) struct Saved {
     prev: Option<Prev>,
     last_sp: Pos,

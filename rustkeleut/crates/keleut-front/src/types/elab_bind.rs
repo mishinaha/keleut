@@ -1,4 +1,4 @@
-//! 束縛と再帰群の精緻化である(Diktor の elab.ml の §11.26〜§11.30)。
+//! 束縛と再帰群を精緻化する(Diktor の `elab.ml` の §11.28〜§11.30 に対応する)。
 
 use super::elab::{GroupRec, has_sub, irrefutable_pat, is_value, outer_eff_written};
 use super::{
@@ -8,10 +8,10 @@ use crate::ast::{ExpKind, LetBinding, NodeId, Pat, PatKind, TypeExpKind};
 use crate::pos::Span;
 use std::rc::Rc;
 
-/// メソッドの期待する引数の型を名前から引く関数(Diktor の `expected_params`)である。
+/// メソッドの名前から、期待する引数の型を求める関数(Diktor の `expected_params` に対応する)。
 pub(crate) type ExpectedParams<'a> = &'a dyn Fn(&mut Tc, &str) -> R<Option<Vec<Ty>>>;
 
-/// 再帰群の事前の型の形(Diktor の `pre_shape`)である。
+/// 再帰群の束縛の本体を検査する直前に記録する、その束縛の型の構造(Diktor の `pre_shape` に対応する)。
 #[derive(Clone, Debug)]
 enum PreShape {
     Open(Cell),
@@ -19,7 +19,7 @@ enum PreShape {
     Row(Vec<(Oid, PreShape)>, Box<PreShape>),
 }
 
-/// 剛定数の並び(名前、型、セル)。
+/// スコーレム定数の並び。各項目は、型パラメータの名前、型、セルの組である。
 pub(crate) type Rigids = Vec<(String, Ty, Cell)>;
 
 impl Tc {
@@ -68,7 +68,7 @@ impl Tc {
         }
     }
 
-    /// `let` の束縛の精緻化(Diktor の `elab_binding`)。
+    /// `let` の束縛を精緻化し、束縛した名前を追加した環境を返す(Diktor の `elab_binding` に対応する)。
     pub(crate) fn elab_binding(
         &mut self,
         expected_params: Option<Vec<Ty>>,
@@ -392,7 +392,7 @@ impl Tc {
         }
     }
 
-    /// `let rec` の群の精緻化(Diktor の `elab_rec_bindings`)。
+    /// `let rec` の再帰群を精緻化し、束縛した名前を追加した環境を返す(Diktor の `elab_rec_bindings` に対応する)。
     pub(crate) fn elab_rec_bindings(
         &mut self,
         top: bool,
@@ -409,7 +409,7 @@ impl Tc {
             let r = self.make_rigids(None, lvl, &b.tparams);
             tps.push(at(b.meta.span, r)?);
         }
-        // 名前と事前の型。
+        // 束縛の名前と、本体を検査する前に決める型。
         let mut names: Vec<(String, Ty)> = Vec::new();
         let mut sigs: Vec<(Option<Ty>, Option<Ty>)> = Vec::new();
         for (b, rigids) in bs.iter().zip(tps.iter()) {
@@ -833,7 +833,8 @@ impl Tc {
         Ok(())
     }
 
-    /// トップレベルの行(Diktor の `toplevel_eff`)。
+    /// トップレベルで起こせるエフェクトの行を返す(Diktor の `toplevel_eff` に対応する)。
+    /// `Console`、`Blocking`、`extra` の名前のうち、組み込みかプレリュードが登録したエフェクトだけを入れる。
     pub(crate) fn toplevel_eff(&mut self, extra: &[String]) -> Ty {
         let mut names: Vec<String> = vec!["Console".into(), "Blocking".into()];
         names.extend(extra.iter().cloned());
@@ -848,7 +849,7 @@ impl Tc {
         acc
     }
 
-    /// 初めの環境(Diktor の `initial_env`)。
+    /// 組み込みの値だけを持つ、最初の環境を返す(Diktor の `initial_env` に対応する)。
     pub(crate) fn initial_env(&self) -> Env {
         let refs = self.builtin_value_refs();
         let mut values = super::pmap::PMap::new();
@@ -888,6 +889,6 @@ fn collect_opens(acc: &mut Vec<Cell>, sh: &PreShape) {
     }
 }
 
-/// 位置の既定値を使う(未使用の警告を避ける)。
+/// `Span` の import に未使用の警告が出ないようにするための関数。どこからも呼ばない。
 #[allow(dead_code)]
 fn _span(_: Span) {}

@@ -1,16 +1,16 @@
-//! OCaml の `Format` の整形の写しである(OCaml 5.2 の stdlib/format.ml)。
+//! OCaml の `Format` の整形を移植したものである(OCaml 5.2 の stdlib/format.ml)。
 //!
-//! Diktor の `--dump-ast` は、S 式を `Format` の hov 箱と区切りで印字する。
-//! 改行と字下げの位置を同じにするため、`Format` の待ち行列と走査スタックの算法をそのまま写す。
-//! 写すのは、箱(`pp_open_box_gen`)、文字列、区切り(`pp_print_break`)、箱を閉じること、
-//! 改行つきの吐き出し(`pp_print_newline`、書式の `@.`)だけである。
-//! 余白は 78、最大の字下げは 68(`formatter_of_out_channel` の既定)、箱の数の上限は無い。
+//! Diktor の `--dump-ast` は、S 式を `Format` の hov ボックスと区切りで整形して出力する。
+//! 改行とインデントの位置を Diktor と一致させるために、`Format` のキューと走査スタックのアルゴリズムをそのまま移植する。
+//! 移植したのは、ボックスを開く操作(`pp_open_box_gen`)、文字列、区切り(`pp_print_break`)、ボックスを閉じる操作、改行を伴う flush(`pp_print_newline`、書式文字列の `@.`)だけである。
+//! マージンは 78、インデントの最大値は 68 で、`formatter_of_out_channel` の既定値と同じである。
+//! ボックスの個数に上限は設けない。
 
 use std::collections::VecDeque;
 
 const INFINITY: i64 = 1_000_000_010;
 
-/// 箱の種類である。
+/// ボックスの種類である。区切りで改行するかどうかの決め方が、種類ごとに異なる。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoxType {
     H,
@@ -40,9 +40,9 @@ struct Elem {
 
 struct ScanElem {
     left_total: i64,
-    /// 待ち行列の要素の通し番号(`None` は番兵)。
+    /// キューの要素の通し番号。`None` は番兵を表す。
     elem: Option<u64>,
-    /// 要素が区切りか(偽なら箱の始まり)。
+    /// 要素が区切りなら真、ボックスの開始なら偽。
     is_break: bool,
 }
 
@@ -51,7 +51,7 @@ struct FormatElem {
     width: i64,
 }
 
-/// 整形器である。出力はバイト列に溜める。
+/// フォーマッタである。整形した出力は、バイト列 `out` にためる。
 pub struct Formatter {
     scan_stack: Vec<ScanElem>,
     format_stack: Vec<FormatElem>,
@@ -77,7 +77,7 @@ impl Default for Formatter {
 }
 
 impl Formatter {
-    /// `formatter_of_out_channel` と同じ既定の整形器。
+    /// `formatter_of_out_channel` と同じ既定値のフォーマッタを作る。
     pub fn new() -> Formatter {
         let margin = 78;
         let min_space_left = 10;
@@ -96,7 +96,7 @@ impl Formatter {
             queue_base: 0,
             out: Vec::new(),
         };
-        // 初期の状態は、仮の箱を 1 つ持つ。
+        // 初期状態では、仮のボックスを 1 つ開いている。
         f.queue.push_back(Elem {
             size: -1,
             token: Token::Begin(0, BoxType::Hov),
@@ -282,7 +282,7 @@ impl Formatter {
             return;
         };
         if is_break == ty {
-            // 既に印字した要素なら、大きさを書いても効かない(OCaml でも同じ)。
+            // すでに出力した要素はキューに残っていないので、サイズを書き込もうとしても何も起きない(OCaml でも同じである)。
             if let Some(e) = self.elem_mut(seq) {
                 e.size += right_total;
             }
@@ -303,7 +303,7 @@ impl Formatter {
         });
     }
 
-    /// 箱を開く(`pp_open_box_gen`)。
+    /// ボックスを開く(`pp_open_box_gen`)。
     pub fn open_box(&mut self, indent: i64, ty: BoxType) {
         self.curr_depth += 1;
         let size = -self.right_total;
@@ -317,7 +317,7 @@ impl Formatter {
         );
     }
 
-    /// 箱を閉じる(`pp_close_box`)。
+    /// ボックスを閉じる(`pp_close_box`)。
     pub fn close_box(&mut self) {
         if self.curr_depth > 1 {
             self.enqueue(Elem {
@@ -331,7 +331,7 @@ impl Formatter {
         }
     }
 
-    /// 文字列を印字する(`pp_print_string`)。幅はバイト数である。
+    /// 文字列を出力する(`pp_print_string`)。幅はバイト数で数える。
     pub fn string(&mut self, s: &str) {
         let n = s.len() as i64;
         self.enqueue_advance(Elem {
@@ -370,7 +370,7 @@ impl Formatter {
         self.open_box(0, BoxType::Hov);
     }
 
-    /// 待ち行列を吐き出し、改行を書く(`pp_print_newline`)。
+    /// キューを flush し、改行を書く(`pp_print_newline`)。
     pub fn newline(&mut self) {
         while self.curr_depth > 1 {
             self.close_box();
@@ -381,7 +381,7 @@ impl Formatter {
         self.rinit();
     }
 
-    /// 溜めた出力を取り出す。
+    /// ためた出力を取り出す。取り出した後の `out` は空になる。
     pub fn take(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.out)
     }

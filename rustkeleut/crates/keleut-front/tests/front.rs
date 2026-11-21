@@ -1,12 +1,12 @@
-//! keleut-front の試験である。
+//! keleut-front の字句解析と構文解析のテストである。
 //!
-//! 期待の文字列は Diktor の `--dump-tokens` と `--dump-ast` の出力を写したものである。
-//! 環境変数 `KELEUT_FRONT_DIKTOR` に本物の diktor を与えると、
-//! `KELEUT_FRONT_CORPUS`(既定は `conformance/corpus`)の全件でも Diktor の出力と比べる。
+//! 期待する文字列は、Diktor の `--dump-tokens` と `--dump-ast` の出力をコピーしたものである。
+//! 環境変数 `KELEUT_FRONT_DIKTOR` に本物の diktor のパスを設定すると、`KELEUT_FRONT_CORPUS`(既定は `conformance/corpus`)のすべての `.kel` ファイルでも、Diktor の `--dump-ast` の出力と比較する。
 
 use keleut_front::{Files, Limits, ParseError, dump, oformat::Formatter, on_stack};
 
-/// `dump ast` と同じ出力を作る。誤りなら診断の 1 行を返す。
+/// `keleut dump ast` と同じ出力を作る。
+/// 字句解析か構文解析に失敗したときは、診断の 1 行を返す。
 fn ast(src: &str) -> Result<String, String> {
     ast_with(src.as_bytes(), keleut_front::DEFAULT_MAX_NEST)
 }
@@ -98,7 +98,7 @@ fn 平らな長い列は限度に数えない() {
     assert!(ast_with(parens.as_bytes(), limit).is_ok());
     let tops: String = (0..5000).map(|i| format!("let a{i} = {i}\n")).collect();
     assert!(ast_with(tops.as_bytes(), limit).is_ok());
-    // 引数の列は `extend` の鎖に脱糖するので、木の深さは引数の数になる。
+    // 引数の並びは `extend` の連鎖に脱糖されるので、木の深さは引数の個数になる。
     let args = format!("let x = f({}1)", "1, ".repeat(900));
     assert!(ast_with(args.as_bytes(), limit).is_ok());
     let block = format!("let x = {{\n{}  1\n}}\n", "  let a = 1\n".repeat(5000));

@@ -1,7 +1,7 @@
-//! 精緻化の式の部分である(Diktor の elab.ml の §11.1〜§11.25)。
+//! 型、パターン、式を精緻化(elaboration)する(Diktor の `elab.ml` の §11.1〜§11.27 に対応する)。
 //!
-//! 型式、パターン、式、handle の検査を持つ。
-//! 束縛と再帰群は `elab_bind`、宣言は `decl` に置く。
+//! 型の式、パターン、式の精緻化と、`handle` の検査を持つ。
+//! 束縛と再帰群は `elab_bind` に、宣言は `decl` に置く。
 
 use super::unify::type_msg;
 use super::{
@@ -15,7 +15,7 @@ use crate::ast::{
 use crate::pos::Span;
 use std::rc::Rc;
 
-/// resume を書けない理由(Diktor の `no_resume`)である。
+/// `resume` を書けない理由を表す(Diktor の `no_resume` に対応する)。
 #[derive(Clone, Copy, Debug)]
 pub enum NoResume {
     NeverClause(Oid),
@@ -24,16 +24,17 @@ pub enum NoResume {
     CancelClause,
 }
 
-/// 再帰群の記録(Diktor の `group_rec`)である。
+/// 検査中の再帰群 1 つの記録(Diktor の `group_rec` に対応する)。
 #[derive(Clone)]
 pub struct GroupRec {
     pub(crate) g_pres: Vec<(Ty, NodeId)>,
     pub(crate) g_cur: Option<NodeId>,
-    /// 参照(式、参照した束縛、参照された束縛、辞書の鍵と穴)。足した順。
+    /// 再帰群の中の参照を、追加した順に並べたもの。
     pub(crate) g_refs: Vec<GroupRef>,
 }
 
-/// 再帰群の中の参照(式、その位置、参照した束縛、参照された束縛、辞書の鍵と穴)である。
+/// 再帰群の中の参照 1 つ。
+/// 参照している式、その位置、参照した側の束縛、参照された束縛、辞書のキーと穴の組の並びを持つ。
 pub(crate) type GroupRef = (
     NodeId,
     Span,
@@ -42,7 +43,8 @@ pub(crate) type GroupRef = (
     Vec<((Oid, Oid), super::HoleId)>,
 );
 
-/// pub の注釈の検査の文脈(Diktor の `pub_scope`)である。
+/// pub な宣言の注釈を検査するときの文脈(Diktor の `pub_scope` に対応する)。
+/// module、単位、型パラメータの名前と、展開中の型エイリアスの名前を持つ。
 #[derive(Clone)]
 pub(crate) struct PubScope {
     ps_module: Option<String>,
@@ -51,7 +53,8 @@ pub(crate) struct PubScope {
     ps_alias: Option<String>,
 }
 
-/// 演算子の意味(Diktor の `Prims.bin_op_sem`)。
+/// 二項演算子に対応する型クラスとメソッドの名前を返す(Diktor の `Prims.bin_op_sem` に対応する)。
+/// `And` と `Or` には `None` を返す。
 pub(crate) fn bin_op_sem(op: BinOp) -> Option<(&'static str, &'static str)> {
     use BinOp::*;
     match op {
@@ -69,10 +72,11 @@ pub(crate) fn bin_op_sem(op: BinOp) -> Option<(&'static str, &'static str)> {
     }
 }
 
-/// ランタイムが実装を持つエフェクト(Diktor の `Prims.runtime_effects`)。
+/// ランタイムが実装を持つエフェクトの名前(Diktor の `Prims.runtime_effects` に対応する)。
 const RUNTIME_EFFECTS: &[&str] = &["Console"];
 
-/// 数値型の無い名前(Diktor の `absent_numeric`)。
+/// Keleut にない数値型の名前(Diktor の `absent_numeric` に対応する)。
+/// 未知の型の診断に、使える数値型の一覧を添えるために使う。
 const ABSENT_NUMERIC: &[&str] = &[
     "Int8", "Int16", "UInt8", "UInt16", "UInt32", "UInt64", "Float32",
 ];
@@ -110,7 +114,7 @@ fn lower_initial(s: &str) -> bool {
     s.as_bytes().first().is_some_and(|c| c.is_ascii_lowercase())
 }
 
-/// パターンが値を問わず一致するか(Diktor の `irrefutable_pat`)。
+/// パターンがどの値にも一致するなら真を返す(Diktor の `irrefutable_pat` に対応する)。
 pub(crate) fn irrefutable_pat(p: &Pat) -> bool {
     match &p.kind {
         PatKind::Var(_) | PatKind::Wildcard => true,
@@ -123,7 +127,7 @@ pub(crate) fn irrefutable_pat(p: &Pat) -> bool {
     }
 }
 
-/// パターンが束縛する名前(Diktor の `pat_var_names`)。
+/// パターンが束縛する名前を返す(Diktor の `pat_var_names` に対応する)。
 pub(crate) fn pat_var_names(p: &Pat) -> Vec<String> {
     match &p.kind {
         PatKind::Var(x) => vec![x.clone()],
@@ -141,7 +145,7 @@ pub(crate) fn pat_var_names(p: &Pat) -> Vec<String> {
     }
 }
 
-/// 値か(Diktor の `is_value`)。
+/// 式が構文上の値なら真を返す(Diktor の `is_value` に対応する)。
 pub(crate) fn is_value(e: &Exp) -> bool {
     match &e.kind {
         ExpKind::Bool(_)
@@ -159,7 +163,8 @@ pub(crate) fn is_value(e: &Exp) -> bool {
     }
 }
 
-/// 引数の個数(Diktor の `args_arity`)。
+/// 実引数の式が `_item` のフィールドだけを持つレコードなら、フィールドの個数を返す(Diktor の `args_arity` に対応する)。
+/// それ以外の式には `None` を返す。
 fn args_arity(e: &Exp) -> Option<usize> {
     let mut n = 0;
     let mut cur = e;
@@ -175,7 +180,8 @@ fn args_arity(e: &Exp) -> Option<usize> {
     }
 }
 
-/// 外側の矢印に `@` を書いたか(Diktor の `outer_eff_written`)。
+/// 束縛の最も外側の矢印に `@` を書いていれば真を返す(Diktor の `outer_eff_written` に対応する)。
+/// 仮引数のない束縛では、型注釈が矢印でなければ真を、型注釈がなければ偽を返す。
 pub(crate) fn outer_eff_written(b: &LetBinding) -> bool {
     match &b.params {
         Some(_) => b.eff.is_some(),
@@ -190,7 +196,7 @@ pub(crate) fn outer_eff_written(b: &LetBinding) -> bool {
 }
 
 impl Env {
-    /// 局所の束縛を足す(Diktor の `add_local`)。
+    /// ローカルの束縛を追加した環境を返す(Diktor の `add_local` に対応する)。
     pub(crate) fn add_local(&self, x: &str, t: Ty) -> Env {
         let mut e = self.clone();
         e.values = e.values.add(Rc::from(x), t);
@@ -208,7 +214,7 @@ impl Env {
 }
 
 impl Tc {
-    /// 大域の束縛を足す(Diktor の `add_top`)。
+    /// グローバルの束縛を追加した環境を返す(Diktor の `add_top` に対応する)。
     pub(crate) fn add_top(&mut self, env: &Env, x: &str, t: Ty, g: GRef) -> Env {
         self.top_types.insert(g.clone(), t);
         let mut e = env.clone();
@@ -217,14 +223,15 @@ impl Tc {
         e
     }
 
-    /// 警告を足す(Diktor の `warn`)。
+    /// 警告を追加する(Diktor の `warn` に対応する)。
     pub(crate) fn warn(&mut self, msg: String) {
         self.warnings.push(msg);
     }
 
     // ---- 数値リテラル ----
 
-    /// 数値リテラルの型(Diktor の `number_ty`)。
+    /// 数値リテラルの型を返す(Diktor の `number_ty` に対応する)。
+    /// 接尾辞のないリテラルには、整数か小数かに応じた組み込みの制約を付けた、新しい型変数を返す。
     pub(crate) fn number_ty(&mut self, loc: Span, level: i32, n: &Number) -> R<Ty> {
         match n.suffix {
             Some(NumSuffix::Int(_) | NumSuffix::UInt(_)) if n.is_float => terr(format!(
@@ -253,7 +260,7 @@ impl Tc {
         }
     }
 
-    /// 数値リテラルのパターンの範囲を調べる(Diktor の `check_pattern_numbers`)。
+    /// 型が `Int32` か `Int64` に決まった数値リテラルのパターンが、その型の範囲に収まることを調べる(Diktor の `check_pattern_numbers` に対応する)。
     pub(crate) fn check_pattern_numbers(&mut self) -> R<()> {
         let pats = std::mem::take(&mut self.pattern_numbers);
         for (id, span, n) in pats {
@@ -380,7 +387,8 @@ impl Tc {
         Ok(())
     }
 
-    /// 閉じた矢印の行を開く(Diktor の `open_closed_arrow`)。
+    /// 矢印型のエフェクト行が閉じていれば、末尾に新しい行変数を付けて開く(Diktor の `open_closed_arrow` に対応する)。
+    /// 付けた行変数は `opened_rows` に記録する。
     pub(crate) fn open_closed_arrow(&mut self, level: i32, ty: Ty) -> R<Ty> {
         let r = self.repr(ty);
         match self.node(r) {
@@ -401,7 +409,8 @@ impl Tc {
         }
     }
 
-    /// 開いた末尾を閉じ直す(Diktor の `reclose_opened_tail`)。
+    /// 矢印型 `ty` のエフェクト行の末尾が、`open_closed_arrow` の付けた行変数のまま決まっていなければ、空の行に決めて閉じ直す(Diktor の `reclose_opened_tail` に対応する)。
+    /// レベルが `lvl` より低い行変数は閉じない。
     pub(crate) fn reclose_opened_tail(&mut self, lvl: i32, ty: Ty) -> R<()> {
         let ty = self.repr(ty);
         if let TyNode::Arrow(_, _, e) = self.node(ty) {
@@ -431,7 +440,7 @@ impl Tc {
         Ok(())
     }
 
-    /// 期待型が矢印なら閉じた行を開く(Diktor の `subsume_closed`)。
+    /// 期待型 `expected` が矢印型なら、`ty` の閉じたエフェクト行を開く(Diktor の `subsume_closed` に対応する)。
     pub(crate) fn subsume_closed(&mut self, level: i32, ty: Ty, expected: Ty) -> R<Ty> {
         let e = self.repr(expected);
         match self.node_ref(e) {
@@ -440,7 +449,8 @@ impl Tc {
         }
     }
 
-    /// pub の値の注釈と本体を単一化する(Diktor の `unify_pub_value_annot`)。
+    /// pub な値の束縛で、注釈の型と本体の型を単一化する(Diktor の `unify_pub_value_annot` に対応する)。
+    /// エフェクト行が一致しなければ、pub な宣言はエフェクトを起こせないという型エラーにする。
     pub(crate) fn unify_pub_value_annot(
         &mut self,
         vty: Ty,
@@ -529,7 +539,9 @@ impl Tc {
         }
     }
 
-    /// 注釈の中で `@` の無い矢印を探す(Diktor の `unwritten_effect`)。
+    /// 型注釈の中から `@` のない矢印を探す(Diktor の `unwritten_effect` に対応する)。
+    /// 見つからなければ `None` を返す。
+    /// 型エイリアスの本体で見つけたときは、その型エイリアスの名前を添えて返す。
     pub(crate) fn unwritten_effect(
         &mut self,
         expanding: &[Oid],
@@ -623,7 +635,7 @@ impl Tc {
         }
     }
 
-    /// pub な宣言の注釈を調べる(Diktor の `check_pub_annots`)。
+    /// pub な宣言に完全な型注釈があることを調べる(Diktor の `check_pub_annots` に対応する)。
     pub(crate) fn check_pub_annots(
         &mut self,
         tparams: Vec<String>,
@@ -665,7 +677,7 @@ impl Tc {
         }
     }
 
-    // ---- カインドの誤り ----
+    // ---- カインドのエラー ----
 
     fn kind_raw_is(&self, k: Kind, row: bool) -> bool {
         matches!(
@@ -727,7 +739,7 @@ impl Tc {
         }
     }
 
-    // ---- 型式 ----
+    // ---- 型の式 ----
 
     fn ty_elab(
         &mut self,
@@ -1470,19 +1482,22 @@ impl Tc {
         Ok(ty)
     }
 
-    /// 注釈の型(外側の矢印の `@` の省略を行変数にする。Diktor の `elab_type_outer`)。
+    /// 型注釈を精緻化する(Diktor の `elab_type_outer` に対応する)。
+    /// 最も外側の矢印が `@` を省略していれば、そのエフェクト行を新しい行変数にする。
     pub(crate) fn elab_type_outer(&mut self, env: &Env, level: i32, t: &TypeExp) -> R<Ty> {
         let r = self.ty_elab(env, level, &[], true, t);
         at(t.meta.span, r)
     }
 
-    /// 型式(Diktor の `elab_type`)。
+    /// 型の式を精緻化する(Diktor の `elab_type` に対応する)。
+    /// `@` を省略した矢印のエフェクト行は、空の行にする。
     pub(crate) fn elab_type(&mut self, env: &Env, level: i32, t: &TypeExp) -> R<Ty> {
         let r = self.ty_elab(env, level, &[], false, t);
         at(t.meta.span, r)
     }
 
-    /// 値の型式(Diktor の `elab_value_type`)。
+    /// 型の式を精緻化し、カインドが `Type` であることを調べる(Diktor の `elab_value_type` に対応する)。
+    /// `what` は、診断に書く位置の名前である。
     pub(crate) fn elab_value_type(
         &mut self,
         env: &Env,
@@ -1494,7 +1509,7 @@ impl Tc {
         at(t.meta.span, r)
     }
 
-    /// 外側の注釈の値の型式(Diktor の `elab_value_type_outer`)。
+    /// `elab_type_outer` と同じ規則で型注釈を精緻化し、カインドが `Type` であることを調べる(Diktor の `elab_value_type_outer` に対応する)。
     pub(crate) fn elab_value_type_outer(
         &mut self,
         env: &Env,
@@ -1508,7 +1523,7 @@ impl Tc {
         Ok(ty)
     }
 
-    /// エフェクトの型式(Diktor の `elab_eff`)。
+    /// エフェクト行を書く位置の型の式を精緻化する(Diktor の `elab_eff` に対応する)。
     pub(crate) fn elab_eff(&mut self, env: &Env, level: i32, t: &TypeExp) -> R<Ty> {
         let r = self.eff_elab(true, env, level, &[], t);
         at(t.meta.span, r)
@@ -1516,7 +1531,7 @@ impl Tc {
 
     // ---- パターン ----
 
-    /// パターンの精緻化(Diktor の `elab_pat`)。
+    /// パターンを精緻化し、パターンが束縛する変数を追加した環境を返す(Diktor の `elab_pat` に対応する)。
     pub(crate) fn elab_pat(
         &mut self,
         env: &Env,
@@ -1718,7 +1733,8 @@ impl Tc {
         Ok(())
     }
 
-    /// 穴を解き、束縛の型から決められない辞書を誤りにする(Diktor の `solve_holes_at`)。
+    /// 辞書の穴を解く(Diktor の `solve_holes_at` に対応する)。
+    /// 束縛の型から決められない辞書があれば、曖昧な制約の型エラーにする。
     pub(crate) fn solve_holes_at(&mut self, since: i64, params: &[(Oid, Oid)]) -> R<()> {
         match self.solve_holes(since, params) {
             Err(Fail::Unsolved(h)) => {
@@ -1791,7 +1807,7 @@ impl Tc {
 
     // ---- 式 ----
 
-    /// 式の精緻化(Diktor の `elab_exp`)。
+    /// 式を精緻化し、その型を返す(Diktor の `elab_exp` に対応する)。
     pub(crate) fn elab_exp(&mut self, env: &Env, level: i32, eff: Ty, node: &Exp) -> R<Ty> {
         guard()?;
         let r = self.elab_exp_inner(env, level, eff, node);
@@ -2232,7 +2248,7 @@ impl Tc {
         Ok(self.con(dname, subst.iter().map(|(_, t)| *t).collect()))
     }
 
-    /// 期待型に照らして式を検査する(Diktor の `elab_check`)。
+    /// 式を期待型 `expected` で検査する(Diktor の `elab_check` に対応する)。
     pub(crate) fn elab_check(
         &mut self,
         row_note: Option<&str>,
@@ -2709,7 +2725,7 @@ impl Tc {
                 ));
             }
         }
-        // 操作節の引数を精緻化し、総和的な節かを調べる。
+        // 操作節の引数を精緻化し、ガードがなく、引数のパターンが必ず一致する節(`total`)かどうかを調べる。
         struct OpClause<'a> {
             op: Oid,
             args: &'a [CtorArgPat],
@@ -2870,7 +2886,7 @@ impl Tc {
         Ok(tres)
     }
 
-    /// 組み込みクラスのメソッドの型(Diktor の `method_scheme`)。
+    /// 組み込みの型クラス `cls` のメソッド `m` の型を返す(Diktor の `method_scheme` に対応する)。
     fn method_scheme(&mut self, cls: &str, m: &str) -> R<Ty> {
         let c = self.intern(cls);
         match self.find_class(c) {
@@ -2882,7 +2898,7 @@ impl Tc {
         }
     }
 
-    /// 型パラメータの制約のクラス(Diktor の `class_names_of`)。
+    /// 型パラメータ `tp` に書いた制約の型クラスを解決して返す(Diktor の `class_names_of` に対応する)。
     pub(crate) fn class_names_of(&mut self, tp: &TypeParam) -> R<Vec<Oid>> {
         let mut out = Vec::new();
         for li in &tp.classes {
@@ -2902,7 +2918,9 @@ impl Tc {
         Ok(out)
     }
 
-    /// 型パラメータの剛定数を作る(Diktor の `make_rigids`)。
+    /// 型パラメータごとにスコーレム定数を作る(Diktor の `make_rigids` に対応する)。
+    /// スコーレム定数は、型パラメータを固定した定数で、コードでは `Rigid` と書く。
+    /// 型パラメータの名前、型、セルの組の並びを返す。
     pub(crate) fn make_rigids(
         &mut self,
         kinds: Option<&[Kind]>,
@@ -2936,7 +2954,7 @@ impl Tc {
         Ok(out)
     }
 
-    /// 剛定数を一般化された変数にする(Diktor の `release_rigids`)。
+    /// スコーレム定数を、一般化された型変数に変える(Diktor の `release_rigids` に対応する)。
     pub(crate) fn release_rigids(&mut self, rigids: &[(String, Ty, Cell)]) -> R<()> {
         for (_, _, r) in rigids {
             if let TVar::Rigid(i) = self.cell(*r).clone() {

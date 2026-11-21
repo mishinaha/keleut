@@ -1,12 +1,12 @@
 //! Diktor の文法(diktor/lib/parser.mly)の LR(1) の表である。
 //!
 //! tools/gen_tables.ml が menhir の .cmly から作った。手で書き換えない。
-//! 元の parser.mly の MD5 は 460e9e033cb2dee08181ee4119ac3969 である。
+//! 元の parser.mly の MD5 は f4c4420ac429a22d111709c46557380e である。
 
 #![allow(clippy::all)]
 
 /// 表を作った元の parser.mly の MD5 である(試験が今の parser.mly と比べる)。
-pub const PARSER_MLY_MD5: &str = "460e9e033cb2dee08181ee4119ac3969";
+pub const PARSER_MLY_MD5: &str = "f4c4420ac429a22d111709c46557380e";
 
 /// 終端記号の数である(`error` と `#` を含む)。
 pub const N_TERMINALS: usize = 70;

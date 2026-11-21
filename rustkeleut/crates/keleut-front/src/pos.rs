@@ -1,30 +1,31 @@
-//! 位置と、ファイル名の表である。
+//! ソース上の位置と、ファイル名の表を定義する。
 //!
 //! 位置は Diktor が使う `Lexing.position` と同じ 4 つの値を持つ。
-//! 行は 1 から数え、桁の材料の `cnum`(ファイルの先頭からの位置)と `bol`(行頭の位置)は、
-//! バイトでなくコードポイントで数える(sedlex の UTF-8 の字句解析器と同じ)。
-//! 表示は `ファイル:行:桁` で、桁は `cnum - bol + 1` である。
+//! 行番号は 1 始まりである。
+//! 桁の計算に使う `cnum`(ファイルの先頭からの位置)と `bol`(行頭の位置)は、バイト数ではなくコードポイント数で数える。
+//! sedlex の UTF-8 の字句解析器と同じ数え方である。
+//! 位置は `ファイル:行:桁` の形式で表示し、桁は `cnum - bol + 1` である。
 
-/// ファイル名の表の添字である。
+/// ファイル名の表([`Files`])の添字である。
 ///
-/// 0 は名前の空のファイル(Diktor の構文解析の開始位置 `Lexing.from_string ""` のもの)を表す。
+/// 0 は名前が空のファイルを表す(Diktor の構文解析の開始位置 `Lexing.from_string ""` のファイル名に相当する)。
 pub type FileId = u32;
 
-/// 位置である。
+/// ソース上の 1 点を表す位置である(Diktor の `Lexing.position`)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Pos {
-    /// ファイル。
+    /// ファイル名の表の添字。
     pub file: FileId,
-    /// 行(1 始まり)。
+    /// 行番号(1 始まり)。
     pub line: u32,
-    /// 行頭の位置(コードポイント)。
+    /// 行頭の、ファイルの先頭からの位置(コードポイント数)。
     pub bol: u32,
-    /// ファイルの先頭からの位置(コードポイント)。
+    /// ファイルの先頭からの位置(コードポイント数)。
     pub cnum: u32,
 }
 
 impl Pos {
-    /// 名前の空のファイルの 1 行目の先頭である。
+    /// 名前が空のファイルの、1 行目の先頭を指す位置である。
     pub const START: Pos = Pos {
         file: 0,
         line: 1,
@@ -32,22 +33,23 @@ impl Pos {
         cnum: 0,
     };
 
-    /// 桁(1 始まり)。
+    /// 桁(1 始まり)を返す。
     pub fn col(self) -> u32 {
         self.cnum - self.bol + 1
     }
 }
 
-/// ノードの範囲である(Diktor の `Location.span`)。
+/// ノードがソース上で占める範囲である(Diktor の `Location.span`)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Span {
-    /// 始まり。
+    /// 範囲の始まりの位置。
     pub start: Pos,
-    /// 終わり。
+    /// 範囲の終わりの位置。
     pub finish: Pos,
 }
 
 /// ファイル名の表である。
+/// 添字([`FileId`])からファイル名を引く。
 #[derive(Clone, Debug)]
 pub struct Files {
     names: Vec<String>,
@@ -62,23 +64,23 @@ impl Default for Files {
 }
 
 impl Files {
-    /// 名前の空のファイルだけを持つ表。
+    /// 名前が空のファイル(添字 0)だけを持つ表を作る。
     pub fn new() -> Files {
         Files::default()
     }
 
-    /// ファイルを足して添字を返す。
+    /// ファイル名を追加し、その添字を返す。
     pub fn add(&mut self, name: &str) -> FileId {
         self.names.push(name.to_string());
         (self.names.len() - 1) as FileId
     }
 
-    /// 添字の名前。
+    /// 添字 `id` のファイル名を返す。
     pub fn name(&self, id: FileId) -> &str {
         &self.names[id as usize]
     }
 
-    /// `ファイル:行:桁` の形の表示(Diktor の `Location.show_pos`)。
+    /// 位置を `ファイル:行:桁` の形式の文字列にする(Diktor の `Location.show_pos`)。
     pub fn show(&self, p: Pos) -> String {
         format!("{}:{}:{}", self.name(p.file), p.line, p.col())
     }

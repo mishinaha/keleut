@@ -1,14 +1,16 @@
-//! 型検査の表に使う速いハッシュ(rustc の FxHash と同じ計算)と、ノードの番号で引く表である。
+//! 型検査の表に使う高速なハッシュ関数と、ノードの番号で引く表、書き換えを取り消せる表である。
+//! ハッシュ関数の計算は rustc の FxHash と同じである。
 //!
-//! 型検査の表の鍵は、名前の番号、セルの添字、ノードの番号、短い文字列である。
-//! 標準の `RandomState`(SipHash)は、敵対的な入力への耐性のために遅い。
-//! 型検査の入力は利用者のプログラムで、型検査の結果は表の走査の順に依らない(走査する表は登録の順の列を別に持つ)ので、
-//! 決定的で速いハッシュを使う。
+//! 型検査の表のキーは、名前の番号、セルの添字、ノードの番号、短い文字列である。
+//! 標準の `RandomState`(SipHash)は、敵対的な入力に耐えるように作られているので遅い。
+//! 型検査の入力はユーザ自身のプログラムなので、その耐性は必要ない。
+//! また、型検査の結果は表を走査する順によらない(走査する表は、登録の順を別の配列に持つ)。
+//! そのため、決定的で高速なハッシュ関数を使う。
 
 use crate::ast::NodeId;
 use std::hash::{BuildHasherDefault, Hasher};
 
-/// FxHash の計算をするハッシュ関数である。
+/// FxHash と同じ計算をするハッシュ関数である。
 #[derive(Clone, Copy, Default)]
 pub struct FxHasher {
     hash: u64,
@@ -78,16 +80,18 @@ pub type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<FxHa
 /// FxHash を使う `HashSet` である。
 pub type HashSet<K> = std::collections::HashSet<K, BuildHasherDefault<FxHasher>>;
 
-/// 列の書き換えの記録である(対話的な実行の入力の取り消し。[`super::Tc::snapshot`])。
+/// 配列(`Vec`)の書き換えを取り消すための変更ログである。
+/// REPL が入力を取り消すときに使う([`super::Tc::snapshot`])。
 ///
-/// [`Trail::begin`] で印を置き、その後に印の時点の長さより前の項目を書き換えるときは、
-/// 書き換える前に [`Trail::record`] で前の値を覚える。
-/// [`Trail::rollback`] は覚えた値を逆の順に書き戻し、列を印の時点の長さに切り詰める。
-/// 印は入れ子にでき、[`Trail::commit`] は最も内側の印を外す(外側の印のために記録は残す)。
-/// 手間は、印の後に書き換えた項目と足した項目の数に比例し、列の長さには依らない。
+/// [`Trail::begin`] でマークを置く。
+/// その後、マークの時点の長さより前にある項目を書き換えるときは、書き換える前に [`Trail::record`] で元の値を記録する。
+/// [`Trail::rollback`] は、記録した値を逆順に書き戻し、配列をマークの時点の長さに切り詰める。
+/// マークは入れ子にできる。
+/// [`Trail::commit`] は最も内側のマークを外すが、外側のマークが残っていれば変更ログは残す。
+/// 処理時間は、マークの後に書き換えた項目と追加した項目の個数に比例し、配列の長さにはよらない。
 #[derive(Clone, Debug)]
 pub struct Trail<T> {
-    /// 印ごとの(列の長さ, 記録の長さ)。
+    /// マークごとの(配列の長さ, 変更ログの長さ)。
     marks: Vec<(usize, usize)>,
     undo: Vec<(usize, T)>,
 }
@@ -102,7 +106,8 @@ impl<T> Default for Trail<T> {
 }
 
 impl<T: Clone> Trail<T> {
-    /// 列 `v` の `i` 番を書き換える前に呼ぶ。最も内側の印より前の項目なら前の値を覚える。
+    /// 配列 `v` の `i` 番目の項目を書き換える前に呼ぶ。
+    /// 最も内側のマークの時点の長さより前にある項目なら、元の値を記録する。
     #[inline]
     pub fn record(&mut self, v: &[T], i: usize) {
         if let Some(&(len, _)) = self.marks.last()
@@ -112,12 +117,12 @@ impl<T: Clone> Trail<T> {
         }
     }
 
-    /// 長さ `len` の列に印を置く。
+    /// 長さ `len` の配列にマークを置く。
     pub fn begin(&mut self, len: usize) {
         self.marks.push((len, self.undo.len()));
     }
 
-    /// 最も内側の印を外す。印が無くなれば記録を捨てる。
+    /// 最も内側のマークを外す。マークがなくなれば変更ログを捨てる。
     pub fn commit(&mut self) {
         self.marks.pop();
         if self.marks.is_empty() {
@@ -125,7 +130,7 @@ impl<T: Clone> Trail<T> {
         }
     }
 
-    /// 列 `v` を最も内側の印の時点に戻し、その印を外す。
+    /// 配列 `v` を最も内側のマークの時点に戻し、そのマークを外す。
     pub fn rollback(&mut self, v: &mut Vec<T>) {
         let Some((len, u)) = self.marks.pop() else {
             return;
@@ -140,9 +145,10 @@ impl<T: Clone> Trail<T> {
     }
 }
 
-/// ノードの番号で引く表である(ノードの番号は 1 つの構文解析の文脈で密に振られる)。
+/// ノードの番号で引く表である。
+/// ノードの番号は、構文解析のコンテキスト 1 つの中で 0 から連続して振られるので、番号を添字とする配列で持つ。
 ///
-/// 書き換えを記録して戻せる([`Trail`]。[`NodeMap::begin`])。
+/// 書き換えを記録して、マークの時点に戻せる([`Trail`]、[`NodeMap::begin`])。
 #[derive(Clone, Debug)]
 pub struct NodeMap<T> {
     v: Vec<Option<T>>,
@@ -159,7 +165,7 @@ impl<T> Default for NodeMap<T> {
 }
 
 impl<T: Clone> NodeMap<T> {
-    /// 番号 `id` の値を置く(前の値は捨てる)。
+    /// 番号 `id` に値を置く。前の値は捨てる。
     #[inline]
     pub fn insert(&mut self, id: NodeId, x: T) {
         let i = id as usize;
@@ -170,21 +176,21 @@ impl<T: Clone> NodeMap<T> {
         self.v[i] = Some(x);
     }
 
-    /// 書き換えの記録の印を置く。
+    /// 変更ログにマークを置く。
     pub fn begin(&mut self) {
         self.trail.begin(self.v.len());
     }
 
-    /// 最も内側の印を外す。
+    /// 最も内側のマークを外す。
     pub fn commit(&mut self) {
         self.trail.commit();
     }
 
-    /// 最も内側の印の時点に戻す。
+    /// 最も内側のマークの時点に戻し、そのマークを外す。
     ///
-    /// 列は切り詰めず、印の後に伸ばした部分を空に戻す。
-    /// ノードの番号は入力をまたいで増え続けるので、切り詰めると、次の入力が列を今の番号まで伸ばし直すことになり、
-    /// 手間がそれまでに振った番号の数に比例するからである。
+    /// 配列は切り詰めず、マークの後に拡張した部分を空に戻す。
+    /// ノードの番号は入力をまたいで増え続ける。
+    /// 切り詰めると、次の入力が配列を現在の番号まで拡張し直すことになり、処理時間がそれまでに振った番号の個数に比例してしまう。
     pub fn rollback(&mut self) {
         let Some(&(len, _)) = self.trail.marks.last() else {
             return;
@@ -199,27 +205,29 @@ impl<T: Clone> NodeMap<T> {
 }
 
 impl<T> NodeMap<T> {
-    /// 番号 `id` の値。
+    /// 番号 `id` の値を返す。
     #[inline]
     pub fn get(&self, id: &NodeId) -> Option<&T> {
         self.v.get(*id as usize).and_then(|x| x.as_ref())
     }
 }
 
-/// 書き換えを記録して戻せる `HashMap` である(対話的な実行の入力の取り消し。[`super::Tc::snapshot`])。
+/// 書き換えを記録して、マークの時点に戻せる `HashMap` である。
+/// REPL が入力を取り消すときに使う([`super::Tc::snapshot`])。
 ///
-/// 読むときは `HashMap` として読める(`Deref`)。
-/// 書き換えは [`JMap::insert`]、[`JMap::remove`]、[`JMap::get_mut`]、[`JMap::get_or_insert_with`] だけで行い、
-/// 印([`JMap::begin`])がある間は、書き換える前の値を覚える。
-/// [`JMap::rollback`] は覚えた値を逆の順に書き戻す。
-/// 印は入れ子にでき、[`JMap::commit`] は最も内側の印を外す(外側の印のために記録は残す)。
-/// 手間は、印の後に書き換えた項目の数に比例し、表の大きさには依らない。
+/// 読むときは `Deref` を通して `HashMap` として読める。
+/// 書き換えは [`JMap::insert`]、[`JMap::remove`]、[`JMap::get_mut`]、[`JMap::get_or_insert_with`] だけで行う。
+/// マーク([`JMap::begin`])がある間は、書き換える前の値を変更ログに記録する。
+/// [`JMap::rollback`] は、記録した値を逆順に書き戻す。
+/// マークは入れ子にできる。
+/// [`JMap::commit`] は最も内側のマークを外すが、外側のマークが残っていれば変更ログは残す。
+/// 処理時間は、マークの後に書き換えた項目の個数に比例し、表のサイズにはよらない。
 #[derive(Clone, Debug)]
 pub struct JMap<K, V> {
     m: HashMap<K, V>,
-    /// 印ごとの記録の長さ。
+    /// マークごとの変更ログの長さ。
     marks: Vec<usize>,
-    /// (鍵, 書き換える前の値。無かったなら `None`)。
+    /// (キー, 書き換える前の値)の並び。キーがなかったときの値は `None` である。
     undo: Vec<(K, Option<V>)>,
 }
 
@@ -253,7 +261,7 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> JMap<K, V> {
         old
     }
 
-    /// `k` を除き、前の値を返す。
+    /// `k` を削除し、前の値を返す。
     pub fn remove(&mut self, k: &K) -> Option<V> {
         let (k, old) = self.m.remove_entry(k)?;
         if !self.marks.is_empty() {
@@ -262,7 +270,7 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> JMap<K, V> {
         Some(old)
     }
 
-    /// `k` の値を書き換えるために借りる。
+    /// `k` の値を書き換えるために可変で借用する。
     pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
         if !self.marks.is_empty()
             && let Some(old) = self.m.get(k)
@@ -272,7 +280,8 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> JMap<K, V> {
         self.m.get_mut(k)
     }
 
-    /// `k` の値を書き換えるために借りる。無ければ `f` の値を置く(`entry(k).or_insert_with(f)`)。
+    /// `k` の値を書き換えるために可変で借用する。
+    /// 値がなければ `f` の値を置く(`entry(k).or_insert_with(f)` と同じ)。
     pub fn get_or_insert_with(&mut self, k: K, f: impl FnOnce() -> V) -> &mut V {
         if !self.marks.is_empty() {
             let old = self.m.get(&k).cloned();
@@ -281,12 +290,12 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> JMap<K, V> {
         self.m.entry(k).or_insert_with(f)
     }
 
-    /// 書き換えの記録の印を置く。
+    /// 変更ログにマークを置く。
     pub fn begin(&mut self) {
         self.marks.push(self.undo.len());
     }
 
-    /// 最も内側の印を外す。印が無くなれば記録を捨てる。
+    /// 最も内側のマークを外す。マークがなくなれば変更ログを捨てる。
     pub fn commit(&mut self) {
         self.marks.pop();
         if self.marks.is_empty() {
@@ -294,7 +303,7 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> JMap<K, V> {
         }
     }
 
-    /// 最も内側の印の時点に戻し、その印を外す。
+    /// 最も内側のマークの時点に戻し、そのマークを外す。
     pub fn rollback(&mut self) {
         let Some(u) = self.marks.pop() else {
             return;
@@ -313,12 +322,12 @@ impl<K: std::hash::Hash + Eq + Clone, V: Clone> JMap<K, V> {
     }
 }
 
-/// 書き換えを記録して戻せる `HashSet` である([`JMap`] と同じ規則)。
+/// 書き換えを記録して、マークの時点に戻せる `HashSet` である。規則は [`JMap`] と同じである。
 #[derive(Clone, Debug)]
 pub struct JSet<K> {
     s: HashSet<K>,
     marks: Vec<usize>,
-    /// 足した鍵(印の前から有った鍵は覚えない)。
+    /// マークがある間に追加したキーの並び。すでに集合にあったキーは記録しない。
     undo: Vec<K>,
 }
 
@@ -341,7 +350,7 @@ impl<K> std::ops::Deref for JSet<K> {
 }
 
 impl<K: std::hash::Hash + Eq + Clone> JSet<K> {
-    /// `k` を足す。新しく足したなら `true` を返す。
+    /// `k` を追加する。新しく追加したなら `true` を返す。
     #[inline]
     pub fn insert(&mut self, k: K) -> bool {
         if self.marks.is_empty() {
@@ -354,12 +363,12 @@ impl<K: std::hash::Hash + Eq + Clone> JSet<K> {
         self.s.insert(k)
     }
 
-    /// 書き換えの記録の印を置く。
+    /// 変更ログにマークを置く。
     pub fn begin(&mut self) {
         self.marks.push(self.undo.len());
     }
 
-    /// 最も内側の印を外す。印が無くなれば記録を捨てる。
+    /// 最も内側のマークを外す。マークがなくなれば変更ログを捨てる。
     pub fn commit(&mut self) {
         self.marks.pop();
         if self.marks.is_empty() {
@@ -367,7 +376,7 @@ impl<K: std::hash::Hash + Eq + Clone> JSet<K> {
         }
     }
 
-    /// 最も内側の印の時点に戻し、その印を外す。
+    /// 最も内側のマークの時点に戻し、そのマークを外す。
     pub fn rollback(&mut self) {
         let Some(u) = self.marks.pop() else {
             return;

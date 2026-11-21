@@ -1,25 +1,26 @@
-//! 型検査の核である(Diktor の syntax.ml の `Type`、decls.ml、unify.ml、show.ml、exhaust.ml、elab.ml)。
-//! 型検査を済ませた状態から KIR を作る手順([`emit`]、Diktor の ir_write.ml)も置く。
+//! 型検査の中核である(Diktor の syntax.ml の `Type`、decls.ml、unify.ml、show.ml、exhaust.ml、elab.ml に対応する)。
+//! 型検査を済ませた状態から KIR を作る処理 [`emit`] も、このモジュールに置く。
+//! これは Diktor の ir_write.ml に対応する。
 //!
-//! Diktor の型検査は大域の可変状態(表と参照)を使うが、本モジュールはそれを 1 つの文脈 [`Tc`] に集める(計画 7 節)。
-//! 型は添字で引く表(arena)に置き、型変数は添字の Union-Find にする。
-//! Diktor が木の節点の可変の欄に書く注釈(型、名前の解決、辞書)は、節点の番号で引く別表に置く。
+//! Diktor の型検査はグローバルな可変の状態(表と参照)を使うが、本モジュールはそれを 1 つのコンテキスト [`Tc`] にまとめる。
+//! 型は添字で引く表(arena)に置き、型変数は添字で表した Union-Find にする。
+//! Diktor が木のノードの可変のフィールドに書く注釈(型、名前解決の結果、辞書)は、ノードの番号で引く別の表に置く。
 //!
-//! Diktor との一致は次の 3 つで保つ。
+//! Diktor と同じ結果になるように、次の 3 つを守る。
 //!
-//! - 割り付けの同一性:Diktor が物理的な等しさ(`==`)で比べる値は、同じ添字のときだけ等しい。
-//!   型の構成子を作るたびに新しい添字を割り付け、Diktor が共有する定数(`t_int32` など)だけを共有する。
-//! - 名前の番号の順:Diktor は名前と型変数に同じ通し番号(`new_oid`)を振り、
-//!   エフェクトやヴァリアントのラベルを番号の順に並べる箇所がある。
-//!   名前を番号にする(`intern`)呼び出しを Diktor と同じ時点で行い、名前どうしの番号の前後を一致させる。
-//! - 列の順:Diktor の連結リストの「先頭に足して後で逆にする」操作は、`Vec` の末尾に足す操作に写す。
+//! - 値の同一性:Diktor が物理的な等しさ(`==`)で比べる値は、同じ添字のときだけ等しいものとして扱う。
+//!   そのために、型のノードを作るたびに新しい添字を割り当て、Diktor が共有する定数(`t_int32` など)だけを共有する。
+//! - 名前の番号の順序:Diktor は名前と型変数に同じ通し番号(`new_oid`)を振り、エフェクトやヴァリアントのラベルを番号の順に並べる箇所がある。
+//!   そのために、名前を番号にする呼び出し(`intern`)を Diktor と同じ時点で行い、名前どうしの番号の大小を一致させる。
+//! - リストの順序:Diktor が連結リストの先頭に追加して後で逆順にする操作は、`Vec` の末尾に追加する操作に置き換える。
 //!
-//! 再帰はスタックの残りを調べ、足りなくなったら [`Fail::Limit`] で止まる。
-//! Diktor の型検査がスタックあふれで止まるときの「処理系の限度」の診断に当たる。
-//! 型検査は [`check::on_check_stack`] が作る専用のスレッドで走らせる。
-//! そのスレッドのスタックは既定で [`check::CHECK_STACK_BYTES`](8 GiB)にし、作れない環境では深さの上限に見込む大きさで作り直す。
-//! `--native-stack` を与えたときはそのスタックを使い、深さの上限をそこで検査を終えられる深さまで下げる。
-//! 検査を通らない再帰(木を捨てることなど)もこのスタックに収める。
+//! 再帰する関数はスタックの残りを調べ、足りなくなったら [`Fail::Limit`] を返して型検査をやめる。
+//! これは、Diktor の型検査がスタックオーバーフローになったときに出す `処理系の限度` の診断に相当する。
+//! 型検査は、[`check::on_check_stack`] が作る専用のスレッドで実行する。
+//! そのスレッドのスタックサイズは、既定で [`check::CHECK_STACK_BYTES`](8 GiB)である。
+//! このサイズのスタックを作れない環境では、深さの上限に必要なサイズで作り直す。
+//! `--native-stack` を指定したときはそのサイズのスタックを使い、深さの上限を、そのスタックで型検査を終えられる深さまで下げる。
+//! スタックの残りを調べない再帰(木の解放など)も、このスタックの中で実行する。
 
 pub mod check;
 mod decl;
@@ -45,29 +46,29 @@ use std::rc::Rc;
 
 pub use decls::{AliasInfo, ClassInfo, CtorInfo, DataInfo, EffectInfo, FieldInfo, InstanceInfo};
 
-/// 名前と型変数の通し番号(Diktor の `oid`)である。
+/// 名前と型変数に振る通し番号である(Diktor の `oid`)。
 pub type Oid = u32;
 
-/// 型の表の添字である。
+/// 型を表す、型の表の添字である。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Ty(u32);
 
-/// カインドの表の添字である。
+/// カインドを表す、カインドの表の添字である。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Kind(u32);
 
-/// 型変数のセル(Diktor の `tvar ref`)の添字である。
+/// 型変数のセル(Diktor の `tvar ref`)を表す、セルの表の添字である。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Cell(u32);
 
-/// 辞書の穴の添字である。
+/// 辞書の穴を表す、穴の表の添字である。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct HoleId(u32);
 
 /// 単位(ファイル)の番号である(Diktor の `Decls.unit_id`)。
 pub type UnitId = i32;
 
-/// 型の形である(Diktor の `Type.ty`)。
+/// 型のノードである(Diktor の `Type.ty`)。型の最も外側の構造を表し、子の型は添字で持つ。
 #[derive(Clone, Debug)]
 pub enum TyNode {
     Con(Oid, Rc<[Ty]>),
@@ -86,7 +87,7 @@ pub struct VarInfo {
     pub vid: Oid,
     pub vlevel: i32,
     pub vkind: Kind,
-    /// 制約(新しいものが先頭)。
+    /// 型クラスの制約の並び。新しいものが先頭にある。
     pub vcls: Vec<Oid>,
 }
 
@@ -99,7 +100,7 @@ pub enum TVar {
     Rigid(VarInfo),
 }
 
-/// カインドの形である。
+/// カインドのノードである。
 #[derive(Clone, Copy, Debug)]
 enum KNode {
     Star,
@@ -108,7 +109,7 @@ enum KNode {
     Var(Oid, Option<Kind>),
 }
 
-/// カインドを見た結果である([`Tc::kview`])。
+/// 代表までたどったカインドの構造である([`Tc::kview`] が返す)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KView {
     Star,
@@ -117,7 +118,7 @@ pub enum KView {
     Var(Kind),
 }
 
-/// 大域の参照(Diktor の `Tree.gref`)である。
+/// グローバルへの参照である(Diktor の `Tree.gref`)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GRef {
     Builtin(String),
@@ -125,7 +126,7 @@ pub enum GRef {
     Decl(NodeId, String),
 }
 
-/// 名前の解決の結果(Diktor の `Tree.resolved`)である。
+/// 名前解決の結果である(Diktor の `Tree.resolved`)。
 #[derive(Clone, Debug)]
 pub enum Resolved {
     Var(GRef),
@@ -137,10 +138,10 @@ pub enum Resolved {
     CtorPat(Oid, Oid, Vec<Option<usize>>),
 }
 
-/// 辞書の鍵(型変数の番号とクラス)である。
+/// 辞書のキーである。型変数の番号とクラスの番号の組で表す。
 pub type DKey = (Oid, Oid);
 
-/// 証拠(Diktor の `Tree.evidence`)である。
+/// 証拠(evidence。どのインスタンスの辞書を使うかを表す項)である。Diktor の `Tree.evidence` に対応する。
 #[derive(Clone, Debug)]
 pub enum Evidence {
     Param(DKey),
@@ -150,7 +151,7 @@ pub enum Evidence {
     Hole(HoleId),
 }
 
-/// 辞書の穴(Diktor の `Tree.hole`)である。
+/// 辞書の穴である(Diktor の `Tree.hole`)。
 #[derive(Clone, Debug)]
 pub struct Hole {
     pub h_id: Oid,
@@ -160,7 +161,7 @@ pub struct Hole {
     pub h_sol: Option<Evidence>,
 }
 
-/// 節点の辞書の情報(Diktor の `Tree.dict_info`)である。
+/// 木のノードに付ける辞書の情報である(Diktor の `Tree.dict_info`)。
 #[derive(Clone, Debug)]
 pub enum DictInfo {
     Use(Vec<HoleId>),
@@ -169,7 +170,7 @@ pub enum DictInfo {
     Instance(Vec<DKey>),
 }
 
-/// 型検査の失敗である(Diktor の例外)。
+/// 型検査の失敗を表す。各バリアントは Diktor の例外に対応する。
 #[derive(Clone, Debug)]
 pub enum Fail {
     /// `Type_error`。
@@ -182,33 +183,33 @@ pub enum Fail {
     NotImplAt(Span, String),
     /// `Import_error`。
     Import(Span, String),
-    /// `Unify.Unsolved_param`(穴)。
+    /// `Unify.Unsolved_param`。値は辞書の穴である。
     Unsolved(HoleId),
-    /// スタックの不足(`Stack_overflow`)。
+    /// スタック不足(`Stack_overflow`)。
     Limit,
-    /// 内部の誤り(`Panic`)。
+    /// 内部エラー(`Panic`)。
     Bug(String),
 }
 
-/// 型検査の結果である。
+/// 型検査の関数が返す結果の型である。失敗は [`Fail`] で表す。
 pub type R<T> = Result<T, Fail>;
 
-/// 位置の無い型エラーで失敗する(Diktor の `type_error`)。
+/// 位置のない型エラーを表す `Err` を返す(Diktor の `type_error`)。
 pub(crate) fn terr<T>(msg: impl Into<String>) -> R<T> {
     Err(Fail::Type(msg.into()))
 }
 
-/// 内部の誤りで失敗する(Diktor の `bug`)。
+/// 内部エラーを表す `Err` を返す。メッセージの先頭に `[BUG] ` を付ける(Diktor の `bug`)。
 pub(crate) fn bug<T>(msg: impl Into<String>) -> R<T> {
     Err(Fail::Bug(format!("[BUG] {}", msg.into())))
 }
 
-/// 未実装で失敗する(Diktor の `noimpl`)。
+/// 未実装の機能を使ったことを表す `Err` を返す(Diktor の `noimpl`)。
 pub(crate) fn noimpl<T>(msg: impl Into<String>) -> R<T> {
     Err(Fail::NotImpl(msg.into()))
 }
 
-/// 位置の無い失敗に位置を付ける(Diktor の `at_node`)。
+/// 位置のない失敗に位置を付ける(Diktor の `at_node`)。
 pub(crate) fn at<T>(span: Span, r: R<T>) -> R<T> {
     match r {
         Err(Fail::Type(m)) => Err(Fail::TypeAt(span, m)),
@@ -218,23 +219,23 @@ pub(crate) fn at<T>(span: Span, r: R<T>) -> R<T> {
 }
 
 thread_local! {
-    /// いまのスレッドで使ってよいスタックの下端である。
+    /// 現在のスレッドで使ってよいスタックの下端のアドレスである。
     /// 決めていない間は `usize::MAX` で、どの [`guard`] も失敗する。
     static STACK_FLOOR: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
 }
 
-/// 大きさ `stack_bytes` のスタックで、[`guard`] が残しておく余白のバイト数である。
+/// サイズが `stack_bytes` のスタックで、[`guard`] が使わずに残す余裕のバイト数を返す。
 ///
-/// 余白は、検査を通らない再帰(木を捨てることなど)と、限度で止まった後の後始末に使う。
+/// 余裕は、スタックの残りを調べない再帰(木の解放など)と、スタック不足で型検査をやめた後の後始末に使う。
 pub(crate) fn guard_margin(stack_bytes: usize) -> usize {
     (stack_bytes / 8).clamp(256 << 10, 4 << 20)
 }
 
-/// いまのスレッドのスタックの下端を決める。
+/// 現在のスレッドで使ってよいスタックの下端を決める。
 ///
-/// `stack_bytes` はスレッドのスタックの大きさである。
-/// 下端から [`guard_margin`] バイト手前までを使ってよい範囲にする。
-/// スレッドの入口で呼ぶ([`check::on_check_stack`] が呼ぶ)。
+/// `stack_bytes` はスレッドのスタックサイズである。
+/// スタックの実際の下端より [`guard_margin`] バイト手前までを、使ってよい範囲にする。
+/// スレッドの先頭で呼ぶ。[`check::on_check_stack`] が呼んでいる。
 pub(crate) fn set_stack_floor(stack_bytes: usize) {
     let here = 0u8;
     let sp = std::ptr::addr_of!(here) as usize;
@@ -244,8 +245,8 @@ pub(crate) fn set_stack_floor(stack_bytes: usize) {
 
 /// スタックの残りが足りなければ [`Fail::Limit`] で失敗する。
 ///
-/// 下端を決めていないスレッドでは、つねに失敗する。
-/// 型検査を [`check::on_check_stack`] の外で走らせても、プロセスがスタックあふれで落ちないようにするためである。
+/// 下端を決めていないスレッドでは、呼ぶたびに失敗する。
+/// 型検査を [`check::on_check_stack`] の外で実行しても、プロセスがスタックオーバーフローで異常終了しないようにするためである。
 #[inline]
 pub(crate) fn guard() -> R<()> {
     let here = 0u8;
@@ -257,27 +258,27 @@ pub(crate) fn guard() -> R<()> {
     }
 }
 
-/// 宣言列を処理するときの出力の行き先(Diktor の `process_decls` の `emit`)である。
+/// 宣言の並びを処理するときに、何を出力するかを表す(Diktor の `process_decls` の `emit`)。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Emit {
-    /// 何も出さない(プレリュード)。
+    /// 何も出力しない(プレリュード)。
     None,
-    /// 型の行と警告を出す(起点の単位)。
+    /// 型を表示する行と警告を出力する(起点の単位)。
     All,
-    /// 警告だけを、単位のパスを前置して出す(起点でない単位)。
+    /// 警告だけを、先頭に単位のパスを付けて出力する(起点でない単位)。
     Warnings(UnitId),
 }
 
-/// `type_check` の出力の行(Diktor の `Elab.out_line`)である。
+/// `type_check` が出力する 1 行である(Diktor の `Elab.out_line`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutLine {
     Binding(String),
     Warning(String),
 }
 
-/// 型検査の文脈である(Diktor の大域の状態のすべて)。
+/// 型検査のコンテキストである。Diktor がグローバルに持つ状態を、すべてここに持つ。
 ///
-/// 対話的な実行は、入力の前に印を取り、受理しなかった入力の後で印の時点に戻す(`Tc::snapshot`)。
+/// 対話的な実行(REPL)は、入力の前にマークを取り、受理しなかった入力の後でコンテキストをマークの時点に戻す(`Tc::snapshot`)。
 #[derive(Clone)]
 pub struct Tc {
     // ---- 通し番号と名前 ----
@@ -320,7 +321,8 @@ pub struct Tc {
     pub(crate) resolved: fx::NodeMap<Resolved>,
     pub(crate) dict: fx::NodeMap<DictInfo>,
     pub(crate) holes_arena: Vec<Hole>,
-    /// セルと穴の書き換えの記録(対話的な実行の入力の取り消し。[`Tc::snapshot`])。
+    /// セルの書き換えの記録である。続く `hole_trail` は穴の、`kind_trail` はカインドの書き換えの記録である。
+    /// 対話的な実行で、入力を取り消すときに使う([`Tc::snapshot`])。
     cell_trail: fx::Trail<TVar>,
     hole_trail: fx::Trail<Hole>,
     kind_trail: fx::Trail<KNode>,
@@ -353,7 +355,7 @@ pub struct Tc {
     pub(crate) pending: Vec<exhaust::Entry>,
 }
 
-/// 精緻化の環境(Diktor の `Elab.env`)である。
+/// 精緻化の環境である(Diktor の `Elab.env`)。
 #[derive(Clone)]
 pub struct Env {
     pub(crate) values: PMap<Rc<str>, Ty>,
@@ -370,7 +372,9 @@ impl Default for Tc {
 }
 
 impl Tc {
-    /// Diktor のモジュールの初期化(syntax.ml の `Type` の定数と decls.ml の `register_builtins`)を済ませた文脈。
+    /// Diktor の各モジュールが初期化で行う処理を済ませたコンテキストを作る。
+    ///
+    /// syntax.ml の `Type` の定数を作り、decls.ml の `register_builtins` を呼び、decls.ml と exhaust.ml が初期化で行う `intern` を同じ順に行う。
     pub fn new() -> Tc {
         let mut tc = Tc {
             next_oid: 0,
@@ -432,7 +436,7 @@ impl Tc {
         tc.row_empty = tc.mk(TyNode::RowEmpty);
         tc.k_star = tc.mk_kind(KNode::Star);
         tc.k_row = tc.mk_kind(KNode::Row);
-        // syntax.ml の Type の定数(定義の順に intern する)。
+        // syntax.ml の Type の定数。Diktor が定義している順に intern する。
         tc.l_item = tc.intern("_item");
         tc.o_boolean = tc.intern("Boolean");
         tc.t_boolean = tc.con0(tc.o_boolean);
@@ -464,14 +468,14 @@ impl Tc {
 
     // ---- 通し番号と名前 ----
 
-    /// 新しい通し番号(Diktor の `new_oid`)。
+    /// 新しい通し番号を返す(Diktor の `new_oid`)。
     pub(crate) fn new_oid(&mut self) -> Oid {
         let r = self.next_oid;
         self.next_oid += 1;
         r
     }
 
-    /// 名前を番号にする(Diktor の `Type.intern`)。
+    /// 名前を番号にする(Diktor の `Type.intern`)。同じ名前には同じ番号を返す。
     pub fn intern(&mut self, name: &str) -> Oid {
         if let Some(&o) = self.intern_map.get(name) {
             return o;
@@ -483,7 +487,7 @@ impl Tc {
         o
     }
 
-    /// 番号の名前(Diktor の `Type.name_of`)。
+    /// 番号 `o` の名前を返す(Diktor の `Type.name_of`)。名前のない番号には `?` と番号をつないだ文字列を返す。
     pub fn name_of(&self, o: Oid) -> Rc<str> {
         self.name_map
             .get(&o)
@@ -491,7 +495,7 @@ impl Tc {
             .unwrap_or_else(|| Rc::from(format!("?{o}")))
     }
 
-    /// 番号の表示名(Diktor の `Type.display_of`)。
+    /// 番号 `o` の表示名を返す(Diktor の `Type.display_of`)。
     pub fn display_of(&self, o: Oid) -> String {
         display(&self.name_of(o)).to_string()
     }
@@ -503,12 +507,12 @@ impl Tc {
         Ty((self.tys.len() - 1) as u32)
     }
 
-    /// 型の形(写し)。
+    /// 型 `t` のノードをコピーして返す。
     pub(crate) fn node(&self, t: Ty) -> TyNode {
         self.tys[t.0 as usize].clone()
     }
 
-    /// 型の形(借用)。
+    /// 型 `t` のノードへの参照を返す。
     pub(crate) fn node_ref(&self, t: Ty) -> &TyNode {
         &self.tys[t.0 as usize]
     }
@@ -541,12 +545,12 @@ impl Tc {
         self.mk(TyNode::Var(c))
     }
 
-    /// セルの状態。
+    /// セル `c` の状態を返す。
     pub(crate) fn cell(&self, c: Cell) -> &TVar {
         &self.cells[c.0 as usize]
     }
 
-    /// セルを書き換える(Diktor の `set_tv`)。
+    /// セルを書き換える(Diktor の `set_tv`)。入力を取り消せるように、書き換える前の値を記録する。
     pub(crate) fn set_tv(&mut self, c: Cell, v: TVar) {
         self.cell_trail.record(&self.cells, c.0 as usize);
         self.cells[c.0 as usize] = v;
@@ -557,7 +561,7 @@ impl Tc {
         Cell((self.cells.len() - 1) as u32)
     }
 
-    /// 型変数のセルなら、その添字。
+    /// `t` のノードが型変数なら、そのセルの添字を返す。代表まではたどらない。
     pub(crate) fn var_cell(&self, t: Ty) -> Option<Cell> {
         match self.node_ref(t) {
             TyNode::Var(c) => Some(*c),
@@ -565,7 +569,7 @@ impl Tc {
         }
     }
 
-    /// 型を代表に辿る(Diktor の `Type.repr`)。リンクは辿った先に縮める。
+    /// 型を代表までたどる(Diktor の `Type.repr`)。途中のリンクは、代表を直接指すように書き換える(経路圧縮)。
     pub(crate) fn repr(&mut self, t: Ty) -> Ty {
         let mut chain: Vec<(Cell, Ty)> = Vec::new();
         let mut cur = t;
@@ -608,7 +612,7 @@ impl Tc {
         }
     }
 
-    /// 型の適用(Diktor の `Type.tapp`)。
+    /// 型 `f` を型 `a` に適用した型を作る(Diktor の `Type.tapp`)。
     pub(crate) fn tapp(&mut self, f: Ty, a: Ty) -> Ty {
         match self.node(f) {
             TyNode::Con(c, args) => {
@@ -620,7 +624,7 @@ impl Tc {
         }
     }
 
-    /// 適用の背骨(Diktor の `Type.app_spine`)。
+    /// 型適用を、先頭の型と引数の並びに分解する(Diktor の `Type.app_spine`)。
     pub(crate) fn app_spine(&mut self, t: Ty) -> (Ty, Vec<Ty>) {
         let t = self.repr(t);
         match self.node(t) {
@@ -633,7 +637,7 @@ impl Tc {
         }
     }
 
-    /// 行の欄と末尾(Diktor の `Type.row_fields`)。
+    /// 行を、フィールド(ラベルと型の組)の並びと行の末尾に分解する(Diktor の `Type.row_fields`)。
     pub(crate) fn row_fields(&mut self, t: Ty) -> (Vec<(Oid, Ty)>, Ty) {
         let mut fs = Vec::new();
         let mut cur = self.repr(t);
@@ -648,13 +652,13 @@ impl Tc {
         }
     }
 
-    /// 行の末尾の型変数(Diktor の `Type.row_tail_var`)。
+    /// 行の末尾が型変数なら、そのセルの添字を返す(Diktor の `Type.row_tail_var`)。
     pub(crate) fn row_tail_var(&mut self, t: Ty) -> Option<Cell> {
         let (_, tail) = self.row_fields(t);
         self.var_cell(tail)
     }
 
-    /// 2 つの行をつなぐ(Diktor の `Type.row_append`)。
+    /// 2 つの行を連結する(Diktor の `Type.row_append`)。
     pub(crate) fn row_append(&mut self, a: Ty, b: Ty) -> R<Ty> {
         let mut fs = Vec::new();
         let mut cur = self.repr(a);
@@ -681,18 +685,18 @@ impl Tc {
         Ok(acc)
     }
 
-    /// 型の形が空の行か(構造の比較 `= TRowEmpty`)。
+    /// `t` のノードが空の行なら真を返す。代表まではたどらない(Diktor の構造の比較 `= TRowEmpty`)。
     pub(crate) fn is_row_empty(&self, t: Ty) -> bool {
         matches!(self.node_ref(t), TyNode::RowEmpty)
     }
 
-    /// `repr t` が空の行か。
+    /// `t` を代表までたどった型が空の行なら真を返す。
     pub(crate) fn repr_is_empty(&mut self, t: Ty) -> bool {
         let t = self.repr(t);
         self.is_row_empty(t)
     }
 
-    /// 新しい型変数(Diktor の `Type.new_var`)。
+    /// 新しい型変数を作る(Diktor の `Type.new_var`)。
     pub(crate) fn new_var_k(&mut self, kind: Kind, classes: Vec<Oid>, level: i32) -> Ty {
         let vid = self.new_oid();
         let c = self.new_cell(TVar::Unbound(VarInfo {
@@ -714,7 +718,7 @@ impl Tc {
         self.new_var_k(k, Vec::new(), level)
     }
 
-    /// 新しい剛定数のセル(Diktor の `Type.new_rigid_ref`)。
+    /// 新しいスコーレム定数(型パラメータを固定した定数。コードでは `Rigid`)のセルを作る(Diktor の `Type.new_rigid_ref`)。
     pub(crate) fn new_rigid_ref(&mut self, kind: Kind, classes: Vec<Oid>, level: i32) -> Cell {
         let vid = self.new_oid();
         self.new_cell(TVar::Rigid(VarInfo {
@@ -730,7 +734,7 @@ impl Tc {
         self.tvar(c)
     }
 
-    /// 一般化された型変数(Diktor の `Decls.generic`)。
+    /// 一般化された型変数を作る(Diktor の `Decls.generic`)。
     pub(crate) fn generic(&mut self, kind: Kind, classes: Vec<Oid>) -> Ty {
         let vid = self.new_oid();
         let c = self.new_cell(TVar::Generic(VarInfo {
@@ -742,7 +746,7 @@ impl Tc {
         self.tvar(c)
     }
 
-    /// 引数の閉じた行(Diktor の `closed_args_row`、`closed_item_row`)。
+    /// 引数の型の並び `tys` から、各型をラベル `_item` のフィールドにした閉じた行を作る(Diktor の `closed_args_row`、`closed_item_row`)。
     pub(crate) fn closed_item_row(&mut self, tys: &[Ty]) -> Ty {
         let mut acc = self.row_empty;
         for &t in tys.iter().rev() {
@@ -758,7 +762,7 @@ impl Tc {
         Kind((self.kinds.len() - 1) as u32)
     }
 
-    /// 新しいカインド変数(Diktor の `new_kind_var`)。
+    /// 新しいカインド変数を作る(Diktor の `new_kind_var`)。
     pub(crate) fn new_kind_var(&mut self) -> Kind {
         let id = self.new_oid();
         self.mk_kind(KNode::Var(id, None))
@@ -768,7 +772,7 @@ impl Tc {
         self.mk_kind(KNode::Arrow(a, b))
     }
 
-    /// `[_, ...] Type`(Diktor の `k_arrow`)。
+    /// 引数が `arity` 個のカインド `[_, ...] Type` を作る(Diktor の `k_arrow`)。
     pub(crate) fn k_arrow(&mut self, arity: u32) -> Kind {
         if arity == 0 {
             self.k_star
@@ -779,7 +783,7 @@ impl Tc {
         }
     }
 
-    /// カインドを代表に辿る(Diktor の `kind_repr`)。
+    /// カインドを代表までたどる(Diktor の `kind_repr`)。
     pub(crate) fn kind_repr(&mut self, k: Kind) -> Kind {
         match self.kinds[k.0 as usize] {
             KNode::Var(id, Some(next)) => {
@@ -794,7 +798,7 @@ impl Tc {
         }
     }
 
-    /// 代表に辿ったカインドの形。
+    /// カインドを代表までたどり、その構造を返す。
     pub(crate) fn kview(&mut self, k: Kind) -> KView {
         let k = self.kind_repr(k);
         match self.kinds[k.0 as usize] {
@@ -812,10 +816,10 @@ impl Tc {
         }
     }
 
-    /// カインドを同じにする(Diktor の `same_kind`)。
+    /// 2 つのカインドを単一化し、一致させられれば真を返す(Diktor の `same_kind`)。
     ///
-    /// Diktor と同じく出現の検査をしないので、カインドは循環しうる。
-    /// 循環したカインドどうしの比較は再帰が尽きず、スタックの不足([`Fail::Limit`])で止まる。
+    /// Diktor と同じく occurs check をしないので、カインドは循環することがある。
+    /// 循環したカインドどうしを比べると再帰が終わらず、スタック不足([`Fail::Limit`])で失敗する。
     pub(crate) fn same_kind(&mut self, a: Kind, b: Kind) -> R<bool> {
         guard()?;
         let ra = self.kind_repr(a);
@@ -840,7 +844,7 @@ impl Tc {
         )
     }
 
-    /// 残ったカインド変数を `Type` にする(Diktor の `default_kind`)。
+    /// 決まらずに残ったカインド変数を `Type` に決める(Diktor の `default_kind`)。
     pub(crate) fn default_kind(&mut self, k: Kind) -> R<()> {
         guard()?;
         match self.kview(k) {
@@ -857,7 +861,7 @@ impl Tc {
         Ok(())
     }
 
-    /// 矢印のカインドの引数の個数(Diktor の `show_kind` の `args` と、elab.ml の `arity`)。
+    /// 矢印のカインドが取る引数の個数を返す(Diktor の `show_kind` の `args` と、elab.ml の `arity`)。
     pub(crate) fn kind_arity(&mut self, k: Kind) -> R<usize> {
         guard()?;
         match self.kview(k) {
@@ -866,7 +870,7 @@ impl Tc {
         }
     }
 
-    /// カインドの表示(Diktor の `show_kind`)。
+    /// カインドを文字列にする(Diktor の `show_kind`)。
     pub(crate) fn show_kind(&mut self, k: Kind) -> R<String> {
         Ok(match self.kview(k) {
             KView::Star => "Type".to_string(),
@@ -907,7 +911,7 @@ impl Tc {
         &self.holes_arena[h.0 as usize]
     }
 
-    /// 穴の解を書く。
+    /// 穴 `h` の解を設定する。入力を取り消せるように、書き換える前の値を記録する。
     pub(crate) fn set_hole_sol(&mut self, h: HoleId, ev: Evidence) {
         self.hole_trail.record(&self.holes_arena, h.0 as usize);
         self.holes_arena[h.0 as usize].h_sol = Some(ev);
@@ -919,9 +923,9 @@ impl Tc {
     }
 }
 
-/// 名前の表示形(Diktor の `Type.display`)。
+/// 名前の表示名を返す(Diktor の `Type.display`)。
 ///
-/// 単位の印の付いた綴り `%N.name` は、印を除いた `name` で表示する。
+/// 単位の接頭辞 `%N.` が付いた内部名 `%N.name` からは、接頭辞を取り除いた `name` を返す。
 pub fn display(name: &str) -> &str {
     if name.len() > 1 && name.starts_with('%') {
         match name.find('.') {

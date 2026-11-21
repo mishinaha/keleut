@@ -1,7 +1,7 @@
-//! 型の表示である(Diktor の show.ml、第9章)。
+//! 型を Keleut の構文の文字列にして表示する(Diktor の show.ml、第9章)。
 //!
-//! 型変数の名前は、表示の中で初めて現れた順に、カインドごとの名簿から振る。
-//! 同じ表示名の別の型(別の単位の同名の型)が 1 つの表示に並ぶときは、単位の名前を添える。
+//! 型変数の名前は、1 回の表示の中で初めて現れた順に、カインドごとの名前の候補の並びから割り当てる。
+//! 表示名が同じで別の型(別の単位にある同名の型)が 1 回の表示に並ぶときは、型の名前に単位のパスを括弧で添える。
 
 use super::fx::{HashMap, HashSet};
 use super::{Fail, KView, Oid, R, TVar, Tc, Ty, TyNode, VarInfo, guard};
@@ -321,7 +321,11 @@ impl Tc {
         }
     }
 
-    /// 型の列を表示し、制約の前置きを返す(Diktor の `show_all`)。
+    /// 複数の型をまとめて文字列にする(Diktor の `show_all`)。
+    ///
+    /// 型変数の名前の割り当てを `ts` の型の間で共有するので、同じ型変数はどの文字列でも同じ名前になる。
+    /// 返り値は、型ごとの文字列と、制約の付いた型変数を並べた `[A: Add + Mul] ` の形の接頭辞である。
+    /// 制約の付いた型変数がなければ、接頭辞は空である。
     fn show_all(&mut self, ts: &[Ty]) -> R<(Vec<String>, String)> {
         let mut st = St {
             seen: HashMap::default(),
@@ -358,22 +362,25 @@ impl Tc {
         Ok((strs, ctx))
     }
 
-    /// 型の表示(Diktor の `Show.show`)。
+    /// 型 1 つを文字列にする(Diktor の `Show.show`)。
+    /// 制約の付いた型変数があれば、制約の接頭辞を型の前に付ける。
     ///
-    /// 表示の途中でスタックが足りなくなったときは、[`Fail::Limit`] で失敗する。
-    /// Diktor の `show` が `Stack_overflow` を投げて限度の診断になるのと同じである。
+    /// 途中でスタックが足りなくなったときは、[`Fail::Limit`] で失敗する。
+    /// Diktor の `show` が `Stack_overflow` を投げ、`処理系の限度` の診断になるのと同じである。
     pub(crate) fn show(&mut self, t: Ty) -> R<String> {
         let (strs, ctx) = self.show_all(&[t]).map_err(|_| Fail::Limit)?;
         Ok(format!("{ctx}{}", strs[0]))
     }
 
-    /// 2 つの型の表示(Diktor の `Show.show2`)。
+    /// 2 つの型を `A と B` の形の 1 つの文字列にする(Diktor の `Show.show2`)。
+    /// 制約の接頭辞は付けない。
     pub(crate) fn show2(&mut self, a: Ty, b: Ty) -> R<String> {
         let (strs, _) = self.show_all(&[a, b]).map_err(|_| Fail::Limit)?;
         Ok(format!("{} と {}", strs[0], strs[1]))
     }
 
-    /// 2 つの型の表示の組(Diktor の `Show.show_pair`)。
+    /// 2 つの型を、型変数の名前を共有した 2 つの文字列にして返す(Diktor の `Show.show_pair`)。
+    /// 制約の接頭辞は付けない。
     pub(crate) fn show_pair(&mut self, a: Ty, b: Ty) -> R<(String, String)> {
         let (mut strs, _) = self.show_all(&[a, b]).map_err(|_| Fail::Limit)?;
         let y = strs.pop().unwrap_or_default();

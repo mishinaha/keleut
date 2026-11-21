@@ -1,15 +1,15 @@
-//! `keleut dump tokens|ast` の印字である(Diktor の driver.ml の `dump_tokens_file` と dump.ml、第4章)。
+//! `keleut dump tokens` と `keleut dump ast` の出力を作る(Diktor の driver.ml の `dump_tokens_file` と、dump.ml に対応する)。
 //!
-//! トークンは `%4d  %s` の形で、行番号とトークンの表記を 1 行ずつ出す。
-//! AST は S 式にして、OCaml の `Format` と同じ hov 箱で印字する([`crate::oformat`])。
-//! 既定値の欄(空の型パラメータ、省いた注釈など)は出さない。
+//! トークンは、行番号とトークンの表記を `%4d  %s` の形式で 1 行ずつ出力する。
+//! AST は S 式に変換し、OCaml の `Format` と同じ hov ボックスで整形して出力する([`crate::oformat`])。
+//! 既定値のままの部分(空の型パラメータ、省略した注釈など)は出力しない。
 
 use crate::ast::*;
 use crate::escape::ocaml_escaped;
 use crate::lexer::Entry;
 use crate::oformat::{BoxType, Formatter};
 
-/// トークンの列を印字した行を返す。
+/// トークン列を 1 トークン 1 行の形式で書いたバイト列を返す。
 pub fn tokens_text(tokens: &[Entry]) -> Vec<u8> {
     let mut out = Vec::new();
     for e in tokens {
@@ -18,7 +18,7 @@ pub fn tokens_text(tokens: &[Entry]) -> Vec<u8> {
     out
 }
 
-/// S 式である。
+/// S 式である。`A` はアトム、`L` はリストである。
 enum Sexp {
     A(String),
     L(Vec<Sexp>),
@@ -34,11 +34,12 @@ fn quoted(s: &str) -> String {
     format!("\"{}\"", ocaml_escaped(s.as_bytes()))
 }
 
-/// S 式を印字する(Diktor の `pp`)。入れ子をスタックでたどり、再帰しない。
+/// S 式を整形して出力する(Diktor の `pp` に対応する)。
+/// 入れ子は明示的なスタックでたどり、再帰しない。
 fn pp(f: &mut Formatter, s: &Sexp) {
     enum W<'a> {
         Node(&'a Sexp),
-        /// 残りの要素と、それが箱の最初の要素か。
+        /// リストのまだ出力していない要素と、その先頭がリストの最初の要素なら真になるフラグ。
         Rest(&'a [Sexp], bool),
     }
     let mut stack = vec![W::Node(s)];
@@ -372,7 +373,8 @@ fn decl(d: &Decl) -> Sexp {
     }
 }
 
-/// import 文の行(Diktor の `dump_imports`)。`Printf` で書くので、`Format` を通らない。
+/// import 文を 1 文 1 行の形式で書いたバイト列を返す(Diktor の `dump_imports` に対応する)。
+/// Diktor が `Printf` で書く行なので、`Format` の整形を通さない。
 pub fn import_lines(imports: &[ImportDecl]) -> Vec<u8> {
     let mut out = Vec::new();
     for im in imports {
@@ -388,7 +390,7 @@ pub fn import_lines(imports: &[ImportDecl]) -> Vec<u8> {
     out
 }
 
-/// 1 つの宣言を S 式にして整形し、改行まで書いた出力を返す(Diktor の `dump_decls` の 1 回分)。
+/// 宣言 1 つを S 式に変換して整形し、末尾の改行まで含めた出力を返す(Diktor の `dump_decls` の 1 回分に対応する)。
 pub fn decl_text(f: &mut Formatter, d: &Decl) -> Vec<u8> {
     let s = decl(d);
     pp(f, &s);
