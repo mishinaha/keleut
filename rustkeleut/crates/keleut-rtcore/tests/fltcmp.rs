@@ -4,7 +4,7 @@
 //! 1 つは、乱数と 2 の冪から作る 1,998,964 件の候補(`fltcmp_candidates`)で、ファイル名と出力では fltcmp と呼ぶ。
 //! もう 1 つは境界値の集合(`boundary_values`)である。
 //! 期待値は、Diktor の `float_repr`(`diktor/lib/value.ml`)と同じ手順を glibc の `snprintf` で行って作る。
-//! NaN は glibc に渡さず、LangSpec 16.2 節の `nan` と比較する。
+//! NaN は glibc に渡さず、LangSpec §16.2 の `nan` と比較する。
 //!
 //! 入力と期待値は `<target>/rtcore/` に書き、`tests/wasm_check.mjs` が wasm32 版の検査に使う。
 

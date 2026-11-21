@@ -120,7 +120,7 @@ pub fn log(x: f64) -> f64 {
     unsafe { sys::krt_log(x) }
 }
 
-/// `x` を LangSpec 16.2 節の表記で `buf` に書き、書いた部分を文字列として返す。
+/// `x` を LangSpec §16.2 の表記で `buf` に書き、書いた部分を文字列として返す。
 pub fn show_f64_into(x: f64, buf: &mut [u8; F64_SHOW_MAX]) -> &str {
     // SAFETY: rtcore が書くのは、NUL を含めて F64_SHOW_MAX バイト以内である。
     let n = unsafe { sys::krt_f64_show_bits(x.to_bits(), buf.as_mut_ptr().cast::<c_char>()) };
@@ -128,7 +128,7 @@ pub fn show_f64_into(x: f64, buf: &mut [u8; F64_SHOW_MAX]) -> &str {
     std::str::from_utf8(&buf[..n]).expect("rtcore の show は ASCII を書く")
 }
 
-/// `x` を LangSpec 16.2 節の表記で文字列にして返す。
+/// `x` を LangSpec §16.2 の表記で文字列にして返す。
 pub fn show_f64(x: f64) -> String {
     let mut buf = [0u8; F64_SHOW_MAX];
     show_f64_into(x, &mut buf).to_string()

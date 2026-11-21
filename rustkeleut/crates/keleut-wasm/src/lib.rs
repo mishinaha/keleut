@@ -15,6 +15,7 @@
 //! | [`check`] | wasmparser による検証と trap の検査 |
 //! | [`launch`] | `keleut run --backend wasm` と `keleut build` の出力の書き出しと Node の起動 |
 //!
+//! LIR の命令の意味と、エフェクトの規約は `rustkeleut/doc/lir.md`(以下 `doc/lir.md`)にある。
 //! 値の表現と制御の構造は、`rt` と `func` の冒頭に書く。
 //! 分類 G の操作節(G の節)の継続は、フレームの記録の並びとして持つ(`func` の冒頭の「継続のキャプチャと再開」)。
 
@@ -88,8 +89,10 @@ pub const E_RRES: u64 = 8 * 5 + 24 * 3 + 64;
 ///
 /// `return` 節と N の節は、`$rt_handle` が末尾呼び出しで呼んで自分のフレームと置き換えるので、ハンドラ式を書いた関数と同じ深さに重なる。
 /// これらの節の連鎖の長さが `r` なら、深さ `h` には、ハンドラ式を書いた関数(上限 `B_wasm − E_rth − E_rres`)、
-/// `r` 個の節(どれも上限 `B_wasm`)、最後の節が呼ぶ `$rt_handle` と `rt_resume` が重なる。
-/// 和は `B_wasm + r × B_wasm − E_rth` で、`R(r)` はこの和から `B_wasm` を引いたものである。
+/// `r` 個の節(どれも上限 `B_wasm`)、`rt_resume`(`E_rres`)が重なる。
+/// 節を呼んだ `$rt_handle` のフレームは、末尾呼び出しでその節のフレームに置き換わっているので、数えない。
+/// 最後の節が `$rt_handle` を非末尾呼び出しで呼ぶ場合は、その節の上限が `B_wasm − E_rth − E_rres` になるので(`func` の `budget_of`)、節とその `$rt_handle` を合わせても、節 1 個に割り当てた `B_wasm` に収まる。
+/// 深さ `h` に重なるものの和は `(B_wasm − E_rth − E_rres) + r × B_wasm + E_rres = B_wasm + r × B_wasm − E_rth` で、`R(r)` はこの和から `B_wasm` を引いたものである。
 /// 連鎖の 2 つ目以降の節は、前の節が非末尾呼び出しで呼んだ `$rt_handle` の位置に重なる。
 /// その `$rt_handle` は上限に入っていないので、節ごとに `B_wasm` を足す。
 ///

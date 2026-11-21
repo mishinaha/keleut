@@ -8,7 +8,7 @@
 //! | [`run_program_with`] | ネイティブコードのバックエンド(JIT。境界は [`native`])を付けたインタプリタで実行する |
 //!
 //! 実行スレッドは、プログラムを実行するために作る専用のスレッドである。
-//! エフェクト(`handle`、ユーザの操作の `perform`、`resume`)は、`doc/lir.md` の 16 節の規約で実行する。
+//! エフェクト(`handle`、ユーザの操作の `perform`、`resume`)は、`rustkeleut/doc/lir.md`(以下 `doc/lir.md`)の 16 節の規約で実行する。
 //! 実装の説明は [`interp`] の冒頭にある。
 
 pub mod bytecode;
@@ -33,7 +33,8 @@ pub struct RunOptions {
     /// 論理的な深さの上限 `L`。
     pub max_depth: u64,
     /// 実行スレッドのネイティブスタックのサイズ(バイト)。
-    /// [`MIN_NATIVE_STACK`] 以上にする。
+    /// [`MIN_NATIVE_STACK`] 以上でなければならない。
+    /// この crate は検査しないので、呼び出し元が検査する。
     pub native_stack: u64,
     /// 真なら、`--gc-stress` の規則で GC を実行する(規則は `keleut_rt::gc::STRESS_RATIO` の説明にある)。
     pub gc_stress: bool,

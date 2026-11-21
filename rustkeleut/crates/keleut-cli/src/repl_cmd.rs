@@ -997,7 +997,7 @@ fn dict_count(kp: &kir::Program, g: usize) -> usize {
 /// 初期化式は構文上の値なので、辞書を使わず、停止し、エフェクトを起こさない。
 /// 評価がエラーで止まったときは `<unevaluated>` と表示する。
 /// ただし、巻き戻さずに終了するエラー(`Stop::is_fatal`)と出力エラーは、そのまま返す。
-/// 型の先頭の型構成子が newtype で `Show` を満たす値は、フロントエンドがその値のために作った内部用のグローバル `$show` の関数を呼んで文字列にする。
+/// 型の先頭の型構成子が宣言表 `datas` にあり(`newtype` で宣言した型と、組み込みのデータ型)、その型が `Show` を満たす値は、フロントエンドがその値のために作った内部用のグローバル `$show` の関数を呼んで文字列にする。
 /// その関数がエラーで止まったら、入力を受理しない。
 fn display(
     it: &mut Interp<'_>,
@@ -1144,7 +1144,7 @@ fn show_value(rt: &Rt<'_>, w: Word, ls: &Layouts, root: usize) -> Vec<u8> {
                     .iter()
                     .map(|&l| p.labels[l as usize].as_str())
                     .collect();
-                // 型が持つレコードの行の順に並べ替える。レイアウトがないか、ラベルの集合が型と違えば、ラベル名の順にする。
+                // 型が持つレコードの行の順に並べ替える。レイアウトがないか、ラベルの集合が型と違えば、ラベルの表示名の順にし、表示名が同じなら内部名の順にする。
                 let mut order: Vec<(usize, usize)> = (0..n).map(|i| (i, 0)).collect();
                 order.sort_by(|&(a, _), &(b, _)| {
                     display_name(names[a])

@@ -850,7 +850,7 @@ fn live_lets(var: &str, nv: usize) -> (String, String) {
 /// その `cancel` 節は、値を生存させたままハンドラ式を直接書き、その本体は、値を生存させたまま `go` を非末尾呼び出しで呼ぶ。
 /// 論理的に同じ深さに、`go`、`$rt_handle`、`cancel` 節、内側の `$rt_handle` が重なる。
 /// 形 f では、内側のハンドラ式に分類 G の操作節 `ask` を追加し、本体が `ask` を `perform` してから `go` を呼ぶ。
-/// この節は実行時には末尾位置で `resume` するので、内側の `$rt_handle` は `rt_resume` として本体のフレームを復元する。
+/// この節は実行時には末尾位置で `resume` するので、内側の `$rt_handle` は `rt_resume` として本体を再開用エントリから再開する。
 /// どちらの形でも、`n` が 1 増えると論理的な深さが 2 段増える。
 /// 出力は、形 c が `2`、`bottom`、`7`、形 f が `bottom`、`7` である。
 fn cancel_nest_src(shape: char, nv: usize, n: u32) -> String {
@@ -1048,7 +1048,7 @@ fn worker_の経路で_g_の節の再開を重ねても_interp_と同じ() {
     if !have_node() {
         return;
     }
-    // 形 f では、内側の $rt_handle が rt_resume として本体のフレームを復元する。
+    // 形 f では、内側の $rt_handle が rt_resume として本体を再開用エントリから再開する。
     let d = scratch("cancel-nest-worker");
     let kel = d.join("f92.kel");
     std::fs::write(&kel, cancel_nest_src('f', 92, 299_000)).unwrap();

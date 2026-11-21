@@ -402,7 +402,7 @@ fn 検証器は壊した_lir_を拒否する() {
     p.funcs[f].frame.as_mut().unwrap().slot[raw] = keleut_lir::Slot::Any(0);
     assert!(keleut_lir::verify(&p).is_err());
 
-    // 生存区間の重なる 2 つのレジスタ(引数と、入口の unbox の結果)を、ボックス化していない値の領域の同じスロットに置く。
+    // 生存区間の重なる 2 つのレジスタ(入口の unbox の結果と、比較の定数 0)を、ボックス化していない値の領域の同じスロットに置く。
     let mut p = ok.clone();
     let raws: Vec<usize> = p.funcs[f]
         .regs
@@ -412,7 +412,7 @@ fn 検証器は壊した_lir_を拒否する() {
         .map(|(i, _)| i)
         .collect();
     assert!(raws.len() >= 2);
-    // 入口の unbox の結果は、本体の比較と再帰呼び出しの引数の計算まで生存する。
+    // 入口の unbox の結果は本体の比較まで生存するので、比較の定数の生存区間と重なる。
     let fr = p.funcs[f].frame.as_mut().unwrap();
     for &r in &raws {
         fr.slot[r] = keleut_lir::Slot::Raw(0);

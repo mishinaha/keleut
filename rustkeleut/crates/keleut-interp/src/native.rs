@@ -348,7 +348,9 @@ pub struct Native {
     pub alt_entries: u64,
     /// `interp_stub` から [`krt_interp_run`] に入った回数。
     pub stub_entries: u64,
-    /// ディスパッチループの呼び出しの最下段のフレームが JIT の関数を末尾呼び出しで呼び、ディスパッチループを抜けた回数([`TAILREQ`])。
+    /// JIT の関数への末尾呼び出しの依頼([`TAILREQ`])の回数(計測用)。
+    ///
+    /// [`krt_interp_run`] が依頼を返したときと、`Interp::call_native_request` が依頼を実行したときに数える。
     pub tail_requests: u64,
     /// ランタイム関数とネイティブの呼び出しが観測した、ネイティブスタックの最も深いアドレス(計測用)。
     pub min_sp: usize,
