@@ -1,15 +1,15 @@
-レコードを含む <値> の綴りの試験である(計画 261104-1 の 5.3 節、IRSpec 付録 B)。
-付録 B は、レコードのラベルの違うフィールドどうしの順を読み手に任せる。
-期待は RustKeleut の綴りで記録する。
-Diktor は値を作った順で書き、RustKeleut は正準の配置の順(ラベルの番号の昇順、同じラベルは最も外側から)で書く。
+レコードを含む <値> の表記のテストである(IRSpec 付録 B)。
+付録 B は、ラベルの違うフィールドどうしを並べる順序をリーダに任せている。
+期待出力は RustKeleut の表記で書いてある。
+Diktor は値を作った順に書き、RustKeleut は正準なレイアウトの順(ラベルの番号の昇順で、同じラベルのフィールドは最も外側から)に書く。
 
-各プログラムは同じ値を 2 つの形で書く。
-1 行目は cancel 節の打ち切りの記録で、kconform は記録と Diktor との比較の前にレコードのフィールドを並べ替える(D560)。
-そのため、この行ではフィールドの順以外の綴りを記録と Diktor に照らせる。
-2 行目は最上位の実行時エラーで、正規化が種別の語の後ろを切るので、記録と Diktor とは中身を比べない。
-後段の群の中(ki kj kt ka km kw と kr-*)は正規化せずに比べるので、2 つの行とも、印字の 2 つの実装(Rust の Rt::show と host の show)が同じ順で書くことを見張る。
+各プログラムは、同じ値を 2 つの形式で書く。
+1 行目は cancel 節の抑制の記録で、kconform は、期待出力や Diktor と比較する前にレコードのフィールドを並べ替える。
+そのため、この行では、フィールドの順序以外の表記を期待出力や Diktor と比較できる。
+2 行目は最上位の実行時エラーで、kconform が正規化で種別名の後ろを切り捨てるので、期待出力や Diktor とは内容を比較しない。
+バックエンドのグループ(ki kj kt ka km kw と kr-*)の中では正規化せずに比較するので、どちらの行でも、値を文字列化する 2 つの実装(crate keleut-rt の Rt::show と host の show)が同じ順序で書くことを検査できる。
 
-型の注釈のラベルの順と違う順で作ったレコード:
+型注釈のラベルの順序と違う順序で作ったレコード:
 
   $ cat > t1.kel <<'EOF'
   > effect A = { a: () => Unit }
@@ -40,7 +40,7 @@ Diktor は値を作った順で書き、RustKeleut は正準の配置の順(ラ�
   実行時エラー: match のどの節にも一致しません: {a = 1, b = 2, c = 3}
   [3]
 
-前に書いた別のレコードがラベルの番号を決める:
+先に書いた別のレコードでラベルの番号が決まる場合:
 
   $ cat > t3.kel <<'EOF'
   > effect A = { a: () => Unit }
@@ -72,7 +72,7 @@ Diktor は値を作った順で書き、RustKeleut は正準の配置の順(ラ�
   実行時エラー: match のどの節にも一致しません: #P({b = 1, a = 2})
   [3]
 
-同じラベルのフィールドは、どの読み手も最も外側から書く:
+同じラベルのフィールドは、どのリーダも最も外側から順に書く:
 
   $ cat > t7.kel <<'EOF'
   > effect A = { a: () => Unit }
@@ -103,7 +103,7 @@ Diktor は値を作った順で書き、RustKeleut は正準の配置の順(ラ�
   実行時エラー: match のどの節にも一致しません: ({b = 2, a = 1}, 3)
   [3]
 
-タプルを拡張したレコード(_item のフィールドと普通のラベルが混ざる):
+タプルを拡張したレコード(_item のフィールドと通常のラベルのフィールドが混ざる):
 
   $ cat > t11.kel <<'EOF'
   > effect A = { a: () => Unit }
@@ -139,19 +139,19 @@ Diktor は値を作った順で書き、RustKeleut は正準の配置の順(ラ�
   [3]
 
 ハンドラのどの節にも一致しない操作(付録 B の 9 番)は、ソースからは書けない。
-型検査が、各操作にガードの無い節を求めるからである。
-nomatch.kirt は、横の nomatch.kel を keleut emit-kir --text --no-prelude で書き、内側のハンドラ(main/inner)から b2 の節(op の項目と節の関数 main/inner$h0.op.b2)を手で除いたものである。
+型検査が、各操作にガードのない節を要求するからである。
+nomatch.kirt は、同じディレクトリの nomatch.kel を keleut emit-kir --text --no-prelude で書き出し、内側のハンドラ(main/inner)から b2 の節(op の項目と、節の関数 main/inner$h0.op.b2)を手で取り除いたものである。
 nomatch.kel はプレリュードを使わないので、Unit の代わりに {} と書く。
-nomatch.kir は、それを keleut kir asm で組んだものである。
-組の中で組まないのは、shim が keleut kir asm を組 dk でも本物の keleut に渡すので、基準の組の結果が RustKeleut のアセンブラに依るからである。
-2 つが同じプログラムであることを、印字して確かめる:
+nomatch.kir は、nomatch.kirt を keleut kir asm でバイナリに変換したものである。
+テストの中で変換せずに変換済みの nomatch.kir を置くのは、shim が keleut kir asm をペア dk でも本物の keleut に渡すので、テストの中で変換すると基準のペアの結果が RustKeleut のアセンブラで決まるからである。
+2 つが同じプログラムであることを、nomatch.kir をテキストに変換して確かめる:
 
   $ keleut kir dis nomatch.kir | cmp - nomatch.kirt && echo same
   same
 
-<値> は、操作の名前と引数の組の綴り(E.op({…},))である。
-cancel 節の中から 1 度、最上位から 1 度、b2 を送る。
-組 dk、dk-ir、kf、x-ir では、shim がこの呼び出しを diktor --run-ir に渡すので、Diktor の読み手とも比べる:
+<値> は、操作の名前と引数の組の表記(E.op({…},))である。
+操作 b2 を、cancel 節の中から 1 回、最上位から 1 回起こす。
+ペア dk、dk-ir、kf、x-ir では、shim がこの呼び出しを diktor --run-ir に渡すので、Diktor のリーダの結果とも比較する:
 
   $ keleut run nomatch.kir
   cancel 節で例外が抑制されました: handle のどの節にも一致しません: Two.b2({a = 1, b = 2, c = 3},)

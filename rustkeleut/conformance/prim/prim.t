@@ -1,7 +1,7 @@
-プリミティブと extern の試験である(計画 261024-1 の 4.9 節、IRSpec 付録 A.5 と付録 B)。
-期待は Diktor の木の評価器の結果と同じである。
+プリミティブと extern のテストである(IRSpec 付録 A.5 と付録 B)。
+期待出力は、Diktor の構文木の評価器の結果と同じである。
 
-付録 A.5 に無い実装名の extern "prim" は、宣言しただけでは誤りにならない:
+付録 A.5 にない実装名の extern "prim" は、宣言しただけではエラーにならない:
 
   $ cat > pdecl.kel <<'EOF'
   > extern "prim" let __no_such(x: Int32): Int32
@@ -10,7 +10,7 @@
   $ keleut run pdecl.kel
   before
 
-呼べば、それまでの出力の後で実行時エラーになる:
+呼び出すと、それまでの出力の後で実行時エラーになる:
 
   $ cat > pcall.kel <<'EOF'
   > extern "prim" let __no_such(x: Int32): Int32
@@ -42,7 +42,7 @@ extern "C" も同じである:
   実行時エラー: 未実装のプリミティブ: foo
   [3]
 
-表示名が実装名と違うときは、実装名も書く:
+表示名が実装名と違うときは、診断に実装名も書く:
 
   $ cat > mun.kel <<'EOF'
   > module M { pub extern "prim" let __no_such(x: Int32): Int32 }
@@ -54,7 +54,7 @@ extern "C" も同じである:
   実行時エラー: 未実装のプリミティブ: M.__no_such(実装名 __no_such が見つかりません)
   [3]
 
-実装の無い extern を値として渡しても、呼ぶまでは誤りにならない:
+実装のない extern を値として渡しても、呼び出すまではエラーにならない:
 
   $ cat > pval.kel <<'EOF'
   > extern "prim" let __no_such(x: Int32): Int32
@@ -68,8 +68,8 @@ extern "C" も同じである:
   実行時エラー: 未実装のプリミティブ: __no_such
   [3]
 
-数の演算は折り返し、除算は 0 へ切り捨てる。
-Float64 の綴りは LangSpec §16.2 に従い、NaN は符号に依らず nan と書く:
+整数の演算は、オーバーフローすると折り返し(2 の補数で下位のビットだけが残る)、除算は 0 に向けて切り捨てる。
+Float64 の表記は LangSpec §16.2 に従い、NaN は符号によらず nan と書く:
 
   $ cat > num.kel <<'EOF'
   > echoln(show(2147483647 + 1))
@@ -166,8 +166,8 @@ Float64 の綴りは LangSpec §16.2 に従い、NaN は符号に依らず nan �
   -5xy
   truetrue
 
-C の関数は rtcore の musl の sin、cos、exp、log と、IEEE 754 の sqrt である。
-ここでは Diktor の glibc と結果が一致する入力だけを使う(最下位のビットは処理系定義。LangSpec §17):
+extern "C" の関数は、rtcore が持つ musl の sin、cos、exp、log と、IEEE 754 の sqrt である。
+sin、cos、exp、log の最下位のビットは処理系が定める(LangSpec §17)ので、ここでは Diktor の glibc と結果が一致する入力だけを使う:
 
   $ cat > math.kel <<'EOF'
   > extern "C" let sin(x: Float64): Float64
@@ -182,7 +182,7 @@ C の関数は rtcore の musl の sin、cos、exp、log と、IEEE 754 の sqrt
   0.0 1.0 1.0 0.0
   4.0 nan -inf inf
 
-ゼロ除算は Int32 でも Int64 でも実行時エラーである:
+ゼロ除算は、Int32 でも Int64 でも実行時エラーになる:
 
   $ cat > div0.kel <<'EOF'
   > echo("partial")
@@ -199,7 +199,7 @@ C の関数は rtcore の musl の sin、cos、exp、log と、IEEE 754 の sqrt
   実行時エラー: ゼロ除算です
   [3]
 
-Float64 から整数への変換は、NaN と範囲を先に確かめる(上端は開区間):
+Float64 から整数への変換は、先に NaN と範囲を検査する(範囲の上端は開いている):
 
   $ cat > nanconv.kel <<'EOF'
   > let x = __f64_to_i32(0.0 / 0.0)
@@ -224,7 +224,7 @@ Float64 から整数への変換は、NaN と範囲を先に確かめる(上端�
   実行時エラー: __f64_to_i32: 変換結果が範囲外です: 2147483648.0
   [3]
 
-__string_sub の範囲の外は実行時エラーである:
+__string_sub に範囲外の引数を渡すと、実行時エラーになる:
 
   $ cat > sub.kel <<'EOF'
   > echoln(__string_sub("abc", 1, 2))
@@ -242,7 +242,7 @@ __string_sub の範囲の外は実行時エラーである:
   実行時エラー: __string_sub: 範囲外です
   [3]
 
-__panic は文面をそのまま書く:
+__panic は、引数のメッセージをそのまま書く:
 
   $ cat > panic.kel <<'EOF'
   > echoln("p")
@@ -307,7 +307,7 @@ __panic は文面をそのまま書く:
   実行時エラー: 配列の範囲外です
   [3]
 
-照合に失敗した値は、Diktor の値の表示で書く:
+照合に失敗した値は、Diktor が値を表示するときと同じ形式で書く:
 
   $ cat > matchfail.kel <<'EOF'
   > let f(x: Option[Int32]): Int32 = x match { case Some(n) => n }

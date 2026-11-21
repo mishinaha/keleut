@@ -1,13 +1,13 @@
-# 既知の差の一覧(計画 261024-1 の 8.1 節)。
-# kconform は、ここに無い差が 1 件でもあれば失敗する。
-# 各項目は、試験のパスの末尾、`  $ ` の行の番号、組、理由、台帳の番号を持つ。
-# 鍵 when と against は省ける(conformance/README.md と crates/kconform/src/known_diffs.rs を見よ)。
+# 既知の差分の一覧である。
+# kconform は、登録のない差分が 1 件でもあれば失敗する。
+# 各項目は、テストのパスの末尾、`  $ ` の行の番号、ペア、理由、台帳の番号を持つ。
+# キー when と against は省略できる(conformance/README.md と crates/kconform/src/known_diffs.rs を参照)。
+# reason の値は kconform が表示する文字列で、上限を「限度」、構文木の評価器を「木の評価器」、メモリ不足を「メモリの不足」、シェイプ表を「形の表」と書いている。
 #
-# V213: OCAMLRUNPARAM=l=... で OCaml のスタックの上限を絞るブロックは、
-# Diktor の木の評価器のスタックの限度を試すもので、語数を写さない。
-# 同じ意図の試験は conformance/depth/ と conformance/frontend-depth/ に作り直す。
-# 組 dk は本物の diktor をそのまま走らせるので、これらの項目に当たらない。
-# 組 kf は M97 から型検査の呼び出しを keleut check で走らせるので、--type-check の呼び出しの項目に当たる。
+# V213: OCAMLRUNPARAM=l=... で OCaml のスタックの上限を下げるブロックは、Diktor の構文木の評価器が使うスタックの上限を確かめるもので、そのワード数はほかの処理系の上限に対応しない。
+# 同じ意図のテストは、conformance/depth/ と conformance/frontend-depth/ に別に置いてある。
+# ペア dk は本物の diktor をそのまま実行するので、これらの項目に該当しない。
+# ペア kf は型検査の呼び出しを keleut check で実行するので、--type-check の呼び出しの項目に該当する。
 
 [[diff]]
 file = "diktor/test/if.t"
@@ -254,9 +254,10 @@ pairs = ["dk-ir", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt",
 reason = "限度は I(§15.5)。OCAMLRUNPARAM で木の評価器のスタックを絞る"
 ledger = "V213"
 
-# 組 kf の型検査の呼び出し(M97 から keleut check)が、標準出力に書けないときの診断の接頭辞は keleut: である。
-# Diktor は diktor: を出す。終了状態(74)と診断の種類は同じである。
-# 組 ki も、型検査の呼び出しを keleut check で走らせる(M88)。
+# ペア kf は型検査の呼び出しを keleut check で実行するので、標準出力に書けないときの診断の接頭辞が keleut: になる。
+# Diktor は diktor: と書く。
+# 終了コード(74)と診断の種類は同じである。
+# RustKeleut のペア(ki〜kw と kr-*)も、型検査の呼び出しを keleut check で実行する。
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
@@ -265,11 +266,11 @@ pairs = ["kf", "ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "k
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# 組 ki の実行の呼び出し(M88 から keleut run)も、標準出力に書けないときの診断の接頭辞は keleut: である。
-# conformance/bytes/ の記録は keleut の結果なので、keleut run を Diktor で走らせる組(dk、dk-ir、kf、x-ir)のほうが記録と違う。
-# これらの組の項目は against = "record" とし、記録との差だけを許す。
-# 組 ki は記録と一致し、基準の組 dk と違うので、別の項目を against = "pair" として置く。
-# diktor/test/eval.t:845 の sinkfail.kel は、記録が Diktor の結果なので、組 ki だけが記録とも組 dk とも違う。
+# RustKeleut のペアは実行の呼び出しを keleut run で実行するので、標準出力に書けないときの診断の接頭辞も keleut: である。
+# conformance/bytes/ の期待出力は keleut の結果なので、keleut run の呼び出しを Diktor で実行するペア(dk、dk-ir、kf、x-ir)のほうが期待出力と違う。
+# これらのペアの項目は against = "record" とし、期待出力との差分だけを許す。
+# RustKeleut のペアは期待出力と一致し、基準のペア dk と違うので、別の項目を against = "pair" として置く。
+# diktor/test/eval.t:845 の sinkfail.kel は、期待出力が Diktor の結果なので、RustKeleut のペアだけが期待出力ともペア dk とも違う。
 
 [[diff]]
 file = "diktor/test/verify_fixes.t"
@@ -445,8 +446,8 @@ pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka",
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# 組 ki などの対話的な実行の呼び出し(keleut repl)も、標準入力を読めないときの診断の接頭辞は keleut: である。
-# 終了状態(74)と理由の文は同じである。
+# RustKeleut のペアは対話的な実行(REPL)の呼び出しを keleut repl で実行するので、標準入力を読めないときの診断の接頭辞も keleut: である。
+# 終了コード(74)と、接頭辞に続く `標準入力を読めません: ` と OS のエラーメッセージは同じである。
 
 [[diff]]
 file = "diktor/test/repl_stdin.t"
@@ -462,8 +463,9 @@ pairs = ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki", "kr-kj", "kr-kt", "kr-ka",
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# 組 kf の実行と型検査の呼び出し(M98 から import を含めてすべて keleut check)が、
-# 入力や import 先を開けないときの診断の接頭辞も keleut: である。終了状態(64)と診断の種類は同じである。
+# ペア kf は、実行と型検査の呼び出しを、import の解決を含めてすべて keleut check で先に実行するので、入力や import 先を開けないときの診断の接頭辞も keleut: である。
+# 終了コード(64)と診断の種類は同じである。
+# 項目には、Rust のフロントエンドが入力を開くペア x-ir と kr-* も挙げてある。
 
 [[diff]]
 file = "diktor/test/import.t"
@@ -486,7 +488,7 @@ pairs = ["kf", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# 組 x-ir は、KIR を書き出すだけの diktor の呼び出しも keleut emit-kir で走らせるので、書き出しの段の診断の接頭辞が違う。
+# ペア x-ir は、KIR を書き出すだけの diktor の呼び出しも keleut emit-kir で実行するので、KIR を書き出す段階の診断の接頭辞が違う。
 
 [[diff]]
 file = "diktor/test/ir_emit.t"
@@ -537,7 +539,8 @@ pairs = ["x-ir"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# コーパスの、--prelude に開けないファイルを渡す 2 本。組 kf と x-ir は keleut が型検査の前にプレリュードを読む。
+# コーパスのうち、開けないファイルを --prelude に渡す 2 つのプログラムである。
+# ペア kf、x-ir、kr-* では、keleut が型検査の前にプレリュードを読むので、プレリュードを開けないときの診断の接頭辞が keleut: になる。
 
 [[diff]]
 file = "corpus/ir_run/0005-hw.kel"
@@ -553,9 +556,9 @@ pairs = ["kf", "x-ir", "kr-ki", "kr-kj", "kr-kt", "kr-ka", "kr-km", "kr-kw"]
 reason = "診断の接頭辞が keleut: である(Diktor は diktor:)"
 ledger = "V217"
 
-# V215: 1 回の確保の上限 N_alloc_max を超える確保は、keleut run ではメモリの不足(3)になる。
-# Diktor には上限が無く、この機械では確保に成功するので、conformance/oom/ の記録(keleut run の結果)と違う。
-# keleut run を Diktor で走らせる組は記録との差(against = "record")、組 ki は組 dk との差(against = "pair")である。
+# V215: 1 回の確保の上限 N_alloc_max を超える確保は、keleut run ではメモリ不足の実行時エラー(終了コード 3)になる。
+# Diktor には上限がなく、テストに使うマシンでは確保に成功するので、conformance/oom/oom.t の期待出力(keleut run の結果)と違う。
+# keleut run の呼び出しを Diktor で実行するペアは期待出力との差分(against = "record")、RustKeleut のペアはペア dk との差分(against = "pair")である。
 
 [[diff]]
 file = "conformance/oom/oom.t"
@@ -589,9 +592,9 @@ reason = "限度は I(§15.5)。Diktor には 1 回の確保の上限が無い"
 ledger = "V215"
 against = "pair"
 
-# V240: 拡張の鎖を仮想メモリの上限 512 MiB の下で走らせると、keleut run は形の表を広げられずメモリの不足(3)になる。
-# Diktor は同じ上限の下で 0 で終わるので、conformance/oom/shape.t の記録(keleut run の結果)と違う。
-# keleut run を Diktor で走らせる組は記録との差(against = "record")、RustKeleut の組は組 dk との差(against = "pair")である。
+# V240: レコードの拡張の連鎖を、仮想メモリを 512 MiB に制限して実行すると、keleut run はシェイプ表を拡張できず、メモリ不足の実行時エラー(終了コード 3)になる。
+# Diktor は同じ制限をかけても終了コード 0 で終了するので、conformance/oom/shape.t の期待出力(keleut run の結果)と違う。
+# keleut run の呼び出しを Diktor で実行するペアは期待出力との差分(against = "record")、RustKeleut のペアはペア dk との差分(against = "pair")である。
 
 [[diff]]
 file = "conformance/oom/shape.t"
@@ -609,9 +612,9 @@ reason = "RustKeleut の形の表が 2 乗で大きくなり、Diktor より先�
 ledger = "V240"
 against = "pair"
 
-# 限度は I: 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックを絞ると、
-# Diktor の KIR の評価器は論理的な深さが限度に届く前にスタックオーバーフロー(3)で止まる(IRSpec 11.5 節)。
-# conformance/depth/limit.t の記録は keleut run の結果である。
+# V213(conformance/depth/limit.t): LangSpec §15.5 は、評価に要する領域の上限の大きさを定めていないので、上限は処理系が決める(reason の `限度は I` はこのことを指す)。
+# 各段の呼び出しを深い入れ子で囲み、OCAMLRUNPARAM で OCaml のスタックの上限を下げると、Diktor の KIR の評価器は、論理的な深さが上限に達する前に、スタックオーバーフローの実行時エラー(終了コード 3)で終了する(IRSpec 11.5 節)。
+# conformance/depth/limit.t の期待出力は keleut run の結果である。
 
 [[diff]]
 file = "conformance/depth/limit.t"
