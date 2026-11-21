@@ -1,9 +1,9 @@
-//! 既知の差の一覧 `known-diffs.toml` である(計画 261024-1 の 8.1 節)。
+//! 既知の差分の一覧 `known-diffs.toml` を読む。
 //!
-//! 各項目は、ファイル、コマンドの行、組、理由、台帳の番号を持つ。
-//! 登録の無い差が 1 件でもあれば、kconform は失敗する。
+//! 各項目は、ファイル、コマンドの行、ペア、理由、台帳の番号を持つ。
+//! 未登録の差分が 1 件でもあれば、kconform は失敗する。
 //!
-//! 読むのは TOML の次の部分だけである(依存の crate を増やさないため)。
+//! 依存する crate を増やさないように、TOML のうち次の形式だけを自前で読む。
 //!
 //! ```toml
 //! # 注釈
@@ -17,88 +17,97 @@
 //! against = "record"                # 省略できる。下を見よ
 //! ```
 //!
-//! `when` は項目が当たる条件を狭める(計画 8.1 節の項目の形に足した鍵である)。
-//! `when = "unimplemented"` の項目は、差のある組の結果が `keleut: 未実装` の行を含み、
-//! その行より前の行が比べる相手の同じ数の先頭の行と(正規化の後で)一致するときだけ当たる。
-//! 評価が未実装の機能に届いて 4 で終わるブロックを一時的に登録するときに使う。
-//! 未実装に届く前の出力の違いと、未実装に届かなくなったブロックの差は隠さない。
+//! キー `when` は、項目が該当する条件を狭める。
+//! `when = "unimplemented"` の項目は、差分のあるペアの結果が `keleut: 未実装` の行を含み、
+//! その行より前の行が、比較対象の先頭から同じ行数だけ取った行と、正規化した後で一致するときだけ該当する。
+//! 評価が未実装の機能に達して終了コード 4 で終了するブロックを、一時的に登録するときに使う。
+//! 未実装の機能に達する前の出力の違いと、未実装の機能に達しなくなったブロックの差分は、この項目では隠れない。
 //!
-//! `against` は、項目が許す比較を決める(これも計画 8.1 節の項目の形に足した鍵である)。
-//! `against = "record"` の項目は `.t` に記録した期待との差だけに当たり、
-//! `against = "pair"` の項目は基準の組との差だけに当たる。
-//! 省くと両方に当たる。
-//! 記録が基準の組の結果と同じ試験(diktor/test)では、2 つの比較の差は同じものなので省いてよい。
-//! 記録が RustKeleut の結果である試験(`conformance/bytes/` など)では、記録と違う組と基準の組と違う組が別なので、分けて書く。
-//! `kconform expect` は記録とだけ比べるので、`against = "pair"` の項目を使わない。
+//! キー `against` は、項目がどの比較の差分を許すかを決める。
+//! `against = "record"` の項目は `.t` に書いた期待出力との差分だけに該当し、
+//! `against = "pair"` の項目は基準のペアとの差分だけに該当する。
+//! 省略すると両方に該当する。
+//! 期待出力が基準のペアの結果と同じテスト(`diktor/test`)では、2 つの比較の差分は同じものなので、`against` を省略してよい。
+//! 期待出力が RustKeleut の結果であるテスト(`conformance/bytes/` など)では、結果が期待出力と違うペアと、結果が基準のペアと違うペアが同じとは限らないので、項目を分けて書く。
+//! `kconform expect` は期待出力とだけ比較するので、`against = "pair"` の項目を使わない。
 //!
-//! 読んだ後に [`validate`] で、組の名前、台帳の番号の形、項目の重なりを確かめる。
+//! 読んだ後に [`validate`] で、ペアの名前、台帳の番号の形式、項目の重なりを検査する。
 //!
 //! 文字列は二重引用符で囲み、`\"` と `\\` だけを解釈する。
 
 use std::path::Path;
 
-/// 既知の差の 1 項目である。
+/// 既知の差分の 1 項目である。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
-    /// 試験のパスの末尾(`/` 区切りの部分の列として照合する)である。
+    /// テストのファイル `.t` のパスの末尾である。
+    /// 実際のパスとは、`/` で区切った要素の単位で比較する。
     pub file: String,
-    /// コマンドの行の番号である。
+    /// コマンドの `  $ ` の行の行番号である。
     pub line: usize,
-    /// 組の名前の列である。
+    /// この項目を適用するペアの名前の並びである。
+    /// `*` はすべてのペアを表す。
     pub pairs: Vec<String>,
-    /// 理由である。
+    /// この差分を許す理由である。
     pub reason: String,
-    /// 台帳の番号である。
+    /// 台帳の番号(`V213` の形式)である。
     pub ledger: String,
-    /// 当たる条件である(`when` の鍵)。
+    /// 項目が該当する条件(キー `when`)である。
     pub when: When,
-    /// 許す比較である(`against` の鍵)。
+    /// 項目が許す比較(キー `against`)である。
     pub against: Against,
-    /// 一覧のファイルの中の行の番号(誤りの報告に使う)である。
+    /// 一覧のファイルの中で、この項目が始まる行の行番号である。
+    /// エラーの報告に使う。
     pub source_line: usize,
-    /// 一覧のファイルのパス(誤りの報告に使う。`parse` では空)である。
+    /// 一覧のファイルのパスである。
+    /// エラーの報告に使う。
+    /// [`parse`] は空にし、[`load`] が設定する。
     pub origin: String,
 }
 
-/// 項目が当たる条件である。
+/// 項目が該当する条件である。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum When {
-    /// ファイル、行、組が合えば当たる。
+    /// ファイル、行、ペアが一致すれば該当する。
     #[default]
     Always,
-    /// そのうえ、差のある組の結果が `keleut: 未実装` の行を含み、
-    /// その行より前が比べる相手の先頭と一致するときだけ当たる。
+    /// ファイル、行、ペアが一致し、さらに、差分のあるペアの結果が `keleut: 未実装` の行を含み、
+    /// その行より前が比較対象の先頭と一致するときだけ該当する。
     Unimplemented,
 }
 
 /// 項目が許す比較である。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Against {
-    /// 記録との差と、基準の組との差の両方に当たる。
+    /// 期待出力との差分と、基準のペアとの差分の両方に該当する。
     #[default]
     Both,
-    /// `.t` に記録した期待との差だけに当たる。
+    /// `.t` に書いた期待出力との差分だけに該当する。
     Record,
-    /// 基準の組との差だけに当たる。
+    /// 基準のペアとの差分だけに該当する。
     Pair,
 }
 
-/// 差を見つけた比較の種類である。
+/// 差分を見つけた比較の種類である。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Comparison {
-    /// `.t` に記録した期待との比較である。
+    /// `.t` に書いた期待出力との比較である。
     Record,
-    /// 基準の組との比較である。
+    /// 基準のペアとの比較である。
     Pair,
-    /// RustKeleut の後段の組(`ki kj kt ka km kw`)の間の比較である。
+    /// RustKeleut のバックエンドのペアどうしの比較である。
+    /// ペアのグループは 2 つある。
+    /// Diktor が書いた KIR を実行する `ki`、`kj`、`kt`、`ka`、`km`、`kw` と、Rust のフロントエンドが書いた KIR を実行する `kr-*` である。
+    /// 比較はグループの中だけで行い、`ki` と `kr-ki` のようにグループの違うペアどうしは比較しない。
     ///
-    /// 後段の間は既知の差の一覧に関係なく完全に一致しなければならない(計画 8.2 節、D499)ので、
-    /// この比較の差はどの項目にも当たらない。
+    /// バックエンドどうしの結果は、既知の差分の一覧に関係なく完全に一致しなければならないので、
+    /// この比較の差分はどの項目にも該当しない。
     Backend,
 }
 
 impl Against {
-    /// この値の項目が、比較 `c` の差を許すかどうかを返す。後段の組の間の比較の差は、どの値も許さない。
+    /// この値を持つ項目が、比較 `c` の差分を許すかどうかを返す。
+    /// バックエンドのペアどうしの比較の差分は、どの値でも許さない。
     pub fn allows(self, c: Comparison) -> bool {
         matches!(
             (self, c),
@@ -109,13 +118,14 @@ impl Against {
     }
 }
 
-/// 未実装の機能に届いたときの、RustKeleut の診断の頭である。
+/// 未実装の機能に達したときに RustKeleut が出力する診断の先頭部分である。
 const UNIMPLEMENTED: &[u8] = "keleut: 未実装".as_bytes();
 
 impl Entry {
-    /// この項目が、`path` の `line` 行のコマンドの、組 `pair` の比較 `cmp` の差に当たるかどうかを返す。
+    /// `path` の `line` 行のコマンドでペア `pair` に比較 `cmp` の差分があるとき、この項目がその差分に該当するかどうかを返す。
     ///
-    /// `want` は比べる相手(記録か基準の組)の行、`got` は差のある組の結果の行(どちらも `.t` の形)である。
+    /// `want` は比較対象(期待出力か、基準のペアの結果)の行で、`got` は差分のあるペアの結果の行である。
+    /// どちらも `.t` の期待出力と同じ形式で渡す。
     pub fn matches(
         &self,
         path: &Path,
@@ -136,7 +146,7 @@ impl Entry {
     }
 }
 
-/// `got` が `keleut: 未実装` の行を含み、その行より前の行が `want` の先頭と(正規化の後で)一致するかを返す。
+/// `got` が `keleut: 未実装` の行を含み、その行より前の行が、`want` の先頭から同じ行数だけ取った行と、正規化した後で一致すれば真を返す。
 fn unimplemented_after_same_prefix(want: &[Vec<u8>], got: &[Vec<u8>]) -> bool {
     let Some(i) = got
         .iter()
@@ -147,7 +157,7 @@ fn unimplemented_after_same_prefix(want: &[Vec<u8>], got: &[Vec<u8>]) -> bool {
     want.len() >= i && crate::normalize::lines(&got[..i]) == crate::normalize::lines(&want[..i])
 }
 
-/// `path` が `suffix` を、パスの部分の境目で終わるかどうかを返す。
+/// `path` の末尾が、パスの要素の単位で `suffix` と一致するかどうかを返す。
 fn path_ends_with(path: &Path, suffix: &str) -> bool {
     path.ends_with(Path::new(suffix))
 }
@@ -181,7 +191,7 @@ fn strip_comment(rest: &str) -> &str {
     }
 }
 
-/// 値の後ろが空か注釈だけであることを確かめる。
+/// 値の後ろが空かコメントだけであることを検査する。
 fn end(rest: &str, n: usize) -> Result<(), String> {
     if strip_comment(rest).is_empty() {
         Ok(())
@@ -190,7 +200,8 @@ fn end(rest: &str, n: usize) -> Result<(), String> {
     }
 }
 
-/// 一覧の中身を読む。
+/// 一覧の内容を読み、項目の並びを返す。
+/// 書式のエラーがあれば、行番号を付けたメッセージを返す。
 pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
     #[derive(Default)]
     struct Partial {
@@ -316,7 +327,7 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
 }
 
 /// 一覧のファイルを読む。
-/// ファイルが無ければ空の一覧である。
+/// ファイルがなければ、空の一覧を返す。
 pub fn load(path: &Path) -> Result<Vec<Entry>, String> {
     match std::fs::read_to_string(path) {
         Ok(t) => {
@@ -331,26 +342,32 @@ pub fn load(path: &Path) -> Result<Vec<Entry>, String> {
     }
 }
 
-/// 組の名前として書けるものかどうかを返す。
+/// `name` が、項目の `pairs` に書けるペアの名前かどうかを返す。
 ///
-/// `*`、[`crate::pairs::NAMES`] の名前、`kr-` で始まる名前(計画 8.2 節の組 `kr-*`)を受け入れる。
+/// `*`、[`crate::pairs::NAMES`] の名前、`kr-` の後に 1 文字以上が続く名前を受理する。
 pub fn is_pair_name(name: &str) -> bool {
     name == "*"
         || crate::pairs::NAMES.contains(&name)
         || name.strip_prefix("kr-").is_some_and(|r| !r.is_empty())
 }
 
-/// 台帳の番号の形(`V` に続く 10 進の数字)かどうかを返す。
+/// 台帳の番号の形式(`V` の後に 1 桁以上の 10 進の数字)かどうかを返す。
 fn is_ledger(s: &str) -> bool {
     s.strip_prefix('V')
         .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// 読んだすべての一覧の項目を確かめ、誤りの文の列を返す(空なら誤りは無い)。
+/// 読んだすべての一覧の項目を検査し、エラーメッセージの並びを返す。
+/// 空ならエラーはない。
 ///
-/// 組の名前が [`is_pair_name`] でないもの、台帳の番号が `V` と数字でないもの、
-/// ファイル、行、組、`when` が同じで、許す比較が重なる項目が 2 つ以上あるもの(ファイルをまたいでも)を誤りとする。
-/// 許す比較が重ならないのは、`against = "record"` と `against = "pair"` の 2 つだけである。
+/// 次の項目をエラーにする。
+///
+/// - ペアの名前が [`is_pair_name`] を満たさない項目。
+/// - `pairs` が空の項目。
+/// - 台帳の番号が `V` と数字の形式でない項目。
+/// - ファイル、行、ペア、`when` が同じで、許す比較が重なる 2 つ以上の項目。別の一覧のファイルにある項目どうしも調べる。
+///
+/// 許す比較が重ならないのは、`against = "record"` と `against = "pair"` の組み合わせだけである。
 pub fn validate(entries: &[Entry]) -> Vec<String> {
     let mut errs = Vec::new();
     type Key<'a> = (&'a str, usize, &'a str, When);
@@ -446,10 +463,10 @@ ledger = "V1"
         let hit = vec![l("  x"), l("  keleut: 未実装: handle"), l("  [4]")];
         let r = Comparison::Record;
         assert!(es[0].matches(p, 3, "ki", r, &want, &hit));
-        // 未実装に届く前の出力が違えば当たらない。
+        // 未実装の機能に達する前の出力が違えば該当しない。
         let early = vec![l("  z"), l("  keleut: 未実装: handle"), l("  [4]")];
         assert!(!es[0].matches(p, 3, "ki", r, &want, &early));
-        // 未実装に届かなければ当たらない。
+        // 未実装の機能に達しなければ該当しない。
         assert!(!es[0].matches(p, 3, "ki", r, &want, &[l("  x"), l("  [4]")]));
         assert!(parse("[[diff]]\nwhen = \"zz\"\n").is_err());
     }
@@ -477,7 +494,7 @@ ledger = "V1"
             assert!(!e.matches(p, 3, "kw", b, &base, &hit));
             assert!(!e.matches(p, 3, "kw", b, &base, &base));
         }
-        // 同じ項目は、記録との差と基準の組との差には当たる。
+        // 同じ項目は、期待出力との差分と基準のペアとの差分には該当する。
         let kw = one("\"kw\"", "when = \"unimplemented\"\n");
         assert!(kw.matches(p, 3, "kw", Comparison::Record, &base, &hit));
         assert!(kw.matches(p, 3, "kw", Comparison::Pair, &base, &hit));
@@ -497,7 +514,7 @@ ledger = "V1"
         let pair = one("pair").unwrap();
         assert!(!pair[0].matches(p, 3, "ki", Comparison::Record, &[], &[]));
         assert!(pair[0].matches(p, 3, "ki", Comparison::Pair, &[], &[]));
-        // 後段の間の差は、`when = "unimplemented"` でない項目には当たらない(D499)。
+        // バックエンドのペアどうしの差分は、`when` のない項目にも該当しない。
         let both = parse(
             "[[diff]]\nfile = \"a.t\"\nline = 3\npairs = [\"*\"]\nreason = \"r\"\nledger = \"V1\"\n",
         )
@@ -525,7 +542,7 @@ ledger = "V1"
         assert_eq!(validate(&[e("\"ki\"", "", "")]).len(), 1);
         assert_eq!(validate(&[e("\"ki\"", "zz", "")]).len(), 1);
         assert_eq!(validate(&[e("", "V1", "")]).len(), 1);
-        // 同じファイル、行、組の項目は、許す比較が重なれば誤りである。
+        // ファイル、行、ペアが同じ項目は、許す比較が重なればエラーである。
         let both = e("\"ki\", \"dk\"", "V1", "");
         let rec = e("\"ki\"", "V2", "against = \"record\"\n");
         let pair = e("\"ki\"", "V2", "against = \"pair\"\n");

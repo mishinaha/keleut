@@ -1,47 +1,51 @@
-//! コーパス(cram のヒアドキュメントから抜き出した `.kel`)である(計画 261024-1 の 8.1 節)。
+//! コーパスを作る。
+//! コーパスは、cram のヒアドキュメントから抜き出した `.kel` の集まりである。
 //!
-//! `kconform extract-corpus` は、各 `.t` の `cat > NAME.kel <<'EOF'` の形のコマンドから中身を抜き出し、
-//! `conformance/corpus/<試験の名前>/<番号>-<NAME>.kel` に置く。
-//! 番号は `.t` の中で 1 から数え、NAME の `/` は `_` にする。
-//! あわせて、各ファイルの出所と旗を `index.tsv` に書く。
+//! `kconform extract-corpus` は、各 `.t` の `cat > NAME.kel <<'EOF'` の形式のコマンドから内容を抜き出し、
+//! `conformance/corpus/<テストの名前>/<番号>-<NAME>.kel` に置く。
+//! 番号は `.t` ごとに 1 から数える 4 桁の数で、NAME の `/` は `_` に置き換える。
+//! あわせて、各ファイルの抽出元とオプションを一覧 `index.tsv` に書く。
 //!
-//! 旗は、同じ `.t` の後のコマンドのうち、そのファイルを引数に取る最初の `diktor` の呼び出しから取る
-//! (`--no-prelude`、`--prelude P`、`--import-path D`)。
-//! 次に同じ名前へ書くコマンドより後の呼び出しは見ない。
-//! そのような呼び出しが無ければ、旗の欄を `?` にする。
+//! オプション(`--no-prelude`、`--prelude P`、`--import-path D`)は、同じ `.t` の後のコマンドのうち、
+//! そのファイルを引数に取る最初の `diktor` の呼び出しから取り出す。
+//! その呼び出しが見つかる前に、同じパスに書き込むヒアドキュメントのコマンドが現れたら、そこで探すのをやめる。
+//! そのような呼び出しがなければ、オプションの列を `?` にする。
 //!
-//! 引用符で囲まない終わりの語のヒアドキュメントは、シェルが中身を展開する。
-//! 中身に `$`、`` ` ``、`\` が無ければそのまま抜き出し、あれば抜き出さずに数える。
+//! 終端の語を引用符で囲んでいないヒアドキュメントは、シェルが内容を展開する。
+//! 内容に `$`、`` ` ``、`\` がなければそのまま抜き出し、あれば抜き出さずに個数だけを数える。
+//! 終端の語が見つからないヒアドキュメントも、抜き出さずに個数だけを数える。
 
 use crate::cram::{self, Item};
 use crate::runner::heredoc_terminator;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// コーパスの 1 項目である。
+/// コーパスの 1 項目(抜き出した `.kel` 1 つ)である。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     /// コーパスのディレクトリからの相対パスである。
     pub path: String,
-    /// 出所(`試験.t:行`)である。
+    /// 抽出元である。
+    /// `.t` のファイル名と、コマンドの行番号を `:` でつないで書く。
     pub source: String,
-    /// 旗である。
-    /// 旗を決められなかったときは `None` である。
+    /// このファイルを引数に取る `diktor` の呼び出しから取り出したオプションである。
+    /// そのような呼び出しが見つからなかったときは `None` である。
     pub flags: Option<Vec<String>>,
 }
 
-/// 抜き出しの結果である。
+/// `.t` から抜き出した結果である。
 #[derive(Debug, Default)]
 pub struct Extracted {
-    /// 項目と中身である。
+    /// 抜き出したファイルの項目と内容である。
     pub files: Vec<(Entry, Vec<u8>)>,
-    /// 終わりの語が見つからなかったヒアドキュメントの数である。
+    /// 終端の語が見つからなかったヒアドキュメントの個数である。
     pub unterminated: usize,
-    /// 展開を含むので抜き出さなかったヒアドキュメントの数である。
+    /// シェルの展開を含むので抜き出さなかったヒアドキュメントの個数である。
     pub expanding: usize,
 }
 
-/// `cat` のヒアドキュメントで `.kel` に書くコマンドなら、書く先のパスと、終わりの語と、引用されているかを返す。
+/// `cat` のヒアドキュメントで `.kel` に書くコマンドなら、書き込み先のパス、終端の語、終端の語を引用符で囲んでいるかどうかを返す。
+/// `>>` で追記するコマンドと、リダイレクトとヒアドキュメントのほかに引数を持つコマンドは対象にしない。
 fn kel_heredoc(first: &str) -> Option<(String, String, bool)> {
     let toks: Vec<&str> = first.split_whitespace().collect();
     if toks.first() != Some(&"cat") {
@@ -79,14 +83,16 @@ fn kel_heredoc(first: &str) -> Option<(String, String, bool)> {
     Some((target, term, quoted))
 }
 
-/// コマンドの行を、シェルの区切りで粗く語に分ける。
+/// コマンドの行を、空白とシェルの区切り文字(`;`、`|`、`&`、`(`、`)`)で単語に分ける。
+/// 引用符は解釈しない。
 fn words(text: &str) -> Vec<&str> {
     text.split(|c: char| c.is_whitespace() || matches!(c, ';' | '|' | '&' | '(' | ')'))
         .filter(|w| !w.is_empty())
         .collect()
 }
 
-/// `cmd` が `path` を引数に取る `diktor` の呼び出しを含むなら、その旗を返す。
+/// `cmd` が `path` を引数に取る `diktor` の呼び出しを含むなら、その呼び出しで `path` より前に書いたオプションを返す。
+/// 返すのは `--no-prelude`、`--prelude P`、`--import-path D` だけである。
 fn diktor_flags(cmd: &str, path: &str) -> Option<Vec<String>> {
     let ws = words(cmd);
     let mut i = 0;
@@ -119,7 +125,7 @@ fn sanitize(name: &str) -> String {
     name.replace('/', "_")
 }
 
-/// 1 つの `.t` から抜き出す。
+/// 1 つの `.t` から `.kel` を抜き出し、`out` に追加する。
 fn extract_one(stem: &str, file_name: &str, items: &[Item], out: &mut Extracted) {
     let cmds = cram::commands(items);
     let mut seq = 0;
@@ -168,7 +174,7 @@ fn extract_one(stem: &str, file_name: &str, items: &[Item], out: &mut Extracted)
     }
 }
 
-/// `dir` の `*.t` のすべてから抜き出す(ファイルの名前の順)。
+/// `dir` にあるすべての `*.t` から、ファイル名の順に抜き出す。
 pub fn extract(dir: &Path) -> std::io::Result<Extracted> {
     let mut names: Vec<PathBuf> = std::fs::read_dir(dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -185,13 +191,14 @@ pub fn extract(dir: &Path) -> std::io::Result<Extracted> {
     Ok(out)
 }
 
-/// 索引の 1 行目である。
+/// 一覧 `index.tsv` の 1 行目(列の名前)である。
 pub const INDEX_HEADER: &str = "# path\tsource\tflags";
 
-/// 索引の名前である。
+/// 一覧のファイル名である。
 pub const INDEX: &str = "index.tsv";
 
-/// 索引の中身を作る。
+/// 一覧の内容を作る。
+/// 1 項目を 1 行に、パス、抽出元、オプションの順にタブで区切って書く。
 pub fn index_text(entries: &[&Entry]) -> String {
     let mut s = String::from(INDEX_HEADER);
     s.push('\n');
@@ -205,7 +212,7 @@ pub fn index_text(entries: &[&Entry]) -> String {
     s
 }
 
-/// 索引を読む。
+/// コーパスのディレクトリの一覧を読む。
 pub fn read_index(corpus: &Path) -> Result<Vec<Entry>, String> {
     let p = corpus.join(INDEX);
     let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
@@ -236,7 +243,7 @@ pub fn read_index(corpus: &Path) -> Result<Vec<Entry>, String> {
     Ok(v)
 }
 
-/// コーパスのディレクトリにある、kconform が書くファイル(`*.kel` と索引)を集める。
+/// コーパスのディレクトリにある、kconform が書くファイル(`*.kel` と一覧)を集める。
 fn existing(corpus: &Path) -> std::io::Result<BTreeMap<String, Vec<u8>>> {
     let mut m = BTreeMap::new();
     if !corpus.is_dir() {
@@ -265,7 +272,8 @@ fn existing(corpus: &Path) -> std::io::Result<BTreeMap<String, Vec<u8>>> {
     Ok(m)
 }
 
-/// 抜き出した結果を、コーパスのディレクトリの望ましい中身(相対パスから中身への表)にする。
+/// 抜き出した結果から、コーパスのディレクトリのあるべき内容を作る。
+/// 相対パスをキー、ファイルの内容を値とするマップを返す。
 pub fn desired(ex: &Extracted) -> BTreeMap<String, Vec<u8>> {
     let mut m = BTreeMap::new();
     let entries: Vec<&Entry> = ex.files.iter().map(|(e, _)| e).collect();
@@ -276,7 +284,8 @@ pub fn desired(ex: &Extracted) -> BTreeMap<String, Vec<u8>> {
     m
 }
 
-/// コーパスのディレクトリと望ましい中身の差(足りない、余る、中身が違う、の相対パス)を返す。
+/// コーパスのディレクトリと、あるべき内容 `want` との違いを返す。
+/// 各要素は、`足りない: `、`中身が違う: `、`余る: ` のどれかに相対パスを続けた文字列である。
 pub fn diff(corpus: &Path, want: &BTreeMap<String, Vec<u8>>) -> std::io::Result<Vec<String>> {
     let have = existing(corpus)?;
     let mut v = Vec::new();
@@ -295,8 +304,8 @@ pub fn diff(corpus: &Path, want: &BTreeMap<String, Vec<u8>>) -> std::io::Result<
     Ok(v)
 }
 
-/// コーパスのディレクトリを望ましい中身に書き換える。
-/// kconform が書くファイル(`*.kel` と索引)のうち、望ましい中身に無いものは消す。
+/// コーパスのディレクトリを、あるべき内容 `want` に書き換える。
+/// kconform が書くファイル(`*.kel` と一覧)のうち、`want` にないものは削除する。
 pub fn write(corpus: &Path, want: &BTreeMap<String, Vec<u8>>) -> std::io::Result<()> {
     let have = existing(corpus)?;
     for k in have.keys() {
@@ -314,7 +323,7 @@ pub fn write(corpus: &Path, want: &BTreeMap<String, Vec<u8>>) -> std::io::Result
         }
         std::fs::write(p, c)?;
     }
-    // 空になったディレクトリを消す。
+    // 空になったディレクトリを削除する。
     for d in std::fs::read_dir(corpus)? {
         let d = d?.path();
         if d.is_dir() && std::fs::read_dir(&d)?.next().is_none() {

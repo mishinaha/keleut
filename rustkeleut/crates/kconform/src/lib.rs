@@ -1,5 +1,5 @@
-//! kconform の lib である。
+//! kconform のライブラリ crate である。
 //!
-//! keleut-cli の試験からも使う比べ方の部品を置く(計画 261104-1 の 5.1 節)。
+//! kconform のバイナリと keleut-cli のテストの両方が使う、出力の比較の部品を置く。
 
 pub mod fieldsort;

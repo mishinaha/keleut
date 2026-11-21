@@ -1,11 +1,12 @@
 //! kconform の自己検査である。
 //!
-//! 本物の diktor の代わりに小さな `sh` のスクリプトを置き、cram の読み方、shim の通り方、記録との比べ方を確かめる。
+//! 本物の diktor の代わりに小さな `sh` のスクリプトを置き、cram の読み取り、shim を通る呼び出し、期待出力との比較を確かめる。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// 試験ごとの一時のディレクトリである。
+/// テストごとに作る一時ディレクトリである。
+/// ドロップすると内容ごと削除する。
 struct Dir(PathBuf);
 
 impl Dir {
@@ -25,8 +26,8 @@ impl Drop for Dir {
 }
 
 /// 偽の diktor である。
-/// 引数を印字し、`fail.kel` なら 3 で終わる。
-/// 標準出力が閉じていれば 74 で終わる。
+/// 引数を標準出力に書き、引数に `fail.kel` があれば型エラーの行を標準エラーに書いて終了コード 3 で終了する。
+/// 標準出力が閉じていれば 74 で終了する。
 const FAKE: &str = "#!/bin/sh\n\
 printf 'fake %s\\n' \"$*\" 2>/dev/null || exit 74\n\
 case \"$*\" in *fail.kel*) echo 'x.kel:1:1: 型エラー: 偽の誤り' >&2; exit 3 ;; esac\n";
@@ -41,7 +42,7 @@ fn setup(d: &Path) -> PathBuf {
 }
 
 fn kconform(d: &Path, fake: &Path, args: &[&str]) -> (i32, String) {
-    // サブコマンドは先頭に置く。
+    // サブコマンドは、ここで追加するオプション(`--root` など)より前に置く。
     let (sub, rest) = match args.first() {
         Some(&s) if !s.starts_with('-') && !s.contains('/') => (vec![s], &args[1..]),
         _ => (vec![], args),
@@ -113,8 +114,8 @@ fn 記録どおりなら差は無く_shim_を通る() {
     );
 }
 
-/// dune 3.21.1 の cram が promote した中身である。
-/// 改行の直前の CR は 1 つだけ落ち、行の途中の CR と最後の改行の無い CR は残る。
+/// dune 3.21.1 の cram が promote した内容である。
+/// dune の cram は、改行の直前の CR を 1 つだけ取り除き、行の途中の CR と、出力の最後にあって改行が続かない CR は残す。
 const CR: &str = "  $ printf \"a\\rb\\n\"\n  a\rb\n  $ printf \"x\\r\\r\\n\"\n  x\r\n  $ printf \"y\\r\"\n  y\r\n  $ printf \"\\r\\n\\r\\n\"\n  \n  \n";
 
 #[test]
@@ -128,8 +129,8 @@ fn 出力の_cr_を_dune_と同じに扱う() {
     assert!(out.contains("差 0 件"), "{out}");
 }
 
-/// dune 3.21.1 の cram が promote した中身である。
-/// シェルの誤りの文面の頭のスクリプトの位置と、端末の色の指定は、出力から除かれる。
+/// dune 3.21.1 の cram が promote した内容である。
+/// dune の cram は、シェルのエラーメッセージの先頭に付くスクリプトの位置と、端末の色の指定を、出力から取り除く。
 const SHELL_MESSAGES: &str = "シェルの誤りと色。
 
   $ nosuchcmd_xyz
@@ -238,13 +239,13 @@ fn 深さの試験群は_dk_と_kf_を走らせず_試験が無ければ失敗�
         let (code, _) = kconform(&d.0, &fake, &["--pairs", p, "--suite", "depth"]);
         assert_eq!(code, 64, "{p}");
     }
-    // conformance/depth/ が無ければ、走らせる試験が無いので失敗にする。
+    // conformance/depth/ がなければ、実行するテストがないので失敗にする。
     let (code, out) = kconform(&d.0, &fake, &["--pairs", "dk-ir", "--suite", "depth"]);
     assert_eq!(code, 1, "{out}");
 }
 
-/// 偽の keleut を置く。
-/// `--version` には `version` を印字し、ほかの引数ではそれを印字する。
+/// 偽の keleut を `d` の下に置き、そのパスを返す。
+/// 偽の keleut は、`--version` には `version` の内容を出力し、ほかの引数では `fake` に続けてその引数を出力する。
 fn fake_keleut(d: &Path, name: &str, version: &str) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
     let k = d.join(format!("kbin-{name}/keleut"));
@@ -260,7 +261,7 @@ fn fake_keleut(d: &Path, name: &str, version: &str) -> PathBuf {
     k
 }
 
-/// 偽の keleut を使って kconform を走らせ、終了状態、標準出力、標準エラー出力を返す。
+/// 偽の keleut を使って kconform を実行し、終了コード、標準出力、標準エラーを返す。
 fn kconform_with_keleut(
     d: &Path,
     fake: &Path,
@@ -287,7 +288,8 @@ fn kconform_with_keleut(
     )
 }
 
-/// LLVM の後段の組の名前である。
+/// LLVM ペアの名前をコンマで区切って並べたものである。
+/// kconform が LLVM ペアを除いたときに標準エラーに書く並びと照合する。
 const JIT_PAIRS: &str = "kj,kt,ka,km,kr-kj,kr-kt,kr-ka,kr-km";
 
 #[test]
@@ -299,13 +301,13 @@ fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
     let t = t.to_str().unwrap();
     let nojit = fake_keleut(&d.0, "nojit", "keleut 0.1.0\\nbackends: interp wasm\\n");
 
-    // --pairs に LLVM の後段の組を書けば、使い方の誤りとして 64 で終わる。
+    // --pairs に LLVM ペアを書けば、使い方のエラーとして終了コード 64 で終了する。
     let (code, out, err) = kconform_with_keleut(&d.0, &fake, &nojit, &["--pairs", "ki,kj", t]);
     assert_eq!(code, 64, "{out}{err}");
     assert!(err.contains("kj"), "{err}");
     assert!(err.contains("feature llvm を外して組まれています"), "{err}");
 
-    // --pairs を省けば、LLVM の後段の組を除いたことを知らせて、残りの組を走らせる。
+    // --pairs を省けば、LLVM ペアを除いたことを標準エラーに書いて、残りのペアを実行する。
     let (_, out, err) = kconform_with_keleut(&d.0, &fake, &nojit, &[t]);
     assert!(
         err.contains(&format!("LLVM の後段の組 {JIT_PAIRS} を走らせません")),
@@ -318,7 +320,7 @@ fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
         "{out}"
     );
 
-    // 後段 jit を持つ keleut と、後段の行を印字しない keleut では、組を除かない。
+    // `--version` の `backends:` の行に jit がある keleut と、その行を出力しない keleut では、ペアを除かない。
     for (name, version) in [
         ("jit", "keleut 0.1.0\\nbackends: interp jit wasm\\n"),
         ("noline", "keleut 0.1.0\\n"),
@@ -336,7 +338,8 @@ fn feature_llvm_を外した_keleut_では_llvm_の後段の組を除く() {
     }
 }
 
-/// 要約の行から、走らせた組の名札を取り出す。
+/// 要約の行(`kconform: 組 ` で始まる行。出力ではペアを「組」と書く)から、実行したペアの名前を取り出す。
+/// シードのあるペアは、`ka=1` のようにシードごとの名前になる。
 fn ran_pairs(out: &str) -> Vec<String> {
     let line = out
         .lines()

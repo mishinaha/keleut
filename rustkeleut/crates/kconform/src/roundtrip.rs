@@ -1,27 +1,33 @@
-//! `kconform kir-roundtrip` である(計画 261024-1 の 8.1 節と 8.3 節)。
+//! `kconform kir-roundtrip` の実装である。
 //!
 //! コーパスの各 `.kel` について、次のことを確かめる。
 //!
-//! 1. `diktor --emit-ir` が 0 で終わる。
-//!    0 で終わらないもの(型検査の誤りなど)は対象の外とし、終了状態ごとに数える。
-//! 2. 2 つのプロセスで書き出したバイナリが、バイト単位で一致する。
-//! 3. `diktor --emit-ir-text` が 0 で終わる。
-//! 4. `keleut kir verify` が、バイナリにもテキストにも 0 で終わる。
-//! 5. `keleut kir dis` でバイナリから印字したテキストが、Diktor のテキストと一致する。
-//! 6. `keleut kir asm` でテキストから組んだバイナリが、Diktor のバイナリと一致する。
-//! 7. 6 のバイナリを `keleut kir dis` で印字したテキストが、Diktor のテキストと一致する(テキスト → バイナリ → テキストの往復)。
-//! 8. 同じ旗の `keleut emit-kir` と `keleut emit-kir --text` が 0 で終わり、書いたバイナリとテキストが Diktor のものと一致する。
+//! 1. `diktor --emit-ir` が終了コード 0 で終了する。
+//!    0 以外の終了コードで終了するもの(型エラーになるプログラムなど)は対象外とし、終了コードごとに数える。
+//!    タイムアウトしたものは、対象外にせず失敗として数える。
+//! 2. `diktor --emit-ir` を 2 回実行して書き出したバイナリが、バイト単位で一致する。
+//! 3. `diktor --emit-ir-text` が終了コード 0 で終了する。
+//! 4. `keleut kir verify` が、バイナリでもテキストでも終了コード 0 で終了する。
+//! 5. `keleut kir dis` でバイナリから出力したテキストが、Diktor のテキストと一致する。
+//! 6. `keleut kir asm` でテキストから作ったバイナリが、Diktor のバイナリと一致する。
+//! 7. 6 のバイナリから `keleut kir dis` で出力したテキストが、Diktor のテキストと一致する。
+//!    テキストをバイナリにしてテキストに戻すと元に戻ること(ラウンドトリップ)の確認である。
+//! 8. 同じオプションの `keleut emit-kir` と `keleut emit-kir --text` が終了コード 0 で終了し、書き出したバイナリとテキストが Diktor のものと一致する。
 //!
-//! 続いて、`conformance/kir-fixtures/` の各版の見本(IRSpec 14 節)について、次のことを確かめる。
+//! 続いて、`conformance/kir-fixtures/` にある各バージョンのフィクスチャ(IRSpec 14 節)について、次のことを確かめる。
 //!
-//! 9. `.kir` の見本を `diktor --run-ir` と `keleut run --frontend diktor --backend interp --tier interp-only` で走らせ、
-//!    `diktor --run-ir` がプログラムの結果(0 か 3)で終わり、`keleut run` の終了状態、標準出力、標準エラーがそれと一致する
-//!    (3 は実行時エラーで終わる見本である。読み込みと検証の失敗は 65 なので、ここで見分けられる)。
-//! 10. `.kir` と `.kirt` の見本がどれも `keleut kir verify` に通る。
+//! 9. `.kir` のフィクスチャを `diktor --run-ir` と `keleut run --frontend diktor --backend interp --tier interp-only` で実行する。
+//!    `diktor --run-ir` がプログラムの結果を表す終了コード(0 か 3)で終了し、`keleut run` の終了コード、標準出力、標準エラーがそれと一致することを確かめる。
+//!    3 は、実行時エラーで終了するフィクスチャの終了コードである。
+//!    読み込みと検証の失敗は終了コード 65 になるので、実行時エラーと区別できる。
+//!    標準エラーは、`<値>` のレコードのフィールドを並べ替えてから比較する。
+//! 10. `.kir` と `.kirt` のどのフィクスチャでも、`keleut kir verify` が終了コード 0 で終了する。
 //!
-//! 旗は索引のものを使う。
-//! 索引の旗が `?` のときは、旗なしで書き出し、型検査の誤り(1)なら `--no-prelude` で試し直す。
-//! `--diktor-only` では 4〜8 と 10 を行わず、9 は `diktor --run-ir` が 0 で終わることだけを確かめる(RustKeleut の側がまだ無いときの確認に使う)。
+//! Diktor と `keleut emit-kir` に渡すオプションは、コーパスの一覧(`index.tsv`)のものを使う。
+//! 一覧のオプションが `?` の項目は、オプションなしで書き出し、0 以外の終了コードで終了すれば `--no-prelude` を付けてやり直す。
+//! タイムアウトしたときはやり直さない。
+//! `--diktor-only` では `keleut` を実行しない。
+//! 4〜8 と 10 を行わず、9 は `.kir` のフィクスチャで `diktor --run-ir` が 0 か 3 で終了することだけを確かめる。
 
 use crate::corpus::{self, Entry};
 use crate::util::{TempDir, par_map, wait_timeout};
@@ -30,28 +36,36 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// 設定である。
+/// `kir-roundtrip` の実行の設定。
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// コーパスのディレクトリ。一覧(`index.tsv`)と `.kel` がある。
     pub corpus: PathBuf,
-    /// 見本のディレクトリ(`conformance/kir-fixtures`)である。無ければ 9 と 10 を行わない。
+    /// フィクスチャのディレクトリ(`conformance/kir-fixtures`)。
+    /// ディレクトリがないか、`.kir` も `.kirt` もなければ、9 と 10 で確かめるものはない。
     pub fixtures: PathBuf,
+    /// 実行する diktor のパス。
     pub diktor: PathBuf,
+    /// 実行する keleut のパス。
     pub keleut: PathBuf,
+    /// 並列に確かめる項目の数。
     pub jobs: usize,
+    /// コマンド 1 回の実行のタイムアウト。
     pub timeout: Duration,
+    /// 真なら `keleut` を実行せず、Diktor だけを確かめる(`--diktor-only`)。
     pub diktor_only: bool,
+    /// 真なら、対象外にした項目も 1 件ずつ表示する。
     pub verbose: bool,
 }
 
-/// 1 項目の結果である。
+/// 1 項目を確かめた結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     /// すべての確認に通った。
     Pass,
-    /// `diktor --emit-ir` が 0 で終わらなかったので対象の外にした(その終了状態)。
+    /// `diktor --emit-ir` が 0 で終了しなかったので対象外にした。値はその終了コードである。
     Skipped(i32),
-    /// 確認に落ちた(段の名前と説明)。
+    /// 確認に失敗した。値は、失敗した確認の名前と説明である。
     Fail(&'static str, String),
 }
 
@@ -223,7 +237,7 @@ fn check_inner(e: &Entry, cfg: &Config) -> std::io::Result<Verdict> {
     Ok(Verdict::Pass)
 }
 
-/// 見本のディレクトリの下の `.kir` と `.kirt` を、パスの順に集める。
+/// フィクスチャのディレクトリの下にある `.kir` と `.kirt` を、パスの順に集める。
 fn fixture_files(dir: &Path) -> Vec<PathBuf> {
     let mut v = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -244,7 +258,7 @@ fn fixture_files(dir: &Path) -> Vec<PathBuf> {
     v
 }
 
-/// 見本の 1 つを確かめる(9 と 10)。
+/// フィクスチャ 1 つを確かめる(モジュールの説明の 9 と 10)。
 fn check_fixture(path: &Path, cfg: &Config) -> std::io::Result<Verdict> {
     let work = TempDir::new("kconform-fx", false)?;
     let dir = work.path();
@@ -288,7 +302,8 @@ fn check_fixture(path: &Path, cfg: &Config) -> std::io::Result<Verdict> {
         if r.code != d.code {
             return Ok(Verdict::Fail("fixture-run", describe(&r)));
         }
-        // 標準エラーの `<値>` のレコードの順は付録 B が読み手に任せるので、並べ替えてから比べる(D561)。
+        // IRSpec 付録 B は、`<値>` のレコードの、ラベルの異なるフィールドどうしの順序をリーダに任せている。
+        // そこで、標準エラーはフィールドを並べ替えてから比較する。
         if r.stdout != d.stdout || !kconform::fieldsort::same_output(&r.stderr, &d.stderr) {
             return Ok(Verdict::Fail(
                 "fixture-run",
@@ -299,7 +314,7 @@ fn check_fixture(path: &Path, cfg: &Config) -> std::io::Result<Verdict> {
     Ok(Verdict::Pass)
 }
 
-/// 見本を全部確かめ、(見本の数、失敗の数)を返す。
+/// すべてのフィクスチャを確かめ、(フィクスチャの数、失敗の数)を返す。
 fn check_fixtures(cfg: &Config) -> (usize, usize) {
     let files = fixture_files(&cfg.fixtures);
     let verdicts = par_map(&files, cfg.jobs, |p| {
@@ -315,7 +330,9 @@ fn check_fixtures(cfg: &Config) -> (usize, usize) {
     (files.len(), fails)
 }
 
-/// コーパスの全件を確かめ、終了状態を返す(0 は全件が通ったこと)。
+/// コーパスの全件とすべてのフィクスチャを確かめ、終了コードを返す。
+///
+/// すべて通れば 0、失敗が 1 件でもあれば 1、コーパスの一覧を読めなければ 64 を返す。
 pub fn main(cfg: &Config) -> u8 {
     let entries = match corpus::read_index(&cfg.corpus) {
         Ok(v) => v,

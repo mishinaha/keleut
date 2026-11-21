@@ -1,26 +1,27 @@
-//! 1 つの cram の試験を、一時のディレクトリで走らせる。
+//! cram 形式のテスト 1 つを、一時ディレクトリで実行する。
 //!
-//! 走らせ方は dune の cram と同じにする(diktor/test/via_ir_run.py と同じ形)。
+//! 実行の方法は dune の cram に合わせる(diktor/test/via_ir_run.py と同じ方法である)。
 //!
-//! - 試験ごとに空のディレクトリを作り、そこに試料(`sample/*.kel` と、`.t` の横の `.kel`、`.kir`、`.kirt`)を写す。
-//! - すべてのコマンドを 1 本の `sh` で走らせる。
-//!   `cd` や `export` は後のコマンドに残る。
-//!   各コマンドはファイルに書いて `.` で読み込み、標準出力と標準エラーを 1 本のファイルにし、直後に `$?` を記録する。
-//! - シェルが `exit` で終わっても `trap 'exit 0' EXIT` で 0 にし、記録の無いコマンドは「到達しない」とする。
+//! - テストごとに空のディレクトリを作り、そこに入力ファイル(`sample/*.kel` と、`.t` と同じディレクトリの `.kel`、`.kir`、`.kirt`)をコピーする。
+//! - すべてのコマンドを 1 つの `sh` で実行する。
+//!   そのため、`cd` や `export` は後のコマンドにも影響する。
+//!   各コマンドはファイルに書いて `.` で読み込み、標準出力と標準エラーを 1 つのファイルにまとめ、直後に `$?` をファイルに書く。
+//! - シェルが `exit` で終了しても、`trap 'exit 0' EXIT` でシェルの終了コードを 0 にする。
+//!   `$?` のファイルがないコマンドは、「到達しない」コマンド(`Outcome::Unreachable`)として扱う。
 //! - 標準入力は `/dev/null` にする。
-//!   `LC_ALL=C` にし、`TMPDIR` を試験の中の空のディレクトリにし、`TESTDIR` と `DIKTOR_VIA_IR` を消す。
-//! - 出力は、dune 3.21.1 の cram(`cram_exec.ml` の `sanitize` と `rewrite_paths`)と同じ順に整える。
-//!   まず端末の色の指定を除く。
-//!   次に、パスの置き換えを dune と同じく語ごとに行う([`rewrite_paths`])。
-//!   作業ディレクトリで始まる語の頭を `$TESTCASE_ROOT` にするのは dune と同じである。
-//!   `TMPDIR` で始まる語の頭を `$TMPDIR` にするのは kconform だけの正規化である。
-//!   dune の試験のシェルの `TMPDIR` は dune の作る `/tmp/build_*_dune` で、dune はこれを置き換えない。
-//!   kconform の `TMPDIR` は試験ごとに作るディレクトリなので、置き換えないと出力が走らせるたびに変わる。
-//!   最後に、シェルの誤りの文面の頭に付くスクリプトの位置(`<main.sh>: N: <k.sh>: ` と `<k.sh>: line N: `)を除く。
-//!   スクリプトは作業ディレクトリと `TMPDIR` の外(`meta/`)に置くので、パスの置き換えはスクリプトの位置に当たらない。
-//! - 行への切り方(改行の直前の CR を 1 つ落とすことなど)は、`cram::render` が dune の `split_lines` と同じにする。
-//! - PATH の先頭に shim のディレクトリを置き、元の PATH からは `diktor` と `keleut` を持つディレクトリを除く。
-//!   shim を通らない呼び出しが、本物に黙って届かないようにするためである。
+//!   `LC_ALL=C` にし、`TMPDIR` をテスト用の空のディレクトリにし、`TESTDIR` と `DIKTOR_VIA_IR` を環境から消す。
+//! - 出力の後処理は、dune 3.21.1 の cram(`cram_exec.ml` の `sanitize` と `rewrite_paths`)と同じ順に行う。
+//!   まず、端末の色を指定するエスケープシーケンスを取り除く。
+//!   次に、dune と同じく、単語ごとにパスを置き換える([`rewrite_paths`])。
+//!   作業ディレクトリで始まる単語の先頭を `$TESTCASE_ROOT` にするのは dune と同じである。
+//!   `TMPDIR` で始まる単語の先頭を `$TMPDIR` にするのは、kconform だけが行う置き換えである。
+//!   dune がテストのシェルに渡す `TMPDIR` は dune の作る `/tmp/build_*_dune` で、dune はこれを置き換えない。
+//!   kconform の `TMPDIR` はテストごとに作るディレクトリなので、置き換えないと出力が実行のたびに変わる。
+//!   最後に、シェルのエラーメッセージの先頭に付くスクリプトの位置(`<main.sh>: N: <k.sh>: ` と `<k.sh>: line N: `)を取り除く。
+//!   スクリプトは作業ディレクトリと `TMPDIR` の外(`meta/`)に置くので、パスの置き換えはスクリプトの位置を変えない。
+//! - 出力を行に分ける方法(改行の直前の CR を 1 つ取り除くことなど)は、`cram::render` が dune の `split_lines` に合わせる。
+//! - PATH の先頭に shim のディレクトリを置き、元の PATH からは `diktor` か `keleut` を持つディレクトリを取り除く。
+//!   shim を通らない呼び出しが、気づかれないまま本物の `diktor` や `keleut` を実行することを防ぐためである。
 
 use crate::cram::{self, Item, Outcome};
 use crate::pairs::Pair;
@@ -31,23 +32,23 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// 走らせる 1 つの試験である。
+/// 実行するテスト 1 つ。
 #[derive(Debug, Clone)]
 pub struct Case {
-    /// 表示に使う名前(`.t` のパス)である。
+    /// 表示に使う名前。`.t` のテストではそのパスである。
     pub name: String,
-    /// 既知の差の照合に使うパス(正規化した絶対パス)である。
+    /// 既知の差分の照合に使うパス。シンボリックリンクを解決した絶対パスである。
     pub key: PathBuf,
-    /// 試験の項目である。
+    /// `.t` を読んで得た項目(コマンド、コメントなど)の並び。
     pub items: Vec<Item>,
-    /// 写す試料の、元のパスと作業ディレクトリの中の相対パスである。
+    /// コピーする入力ファイルの、元のパスと、作業ディレクトリからの相対パスの組。
     pub fixtures: Vec<(PathBuf, PathBuf)>,
-    /// `.t` に記録した期待と比べるかどうかである(コーパスの試験は比べない)。
+    /// `.t` に書いた期待出力と比較するなら真。コーパスのテストは期待出力を持たないので偽である。
     pub has_expectations: bool,
 }
 
 impl Case {
-    /// `.t` のファイルを読んで試験にする。
+    /// `.t` のファイルを読んでテストにする。
     pub fn from_file(path: &Path) -> std::io::Result<Case> {
         let text = std::fs::read(path)?;
         let key = std::fs::canonicalize(path)?;
@@ -68,10 +69,11 @@ fn has_ext(p: &Path, exts: &[&str]) -> bool {
         .is_some_and(|e| exts.contains(&e))
 }
 
-/// `.t` の横の試料を集める。
+/// `.t` のあるディレクトリ `dir` から、テストの入力ファイルを集める。
 ///
-/// dune の cram の試験(diktor/test)は、test/dune が依存に挙げる `sample/*.kel` だけを見る。
-/// `conformance/` の試験は、`.t` の横の `.kel`、`.kir`、`.kirt` も見る。
+/// dune の cram のテスト(diktor/test)が使えるのは、test/dune が依存に挙げる `sample/*.kel` だけである。
+/// `conformance/` のテストは、`.t` と同じディレクトリの `.kel`、`.kir`、`.kirt` も使う。
+/// この関数は 2 つを区別せず、`dir/sample/*.kel` と、`dir` の直下の `.kel`、`.kir`、`.kirt` をすべて集める。
 fn fixtures_of(dir: &Path) -> std::io::Result<Vec<(PathBuf, PathBuf)>> {
     let mut v = Vec::new();
     let sample = dir.join("sample");
@@ -95,49 +97,49 @@ fn fixtures_of(dir: &Path) -> std::io::Result<Vec<(PathBuf, PathBuf)>> {
     Ok(v)
 }
 
-/// 走らせ方の設定である。
+/// テストの実行の設定。
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// shim(`diktor` と `keleut`)を置いたディレクトリである。
+    /// shim(`diktor` と `keleut`)を置いたディレクトリ。
     pub shim_dir: PathBuf,
-    /// 本物の diktor である。
+    /// 本物の diktor のパス。
     pub real_diktor: PathBuf,
-    /// 本物の keleut である。
+    /// 本物の keleut のパス。
     pub real_keleut: PathBuf,
-    /// 試験のコマンドの PATH の、shim の後ろに続く部分である。
+    /// テストのコマンドに渡す PATH のうち、shim のディレクトリの後ろに続く部分。
     pub path_tail: OsString,
-    /// 1 つの試験の時間の上限である。
+    /// テスト 1 つのタイムアウト。
     pub timeout: Duration,
-    /// 一時のディレクトリを残すかどうかである。
+    /// 真なら一時ディレクトリを残す。
     pub keep: bool,
-    /// `--extra` の旗である。
+    /// `--extra` で指定したオプション。RustKeleut のバックエンドのペアのオプションに追加する。
     pub extra: Vec<String>,
 }
 
-/// shim の 1 回の呼び出しである。
+/// shim のログの 1 行。shim の呼び出し 1 回か、shim が書いた振り分けの結果を表す。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invocation {
-    /// 呼ばれた shim の名前(`diktor` か `keleut`)である。
+    /// 呼ばれた shim の名前(`diktor` か `keleut`)。振り分けの結果の行では、その種類(`backend-override` など)が入る。
     pub who: String,
-    /// 引数である。
+    /// 呼び出しの引数。振り分けの結果の行では、その内容が入る。
     pub args: Vec<String>,
 }
 
-/// 1 つの試験を 1 つの組で走らせた結果である。
+/// テスト 1 つをペア 1 つで実行した結果。
 #[derive(Debug, Clone)]
 pub struct CaseResult {
-    /// コマンドごとの結果である。
+    /// コマンドごとの結果。
     pub outcomes: Vec<Outcome>,
-    /// コマンドごとの shim の呼び出しである。
+    /// コマンドごとの、shim の呼び出しの並び。
     pub invocations: Vec<Vec<Invocation>>,
-    /// 時間切れになったかどうかである。
+    /// タイムアウトになったら真。
     pub timed_out: bool,
-    /// 走らせる前の誤り(試料を写せないなど)である。
+    /// コマンドを実行できなかったときのエラー(入力ファイルをコピーできないなど)。
     pub error: Option<String>,
 }
 
-/// 元の PATH から、`diktor` か `keleut` を持つディレクトリを除く。
-/// 戻り値は、残した PATH と除いたディレクトリの列である。
+/// 元の PATH から、`diktor` か `keleut` を持つディレクトリを取り除く。
+/// 残した PATH と、取り除いたディレクトリの並びを返す。
 pub fn filter_path(path: &OsString) -> (OsString, Vec<PathBuf>) {
     let mut keep = Vec::new();
     let mut removed = Vec::new();
@@ -151,7 +153,8 @@ pub fn filter_path(path: &OsString) -> (OsString, Vec<PathBuf>) {
     (std::env::join_paths(keep).unwrap_or_default(), removed)
 }
 
-/// 試験を走らせる。
+/// テスト `case` をペア `pair` で実行する。
+/// 一時ディレクトリの作成やファイルのコピーに失敗したときは、`error` にエラーを入れた結果を返す。
 pub fn run(case: &Case, pair: &Pair, cfg: &Config) -> CaseResult {
     match run_inner(case, pair, cfg) {
         Ok(r) => r,
@@ -214,8 +217,8 @@ fn run_inner(case: &Case, pair: &Pair, cfg: &Config) -> std::io::Result<CaseResu
         .current_dir(&root)
         .env_remove("TESTDIR")
         .env_remove("DIKTOR_VIA_IR")
-        // `keleut run --frontend diktor` がいつも PATH の diktor(shim)を通るように、
-        // `$KELEUT_DIKTOR` を子に渡さない(本物の diktor は `KCONFORM_REAL_DIKTOR` で渡す)。
+        // `keleut run --frontend diktor` が PATH の diktor(shim)を呼ぶように、
+        // `$KELEUT_DIKTOR` を子プロセスに渡さない(本物の diktor のパスは `KCONFORM_REAL_DIKTOR` で渡す)。
         .env_remove("KELEUT_DIKTOR")
         .env("PATH", path)
         .env("LC_ALL", "C")
@@ -275,24 +278,26 @@ fn run_inner(case: &Case, pair: &Pair, cfg: &Config) -> std::io::Result<CaseResu
     })
 }
 
-/// 1 つのコマンドの出力を、dune 3.21.1 の cram と同じ順に整える。
+/// コマンド 1 つの出力に、dune 3.21.1 の cram と同じ順で後処理を行う。
 ///
-/// 端末の色の指定を除き、パスを語ごとに置き換え([`rewrite_paths`])、
-/// 行の頭のスクリプトの位置(親のスクリプト `main` とコマンドのスクリプト `cmd` のもの)を除く。
+/// 端末の色を指定するエスケープシーケンスを取り除き、単語ごとにパスを置き換え([`rewrite_paths`])、
+/// 行の先頭に付くスクリプトの位置(親のスクリプト `main` とコマンドのスクリプト `cmd` のもの)を取り除く。
 pub fn sanitize(out: &[u8], root: &[u8], tmp: &[u8], main: &[u8], cmd: &[u8]) -> Vec<u8> {
     let out = strip_ansi(out);
     let out = rewrite_paths(&out, root, tmp);
     strip_script_prefixes(&out, main, cmd)
 }
 
-/// パスを語ごとに置き換える(dune 3.21.1 の `cram_exec.ml` の `rewrite_paths` と同じ切り方)。
+/// 単語ごとにパスを置き換える。単語の区切り方は、dune 3.21.1 の `cram_exec.ml` の `rewrite_paths` と同じである。
 ///
-/// 語は、`/` で始まり、空白、改行、CR、タブ、`:` のどれでもないバイトが続く最長の並びである(正規表現 `/[^ \n\r\t:]+`)。
-/// 語の頭が `tmp` なら `$TMPDIR` に、そうでなく `root` なら `$TESTCASE_ROOT` に、1 つの語につき 1 度だけ置き換える。
-/// dune の `Build_path_prefix_map.rewrite` と同じく、頭の比べ方は文字列の接頭辞で、パスの部分の境目を見ない。
-/// 新しく足した対応から先に見るので、後に足す `tmp` を先に比べる。
-/// 語の途中に現れるパスは置き換えない。
-/// `$TMPDIR` への置き換えは kconform だけの正規化である(モジュールの説明を見よ)。
+/// 単語は、`/` で始まり、空白、改行、CR、タブ、`:` のどれでもないバイトが続く最長の並びである(正規表現 `/[^ \n\r\t:]+`)。
+/// 単語の先頭が `tmp` なら `$TMPDIR` に、そうでなく `root` なら `$TESTCASE_ROOT` に置き換える。
+/// 置き換えは、単語 1 つにつき 1 度だけ行う。
+/// dune の `Build_path_prefix_map.rewrite` と同じく、単語の先頭は文字列の接頭辞として比較し、パスの要素の境界は考慮しない。
+/// dune は、接頭辞と置き換え後の文字列の対応を、後から追加したものから先に調べる。
+/// `tmp` の対応は `root` の対応より後に追加するものなので、`tmp` を先に比較する。
+/// 単語の途中に現れるパスは置き換えない。
+/// `$TMPDIR` への置き換えは、kconform だけが行う(モジュールの説明を参照)。
 pub fn rewrite_paths(out: &[u8], root: &[u8], tmp: &[u8]) -> Vec<u8> {
     let stop = |b: u8| matches!(b, b' ' | b'\n' | b'\r' | b'\t' | b':');
     let mut v = Vec::with_capacity(out.len());
@@ -327,10 +332,11 @@ pub fn rewrite_paths(out: &[u8], root: &[u8], tmp: &[u8]) -> Vec<u8> {
     v
 }
 
-/// コマンドの行(ヒアドキュメントの中身を除く)が、`diktor` をコマンドの語として含むかどうかを返す。
+/// コマンドの行(ヒアドキュメントの内容を除く)が、`word` を単語として含むなら真を返す。
 ///
-/// shim を通らずに本物へ届く呼び出しを探すために使う。
-/// 語の境目だけを見る粗い判定で、引用符の中の `diktor` も数える。
+/// `word` に `diktor` を渡して、shim を通らずに本物の diktor を実行する呼び出しを探すために使う。
+/// 単語の境界だけを調べる粗い判定で、引用符の中の `diktor` も数える。
+/// シェルの関数を定義するだけのコマンドでは偽を返す。
 pub fn mentions(command: &cram::Command, word: &str) -> bool {
     if defines_function(command) {
         return false;
@@ -352,8 +358,8 @@ pub fn mentions(command: &cram::Command, word: &str) -> bool {
     false
 }
 
-/// コマンドが、シェルの関数を定義するだけのもの(`name() { … }`)かどうかを返す。
-/// 関数の本体の `diktor` は、関数を呼んだコマンドで走るので、定義のコマンドでは数えない。
+/// コマンドが、シェルの関数を定義するだけのもの(`name() { … }`)なら真を返す。
+/// 関数の本体の `diktor` は、関数を呼んだコマンドで実行されるので、定義のコマンドでは数えない。
 fn defines_function(command: &cram::Command) -> bool {
     let first = String::from_utf8_lossy(&command.text[0]);
     let t = first.trim_start();
@@ -366,7 +372,7 @@ fn defines_function(command: &cram::Command) -> bool {
 
 fn has_word(line: &str, word: &str) -> bool {
     let b = line.as_bytes();
-    // `/` は境目として扱う。`$DIR/diktor` のようにパスで呼ぶ(shim を通らない)呼び出しも見つけるためである。
+    // `/` は単語の境界として扱う。`$DIR/diktor` のようにパスで呼ぶ(shim を通らない)呼び出しも見つけるためである。
     let is_word = |c: u8| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.');
     let mut start = 0;
     while let Some(i) = line[start..].find(word) {
@@ -382,7 +388,7 @@ fn has_word(line: &str, word: &str) -> bool {
     false
 }
 
-/// 行がヒアドキュメントを始めるなら、その終わりの語を返す。
+/// 行がヒアドキュメントを始めるなら、その終端の語を返す。
 pub fn heredoc_terminator(line: &str) -> Option<String> {
     let i = line.find("<<")?;
     let rest = line[i + 2..].trim_start_matches('-').trim_start();
@@ -446,22 +452,22 @@ mod tests {
             s(b"/w/meta/main.sh: 3: /w/meta/0.sh: cannot create /w/tmp/a: x\n"),
             b"cannot create $TMPDIR/a: x\n"
         );
-        // 色の指定を先に除くので、色の指定に挟まれたスクリプトの位置も除く。
+        // エスケープシーケンスを先に取り除くので、その直後にあるスクリプトの位置も取り除ける。
         assert_eq!(s(b"\x1b[1m/w/meta/0.sh: line 2: y\n"), b"y\n");
     }
 
     #[test]
     fn パスは語の頭だけを_1_度置き換える() {
         let r = |o: &[u8]| rewrite_paths(o, b"/w/root", b"/w/tmp");
-        // dune 3.21.1 と同じく、語の途中のパスと、別の語に続くパスは置き換えない。
+        // dune 3.21.1 と同じく、単語の途中に現れるパスは置き換えない。
         assert_eq!(r(b"/x/w/root/a"), b"/x/w/root/a");
         assert_eq!(r(b"/w/root/a/w/root"), b"$TESTCASE_ROOT/a/w/root");
         assert_eq!(r(b"/w/root/a /w/tmp/b"), b"$TESTCASE_ROOT/a $TMPDIR/b");
-        // `/` は語の始まりなので、語の文字に続く `/` からも語が始まる。
+        // 単語は `/` から始まる。`x/w/root/a` のように、ほかの文字の直後にある `/` からも単語が始まるので、そこから置き換える。
         assert_eq!(r(b"x/w/root/a"), b"x$TESTCASE_ROOT/a");
-        // `:` は語を切る。
+        // `:` は単語を区切る。
         assert_eq!(r(b"/w/root/a:/w/tmp:x"), b"$TESTCASE_ROOT/a:$TMPDIR:x");
-        // 頭の比べ方は文字列の接頭辞である。
+        // 単語の先頭は文字列の接頭辞として比較する。
         assert_eq!(r(b"/w/rootx"), b"$TESTCASE_ROOTx");
         assert_eq!(r(b"a / b //"), b"a / b //");
     }

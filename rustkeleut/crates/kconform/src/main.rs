@@ -1,15 +1,16 @@
-//! kconform は、RustKeleut の差分試験の実行器である(計画 261024-1 の 8.1 節)。
+//! kconform は、RustKeleut の差分テストを実行するツールである。
 //!
-//! | 形 | 働き |
+//! | 書式 | 動作 |
 //! |---|---|
-//! | `kconform [--pairs P,…] [--suite S] [--extra=FLAG…] [FILES…]` | 組ごとに走らせ、組の間で比べ、各組を `.t` に記録した期待とも比べる |
-//! | `kconform expect FILES…` | 組の間で比べずに走らせ、`.t` に記録した期待とだけ比べる |
-//! | `kconform kir-roundtrip` | コーパスの全件で、KIR の往復と 2 つのプロセスの書き出しの一致を確かめ、`conformance/kir-fixtures/` の見本を両方の読み手で読む |
+//! | `kconform [--pairs P,…] [--suite S] [--extra=FLAG…] [FILES…]` | テストをペアごとに実行し、ペアの間で結果を比較する。各ペアの結果は `.t` に書いた期待出力とも比較する |
+//! | `kconform expect FILES…` | ペアの間の比較をせずに実行し、`.t` に書いた期待出力とだけ比較する |
+//! | `kconform kir-roundtrip` | コーパスの全件で、KIR のテキストとバイナリを相互に変換して元に戻ること(ラウンドトリップ)と、2 つのプロセスが書き出した KIR が一致することを確かめる。`conformance/kir-fixtures/` のフィクスチャを Diktor と RustKeleut の両方のリーダで読むことも確かめる |
 //! | `kconform extract-corpus` | cram のヒアドキュメントから `.kel` を抜き出し、`conformance/corpus/` に置く |
 //!
 //! PATH の先頭に置く shim は、`kconform __shim diktor|keleut ARGS…` を呼ぶ(`shim` モジュール)。
 //!
-//! 終了状態は、差が無ければ 0、登録の無い差か失敗があれば 1、使い方の誤りなら 64、内部の誤りなら 70 である。
+//! 終了コードは、差分がなければ 0、未登録の差分か失敗があれば 1、使い方のエラーなら 64、内部エラーなら 70 である。
+//! kconform は、出力ではペアを「組」、バックエンドを「後段」、テストを「試験」、既知の差分を「既知の差」、期待出力を主に「記録」と書く(「期待の出力」と書く行もある)。
 
 mod corpus;
 mod cram;
@@ -51,7 +52,9 @@ options:
   --list-invocations  print FILE:LINE [PAIR] and the shim calls of each command that reached the shim
 ";
 
-/// 共通の選択肢である。
+/// コマンド行のオプションを読んだ結果。
+///
+/// どのサブコマンドも同じ構造体を使い、自分に関係するフィールドだけを読む。
 #[derive(Debug, Clone)]
 struct Options {
     root: PathBuf,
@@ -75,7 +78,7 @@ struct Options {
     files: Vec<PathBuf>,
 }
 
-/// 使い方の誤りである。
+/// 使い方のエラー。標準エラーに書くメッセージを持つ。
 struct Usage(String);
 
 fn default_root() -> PathBuf {
@@ -207,10 +210,11 @@ impl Options {
             .unwrap_or_else(|| self.conformance().join("corpus"))
     }
 
-    /// 読む既知の差の一覧である。
+    /// 読み込む既知の差分の一覧のパスを返す。
     ///
-    /// `--known-diffs` を与えなければ、`conformance/known-diffs.toml` と、
-    /// その横の `known-diffs-*.toml`(名前の順。一時の登録を分けて置くもの)を読む。
+    /// `--known-diffs` を指定しなければ、`conformance/known-diffs.toml` と、
+    /// 同じディレクトリの `known-diffs-*.toml` を名前の順に読む。
+    /// `known-diffs-*.toml` は、一時的な登録を分けて置くためのファイルである。
     fn known_diffs_paths(&self) -> Vec<PathBuf> {
         if let Some(p) = &self.known_diffs {
             return vec![p.clone()];
@@ -235,7 +239,8 @@ impl Options {
     }
 }
 
-/// 絶対パスにする(shim が別のディレクトリから起動するため)。
+/// パスを絶対パスにする。
+/// shim はテストの作業ディレクトリで起動されるので、相対パスのままでは使えない。
 fn absolute(p: &Path) -> PathBuf {
     std::fs::canonicalize(p).unwrap_or_else(|_| {
         std::env::current_dir()
@@ -244,7 +249,7 @@ fn absolute(p: &Path) -> PathBuf {
     })
 }
 
-/// shim のディレクトリを作る(`diktor` と `keleut` のスクリプトを置く)。
+/// shim のディレクトリを作り、`diktor` と `keleut` のスクリプトを置く。
 fn make_shim_dir(keep: bool) -> std::io::Result<util::TempDir> {
     use std::os::unix::fs::PermissionsExt;
     let dir = util::TempDir::new("kconform-shim", keep)?;
@@ -269,7 +274,8 @@ fn t_files_in(dir: &Path) -> Vec<PathBuf> {
     v
 }
 
-/// `conformance/` の下の `.t` を集める(`corpus/` と、`skip` に挙げたディレクトリを除く)。
+/// `conformance/` の下の `.t` を集める。
+/// `corpus/` と、`skip` に挙げた直下のディレクトリは除く。
 fn conformance_files(dir: &Path, skip: &[&str]) -> Vec<PathBuf> {
     let mut v = t_files_in(dir);
     let mut subs: Vec<PathBuf> = std::fs::read_dir(dir)
@@ -290,7 +296,7 @@ fn conformance_files(dir: &Path, skip: &[&str]) -> Vec<PathBuf> {
     v
 }
 
-/// コーパスの 1 項目を、1 つのコマンド(`diktor 旗 FILE`)の試験にする。
+/// コーパスの 1 項目を、コマンド 1 つ(`diktor [オプション] FILE`)のテストにする。
 fn corpus_case(corpus: &Path, e: &corpus::Entry) -> Case {
     let src = corpus.join(&e.path);
     let name = src.file_name().unwrap().to_string_lossy().into_owned();
@@ -316,7 +322,7 @@ fn corpus_case(corpus: &Path, e: &corpus::Entry) -> Case {
     }
 }
 
-/// `.kel` のファイルを、1 つのコマンドの試験にする。
+/// `.kel` のファイルを、コマンド 1 つのテストにする。
 fn kel_case(p: &Path) -> Case {
     let entry = corpus::Entry {
         path: p.file_name().unwrap().to_string_lossy().into_owned(),
@@ -326,15 +332,17 @@ fn kel_case(p: &Path) -> Case {
     corpus_case(p.parent().unwrap_or(Path::new(".")), &entry)
 }
 
-/// 1 件の差である。
+/// 比較で見つけた差分 1 件。どのテストのどのコマンドで、どのペアの結果が何と違ったかを持つ。
 struct Difference {
+    /// テストの番号(`cases` の添字)。
     case: usize,
+    /// テストの中のコマンドの番号。
     command: usize,
-    /// 差のある組の実体の名前である。
+    /// 差分のあるペアの、個々の構成の名前(`ka=3` など)。
     pair: String,
-    /// 比べた相手(`記録` か、基準の組の名前)である。
+    /// 比較対象の表示。`記録`(期待出力)か、基準のペアの名前を含む文字列である。
     against: String,
-    /// 比較の種類(既知の差の `against` の照合に使う)である。
+    /// 比較の種類。既知の差分の `against` との照合に使う。
     cmp: known_diffs::Comparison,
     want: Vec<Vec<u8>>,
     got: Vec<Vec<u8>>,
@@ -346,11 +354,11 @@ fn show(lines: &[Vec<u8>], mark: char) {
     }
 }
 
-/// 組の間の比較の基準にする組の、`run_pairs` の中の位置を返す。
+/// ペアの間の比較で基準にするペアの、`run_pairs` の中の位置を返す。
 ///
-/// 計画 8.2 節のとおり `dk` を基準にする。
-/// `dk` が無ければ `dk-ir`(組 `depth` の試験群など)、それも無ければ最初の組である。
-/// `--pairs` に書いた順に依らずに、同じ既知の差の一覧が当たるようにするためである。
+/// `dk` があれば `dk` を基準にする。
+/// `dk` がなければ `dk-ir`(`--suite depth` など)、それもなければ最初のペアを基準にする。
+/// こうすると、`--pairs` に書いた順序によらず、既知の差分の同じ項目が該当する。
 fn base_index(run_pairs: &[Pair]) -> usize {
     ["dk", "dk-ir"]
         .iter()
@@ -358,27 +366,28 @@ fn base_index(run_pairs: &[Pair]) -> usize {
         .unwrap_or(0)
 }
 
-/// 深さの試験群(`--suite depth`)で走らせない組である。
+/// 深さのテストスイート(`--suite depth`)で実行しないペア。
 ///
-/// 計画 8.2 節のとおり、深さの試験は `dk-ir` と RustKeleut の組で比べ、`dk` とは比べない。
-/// `kf` も Diktor の木の評価器で走り、`keleut run --max-depth` の限度を持たないので除く。
+/// 深さのテストは `dk-ir` と RustKeleut のペアで比較する。
+/// `dk` と `kf` は Diktor の構文木の評価器で実行するので、`keleut run --max-depth` の上限が適用されない。
 const NOT_IN_DEPTH: &[&str] = &["dk", "kf"];
 
-/// 深さの試験群を走らせるかどうかを返す。
+/// 深さのテストスイートを実行するなら真を返す。
 fn depth_suite(o: &Options) -> bool {
     o.suite.as_deref() == Some("depth")
 }
 
-/// RustKeleut の後段の組の間の差を集める(計画 8.2 節、D499)。
+/// RustKeleut のバックエンドのペアの間の差分を集める。
 ///
-/// 同じ書き手の後段の組を 1 つの群にする。
-/// 実行系が [`Engine::Keleut`] の組(Diktor が書いた KIR。`ka` と `km` の種ごとの実体を含む)と、
-/// [`Engine::RustKeleut`] の組(Rust のフロントエンドが書いた KIR。`kr-ka` と `kr-km` の種ごとの実体を含む)である。
-/// 群ごとに、誤りの無い最初の組を基準にし、ほかの組の各コマンドの結果を正規化をせずに基準の組と比べる。
-/// 後段の間は完全に一致しなければならないからである。
-/// 書き手の違う群の間(`ki` と `kr-ki` など)は、診断の文面が違ってよいので、ここでは比べない。
-/// 誤りのある組は [`report`] が失敗として数えるので、ここでは比べない。
-/// 返す差は [`known_diffs::Comparison::Backend`] の比較で、どの既知の差の項目にも当たらない。
+/// KIR のライタが同じペアを 1 つのグループにする。
+/// グループは 2 つある。
+/// 処理系が [`Engine::Keleut`] のペアは、Diktor が書いた KIR を実行する(`ka` と `km` はシードごとの個々の構成を含む)。
+/// 処理系が [`Engine::RustKeleut`] のペアは、Rust のフロントエンドが書いた KIR を実行する(`kr-ka` と `kr-km` はシードごとの個々の構成を含む)。
+/// グループごとに、エラーのない最初のペアを基準にし、ほかのペアの各コマンドの結果を、正規化せずに基準のペアと比較する。
+/// バックエンドどうしは完全に一致しなければならないからである。
+/// ライタの違うグループの間(`ki` と `kr-ki` など)は、診断メッセージが違ってよいので、ここでは比較しない。
+/// エラーのあるペアは [`report`] が失敗として数えるので、ここでは比較しない。
+/// 返す差分は比較の種類が [`known_diffs::Comparison::Backend`] で、既知の差分のどの項目にも該当しない。
 fn backend_diffs(
     case: usize,
     run_pairs: &[Pair],
@@ -392,7 +401,7 @@ fn backend_diffs(
     v
 }
 
-/// [`backend_diffs`] の 1 つの群(実行系が `engine` の組)の差を集める。
+/// [`backend_diffs`] のグループ 1 つ(処理系が `engine` のペア)の差分を集める。
 fn backend_group_diffs(
     case: usize,
     run_pairs: &[Pair],
@@ -427,7 +436,7 @@ fn backend_group_diffs(
     v
 }
 
-/// 走らせた結果を比べ、報告し、終了状態を返す。
+/// 実行の結果を比較して報告し、終了コードを返す。
 fn report(
     o: &Options,
     cases: &[Case],
@@ -439,20 +448,20 @@ fn report(
     let mut diffs = Vec::new();
     let mut failures = Vec::new();
     let mut exact_mismatch = 0usize;
-    // 正規化の後は一致するが、前は違うもの(`--verbose` で印字する)。
+    // 正規化すれば一致するが、正規化の前は違うもの(`--verbose` のときに表示する)。
     let mut exact_only = Vec::new();
     let mut compared = 0usize;
     let mut commands_total = 0usize;
     let mut invocations = 0usize;
     let mut diktor_commands = 0usize;
     let mut bypass = Vec::new();
-    // コマンドの `--backend` が組の後段を上書きしたもの(shim の `backend-override` の行)。
+    // コマンドの `--backend` がペアのバックエンドを上書きしたもの(shim のログの `backend-override` の行)。
     let mut overridden = Vec::new();
     let base_i = base_index(run_pairs);
     let depth = depth_suite(o);
-    // 後段の組の間の差(既知の差の一覧に照らさない)。
+    // バックエンドのペアの間の差分(既知の差分の一覧と照合しない)。
     let mut backend = Vec::new();
-    // どのコマンドにも付かない期待の出力の行(dune は捨てるので、記録との差になる)。
+    // どのコマンドにも属さない期待出力の行の数(dune はこの行を捨てるので、期待出力との差分として数える)。
     let mut dropped = 0usize;
     for case in cases.iter().filter(|c| c.has_expectations) {
         for (line, text) in cram::dropped(&case.items) {
@@ -498,7 +507,7 @@ fn report(
                         who.join(",")
                     );
                 }
-                // 深さの試験では、予備の検査の終了状態 70 を失敗にする(計画 8.2 節)。
+                // 深さのテストでは、スタック残量の検査(出力では「予備の検査」)による終了コード 70 を失敗として扱う。
                 if depth && matches!(r.outcomes[k], cram::Outcome::Ran { code: 70, .. }) {
                     failures.push(format!(
                         "{}:{} [{}]: 終了状態 70(深さの試験では予備の検査を失敗にする)",
@@ -626,7 +635,7 @@ fn report(
         show(&d.want, '-');
         show(&d.got, '+');
     }
-    // 後段の組の間の差は、すべて登録の無い差に数える(D499)。
+    // バックエンドのペアの間の差分は、すべて未登録の差分として数える。
     let mut backend_unknown = 0usize;
     for d in &backend {
         let case = &cases[d.case];
@@ -659,7 +668,7 @@ fn report(
             println!("shim を通らない: {b}");
         }
     }
-    // 組の後段で走らなかったコマンドは、組の比べ方から漏れているので、いつも印字する。
+    // ペアのバックエンドで実行されなかったコマンドは、そのペアの比較から漏れているので、`--verbose` でなくても表示する。
     for b in &overridden {
         println!("組の後段の上書き: {b}");
     }
@@ -711,7 +720,10 @@ fn report(
     }
 }
 
-/// 走らせる試験を集める。
+/// 実行するテストを集める。
+///
+/// ファイルを指定しなければ、`--suite` のテストスイートを集める。
+/// `all` のコーパスは、`include_corpus` が真のときだけ加える。
 fn collect_cases(o: &Options, include_corpus: bool) -> Result<Vec<Case>, String> {
     let mut paths = Vec::new();
     let mut kels = Vec::new();
@@ -758,7 +770,7 @@ fn collect_cases(o: &Options, include_corpus: bool) -> Result<Vec<Case>, String>
     Ok(cases)
 }
 
-/// 既知の差の項目が指しうる、すべての試験のファイルのパスである。
+/// 既知の差分の項目が指すことのある、すべてのテストのファイルのパスを返す。
 ///
 /// diktor/test の `.t`、`conformance/` の下のすべての `.t`(`depth/` と `frontend-depth/` を含む)、
 /// コーパスの `.kel` である。
@@ -784,7 +796,7 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
             return 64;
         }
     };
-    // 試験が 1 つも無ければ、何も確かめていないので失敗にする(`conformance/depth/` が無いときなど)。
+    // テストが 1 つもなければ、何も確かめていないので失敗として終了する(`conformance/depth/` がないときなど)。
     if cases.is_empty() {
         eprintln!("kconform: 走らせる試験がありません");
         return 1;
@@ -806,8 +818,9 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
     if !errs.is_empty() {
         return 64;
     }
-    // 試験群を走らせるときは、どの試験のファイルにも当たらない項目を誤りにする(ファイルの名前の誤りに気づく)。
-    // 走らせない組の項目や、この試験群で集めないコーパスと `depth` の試験の項目も確かめる。
+    // テストスイートを実行するときは、既知の差分の一覧に、どのテストのファイルにも該当しない項目があれば使い方のエラーにする。
+    // ファイル名の誤りを検出するためである。
+    // 実行しないペアの項目や、このテストスイートで集めないコーパスと `depth` のテストの項目も確かめる。
     if o.files.is_empty() {
         let universe = all_test_keys(o);
         let mut orphan = 0;
@@ -824,11 +837,12 @@ fn run_suite(o: &Options, run_pairs: Vec<Pair>, compare_pairs: bool) -> u8 {
             return 64;
         }
     }
-    // `kconform expect` は記録とだけ比べるので、基準の組との差だけを許す項目を使わない。
+    // `kconform expect` は期待出力とだけ比較するので、基準のペアとの差分だけを許す項目を使わない。
     if !compare_pairs {
         known.retain(|e| e.against != known_diffs::Against::Pair);
     }
-    // 一覧の項目が、走らせる試験のコマンドの行を指していることを確かめる(試験の行がずれたら気づく)。
+    // 一覧の項目が、実行するテストのコマンドの行を指していることを確かめる。
+    // テストを編集して行番号がずれたことを検出するためである。
     let mut stale = 0;
     for e in &known {
         for c in cases.iter().filter(|c| c.key.ends_with(Path::new(&e.file))) {
@@ -968,10 +982,10 @@ fn main_default(o: &Options) -> u8 {
     run_suite(o, run_pairs, true)
 }
 
-/// 使う `keleut` が後段 `jit`(feature `llvm`)を持つかを、`keleut --version` で確かめる。
+/// 使う `keleut` がバックエンド `jit`(feature `llvm`)を持つかどうかを、`keleut --version` の出力で調べる。
 ///
-/// `keleut` を起動できないか、出力に後段の行が無いときは、持つとみなす。
-/// そのときは組の実行そのものが失敗として報告されるので、ここでは組を除かない。
+/// `keleut` を起動できないか、出力に `backends:` の行がないときは、持つとみなす。
+/// そのときはペアの実行そのものが失敗として報告されるので、ここではペアを除かない。
 fn keleut_has_jit(o: &Options) -> bool {
     let out = std::process::Command::new(o.keleut_path())
         .arg("--version")
@@ -1064,7 +1078,7 @@ fn main_roundtrip(o: &Options) -> u8 {
 }
 
 fn main() -> ExitCode {
-    // shim として呼ばれたときの引数は、UTF-8 でないことがある(試験が故意に渡す)。
+    // shim として呼ばれたときの引数は、UTF-8 でないことがある(テストが意図して渡す)。
     let mut argv = std::env::args_os();
     let _ = argv.next();
     let raw: Vec<std::ffi::OsString> = argv.collect();
@@ -1138,12 +1152,12 @@ mod tests {
         for out in ["x\n", "y\n", "x\n", "x\n"] {
             rs.push(result(vec![ran(out, 0)]));
         }
-        // 組 dk との差は後段の間の差ではない。
+        // ペア `dk` との差分は、バックエンドの間の差分ではない。
         let d = backend_diffs(0, &ps, &rs, 1);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].pair, "km=2");
         assert_eq!(d[0].cmp, known_diffs::Comparison::Backend);
-        // 両方の組を挙げた項目も、すべての組の項目も当たらない。
+        // 両方のペアを挙げた項目も、すべてのペアを指す項目も該当しない。
         let es = known_diffs::parse(
             "[[diff]]\nfile = \"a.t\"\nline = 1\npairs = [\"ki\", \"km\"]\nreason = \"r\"\nledger = \"V1\"\n\n[[diff]]\nfile = \"a.t\"\nline = 1\npairs = [\"*\"]\nreason = \"r\"\nledger = \"V1\"\nagainst = \"pair\"\n",
         )
@@ -1166,7 +1180,7 @@ mod tests {
                 &d[0].got
             ));
         }
-        // 正規化で消える違いも差にする。
+        // 正規化で消える違いも差分として数える。
         let ps2 = [pairs::expand("ki").unwrap(), pairs::expand("km").unwrap()].concat();
         let rs2: Vec<CaseResult> = ["x.kel:1:1: 型エラー: 甲\n", "x.kel:1:1: 型エラー: 乙\n"]
             .iter()
@@ -1174,11 +1188,11 @@ mod tests {
             .map(|t| result(vec![ran(t, 1)]))
             .collect();
         assert_eq!(backend_diffs(0, &ps2, &rs2, 1).len(), 1);
-        // 誤りのある組は比べない。
+        // エラーのあるペアは比較しない。
         let mut rs3 = rs2;
         rs3[1].error = Some("e".to_string());
         assert!(backend_diffs(0, &ps2, &rs3, 1).is_empty());
-        // 基準の組に誤りがあれば、誤りの無い次の組を基準にする。
+        // 基準のペアにエラーがあれば、エラーのない次のペアを基準にする。
         rs3[1].error = None;
         rs3[0].error = Some("e".to_string());
         assert_eq!(backend_diffs(0, &ps2, &rs3, 1).len(), 3);

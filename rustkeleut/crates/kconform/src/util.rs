@@ -1,4 +1,6 @@
-//! 一時のディレクトリ、並行の実行、時間切れのある子プロセスである。
+//! kconform の各モジュールが共通に使う補助関数と型を置く。
+//!
+//! 一時ディレクトリ、並行実行、タイムアウト付きの子プロセスの待機、出力の後処理、シェルに渡す文字列の引用を扱う。
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
@@ -6,8 +8,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-/// 消し忘れない一時のディレクトリである。
-/// 落とすと中身ごと消す(`keep` が立っていれば残す)。
+/// 削除し忘れることのない一時ディレクトリである。
+/// ドロップすると内容ごと削除する。
+/// `keep` が真なら削除せず、残したパスを標準エラーに書く。
 pub struct TempDir {
     path: PathBuf,
     keep: bool,
@@ -16,7 +19,8 @@ pub struct TempDir {
 static SEQ: AtomicUsize = AtomicUsize::new(0);
 
 impl TempDir {
-    /// `TMPDIR`(無ければ `/tmp`)の下に新しいディレクトリを作る。
+    /// `TMPDIR`(なければ `/tmp`)の下に新しいディレクトリを作る。
+    /// 名前は `prefix`、プロセス ID、通し番号をつないだもので、すでにあれば次の番号で作る。
     pub fn new(prefix: &str, keep: bool) -> std::io::Result<TempDir> {
         let base = std::env::temp_dir();
         loop {
@@ -48,7 +52,7 @@ impl Drop for TempDir {
     }
 }
 
-/// `items` の各要素に `f` を `jobs` 本のスレッドで当て、元の順の結果を返す。
+/// `items` の各要素に `f` を `jobs` 本のスレッドで適用し、結果を `items` と同じ順に並べて返す。
 pub fn par_map<T: Sync, R: Send>(items: &[T], jobs: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let next = AtomicUsize::new(0);
     let results: Mutex<Vec<Option<R>>> = Mutex::new((0..items.len()).map(|_| None).collect());
@@ -74,10 +78,10 @@ pub fn par_map<T: Sync, R: Send>(items: &[T], jobs: usize, f: impl Fn(&T) -> R +
         .collect()
 }
 
-/// 子プロセスを、時間切れのある形で待つ。
+/// 子プロセスの終了を、タイムアウト付きで待つ。
 ///
-/// 子プロセスは自分のプロセスグループで起動しておくこと(`process_group(0)`)。
-/// 時間切れになったら、そのグループのすべてに SIGKILL を送り、`None` を返す。
+/// 呼び出し元は、子プロセスを、それ自身を先頭とするプロセスグループで起動しておく必要がある(`process_group(0)`)。
+/// `limit` を過ぎたら、そのグループのすべてのプロセスに SIGKILL を送り、`None` を返す。
 pub fn wait_timeout(child: &mut Child, limit: Duration) -> std::io::Result<Option<ExitStatus>> {
     let start = Instant::now();
     let mut sleep = Duration::from_millis(1);
@@ -101,10 +105,10 @@ pub fn wait_timeout(child: &mut Child, limit: Duration) -> std::io::Result<Optio
     }
 }
 
-/// 端末の色の指定を除く(dune 3.21.1 の `Ansi_color.strip` と同じ)。
+/// 端末の色の指定を取り除く(dune 3.21.1 の `Ansi_color.strip` と同じ)。
 ///
-/// ESC から、その後に最初に現れる `m` までを除く。
-/// `m` が現れなければ、ESC から終わりまでを除く。
+/// ESC から、その後に最初に現れる `m` までを取り除く。
+/// `m` が現れなければ、ESC から終わりまでを取り除く。
 pub fn strip_ansi(hay: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(hay.len());
     let mut i = 0;
@@ -122,13 +126,13 @@ pub fn strip_ansi(hay: &[u8]) -> Vec<u8> {
     out
 }
 
-/// シェルの誤りの文面の頭に付く、スクリプトの位置を除く(dune 3.21.1 の cram と同じ)。
+/// シェルのエラーメッセージの先頭に付く、スクリプトの位置を取り除く(dune 3.21.1 の cram と同じ)。
 ///
-/// 行の頭にある次の 2 つの形を、行ごとに 1 度だけ除く。
-/// `N` は 0 で始まらない 10 進の数である。
+/// 行の先頭にある次の 2 つの形式を、行ごとに 1 度だけ取り除く。
+/// `N` は 0 で始まらない 10 進数である。
 ///
-/// - `<parent>: N: <command>: `(dash の形)
-/// - `<command>: line N: `(bash の形)
+/// - `<parent>: N: <command>: `(dash の形式)
+/// - `<command>: line N: `(bash の形式)
 pub fn strip_script_prefixes(hay: &[u8], parent: &[u8], command: &[u8]) -> Vec<u8> {
     fn line_number(s: &[u8]) -> Option<&[u8]> {
         let n = s.iter().take_while(|b| b.is_ascii_digit()).count();
@@ -155,7 +159,8 @@ pub fn strip_script_prefixes(hay: &[u8], parent: &[u8], command: &[u8]) -> Vec<u
     out
 }
 
-/// シェルの引数として安全な形にする(単一引用符で囲む)。
+/// 文字列を、シェルが 1 つの引数としてそのまま読む形にする。
+/// 全体を単一引用符で囲み、中の単一引用符は `'\''` に置き換える。
 pub fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }

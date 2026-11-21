@@ -1,49 +1,54 @@
-//! PATH の先頭に置く `diktor` と `keleut` の shim である(計画 261024-1 の 8.1 節)。
+//! PATH の先頭に置く `diktor` と `keleut` の shim である。
 //!
-//! shim は小さな `sh` のスクリプトで、呼び出しを記録し、組 `dk`(と組の無いとき)の `diktor` は本物へ直に `exec` する。
-//! そのほかは `kconform __shim diktor|keleut ARGS…` に `exec` し、本モジュールが振り分ける。
+//! shim は小さな `sh` のスクリプトである。
+//! スクリプトは呼び出しをログに書く。
+//! ペアが `dk` のときと、ペアが設定されていないときは、`diktor` の shim が本物の diktor を直接 `exec` する。
+//! それ以外の呼び出しは `kconform __shim diktor|keleut ARGS…` を `exec` し、本モジュールが振り分ける。
 //!
-//! shim を Rust の実行形そのものにしないのは、Rust の実行時が起動のときに、閉じた標準入出力(0、1、2)を `/dev/null` で開き直すからである。
-//! `diktor x.kel >&-` のような試験(閉じた標準出力で 74)が、shim を挟むと 0 になってしまう。
-//! そこでスクリプトが、閉じていた記述子の番号を `KCONFORM_CLOSED_FDS` で渡し、本モジュールが `exec` の前に閉じ直す。
+//! shim を Rust の実行ファイルそのものにしないのは、Rust のランタイムが起動時に、閉じている標準入出力(ファイル記述子 0、1、2)を `/dev/null` で開き直すからである。
+//! shim が Rust の実行ファイルだと、`diktor x.kel >&-` のように標準出力を閉じて終了コード 74 を確かめるテストで、コマンドが 0 で終了してしまう。
+//! そこで、スクリプトは、呼ばれたときに閉じていたファイル記述子の番号を `KCONFORM_CLOSED_FDS` で渡し、本モジュールが `exec` の前にそれらを閉じ直す。
 //!
-//! 行き先は環境変数で受け取る。
+//! 転送先などの設定は環境変数で受け取る。
 //!
-//! | 変数 | 中身 |
+//! | 変数 | 内容 |
 //! |---|---|
-//! | `KCONFORM_REAL_DIKTOR` | 本物の diktor の実行形 |
-//! | `KCONFORM_REAL_KELEUT` | 本物の keleut の実行形 |
-//! | `KCONFORM_PAIR` | 組の名前(`dk`、`dk-ir`、`ki` など) |
-//! | `KCONFORM_PAIR_ARGS` | 組の `keleut run` の選択肢(空白区切り。`--extra` の旗を含む) |
-//! | `KCONFORM_LOG` | 呼び出しを 1 行ずつ足す記録のファイル |
-//! | `KCONFORM_CMD` | いま走っている cram のコマンドの番号 |
-//! | `KCONFORM_CLOSED_FDS` | shim が呼ばれたときに閉じていた標準入出力の番号(空白区切り) |
+//! | `KCONFORM_REAL_DIKTOR` | 本物の diktor の実行ファイル |
+//! | `KCONFORM_REAL_KELEUT` | 本物の keleut の実行ファイル |
+//! | `KCONFORM_PAIR` | ペアの名前(`dk`、`dk-ir`、`ki` など) |
+//! | `KCONFORM_PAIR_ARGS` | ペアが `keleut run` に渡すオプションを空白で区切ったもの。RustKeleut のバックエンドで実行するペアでは `--extra` のオプションを含む |
+//! | `KCONFORM_LOG` | 呼び出しを 1 行ずつ追記するログファイル |
+//! | `KCONFORM_CMD` | 実行中の cram のコマンドの番号 |
+//! | `KCONFORM_CLOSED_FDS` | shim が呼ばれたときに閉じていた標準入出力のファイル記述子の番号(空白区切り) |
 //!
-//! 行き先へは `exec` で移る。
-//! 標準入力、開いているファイル記述子、シグナルによる終わり方が、本物を直に呼んだときと同じになる。
+//! 転送先の実行ファイルは `exec` で起動する。
+//! そのため、標準入力、開いているファイル記述子、シグナルによる終了の扱いが、本物を直接呼んだときと同じになる。
 
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
-/// diktor の呼び出しの振り分け先(計画 8.1 節の shim の表の行)である。
+/// Diktor の呼び出しの分類である。
+/// [`classify`] が決め、[`diktor`] がペアと分類から転送先を選ぶ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route {
-    /// 実行(旗なし、`--prelude`、`--no-prelude`、`--import-path`)。
+    /// 実行。ほかのどの分類にも該当しない呼び出しで、オプションなしか、`--prelude`、`--no-prelude`、`--import-path` を付けた呼び出しがこれになる。
     Run,
-    /// `--type-check`、`--strict-exhaustive`。
+    /// `--type-check` か `--strict-exhaustive` を付けた呼び出し。
     TypeCheck,
-    /// `--dump-tokens`、`--dump-ast`。
+    /// `--dump-tokens` か `--dump-ast` を付けた呼び出し。
     Dump,
-    /// `--repl`。
+    /// `--repl` を付けた呼び出し。
     Repl,
     /// Diktor 自身の IR の経路を試す呼び出し。
-    /// 組に依らず、いつも本物の diktor に渡す。
+    /// ペア `x-ir` では、KIR を書き出すだけの呼び出しを `keleut emit-kir` に転送する。
+    /// それ以外は、どのペアでも本物の diktor に渡す。
     DiktorIr,
 }
 
-/// Diktor の IR の旗である。
+/// Diktor の IR のオプションである。
+/// 1 つでも含む呼び出しは [`Route::DiktorIr`] に分類する。
 const IR_FLAGS: &[&str] = &[
     "--emit-ir",
     "--emit-ir-text",
@@ -53,8 +58,8 @@ const IR_FLAGS: &[&str] = &[
     "--dump-ir-tables",
 ];
 
-/// 引数を 1 つ取る Diktor の旗である。
-/// その引数を旗と取り違えないために使う。
+/// 引数を 1 つ取る Diktor のオプションである。
+/// その引数をオプションと取り違えないために使う。
 const TAKES_ARG: &[&str] = &[
     "--prelude",
     "--import-path",
@@ -64,15 +69,16 @@ const TAKES_ARG: &[&str] = &[
     "--max-depth",
 ];
 
-/// diktor の呼び出しを振り分ける。
+/// Diktor の呼び出しを分類する。
 ///
-/// 2 つ以上の行に当たる呼び出しは、Diktor の IR の旗の行を先に当てる。
-/// `via_ir` は、環境変数 `DIKTOR_VIA_IR` が立っているかである。
+/// 複数の分類に該当する呼び出しは、IR(`via_ir` が真か、IR のオプションがある)、`--repl`、ダンプ、型検査の順に調べ、最初に該当した分類にする。
+/// どれにも該当しなければ実行に分類する。
+/// `via_ir` には、環境変数 `DIKTOR_VIA_IR` が設定されているかどうかを渡す。
 pub fn classify(args: &[OsString], via_ir: bool) -> Route {
     let mut flags = Vec::new();
     let mut i = 0;
     while i < args.len() {
-        // 旗は ASCII なので、UTF-8 でない引数は旗でない。
+        // オプションは ASCII なので、UTF-8 でない引数はオプションでない。
         let a = args[i].to_str().unwrap_or("");
         if a.starts_with("--") {
             flags.push(a);
@@ -96,10 +102,11 @@ pub fn classify(args: &[OsString], via_ir: bool) -> Route {
     }
 }
 
-/// 環境変数 `DIKTOR_VIA_IR` が立っているかを返す。
+/// 環境変数 `DIKTOR_VIA_IR` が設定されていれば真を返す。
 ///
-/// kconform は試験の環境からこの変数を消すので、立っているのは試験のコマンドが自分で立てたときだけである。
-/// `DIKTOR_VIA_IR=0` も、木の評価器を名指しする呼び出しなので、値に依らず Diktor の IR の行に当てる。
+/// kconform はテストの環境からこの変数を取り除くので、設定されているのはテストのコマンドが自分で設定したときだけである。
+/// Diktor が `--via-ir` と同じ実行をするのは値が `1` のときだけである。
+/// しかし `DIKTOR_VIA_IR=0` も、構文木の評価器を明示して選ぶ呼び出しなので、値によらず [`Route::DiktorIr`] に分類する。
 pub fn via_ir_env() -> bool {
     std::env::var_os("DIKTOR_VIA_IR").is_some()
 }
@@ -110,8 +117,8 @@ fn env(name: &str) -> Option<OsString> {
 
 /// shim のスクリプトを作る。
 ///
-/// `who` は shim の名前(`diktor` か `keleut`)、`kconform` は kconform の実行形の絶対パスである。
-/// 記録の行は「コマンドの番号、タブ、shim の名前、タブ、引数を 0x1f で区切った列」で、1 回の `printf` で足す。
+/// `who` は shim の名前(`diktor` か `keleut`)、`kconform` は kconform の実行ファイルの絶対パスである。
+/// ログの 1 行は「コマンドの番号、タブ、shim の名前、タブ、引数を 0x1f で区切って並べたもの」で、1 回の `printf` で追記する。
 /// 1 回の write で書くので、パイプの両側で並行に呼ばれた shim の行は混ざらない。
 pub fn script(who: &str, kconform: &str) -> String {
     let direct = if who == "diktor" {
@@ -145,14 +152,15 @@ fn restore_closed_fds() {
         .filter_map(|n| n.parse::<i32>().ok())
     {
         if (0..=2).contains(&n) {
-            // SAFETY: 0〜2 は Rust の実行時が起動のときに `/dev/null` で開いたもので、
-            // 本プロセスはこれらの記述子を所有する値をほかに持たない(標準入出力は使う都度に借りる)。
+            // SAFETY: 0〜2 は Rust のランタイムが起動時に `/dev/null` で開いたもので、
+            // 本プロセスはこれらのファイル記述子を所有する値をほかに持たない(標準入出力は使うたびに借用する)。
             drop(unsafe { OwnedFd::from_raw_fd(n) });
         }
     }
 }
 
-/// `exec` に失敗したときの終わり方である(シェルがコマンドを見つけられないときと同じ 127)。
+/// 実行ファイルを起動できなかったことを標準エラーに書き、終了コード 127 を返す。
+/// 127 は、シェルがコマンドを見つけられないときと同じ値である。
 fn exec_failed(prog: &OsString, e: std::io::Error) -> u8 {
     eprintln!(
         "kconform shim: {} を起動できません: {e}",
@@ -161,7 +169,7 @@ fn exec_failed(prog: &OsString, e: std::io::Error) -> u8 {
     127
 }
 
-/// 本物の実行形へ `exec` で移る。
+/// 本物の実行ファイルを `exec` で起動する。
 /// 戻るのは失敗したときだけである。
 fn exec(prog: &OsString, arg0: &str, args: &[OsString]) -> u8 {
     let e = Command::new(prog).arg0(arg0).args(args).exec();
@@ -183,7 +191,9 @@ fn pair_args() -> Vec<OsString> {
         .collect()
 }
 
-/// 一時ファイルの名前を作る(呼び出しの作業ディレクトリの `TMPDIR` の中)。
+/// KIR を書く一時ファイルのパスを作る。
+/// 置く場所は `std::env::temp_dir()` が返すディレクトリである。
+/// これは `TMPDIR` の値で、kconform は `TMPDIR` にテストごとに作るディレクトリを設定する。
 fn temp_kir() -> std::path::PathBuf {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -192,10 +202,11 @@ fn temp_kir() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("kconform-shim-{}-{nanos}.kir", std::process::id()))
 }
 
-/// Diktor の実行の呼び出しを、`--emit-ir` の後の `--run-ir` にする(組 `dk-ir`)。
+/// Diktor の実行の呼び出しを、`diktor --emit-ir` と、その後の `diktor --run-ir` の 2 回の呼び出しに置き換える(ペア `dk-ir`)。
 ///
-/// `run_ir_args` は `--run-ir` の呼び出しに足す旗(`--max-depth N` など)である。
-/// 書き出しが 0 で終わらなければ、その出力と終了状態をそのまま返す。
+/// `run_ir_args` は `--run-ir` の呼び出しに追加するオプション(`--max-depth N` など)である。
+/// `--emit-ir` の終了コードが 0 でなければ、`--run-ir` を実行せずにその終了コードを返すので、出力も `--emit-ir` のものだけになる。
+/// `--emit-ir` がシグナルで終了したときは 70 を返す。
 fn diktor_via_emit(real: &OsString, args: &[OsString], run_ir_args: &[OsString]) -> u8 {
     let kir = temp_kir().into_os_string();
     let mut emit = vec![OsString::from("--emit-ir"), kir.clone()];
@@ -212,10 +223,11 @@ fn diktor_via_emit(real: &OsString, args: &[OsString], run_ir_args: &[OsString])
     exec(real, "diktor", &run)
 }
 
-/// Diktor の実行の呼び出しの旗とファイルを、`keleut emit-kir` の引数に写す(組 `x-ir`)。
+/// Diktor の実行の呼び出しからオプションとファイルを取り出し、`keleut emit-kir` の引数に変換する(ペア `x-ir`)。
 ///
-/// `--no-prelude`、`--prelude`、`--import-path` は同じ綴りで渡す。
-/// ほかの旗(使い方の誤りになるものを含む)と、UTF-8 でない引数を含む呼び出しは `None` を返す(本物の diktor に渡す)。
+/// `--no-prelude`、`--prelude`、`--import-path` は同じ名前のまま渡す。
+/// ほかのオプションを含む呼び出し、UTF-8 でない引数を含む呼び出し、使い方のエラーになる呼び出し(入力ファイルのない呼び出しを含む)では `None` を返す。
+/// `None` を受け取った呼び出し元は、その呼び出しを本物の diktor に渡す。
 fn emit_args(args: &[OsString]) -> Option<Vec<OsString>> {
     let mut out = Vec::new();
     let mut files = 0;
@@ -241,7 +253,11 @@ fn emit_args(args: &[OsString]) -> Option<Vec<OsString>> {
     (files > 0).then_some(out)
 }
 
-/// `keleut emit-kir` を走らせる。`quiet` なら標準エラーを捨てずに預かり、失敗したときだけ書く。
+/// `keleut emit-kir` を実行する。
+///
+/// `text` が真ならテキストの KIR を、偽ならバイナリの KIR を `out` に書かせる。
+/// `quiet` が真なら、`keleut emit-kir` の標準エラーをいったん受け取り、失敗したときだけ shim の標準エラーに書く(成功したときは捨てる)。
+/// 失敗したときは、shim が返す終了コードを `Err` で返す。
 fn keleut_emit(
     real_keleut: &OsString,
     text: bool,
@@ -275,9 +291,10 @@ fn keleut_emit(
     }
 }
 
-/// Diktor の実行の呼び出しを、`keleut emit-kir` の後の `diktor --run-ir` にする(組 `x-ir`)。
+/// Diktor の実行の呼び出しを、`keleut emit-kir` と、その後の `diktor --run-ir` の 2 回の呼び出しに置き換える(ペア `x-ir`)。
 ///
-/// 書き出しが 0 で終わらなければ、その出力と終了状態をそのまま返す。
+/// `keleut emit-kir` の終了コードが 0 でなければ、`--run-ir` を実行せずにその終了コードを返すので、出力も `keleut emit-kir` のものだけになる。
+/// [`emit_args`] が `None` を返す呼び出しは、本物の diktor に渡す。
 fn keleut_via_emit(real: &OsString, args: &[OsString], run_ir_args: &[OsString]) -> u8 {
     let Some(eargs) = emit_args(args) else {
         return exec(real, "diktor", args);
@@ -295,12 +312,12 @@ fn keleut_via_emit(real: &OsString, args: &[OsString], run_ir_args: &[OsString])
     exec(real, "diktor", &run)
 }
 
-/// 組 `x-ir` で、KIR を書き出すだけの呼び出し(`--emit-ir`、`--emit-ir-text` と、プレリュードと import の旗)を
-/// `keleut emit-kir` に振り向ける。
+/// ペア `x-ir` で、KIR を書き出すだけの呼び出しを `keleut emit-kir` に転送する。
+/// 転送するのは、`--emit-ir`、`--emit-ir-text` と、プレリュードと import のオプションだけを付けた呼び出しである。
 ///
-/// 両方の旗があれば、Diktor と同じくテキストを先に書き、警告は 1 回だけ出す。
-/// ほかの IR の旗(`--run-ir`、`--via-ir`、`--max-depth`、`--dump-ir-tables`)やモードの旗を含む呼び出しと、
-/// 環境変数 `DIKTOR_VIA_IR` を立てた呼び出しは、本物の diktor に渡す。
+/// `--emit-ir` と `--emit-ir-text` の両方があれば、Diktor と同じくテキストを先に書き、警告は 1 回だけ出す。
+/// ほかの IR のオプション(`--run-ir`、`--via-ir`、`--max-depth`、`--dump-ir-tables`)やモードのオプションを含む呼び出しと、
+/// 環境変数 `DIKTOR_VIA_IR` を設定した呼び出しは、本物の diktor に渡す。
 fn x_ir_emit(real: &OsString, args: &[OsString]) -> u8 {
     if via_ir_env() {
         return exec(real, "diktor", args);
@@ -349,6 +366,7 @@ fn x_ir_emit(real: &OsString, args: &[OsString]) -> u8 {
 }
 
 /// `diktor` の shim の本体である。
+/// 呼び出しを [`classify`] で分類し、ペアと分類から転送先を選ぶ。
 pub fn diktor(args: &[OsString]) -> u8 {
     restore_closed_fds();
     let real = match required("KCONFORM_REAL_DIKTOR") {
@@ -359,8 +377,8 @@ pub fn diktor(args: &[OsString]) -> u8 {
     let route = classify(args, via_ir_env());
     match (pair.as_str(), route) {
         ("dk-ir", Route::Run) => diktor_via_emit(&real, args, &[]),
-        // `--strict-exhaustive` だけの呼び出しは表では型検査の行にあるが、Diktor はプログラムを実行するので、
-        // 組 `ki` と同じく実行として扱う。
+        // `--strict-exhaustive` があって `--type-check` のない呼び出しは `Route::TypeCheck` に分類されるが、
+        // Diktor はプログラムを実行するので、ペア `ki` と同じく実行として扱う。
         ("dk-ir", Route::TypeCheck) if strict_exhaustive_run(args) => {
             diktor_via_emit(&real, args, &[])
         }
@@ -383,18 +401,19 @@ pub fn diktor(args: &[OsString]) -> u8 {
     }
 }
 
-/// 型検査の行に当たる呼び出しが、実際には実行(`--strict-exhaustive` があり `--type-check` が効かない)かどうかを返す。
+/// [`Route::TypeCheck`] に分類した呼び出しが、実際には実行であれば真を返す。
+/// `--strict-exhaustive` があり、モードが実行のままで、入力ファイルのある呼び出しである。
 fn strict_exhaustive_run(args: &[OsString]) -> bool {
     matches!(diktor_mode(args), Some((Mode::Run, f, _)) if !f.is_empty())
 }
 
-/// 組が RustKeleut の後段(`keleut run`)で実行する組(`ki kj kt ka km kw`)かどうかを返す。
+/// Diktor が書いた KIR を RustKeleut のバックエンド(`keleut run`)で実行するペア(`ki kj kt ka km kw`)であれば真を返す。
 fn is_keleut_pair(name: &str) -> bool {
     crate::pairs::expand(name)
         .is_some_and(|ps| ps.iter().all(|p| p.engine == crate::pairs::Engine::Keleut))
 }
 
-/// 組が Rust のフロントエンドと RustKeleut の後段で実行する組(`kr-*`)かどうかを返す。
+/// Rust のフロントエンドと RustKeleut のバックエンドで実行するペア(`kr-*`)であれば真を返す。
 fn is_rust_pair(name: &str) -> bool {
     crate::pairs::expand(name).is_some_and(|ps| {
         ps.iter()
@@ -402,11 +421,12 @@ fn is_rust_pair(name: &str) -> bool {
     })
 }
 
-/// 組が RustKeleut の後段の組(`ki kj kt ka km kw` と `kr-*`)かどうかを返す。
+/// RustKeleut のバックエンドで実行するペア(`ki kj kt ka km kw` と `kr-*`)であれば真を返す。
 ///
-/// これらの組では、`--repl` の呼び出しを `keleut repl` に振り向ける(計画 8.1 節の shim の表。M100)。
-/// `keleut repl` は組の後段に関係なくインタプリタで実行し、組の選択肢(`--backend`、`--tier`、`--frontend`)は受けて捨てる。
-/// どの後段の組でも REPL の出力が同じになるので、後段の組の間の完全な一致の比べ(D499)が成り立つ。
+/// これらのペアでは、`--repl` の呼び出しを `keleut repl` に転送する。
+/// `keleut repl` はペアのバックエンドに関係なくインタプリタで実行し、ペアのオプション(`--backend`、`--tier`、`--frontend`)は受け付けて無視する。
+/// そのため、どのペアでも REPL の出力は同じになる。
+/// kconform は RustKeleut のバックエンドで実行するペアどうしの結果が完全に一致することを要求するが、REPL のブロックもこの条件を満たす。
 fn repl_pair(name: &str) -> bool {
     crate::pairs::expand(name).is_some_and(|ps| {
         ps.iter().all(|p| {
@@ -418,11 +438,12 @@ fn repl_pair(name: &str) -> bool {
     })
 }
 
-/// Diktor の `--repl` の呼び出しを、`keleut repl 組の選択肢 旗` にする。
+/// Diktor の `--repl` の呼び出しを、`keleut repl` の呼び出しに置き換える。
+/// 引数は、ペアのオプション、Diktor のオプションの順に並べる。
 ///
-/// `--no-prelude` と `--prelude` を渡す。
-/// `--import-path` と `--strict-exhaustive` は Diktor の対話的な実行に効かないので渡さない。
-/// 入力のファイルを渡した呼び出し(使い方の誤り)と、モードが `--repl` でない呼び出しは、本物の diktor に渡す。
+/// Diktor のオプションのうち、`--no-prelude` と `--prelude` を渡す。
+/// `--import-path` と `--strict-exhaustive` は Diktor の REPL に影響しないので渡さない。
+/// 入力ファイルや未知のオプションを渡した呼び出し(使い方のエラー)、UTF-8 でない引数を含む呼び出し、モードが `--repl` でない呼び出しは、本物の diktor に渡す。
 fn repl_to_keleut(real: &OsString, args: &[OsString]) -> u8 {
     let mut mode = Mode::Run;
     let mut flags = Vec::new();
@@ -466,12 +487,12 @@ fn repl_to_keleut(real: &OsString, args: &[OsString]) -> u8 {
     exec(&keleut, "keleut", &v)
 }
 
-/// 組 `kr-*` で、Diktor の実行と型検査の呼び出しを振り分ける。
+/// ペア `kr-*` で、Diktor の実行と型検査の呼び出しを振り分ける。
 ///
-/// - 実行は `keleut compat-diktor 組の選択肢 -- ARGS…` にする(計画 8.1 節の shim の表。組の選択肢は `--frontend rust` を含む)。
-///   `ARGS` は Diktor の呼び出しの引数そのままで、`keleut compat-diktor` が Diktor と同じに解釈して `keleut run` を呼ぶ。
-/// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す。
-/// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+/// - 実行は `keleut compat-diktor ペアのオプション -- ARGS…` の呼び出しに置き換える(ペアのオプションは `--frontend rust` を含む)。
+///   `ARGS` は Diktor の呼び出しの引数そのままで、`keleut compat-diktor` が Diktor と同じように解釈して `keleut run` の処理を実行する。
+/// - 型検査(`--type-check`)は、ペア `kf` と同じく `keleut check` に渡す。
+/// - 使い方のエラーになる呼び出し(入力ファイルのない呼び出しを含む)は、本物の diktor に渡す。
 fn rust_backend(real: &OsString, args: &[OsString]) -> u8 {
     match kf_check_args(args) {
         Some((Mode::Run, _)) => compat_diktor(args, "keleut-rust"),
@@ -480,9 +501,9 @@ fn rust_backend(real: &OsString, args: &[OsString]) -> u8 {
     }
 }
 
-/// Diktor の実行の呼び出しを、`keleut compat-diktor 組の選択肢 -- ARGS…` にする(計画 8.1 節)。
+/// Diktor の実行の呼び出しを、`keleut compat-diktor ペアのオプション -- ARGS…` の呼び出しに置き換える。
 ///
-/// `outcome` は記録の行(`keleut-run` の行)に書く振り分けの名前である。
+/// `outcome` は、ログの `keleut-run` の行に書く転送先の名前である。
 fn compat_diktor(args: &[OsString], outcome: &str) -> u8 {
     let keleut = match required("KCONFORM_REAL_KELEUT") {
         Ok(r) => r,
@@ -491,22 +512,23 @@ fn compat_diktor(args: &[OsString], outcome: &str) -> u8 {
     log_route("keleut-run", outcome);
     let mut v = vec![OsString::from("compat-diktor")];
     v.extend(pair_args());
-    // `--` の前が組の選択肢で、後が Diktor の引数である(Diktor の `--max-depth` を組の選択肢と取り違えない)。
+    // `--` の前がペアのオプションで、後が Diktor の引数である。
+    // `--` で区切るので、`keleut compat-diktor` は Diktor の `--max-depth` をペアのオプションと取り違えない。
     v.push(OsString::from("--"));
     v.extend_from_slice(args);
     exec(&keleut, "keleut", &v)
 }
 
-/// RustKeleut の後段の組で、Diktor の実行と型検査の呼び出しを振り分ける(計画 8.1 節の shim の表)。
+/// Diktor が KIR を書くペア(`ki kj kt ka km kw`)で、Diktor の実行と型検査の呼び出しを振り分ける。
 ///
-/// - 実行(旗なし、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive`)は、
-///   `keleut compat-diktor 組の選択肢 -- ARGS…` にする。
-///   組の選択肢の先頭の `--frontend diktor` で、`keleut run` は PATH の `diktor`(この shim)を `--emit-ir` で呼び、
-///   shim はそれを Diktor の IR の行として本物の diktor に渡す。
-///   本物の `diktor --emit-ir` が 0 で終わらなければ、`keleut run` はその終了状態で終わる
-///   (網羅漏れの警告で 1 で終わるかどうかも、同じ旗を渡した `diktor --emit-ir` が決める)。
-/// - 型検査(`--type-check`)は、組 `kf` と同じく `keleut check` に渡す(M98 で切り替えた行)。
-/// - 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+/// - 実行(オプションなしか、`--prelude`、`--no-prelude`、`--import-path`、`--strict-exhaustive` だけを付けた呼び出し)は、
+///   `keleut compat-diktor ペアのオプション -- ARGS…` の呼び出しに置き換える。
+///   ペアのオプションの先頭に `--frontend diktor` があるので、`keleut run` は PATH の `diktor`(この shim)を `--emit-ir` で呼び、
+///   shim はその呼び出しを [`Route::DiktorIr`] に分類して本物の diktor に渡す。
+///   本物の `diktor --emit-ir` の終了コードが 0 でなければ、`keleut run` は同じ終了コードで終了する。
+///   網羅漏れの警告があるときに 1 で終了するかどうかも、同じオプションを渡した `diktor --emit-ir` が決める。
+/// - 型検査(`--type-check`)は、ペア `kf` と同じく `keleut check` に渡す。
+/// - 使い方のエラーになる呼び出し(入力ファイルのない呼び出しを含む)は、本物の diktor に渡す。
 fn keleut_backend(real: &OsString, args: &[OsString]) -> u8 {
     match diktor_mode(args) {
         Some((Mode::Run, files, _)) if !files.is_empty() => compat_diktor(args, "keleut"),
@@ -515,7 +537,8 @@ fn keleut_backend(real: &OsString, args: &[OsString]) -> u8 {
     }
 }
 
-/// Diktor のモードの旗である(後に書いたものが効く)。
+/// Diktor のモードである。
+/// モードのオプションを複数書いた呼び出しでは、最後に書いたものが優先される。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Run,
@@ -525,12 +548,13 @@ enum Mode {
     DumpAst,
 }
 
-/// IR の旗を含まない diktor の呼び出しを、Diktor の引数解析(driver.ml の `parse_args`)と同じ規則で読む。
+/// IR のオプションを含まない Diktor の呼び出しを、Diktor の引数解析(`driver.ml` の `parse_args`)と同じ規則で読む。
 ///
-/// モード、入力のファイル、`--prelude` があるかを返す。
-/// 知らない旗や、引数の足りない旗があれば `None` を返す(本物の diktor に使い方の誤りを報告させる)。
-/// UTF-8 でない引数を含む呼び出しも `None` を返す(本物の diktor に渡す)。
-/// keleut は UTF-8 でない引数を使い方の誤りにするので、組 `kf` と `kr-*` の [`kf_check_args`] と同じく、
+/// モード、入力ファイル、`--prelude` があったかどうかを返す。
+/// 未知のオプションや、引数の足りないオプションがあれば `None` を返す。
+/// 呼び出し元はその呼び出しを本物の diktor に渡し、使い方のエラーを報告させる。
+/// UTF-8 でない引数を含む呼び出しでも `None` を返す。
+/// keleut は UTF-8 でない引数を使い方のエラーにするので、ペア `kf` と `kr-*` の [`kf_check_args`] と同じく、
 /// そのような呼び出しは本物の diktor に任せる。
 fn diktor_mode(args: &[OsString]) -> Option<(Mode, Vec<OsString>, bool)> {
     let mut mode = Mode::Run;
@@ -560,11 +584,12 @@ fn diktor_mode(args: &[OsString]) -> Option<(Mode, Vec<OsString>, bool)> {
     Some((mode, files, prelude))
 }
 
-/// 組 `kf` などで、`--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump tokens|ast` に振り向ける。
+/// `--dump-tokens` と `--dump-ast` の呼び出しを `keleut dump tokens|ast` に転送する。
+/// `dk`、`dk-ir`、`x-ir` 以外のペア(`kf` と、RustKeleut のバックエンドで実行するペア)で使う。
 ///
-/// Diktor のダンプのモードは、プレリュードと import の旗を読み飛ばし、ファイルを並べた順に処理する。
+/// Diktor のダンプのモードは、プレリュードと import のオプションを無視し、ファイルを並べた順に処理する。
 /// `keleut dump` も同じ順に処理するので、ファイルだけを渡す。
-/// 使い方の誤りになる呼び出しは、本物の diktor に渡す。
+/// 使い方のエラーになる呼び出し(入力ファイルのない呼び出しを含む)は、本物の diktor に渡す。
 fn dump_to_keleut(real_diktor: &OsString, args: &[OsString]) -> u8 {
     let tool = match diktor_mode(args) {
         Some((Mode::DumpTokens, files, _)) if !files.is_empty() => ("tokens", files),
@@ -580,10 +605,13 @@ fn dump_to_keleut(real_diktor: &OsString, args: &[OsString]) -> u8 {
     exec(&real, "keleut", &v)
 }
 
-/// 組 `kf` の実行と型検査の呼び出しを、Diktor の旗のまま `keleut check` の引数に写す。
+/// Diktor の実行と型検査の呼び出しを、オプションの名前を変えずに `keleut check` の引数に変換する。
+/// ペア `kf` と、型検査を `keleut check` に渡すペアで使う。
 ///
-/// モードと、`keleut check` に渡す引数(旗とファイル)を返す。
-/// 使い方の誤りになる呼び出しと、UTF-8 でない引数を含む呼び出しは `None` を返す(本物の diktor に渡す)。
+/// モードと、`keleut check` に渡す引数を返す。
+/// 引数は、オプションを先に、ファイルを後に並べる。
+/// 使い方のエラーになる呼び出し(入力ファイルのない呼び出しを含む)と、UTF-8 でない引数を含む呼び出しでは `None` を返す。
+/// `None` を受け取った呼び出し元は、その呼び出しを本物の diktor に渡す。
 fn kf_check_args(args: &[OsString]) -> Option<(Mode, Vec<OsString>)> {
     let mut mode = Mode::Run;
     let mut flags = Vec::new();
@@ -615,12 +643,14 @@ fn kf_check_args(args: &[OsString]) -> Option<(Mode, Vec<OsString>)> {
     Some((mode, flags))
 }
 
-/// 組 `kf` の振り分けを記録の行に足す(`--list-invocations` に `kf-check` の行として出る)。
+/// `keleut check` に渡した呼び出しの結果を、ログに 1 行追記する。
+/// ログには `kf-check` の行として追記され、`--list-invocations` は、そのコマンドの `呼び出し:` の行の並びに `kf-check` を表示する。
 fn log_kf(outcome: &str) {
     log_route("kf-check", outcome);
 }
 
-/// 振り分けを記録の行に足す(`--list-invocations` に `tag` の行として出る)。
+/// 振り分けの結果を、ログに 1 行追記する。
+/// ログには `tag` の行として追記され、`--list-invocations` は、そのコマンドの `呼び出し:` の行の並びに `tag` を表示する。
 fn log_route(tag: &str, outcome: &str) {
     let Some(log) = env("KCONFORM_LOG") else {
         return;
@@ -637,12 +667,14 @@ fn log_route(tag: &str, outcome: &str) {
     }
 }
 
-/// 組 `kf` の実行と型検査の呼び出しを、RustKeleut の型検査に通す。
+/// Diktor の実行と型検査の呼び出しを、RustKeleut の型検査に通す。
+/// この関数が処理するのは、ペア `kf` の実行の呼び出しと、`kf` と RustKeleut のバックエンドで実行するペアの型検査の呼び出しである。
 ///
-/// 型検査の呼び出し(`--type-check`)は `keleut check` に振り向け、その出力と終了状態を返す。
-/// 実行の呼び出しは、先に `keleut check --quiet` を走らせ、Diktor が実行の前段の型検査で止まる入力
-/// (読めない入力、字句、構文、型、import の誤り、`--strict-exhaustive` の警告)では、その診断と終了状態を返す。
-/// 型検査を通った入力は、本物の diktor に渡して実行する(警告は diktor が出し直す)。
+/// 型検査の呼び出し(`--type-check`)は `keleut check` に転送し、その出力と終了コードを返す。
+/// 実行の呼び出しは、先に `keleut check --quiet` を実行する。
+/// Diktor が実行の前に行う型検査までで終了する入力(読めない入力、字句エラー、構文エラー、型エラー、import のエラー、`--strict-exhaustive` の警告)では、
+/// `keleut check` の診断と終了コードを返す。
+/// 型検査に通った入力は、本物の diktor に渡して実行する(警告は diktor が改めて出す)。
 fn kf_check(real_diktor: &OsString, args: &[OsString]) -> u8 {
     let (mode, kargs) = match kf_check_args(args) {
         Some((m @ (Mode::Run | Mode::TypeCheck), k)) => (m, k),
@@ -688,10 +720,10 @@ fn kf_check(real_diktor: &OsString, args: &[OsString]) -> u8 {
     }
 }
 
-/// `keleut run` の選択肢のうち、Diktor にもある旗と、その引数の数である。
+/// `keleut run` のオプションのうち Diktor にもあるものと、その引数の個数である。
 const RUN_SHARED: &[(&str, usize)] = &[("--no-prelude", 0), ("--prelude", 1), ("--import-path", 1)];
 
-/// `keleut run` の選択肢のうち、RustKeleut だけの旗と、その引数の数である。
+/// `keleut run` のオプションのうち RustKeleut だけにあるものと、その引数の個数である。
 const RUN_KELEUT_ONLY: &[(&str, usize)] = &[
     ("--backend", 1),
     ("--tier", 1),
@@ -702,11 +734,12 @@ const RUN_KELEUT_ONLY: &[(&str, usize)] = &[
     ("--no-yield-prune", 0),
 ];
 
-/// `keleut run ARGS` の `ARGS` を、Diktor の呼び出しに写す(組 `dk` と `dk-ir`)。
+/// `keleut run ARGS` の `ARGS` を、Diktor の呼び出しの引数に変換する(ペア `dk`、`dk-ir`、`kf`、`x-ir`)。
 ///
-/// 戻り値は、Diktor の引数、`--run-ir` に足す旗、KIR のファイルを走らせるかどうかである。
+/// 返り値は、Diktor の引数、`--run-ir` に追加するオプション、KIR のファイルを実行するかどうかの 3 つである。
+/// RustKeleut だけにあるオプションは取り除き、そのうち `--max-depth` だけを `--run-ir` に追加するオプションに入れる。
 /// テキストの KIR(`.kirt`)も KIR のファイルとして扱う。
-/// `diktor --run-ir` はバイナリしか読まないので、[`keleut`] がその呼び出しを断る。
+/// `diktor --run-ir` はバイナリしか読まないので、[`keleut`] がその呼び出しを拒否する。
 fn run_to_diktor(args: &[OsString]) -> (Vec<OsString>, Vec<OsString>, bool) {
     let mut out = Vec::new();
     let mut ir_extra = Vec::new();
@@ -735,6 +768,10 @@ fn run_to_diktor(args: &[OsString]) -> (Vec<OsString>, Vec<OsString>, bool) {
 }
 
 /// `keleut` の shim の本体である。
+///
+/// `keleut run` は、Diktor で実行するペア(`dk`、`dk-ir`、`kf`、`x-ir`)では Diktor の呼び出しに変換する。
+/// それ以外のペアでは、ペアのオプションを付けて本物の keleut に渡す。
+/// `run` 以外のサブコマンドは、引数を変えずに本物の keleut に渡す。
 pub fn keleut(args: &[OsString]) -> u8 {
     restore_closed_fds();
     let pair = std::env::var("KCONFORM_PAIR").unwrap_or_default();
@@ -745,8 +782,8 @@ pub fn keleut(args: &[OsString]) -> u8 {
             Err(c) => return c,
         };
         let (dargs, ir_extra, is_kir) = run_to_diktor(&args[1..]);
-        // `diktor --run-ir` はテキストの KIR を読まないので、Diktor の側だけが shim のせいで 65 になる。
-        // 基準の組の結果を RustKeleut のアセンブラに頼らせないため、変換せずに断る。
+        // `diktor --run-ir` はテキストの KIR を読めないので、そのまま渡すと、shim の変換が原因で Diktor の側だけが終了コード 65 で終了する。
+        // バイナリに変換して渡すと、基準のペアの結果が RustKeleut のアセンブラに依存するので、変換せずに拒否する。
         if dargs.iter().any(|a| a.as_bytes().ends_with(b".kirt")) {
             eprintln!(
                 "kconform shim: 組 {pair} は keleut run のテキストの KIR(.kirt)を Diktor で走らせられません"
@@ -785,16 +822,19 @@ pub fn keleut(args: &[OsString]) -> u8 {
     exec(&real, "keleut", args)
 }
 
-/// コマンドが自分で書いた `keleut run --backend` と、組の後段の食い違いを扱う。
+/// コマンドが自分で書いた `keleut run --backend` と、ペアのバックエンドの食い違いを処理する。
 ///
-/// shim は組の選択肢を先に、コマンドの引数を後に並べるので、後に書いた旗が効く `keleut run` ではコマンドの `--backend` が組の後段に勝つ。
-/// LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`。組の選択肢で見分ける。[`crate::pairs::is_jit_args`])では、
-/// 組の後段を優先して、コマンドの `--backend` を取り除く。
-/// `--backend interp` を書いたコマンドが組の JIT を通らず、比べたことにならないのを防ぐためである。
-/// そのほかの組(`kw` など)では、コマンドの `--backend` を残す(Node は仮想メモリの上限 512 MiB の下で起動できない。V215)。
+/// shim はペアのオプションを先に、コマンドの引数を後に並べ、`keleut run` は後に書いたオプションを優先する。
+/// そのままでは、コマンドの `--backend` がペアのバックエンドより優先される。
+/// LLVM ペア(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)では、ペアのバックエンドを優先して、コマンドの `--backend` を取り除く。
+/// `--backend interp` を書いたコマンドがペアの JIT で実行されず、JIT を比較したことにならないのを防ぐためである。
+/// LLVM ペアかどうかは、ペアの名前でなく、ペアのオプションから [`crate::pairs::is_jit_args`] で判別する。
+/// それ以外のペア(`kw` など)では、コマンドの `--backend` を残す。
+/// 仮想メモリを 512 MiB に制限するコマンド(`ulimit -v 524288`)は、Node を起動できないので、WasmGC バックエンドでは実行できないからである。
 ///
-/// 返すのは、組の選択肢の後に並べる引数と、食い違いがあったときの記録の文面である。
-/// 文面は呼び出しの記録に `backend-override` の行として足し、kconform が後段を上書きしたコマンドとして報告する。
+/// 返すのは、ペアのオプションの後に並べる引数と、食い違いがあったときにログに書くメッセージである。
+/// メッセージは呼び出しのログに `backend-override` の行として追記する。
+/// kconform はそのコマンドを、バックエンドを上書きしたコマンドとして `組の後段の上書き` の行で報告する(出力では、ペアを「組」、バックエンドを「後段」と書く)。
 fn own_backend(pair_args: &[OsString], own: &[OsString]) -> (Vec<OsString>, Option<String>) {
     let jit = crate::pairs::is_jit_args(&pair_args_str(pair_args));
     let pair_backend = pair_args
@@ -831,7 +871,7 @@ fn own_backend(pair_args: &[OsString], own: &[OsString]) -> (Vec<OsString>, Opti
     (out, note)
 }
 
-/// 組の選択肢を文字列の列にする(UTF-8 でないものは空にする)。
+/// ペアのオプションを `&str` の配列にする(UTF-8 でないものは空文字列にする)。
 fn pair_args_str(args: &[OsString]) -> Vec<&str> {
     args.iter().map(|a| a.to_str().unwrap_or("")).collect()
 }
@@ -861,7 +901,7 @@ mod tests {
         assert_eq!(n.as_deref(), Some("--backend interp が組の wasm に勝った"));
         let (v, n) = own_backend(&a(&["--backend", "interp", "--tier", "interp-only"]), &own);
         assert_eq!((v, n), (own.clone(), None));
-        // 組 `kr-kj`、`kr-kt`、`kr-ka`、`kr-km` もフロントエンドの選択肢に関係なく LLVM の後段の組として扱う。
+        // ペア `kr-kj`、`kr-kt`、`kr-ka`、`kr-km` も、フロントエンドのオプションに関係なく LLVM ペアとして扱う。
         let (v, n) = own_backend(&a(&["--frontend", "rust", "--tier", "alternating=3"]), &own);
         assert_eq!(v, a(&["--native-stack", "512k", "x.kel"]));
         assert!(n.is_some());
@@ -899,7 +939,7 @@ mod tests {
             assert!(is_rust_pair(p), "{p}");
             assert!(repl_pair(p), "{p}");
         }
-        // 実行と型検査は diktor の引数解析と同じ規則でモードを決める(後に書いたものが効く)。
+        // 実行と型検査は、Diktor の引数解析と同じ規則でモードを決める(後に書いたオプションが優先される)。
         let (m, f, _) = diktor_mode(&a(&["--strict-exhaustive", "x.kel"])).unwrap();
         assert_eq!((m, f), (Mode::Run, a(&["x.kel"])));
         let (m, _, _) = diktor_mode(&a(&["--strict-exhaustive", "--type-check", "x.kel"])).unwrap();
@@ -913,7 +953,7 @@ mod tests {
         for p in ["dk", "ki", "kw", "x-ir", ""] {
             assert!(!is_rust_pair(p), "{p}");
         }
-        // --repl は、後段に関係なく RustKeleut の後段の組すべてで keleut repl に振り向ける。
+        // --repl は、ペアのバックエンドに関係なく、RustKeleut のバックエンドで実行するペアすべてで keleut repl に転送する。
         for p in ["ki", "kj", "kt", "ka", "km", "kw", "kr-ki"] {
             assert!(repl_pair(p), "{p}");
         }

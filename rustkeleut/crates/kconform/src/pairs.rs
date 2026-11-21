@@ -1,83 +1,87 @@
-//! 組み合わせ(計画 261024-1 の 8.2 節)である。
+//! テストを実行するペアの定義である。
 //!
-//! 組は、KIR の書き手と実行系の組である。
-//! `ka` と `km` は種ごとに 1 回ずつ走らせるので、1 つの名前が複数の実体に広がる。
+//! ペアは、KIR のライタ(KIR を書き出す処理系)と、その KIR を実行する処理系の組み合わせである。
+//! `ka`、`km`、`kr-ka`、`kr-km` はシードごとに 1 回ずつ実行するので、1 つの名前を複数の個々の構成に展開する。
 
-/// 組の実行系である。
+/// ペアの処理系。KIR を書き出す処理系と、それを実行する処理系の組み合わせを表す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Engine {
-    /// Diktor の木の評価器(基準)。
+    /// Diktor の構文木の評価器(ペア `dk`)。ペアの間の比較の基準になる。
     Diktor,
-    /// `diktor --emit-ir` の後の `diktor --run-ir`。
+    /// `diktor --emit-ir` の後の `diktor --run-ir`(ペア `dk-ir`)。
     DiktorIr,
-    /// Diktor の木の評価器を基準にし、RustKeleut に移したフロントエンドの段だけを RustKeleut で走らせる(組 `kf`)。
+    /// Diktor の構文木の評価器で実行し、フロントエンドの段階だけを RustKeleut で実行する(ペア `kf`)。
     Frontend,
-    /// `keleut run` に組の選択肢を足したもの。
+    /// `keleut run --frontend diktor` にペアのオプションを追加したもの(ペア `ki`、`kj`、`kt`、`ka`、`km`、`kw`)。
+    /// Diktor が書いた KIR を RustKeleut のバックエンドが実行する。
     Keleut,
-    /// `keleut emit-kir` の後の `diktor --run-ir`(組 `x-ir`)。
+    /// `keleut emit-kir` の後の `diktor --run-ir`(ペア `x-ir`)。
     /// Rust のフロントエンドが書いた KIR を Diktor が実行する。
     RustIr,
-    /// `keleut run --frontend rust` に組の選択肢を足したもの(組 `kr-*`)。
-    /// Rust のフロントエンドが書いた KIR を RustKeleut の後段が実行する。
+    /// `keleut run --frontend rust` にペアのオプションを追加したもの(ペア `kr-*`)。
+    /// Rust のフロントエンドが書いた KIR を RustKeleut のバックエンドが実行する。
     RustKeleut,
 }
 
-/// 走らせる組の 1 つの実体である。
+/// 実行するペアの、個々の構成 1 つ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pair {
-    /// 表示と既知の差の照合に使う名前(`ka` の種 3 なら `ka`)である。
+    /// 既知の差分の照合と shim への指定(`KCONFORM_PAIR`)に使う、ペアの名前(`ka` のシード 3 なら `ka`)。
     pub name: &'static str,
-    /// 種のある組の実体の名前(`ka=3`)である。
-    /// 種の無い組では `name` と同じである。
+    /// 表示に使う、個々の構成の名前(`ka=3`)。
+    /// シードのないペアでは `name` と同じである。
     pub label: String,
-    /// 実行系である。
+    /// ペアの処理系。
     pub engine: Engine,
-    /// `keleut run` に足す選択肢である。
+    /// `keleut run` に追加するオプション。
     pub args: Vec<String>,
 }
 
-/// 組の名前の一覧である。
+/// ペアの名前の一覧。
 pub const NAMES: &[&str] = &[
     "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt",
     "kr-ka", "kr-km", "kr-kw",
 ];
 
-/// いま走らせられる組である。
+/// 現在実行できるペア。
 ///
-/// RustKeleut の後段は M88 から順に加わるので、ここに名前を足していく。
+/// [`NAMES`] のうち、実行に必要な実装がそろったペアを並べる。
+/// 現在は [`NAMES`] のすべてが入っている。
+/// [`NAMES`] にあってここにない名前を `--pairs` に書くと、kconform は `組 {n} はまだ使えません` と書いて終了コード 64 で終了する。
 pub const AVAILABLE: &[&str] = &[
     "dk", "dk-ir", "kf", "ki", "kj", "kt", "ka", "km", "kw", "x-ir", "kr-ki", "kr-kj", "kr-kt",
     "kr-ka", "kr-km", "kr-kw",
 ];
 
-/// `--pairs` を省いたときに走らせる組である。
+/// `--pairs` を省いたときに実行するペア。
 ///
-/// 計画 8.1 節のとおり、[`AVAILABLE`] のすべてである。
-/// LLVM の後段の組([`needs_jit`])は、feature `llvm`(既定で有効)で組んだ `keleut` でだけ走る。
-/// `--no-default-features` で組んだ `keleut` では、kconform はそれらの組を除き、除いた組を標準エラーに書く。
+/// [`AVAILABLE`] のすべてである。
+/// LLVM ペア([`needs_jit`])は、既定の feature `llvm` を有効にしたままビルドした `keleut` でだけ実行できる。
+/// `--no-default-features` でビルドした `keleut` では、kconform は LLVM ペアを除き、除いたペアを標準エラーに書く。
+/// `--suite depth` では、kconform は `dk` と `kf` も除く。
 pub const DEFAULT: &[&str] = AVAILABLE;
 
-/// 組の名前が LLVM の後段の組(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)かどうかを返す。
+/// ペアの名前が LLVM ペア(`kj`、`kt`、`ka`、`km`、`kr-kj`、`kr-kt`、`kr-ka`、`kr-km`)なら真を返す。
 ///
-/// 組の実体の選択肢で見分ける([`is_jit_args`])。
-/// 知らない名前なら `false` を返す。
+/// ペアの個々の構成のオプションで判別する([`is_jit_args`])。
+/// 未知の名前なら `false` を返す。
 pub fn needs_jit(name: &str) -> bool {
     expand(name).is_some_and(|ps| ps.iter().any(|p| is_jit_args(&p.args)))
 }
 
-/// `keleut --version` の出力から、その `keleut` が後段 `jit` を持つかを返す。
+/// `keleut --version` の出力から、その `keleut` がバックエンド `jit` を持つかどうかを返す。
 ///
-/// 2 行目の `backends: …` に `jit` があれば持つ。
-/// その行が無い出力(読めない出力)なら `None` を返す。
+/// `backends:` で始まる最初の行(`keleut --version` は 2 行目に書く)に `jit` があれば、持つと判定する。
+/// その行がない出力なら、判定できないので `None` を返す。
 pub fn version_has_jit(out: &str) -> Option<bool> {
     out.lines()
         .find_map(|l| l.strip_prefix("backends:"))
         .map(|bs| bs.split_whitespace().any(|b| b == "jit"))
 }
 
-/// `kconform expect` が `keleut run` に足す選択肢(組 `ki`)である。
+/// `kconform expect` が `keleut run` に追加するオプション。ペア `ki` のオプションと同じである。
 ///
-/// `keleut run` の既定のフロントエンドは M99 から `rust` なので、Diktor が KIR を書く組
+/// `keleut run` の既定のフロントエンドは `rust` なので、Diktor が KIR を書くペア
 /// (`ki kj kt ka km kw`)は `--frontend diktor` を明示する。
 pub const EXPECT_ARGS: &[&str] = &[
     "--frontend",
@@ -88,15 +92,16 @@ pub const EXPECT_ARGS: &[&str] = &[
     "interp-only",
 ];
 
-/// Diktor のフロントエンドを選ぶ選択肢である(組 `ki kj kt ka km kw` の先頭に置く)。
+/// Diktor のフロントエンドを選ぶオプション。ペア `ki kj kt ka km kw` のオプションの先頭に置く。
 const DIKTOR_FRONT: &[&str] = &["--frontend", "diktor"];
 
-/// Rust のフロントエンドを選ぶ選択肢である(組 `kr-*` の先頭に置く)。
+/// Rust のフロントエンドを選ぶオプション。ペア `kr-*` のオプションの先頭に置く。
 const RUST_FRONT: &[&str] = &["--frontend", "rust"];
 
-/// 後段の組の名前と、フロントエンドの選択肢を除いた `keleut run` の選択肢である。
+/// バックエンドのペアの名前と、フロントエンドのオプションを除いた `keleut run` のオプションの対応。
 ///
-/// 種の無い組だけを並べる。`ka` と `km` は [`expand`] が種ごとに広げる。
+/// シードのないペアだけを並べる。
+/// `ka` と `km` は [`expand`] がシードごとに展開する。
 const BACKENDS: &[(&str, &[&str])] = &[
     ("ki", &["--backend", "interp", "--tier", "interp-only"]),
     ("kj", &["--backend", "jit", "--tier", "jit-only"]),
@@ -108,8 +113,8 @@ fn strs(xs: &[&str]) -> Vec<String> {
     xs.iter().map(|s| s.to_string()).collect()
 }
 
-/// 組の名前を実体の列に広げる。
-/// 知らない名前なら `None` を返す。
+/// ペアの名前を、個々の構成の並びに展開する。
+/// 未知の名前なら `None` を返す。
 pub fn expand(name: &str) -> Option<Vec<Pair>> {
     let one = |name: &'static str, engine: Engine, args: Vec<String>| {
         vec![Pair {
@@ -162,10 +167,11 @@ pub fn expand(name: &str) -> Option<Vec<Pair>> {
     })
 }
 
-/// 組の選択肢が LLVM の後段で走らせるものかどうかを返す。
+/// ペアのオプションが LLVM バックエンドで実行するものなら真を返す。
 ///
-/// `--backend jit` があるか、`--backend` が無く `interp-only` でない `--tier` があるときである
-/// (`keleut run` の後段の選び方と同じ)。
+/// `--backend jit` があるか、`--backend` がなく `interp-only` でない `--tier` があるときに真を返す。
+/// `--backend` か `--tier` を書いたときの、`keleut run` のバックエンドの選び方と同じである。
+/// どちらもなければ偽を返す(`dk` のように、オプションのないペアが該当する)。
 pub fn is_jit_args<S: AsRef<str>>(args: &[S]) -> bool {
     let mut backend = None;
     let mut tier = None;
