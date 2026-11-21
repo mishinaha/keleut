@@ -1,22 +1,26 @@
-//! エフェクトの下ろし(パス 8。計画 261024-1 の 6.6 節、`doc/lir.md` の 16 節)。
+//! エフェクトの LIR への変換(パス 8。`doc/lir.md` の 16 節)。
 //!
-//! `handle`、利用者の操作の `perform`、`resume` と、操作節の関数の入口をここで下ろす。
-//! 規約の要は次のとおりである。
+//! `handle`、ユーザの操作の `perform`、`resume` と、操作節の関数の入口をここで変換する。
+//! 変換の規約は次のとおりである。
 //!
-//! - ハンドラのフレームは、すべての `handle` が共有する LIR の関数 `$rt_handle(hr, k, v)` である
+//! - ハンドラのフレームになる関数は、すべての `handle` が共有する LIR の関数 `$rt_handle(hr, k, v)` である
 //!   ([`rt_handle_body`])。
-//!   `handle` は、ハンドラ記録 `hr` を作って `$rt_handle(hr, unit, unit)` を呼ぶ(末尾の `handle` なら末尾で呼ぶ)。
-//!   継続 `k` の再開(計画 6.6 節の `rt_resume`)は `$rt_handle(k.hr, k, v)` を呼ぶことで、
-//!   新しいハンドラのフレームの上に `k` のフレームを写し戻して続ける。
-//!   本体の値、自分宛ての破棄、自分宛ての yield、ほかの宛ての巻き戻し(防壁の中の `cancel` 節)の扱いは、
-//!   どちらの入り方でも同じ LIR の文面である。
-//! - 操作節の関数は、KIR の引数の後ろに隠れた引数 `x` と `sel` を持つ。
-//!   `sel` が 0 以上なら選択の段で、`x` はハンドラ記録、`sel` はこの節の候補の番号である。
-//!   パターンとガードが一致しなければ、次の候補を末尾で呼ぶ(`tail_call_clause`)。
-//!   T の節は一致したらそのまま本体を走らせ、N と G の節は `clause_matched` で戻る。
-//!   `sel` が負なら本体の段で、`x` は G の節では継続、N の節では Unit である。
-//!   パターンをもう一度照合し(照合は副作用を持たない)、ガードを飛ばして本体を走らせる。
-//! - ハンドラ式の本体の関数は、隠れた引数として、囲む操作節の継続(無ければ Unit)を受け取る。
+//!   `handle` は、ハンドラ記録 `hr` を作って `$rt_handle(hr, unit, unit)` を呼ぶ。
+//!   末尾の `handle` なら、末尾呼び出しで呼ぶ。
+//!   継続 `k` を再開するとき(`doc/lir.md` の `rt_resume`)は、`$rt_handle(k.hr, k, v)` を呼ぶ。
+//!   呼ばれた `$rt_handle` は、新しいハンドラのフレームの上に `k` のフレームを復元して、実行を続ける。
+//!   本体の値、自分宛ての破棄、自分宛ての yield、ほかのハンドラ宛ての巻き戻しは、どちらの呼ばれ方でも同じ LIR の命令列で処理する。
+//!   ほかのハンドラ宛ての巻き戻しでは、防壁(`doc/lir.md` の 16.4 節)の中で `cancel` 節を実行する。
+//! - 操作節の関数は、KIR の引数の後ろに暗黙の引数 `x` と `sel` を持つ。
+//!   `sel` が 0 以上なら選択フェーズで、`x` はハンドラ記録、`sel` はこの節の候補の番号である。
+//!   パターンが一致しないかガードが偽なら、次の候補を末尾呼び出しで呼ぶ(`tail_call_clause`)。
+//!   一致したとき、分類(IRSpec 9.2 節)が T の節はそのまま本体を実行し、N と G の節は `clause_matched` で戻る。
+//!   `sel` が負なら本体フェーズで、`x` は G の節では継続、N の節では Unit である。
+//!   パターンをもう一度照合し、ガードを飛ばして本体を実行する。
+//!   照合は副作用を持たないので、束縛は選択フェーズと同じになる。
+//! - ハンドラ式の本体の関数は、暗黙の引数として、引き継ぐ継続を受け取る。
+//!   引き継ぐ継続は、ハンドラ式を書いた関数が G の節の関数かハンドラ式の本体の関数なら、その関数が持つ継続である。
+//!   そうでなければ Unit である。
 //!   本体の中の `resume` はこの継続を再開する(IRSpec 9.2 節)。
 
 use kir::{ClauseClass, FnKind};
@@ -26,10 +30,11 @@ use crate::ir::*;
 use crate::lower::{Low, V};
 use crate::pattern::Target;
 
-/// 操作節の関数ごとの(操作, 分類)。操作節でない関数は `None`。
+/// 操作節の関数ごとに、操作と分類の組を求めて `out` に書く。
+/// 操作節でない関数は `None` になる。
 ///
-/// 単位を足したプログラムでは、`out` に前の関数の分類を持ち、関数 `f0` から後ろの本体だけを調べる
-/// (足した操作節の関数を作る `handle` は、足した関数の本体にある)。
+/// 単位を追加したプログラムでは、それまでの関数の結果を `out` に入れて渡し、`f0` 番以降の関数の本体だけを調べる。
+/// 追加した操作節の関数を作る `handle` は、追加した関数の本体にあるからである。
 pub(crate) fn clause_classes(
     k: &kir::Program,
     out: &mut Vec<Option<(u32, ClauseClass)>>,
@@ -49,17 +54,21 @@ pub(crate) fn clause_classes(
     }
 }
 
+/// エフェクトの命令 `op` を置く。
+/// 結果を持つ命令なら、結果のレジスタを返す。
 fn fx(b: &mut Builder, op: FxOp, args: Vec<Reg>) -> Option<Reg> {
     let dst = op.sig().1.map(|rep| b.reg(rep));
     b.emit(Inst::Fx { op, dst, args });
     dst
 }
 
+/// 結果を持つエフェクトの命令 `op` を置き、結果のレジスタを返す。
 fn fx_val(b: &mut Builder, op: FxOp, args: Vec<Reg>) -> Reg {
     fx(b, op, args).expect("結果を持つエフェクトの命令")
 }
 
-/// 利用者の操作の `perform`(引数は評価して一様な語にしたもの)。
+/// ユーザの操作の `perform` を変換する。
+/// `args` は、引数を評価して一様表現の値にしたものである。
 pub(crate) fn perform(lw: &mut Low, effect: u32, op: u32, args: Vec<Reg>) -> V {
     let hr = fx_val(&mut lw.b, FxOp::HandlerFind { effect, op }, Vec::new());
     let saved = fx_val(&mut lw.b, FxOp::HandlersGet, Vec::new());
@@ -68,7 +77,8 @@ pub(crate) fn perform(lw: &mut Low, effect: u32, op: u32, args: Vec<Reg>) -> V {
     V::any(fx_val(&mut lw.b, FxOp::Perform { effect, op }, a))
 }
 
-/// ハンドラ式。`tail` なら `$rt_handle` を末尾で呼んでブロックを終え、`None` を返す。
+/// ハンドラ式を変換する。
+/// `tail` が真なら、`$rt_handle` を末尾呼び出しで呼んでブロックを終え、`None` を返す。
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle(
     lw: &mut Low,
@@ -108,7 +118,7 @@ pub(crate) fn handle(
         });
         return None;
     }
-    // ハンドラのフレームはハンドラ式の位置の深さ `h` で走るので、深さを増やさずに呼ぶ。
+    // ハンドラのフレームはハンドラ式の位置の深さ `h` で実行するので、深さを増やさずに呼ぶ。
     let dst = lw.b.reg(Rep::Any);
     lw.b.emit(Inst::CallDirect {
         dst,
@@ -119,14 +129,16 @@ pub(crate) fn handle(
     Some(V::any(dst))
 }
 
-/// 末尾でない `resume(v)`。`k` は再開する継続、`v` は評価した値。
+/// 末尾位置にない `resume(v)` を変換する。
+/// `k` は再開する継続、`v` は評価した値である。
 pub(crate) fn resume(lw: &mut Low, k: Reg, v: Reg) -> Option<V> {
     let Some(f) = lw.p.rt_handle else {
         return lw.bug("$rt_handle が無い");
     };
     fx(&mut lw.b, FxOp::ContCheck { nontail: true }, vec![k]);
     let hr = fx_val(&mut lw.b, FxOp::ContHr, vec![k]);
-    // 再開した計算のハンドラのフレームは `resume` の位置の深さ `c` で走る(IRSpec 11.4 節)。
+    // 再開した計算のハンドラのフレームは、`resume` の位置の深さ `c` で実行する(IRSpec 11.4 節)。
+    // そのため、深さを増やさずに呼ぶ。
     let dst = lw.b.reg(Rep::Any);
     lw.b.emit(Inst::CallDirect {
         dst,
@@ -137,7 +149,9 @@ pub(crate) fn resume(lw: &mut Low, k: Reg, v: Reg) -> Option<V> {
     Some(V::any(dst))
 }
 
-/// 関数の入口の後に、種類に応じた隠れた引数を足す。操作節の関数なら本体まで下ろして `true` を返す。
+/// 関数の入口の命令の後に、関数の種類に応じた暗黙の引数を追加する。
+/// 操作節の関数なら、本体まで変換して `true` を返す。
+/// それ以外の関数では `false` を返す。
 pub(crate) fn lower_entry(lw: &mut Low, f: &kir::Function, fid: usize) -> bool {
     match f.kind {
         FnKind::Handlebody => {
@@ -153,7 +167,8 @@ pub(crate) fn lower_entry(lw: &mut Low, f: &kir::Function, fid: usize) -> bool {
     }
 }
 
-/// 操作節の関数(入口の後)。
+/// 操作節の関数の、入口の命令より後の部分を変換する。
+/// 暗黙の引数、パターンの照合、ガード、本体をこの順に置く。
 fn opclause(lw: &mut Low, f: &kir::Function, fid: usize) {
     let Some((op, class)) = lw.p.clause_class.get(fid).copied().flatten() else {
         lw.bug(format!("どの handle にも属さない操作節の関数 {}", f.sym));
@@ -181,7 +196,7 @@ fn opclause(lw: &mut Low, f: &kir::Function, fid: usize) {
     }
     if lw.b.current().is_some() {
         if class != ClauseClass::T {
-            // 本体の段(`sel` が負)ならガードを飛ばす。
+            // 本体フェーズ(`sel` が負)なら、ガードを飛ばす。
             let s = lw.b.reg(Rep::I32);
             lw.b.emit(Inst::Unbox { dst: s, src: sel });
             let zero = lw.b.konst(Const::I32(0));
@@ -228,7 +243,8 @@ fn opclause(lw: &mut Low, f: &kir::Function, fid: usize) {
     });
 }
 
-/// 操作節のガード。偽なら `miss` へ移る。
+/// 操作節のガードを変換する。
+/// ガードが偽なら `miss` へ分岐する。
 fn guard(lw: &mut Low, f: &kir::Function, miss: BlockId) {
     if let Some(g) = f.guard
         && let Some(gv) = lw.exp(g, false)
@@ -244,7 +260,8 @@ fn guard(lw: &mut Low, f: &kir::Function, miss: BlockId) {
     }
 }
 
-/// `c == n` で `yes` へ、そうでなければ新しいブロックへ移り、そこへ切り替える。
+/// `c == n` なら `yes` へ、そうでなければ新しいブロックへ分岐する命令を置く。
+/// 続きの命令は、その新しいブロックに追加される。
 fn branch_eq(b: &mut Builder, c: Reg, n: i32, yes: BlockId) {
     let k = b.konst(Const::I32(n));
     let t = b.reg(Rep::Bool);
@@ -264,7 +281,7 @@ fn branch_eq(b: &mut Builder, c: Reg, n: i32, yes: BlockId) {
     b.switch_to(no);
 }
 
-/// `pending_class` の値(`doc/lir.md` の 16 節)。
+/// `pending_class` が返す値(`doc/lir.md` の 16.5 節)。
 pub mod class {
     /// 自分宛ての `DISCARD(Value v)`。
     pub const OWN_VALUE: i32 = 1;
@@ -272,15 +289,18 @@ pub mod class {
     pub const OWN_NEVER: i32 = 2;
     /// 自分宛ての `YIELD`。
     pub const OWN_YIELD: i32 = 3;
-    /// ほかの宛ての `YIELD`。
+    /// ほかのハンドラ宛ての `YIELD`。
     pub const OTHER_YIELD: i32 = 4;
-    /// ほかの宛ての `DISCARD` と `ERROR`。
+    /// ほかのハンドラ宛ての `DISCARD` と `ERROR`。
     pub const OTHER_UNWIND: i32 = 5;
-    /// G の節の末尾の `resume` の印。
+    /// G の節の末尾 `resume` が設定する、`tail_resume` の目印。
     pub const TAIL_RESUME: i32 = 6;
 }
 
-/// ハンドラのフレームの関数 `$rt_handle(hr, k, v)` の本体(`doc/lir.md` の 16.3 節)。`me` はこの関数の番号。
+/// ハンドラのフレームになる関数 `$rt_handle(hr, k, v)` の本体を作る(`doc/lir.md` の 16.3 節)。
+/// `me` は、この関数自身の番号である。
+///
+/// コメントの「手順 N」は、16.3 節の番号付きの項目を指す。
 pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
     use class::*;
     let mut b = Builder::new();
@@ -300,7 +320,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         else_: fresh,
     });
 
-    // 計画 6.6 節の rt_handle の手順 1(doc/lir.md 16.3 節の手順 1)。本体の深さ h+1 は、連鎖に入れる前に限度と比べる。
+    // 手順 1(rt_handle)。本体の深さ h + 1 は、ハンドラを連鎖に入れる前に上限と比較する。
     b.switch_to(fresh);
     b.emit(Inst::DepthCheck);
     fx(&mut b, FxOp::HandlerInstall, vec![hr]);
@@ -310,7 +330,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
     b.emit(Inst::Move { dst: r, src: r1 });
     b.terminate(Term::Jump(post));
 
-    // rt_resume(16.3 節の手順 2)。再開済みなら実行時エラー(7)。継続のフレームを写し戻して続ける。
+    // 手順 2(rt_resume)。再開済みなら実行時エラー 7 にする。そうでなければ、継続のフレームを復元して実行を続ける。
     b.switch_to(res);
     fx(&mut b, FxOp::ContCheck { nontail: false }, vec![k]);
     let r2 = fx_val(&mut b, FxOp::ContResume, vec![k, v]);
@@ -318,7 +338,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
     b.emit(Inst::Move { dst: r, src: r2 });
     b.terminate(Term::Jump(post));
 
-    // 計画 6.6 節の手順 2〜7(doc/lir.md 16.3 節の手順 3〜4)。
+    // 手順 3〜4。結果が番兵かどうかで場合を分ける。
     b.switch_to(post);
     let ip = fx_val(&mut b, FxOp::IsPending, vec![r]);
     let pend = b.block();
@@ -329,7 +349,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         else_: normal,
     });
 
-    // 計画 6.6 節の手順 2(16.3 節の手順 3): 値 x で戻ったら、連鎖から外して return 節を末尾で呼ぶ。
+    // 手順 3。値で戻ったら、ハンドラを連鎖から外す。return 節があれば末尾呼び出しで呼び、なければその値を返す。
     b.switch_to(normal);
     fx(&mut b, FxOp::HandlerUninstall, vec![hr]);
     let hasret = fx_val(&mut b, FxOp::HandlerHas(HandlerPart::Ret), vec![hr]);
@@ -362,14 +382,14 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
     branch_eq(&mut b, cls, OTHER_YIELD, prop);
     b.terminate(Term::Jump(other));
 
-    // 計画 6.6 節の手順 3(16.3 節の手順 4 の 1): 自分宛ての DISCARD(Value v)。return も cancel も走らせない。
+    // 手順 4 の 1。自分宛ての DISCARD(Value v)。return 節も cancel 節も実行しない。
     b.switch_to(own_val);
     fx(&mut b, FxOp::HandlerUninstall, vec![hr]);
     let p = fx_val(&mut b, FxOp::PendingTake, Vec::new());
     let pv = fx_val(&mut b, FxOp::PendingValue, vec![p]);
     b.terminate(Term::Return(pv));
 
-    // 計画 6.6 節の手順 4(16.3 節の手順 4 の 2): 自分宛ての DISCARD(NeverBody)。N の節の本体を末尾で呼ぶ。
+    // 手順 4 の 2。自分宛ての DISCARD(NeverBody)。N の節の本体を末尾呼び出しで呼ぶ。
     b.switch_to(own_never);
     fx(&mut b, FxOp::HandlerUninstall, vec![hr]);
     let p = fx_val(&mut b, FxOp::PendingTake, Vec::new());
@@ -378,8 +398,8 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         args: vec![p],
     });
 
-    // 計画 6.6 節の手順 5(16.3 節の手順 4 の 3): 自分宛ての YIELD。連鎖から外し、継続を作って G の節を末尾でなく呼ぶ。
-    // 先に外すので、継続を作れずにメモリの不足になっても、連鎖に死んだハンドラが残らない。
+    // 手順 4 の 3。自分宛ての YIELD。ハンドラを連鎖から外し、継続を作って、G の節を非末尾呼び出しで呼ぶ。
+    // 先に外すので、継続を作れずにメモリ不足になっても、無効になったハンドラが連鎖に残らない。
     b.switch_to(own_yield);
     fx(&mut b, FxOp::HandlerUninstall, vec![hr]);
     let kk = fx_val(&mut b, FxOp::ContMake, vec![hr]);
@@ -393,9 +413,11 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         then: gpend,
         else_: gval,
     });
-    // 節が値 g で戻った。継続を使っていれば g がこのフレームの値である。
-    // 使っていなければ DISCARD(hr, Value g) を注入して継続を写し戻し、中の cancel 節を走らせる。
-    // 節が終わったら継続を節の外にする。節の中から外側へ YIELD が届いたときは、節はまだ終わっていない。
+    // 節が値 g で戻った。継続を使っていれば、g がこのフレームの値である。
+    // 使っていなければ、DISCARD(hr, Value g) を継続に注入して、継続の中の cancel 節を実行する。
+    // 節が終わったので、cont_kill で継続の alive フラグを下ろす。
+    // 以後、この継続は節の外にある継続として扱う。
+    // 節の中から外側へ YIELD が届いたとき(下の gpend の分岐)は、節がまだ終わっていないので、cont_kill を行わない。
     b.switch_to(gval);
     fx(&mut b, FxOp::ContKill, vec![kk]);
     let used = fx_val(&mut b, FxOp::ContUsed, vec![kk]);
@@ -415,7 +437,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         args: vec![hr, kk, inj],
         yields: true,
     });
-    // 節が状態語を立てて戻った。
+    // 節が番兵を返して戻った。状態ワードが設定されている。
     b.switch_to(gpend);
     let gc = fx_val(&mut b, FxOp::PendingClass, vec![hr]);
     let tr = b.block();
@@ -423,7 +445,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
     branch_eq(&mut b, gc, TAIL_RESUME, tr);
     branch_eq(&mut b, gc, OTHER_YIELD, prop);
     b.terminate(Term::Jump(g3));
-    // 末尾の resume(v): 自分を rt_resume(k, v) の末尾呼び出しで置き換える。
+    // 末尾 resume(v)。自分のフレームを、rt_resume(k, v) の末尾呼び出しで置き換える。
     b.switch_to(tr);
     fx(&mut b, FxOp::ContKill, vec![kk]);
     let p = fx_val(&mut b, FxOp::PendingTake, Vec::new());
@@ -433,7 +455,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         args: vec![hr, kk, tv],
         yields: true,
     });
-    // 脱出。resume の後ならそのまま伝播し、前なら同じ状態を継続に注入する。
+    // 節が DISCARD か ERROR で脱出した。resume の後ならそのまま伝播し、前なら同じ状態ワードを継続に注入する。
     b.switch_to(g3);
     fx(&mut b, FxOp::ContKill, vec![kk]);
     let used2 = fx_val(&mut b, FxOp::ContUsed, vec![kk]);
@@ -451,7 +473,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         yields: true,
     });
 
-    // 計画 6.6 節の手順 6(16.3 節の手順 4 の 5): ほかの宛ての DISCARD と ERROR。連鎖から外し、防壁の中で cancel 節を走らせる。
+    // 手順 4 の 5。ほかのハンドラ宛ての DISCARD と ERROR。ハンドラを連鎖から外し、cancel 節があれば防壁(doc/lir.md の 16.4 節)の中で実行する。
     b.switch_to(other);
     fx(&mut b, FxOp::HandlerUninstall, vec![hr]);
     let hc = fx_val(&mut b, FxOp::HandlerHas(HandlerPart::Cancel), vec![hr]);
@@ -475,8 +497,8 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         then: cpend,
         else_: cdone,
     });
-    // cancel 節が YIELD を立てたら、P を持ったまま自分のフレームも継続に含めて戻る。
-    // DISCARD か ERROR なら打ち切って記録する。
+    // cancel 節がほかのハンドラ宛ての YIELD で戻ったら、退避した状態ワード p3 と上限 lim をスロットに持ったまま、自分のフレームも継続に含めて戻る。
+    // DISCARD か ERROR で戻ったら、抑制して記録する。
     b.switch_to(cpend);
     let cc = fx_val(&mut b, FxOp::PendingClass, vec![hr]);
     let supp = b.block();
@@ -493,7 +515,7 @@ pub(crate) fn rt_handle_body(me: FuncId) -> Builder {
         args: Vec::new(),
     });
 
-    // 計画 6.6 節の手順 7(16.3 節の手順 4 の 4)と、伝播を続ける場合。
+    // 手順 4 の 4(ほかのハンドラ宛ての YIELD)と、それ以外で伝播を続ける場合。
     b.switch_to(prop);
     b.terminate(Term::Fx {
         op: FxTermOp::Propagate,

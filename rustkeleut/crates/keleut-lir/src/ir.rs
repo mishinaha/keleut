@@ -1,15 +1,15 @@
 //! LIR の型。
 //!
-//! LIR は関数ごとの基本ブロックのグラフである(計画 261024-1 の 6.4 節)。
-//! 各命令の意味は `rustkeleut/doc/lir.md` に定める。
-//! ここでは型と、命令の被演算子をたどる補助だけを置く。
+//! LIR は、関数ごとの基本ブロックのグラフである。
+//! 各命令の意味は `rustkeleut/doc/lir.md` が定める。
+//! ここには、型と、命令のオペランドをたどる補助関数だけを置く。
 //!
 //! - 仮想レジスタ [`Reg`] は関数ごとに番号を振り、それぞれがちょうど 1 つの [`Rep`] を持つ。
-//!   SSA ではない。
-//!   合流する値は、各前任のブロックが同じレジスタに書く。
-//! - 関数の制御は非巡回である。
-//!   ブロックは位相の順に並び、枝はどれも番号の大きいブロックへ向かう。
-//! - 関数の境目は一様で、引数も戻り値も `any` である(D503)。
+//!   SSA 形式ではない。
+//!   合流する値は、各先行ブロックが同じレジスタに書く。
+//! - 関数の制御フローは非巡回である。
+//!   ブロックはトポロジカル順に並び、どの分岐も番号の大きいブロックへ向かう。
+//! - 関数の境界で受け渡す値の表現は一様で、引数も返り値も `any` である。
 
 pub use crate::live::{LiveWork, Point, Points};
 pub use kir::{Abi, ClassId, ClauseClass, FnKind, GlobalId, InstanceId, Rep, TypeId};
@@ -38,23 +38,26 @@ id_type!(
     BlockId
 );
 id_type!(
-    /// LIR の関数の表の添字。KIR の関数は同じ添字に置く。
+    /// LIR の関数表の添字。
+    /// 最初の変換でまとめて LIR に変換した KIR の関数は、KIR と同じ添字に置く。
+    /// 単位を追加しない通常の変換では、KIR のプログラムのすべての関数がこれに当たる。
+    /// 単位を追加したプログラムでの位置は [`Program::funcs`] に書く。
     FuncId
 );
 id_type!(
-    /// ラベルの表 [`Program::labels`] の添字。
+    /// ラベル表 [`Program::labels`] の添字。
     LabelId
 );
 id_type!(
-    /// レコードの形の表 [`Program::shapes`] の添字。
+    /// レコードのシェイプ表 [`Program::shapes`] の添字。
     ShapeId
 );
 id_type!(
-    /// 文字列の定数の表 [`Program::strings`] の添字。
+    /// 文字列定数の表 [`Program::strings`] の添字。
     StrId
 );
 
-/// 定数。
+/// `const` 命令が置く定数。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Const {
     /// Unit(空のレコード)。
@@ -67,28 +70,28 @@ pub enum Const {
     I64(i64),
     /// `Float64` の値のビット列。
     F64(u64),
-    /// 文字列の定数。
+    /// 文字列定数。
     Str(StrId),
-    /// 引数の無いコンストラクタ。
+    /// 引数のないコンストラクタの値。
     Ctor0 {
-        /// 型。
+        /// 名目的な型。
         ty: TypeId,
-        /// コンストラクタ(型の中の位置)。
+        /// コンストラクタの番号(型の中の位置)。
         ctor: u32,
     },
     /// 組み込みのインスタンスの辞書。
     DictBuiltin {
-        /// クラス。
+        /// インスタンスのクラス。
         class: ClassId,
-        /// 型。
+        /// インスタンスの対象の型。
         ty: TypeId,
     },
-    /// 前提を持たない利用者のインスタンスの辞書。
+    /// 前提を持たない、ユーザのインスタンスの辞書。
     DictInst0(InstanceId),
 }
 
 impl Const {
-    /// 定数の Rep。
+    /// 定数の Rep を返す。
     pub fn rep(&self) -> Rep {
         match self {
             Const::Bool(_) => Rep::Bool,
@@ -113,7 +116,7 @@ pub enum IntTy {
 }
 
 impl IntTy {
-    /// 整数の Rep。
+    /// この幅の整数の Rep を返す。
     pub fn rep(self) -> Rep {
         match self {
             IntTy::I32 => Rep::I32,
@@ -121,7 +124,7 @@ impl IntTy {
         }
     }
 
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             IntTy::I32 => "i32",
@@ -133,20 +136,22 @@ impl IntTy {
 /// 整数の二項演算。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IntOp {
-    /// 折り返す加算。
+    /// 折り返す(2 の補数で下位のビットだけが残る)加算。
     Add,
     /// 折り返す減算。
     Sub,
     /// 折り返す乗算。
     Mul,
-    /// 0 へ切り捨てる除算(全域。`b = 0` なら 0、`MIN / -1` は `MIN`)。
+    /// 0 へ切り捨てる除算。
+    /// どの入力にも結果を定めていて、`b = 0` なら 0、`MIN / -1` は `MIN` になる。
     Div,
-    /// 除算の剰余(全域。`b = 0` なら 0、`MIN % -1` は 0)。
+    /// 除算の剰余。
+    /// どの入力にも結果を定めていて、`b = 0` なら 0、`MIN % -1` は 0 になる。
     Rem,
 }
 
 impl IntOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             IntOp::Add => "add",
@@ -172,7 +177,7 @@ pub enum FloatOp {
 }
 
 impl FloatOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             FloatOp::Add => "add",
@@ -183,7 +188,7 @@ impl FloatOp {
     }
 }
 
-/// 比較。
+/// 比較の種類。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CmpOp {
     /// 等しい。
@@ -199,7 +204,7 @@ pub enum CmpOp {
 }
 
 impl CmpOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             CmpOp::Eq => "eq",
@@ -211,7 +216,7 @@ impl CmpOp {
     }
 }
 
-/// `extern "C"` の数学の関数。
+/// `extern "C"` の数学関数。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MathFn {
     /// rtcore の `krt_sin`。
@@ -227,7 +232,8 @@ pub enum MathFn {
 }
 
 impl MathFn {
-    /// 印字の綴り(`extern "C"` の実装名と同じ)。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
+    /// `extern "C"` の実装名と同じである。
     pub fn name(self) -> &'static str {
         match self {
             MathFn::Sin => "sin",
@@ -239,7 +245,7 @@ impl MathFn {
     }
 }
 
-/// 数の変換。
+/// 数値変換の種類。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ConvOp {
     /// 符号を拡張する。
@@ -250,14 +256,16 @@ pub enum ConvOp {
     I64ToI32,
     /// 最も近い値へ丸める(等距離なら偶数)。
     I64ToF64,
-    /// 0 へ切り捨てる(全域。NaN は 0、範囲の外は飽和)。
+    /// 0 へ切り捨てる。
+    /// どの入力にも結果を定めていて、NaN は 0 になり、範囲外の値は飽和する。
     F64ToI32,
-    /// 0 へ切り捨てる(全域。NaN は 0、範囲の外は飽和)。
+    /// 0 へ切り捨てる。
+    /// どの入力にも結果を定めていて、NaN は 0 になり、範囲外の値は飽和する。
     F64ToI64,
 }
 
 impl ConvOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             ConvOp::I32ToI64 => "i32_to_i64",
@@ -269,7 +277,7 @@ impl ConvOp {
         }
     }
 
-    /// (引数の Rep, 結果の Rep)。
+    /// 引数の Rep と結果の Rep の組を返す。
     pub fn reps(self) -> (Rep, Rep) {
         match self {
             ConvOp::I32ToI64 => (Rep::I32, Rep::I64),
@@ -281,7 +289,7 @@ impl ConvOp {
         }
     }
 
-    /// 対応するプリミティブの実装名。
+    /// 対応するプリミティブの実装名を返す。
     pub fn prim_name(self) -> &'static str {
         match self {
             ConvOp::I32ToI64 => "__i32_to_i64",
@@ -294,21 +302,21 @@ impl ConvOp {
     }
 }
 
-/// 値を文字列にする種類。
+/// `show` 命令が文字列にする値の種類。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ShowOp {
-    /// `Int32` の 10 進。
+    /// `Int32` の 10 進表記。
     I32,
-    /// `Int64` の 10 進。
+    /// `Int64` の 10 進表記。
     I64,
-    /// LangSpec §16.2 の `Float64` の綴り。
+    /// LangSpec §16.2 が定める `Float64` の表記。
     F64,
     /// `true` か `false`。
     Bool,
 }
 
 impl ShowOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             ShowOp::I32 => "i32",
@@ -318,7 +326,7 @@ impl ShowOp {
         }
     }
 
-    /// 引数の Rep。
+    /// 引数の Rep を返す。
     pub fn rep(self) -> Rep {
         match self {
             ShowOp::I32 => Rep::I32,
@@ -329,29 +337,30 @@ impl ShowOp {
     }
 }
 
-/// 命令(ブロックの終わり以外)。
+/// 終端命令以外の命令。
 ///
-/// 被演算子の Rep と結果の Rep は [`crate::verify`] が確かめる。
-/// 意味と、trap しない条件は `doc/lir.md` の各節にある。
+/// オペランドの Rep と結果の Rep は [`crate::verify`] が検査する。
+/// 意味と trap しない条件は、`doc/lir.md` の各節にある。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Inst {
     /// 定数を置く。
     Const { dst: Reg, value: Const },
-    /// 同じ Rep のレジスタへ写す。
+    /// 同じ Rep のレジスタへコピーする。
     Move { dst: Reg, src: Reg },
-    /// 生の値を一様な語にする。
+    /// ボックス化していない値を一様表現の値(Rep `any` の値)にする。
     Box { dst: Reg, src: Reg },
-    /// 一様な語から生の値を取り出す。
+    /// 一様表現の値から、ボックス化していない値を取り出す。
     Unbox { dst: Reg, src: Reg },
-    /// 自分の環境(捕獲)の `index` 番目を読む。入口の `depth_enter` の直後にだけ置く。
+    /// 自分の環境の `index` 番目のキャプチャを読む。
+    /// 入口の `depth_enter` の直後にだけ置く。
     EnvGet { dst: Reg, index: u32 },
-    /// 入口で、文脈の深さを自分のフレームの深さとして書く。
+    /// 入口で、コンテキストの深さを自分のフレームの深さとして記録する。
     DepthEnter,
-    /// 呼ばれた側の深さ(文脈の深さ + 1)を限度と比べる。
+    /// 呼び出し先の深さ(コンテキストの深さ + 1)を上限と比較する。
     DepthCheck,
-    /// `DepthCheck` を行い、文脈の深さを 1 増やす。
+    /// `DepthCheck` と同じ検査を行い、コンテキストの深さを 1 増やす。
     DepthPush,
-    /// 文脈の深さを自分のフレームの深さに書き戻す。
+    /// コンテキストの深さを自分のフレームの深さに書き戻す。
     DepthRestore,
     /// 整数の二項演算。
     IntArith {
@@ -363,7 +372,7 @@ pub enum Inst {
     },
     /// 折り返す符号反転。
     IntNeg { ty: IntTy, dst: Reg, a: Reg },
-    /// 符号付きの整数の比較。
+    /// 符号付き整数の比較。
     IntCmp {
         ty: IntTy,
         op: CmpOp,
@@ -378,29 +387,30 @@ pub enum Inst {
         a: Reg,
         b: Reg,
     },
-    /// 符号反転(符号のビットを反転する)。
+    /// 符号反転(符号ビットを反転する)。
     FloatNeg { dst: Reg, a: Reg },
     /// IEEE 754 の比較(NaN を含めばどれも偽)。
     FloatCmp { op: CmpOp, dst: Reg, a: Reg, b: Reg },
-    /// 数学の関数。
+    /// 数学関数。
     FloatMath { f: MathFn, dst: Reg, a: Reg },
     /// 0 へ切り捨てる。
     FloatTrunc { dst: Reg, a: Reg },
-    /// NaN かどうか。
+    /// NaN なら真。
     FloatIsNan { dst: Reg, a: Reg },
-    /// 数の変換。
+    /// 数値変換。
     Conv { op: ConvOp, dst: Reg, a: Reg },
-    /// 否定。
+    /// 真偽値の否定。
     BoolNot { dst: Reg, a: Reg },
-    /// 真偽値が等しいか。
+    /// 2 つの真偽値が等しければ真。
     BoolEq { dst: Reg, a: Reg, b: Reg },
     /// 文字列の連結。
     StrConcat { dst: Reg, a: Reg, b: Reg },
-    /// 符号なしバイトの辞書順の比較。
+    /// 2 つの文字列を、バイトを符号なしの値として辞書順に比較する。
     StrCmp { op: CmpOp, dst: Reg, a: Reg, b: Reg },
-    /// バイトの数。
+    /// 文字列のバイト数。
     StrLen { dst: Reg, a: Reg },
-    /// 部分の文字列(全域。範囲の外は切り詰める)。
+    /// 部分文字列。
+    /// どの入力にも結果を定めていて、範囲外の部分は切り詰める。
     StrSub {
         dst: Reg,
         s: Reg,
@@ -409,7 +419,8 @@ pub enum Inst {
     },
     /// 値を文字列にする。
     Show { op: ShowOp, dst: Reg, a: Reg },
-    /// 名目的な型の値を作る。`fields` はフィールドの位置の順。
+    /// 名目的な型の値を作る。
+    /// `fields` はフィールドの位置の順に並べる。
     CtorNew {
         dst: Reg,
         ty: TypeId,
@@ -428,38 +439,40 @@ pub enum Inst {
     },
     /// ヴァリアントのラベルの番号を読む。
     VariantTag { dst: Reg, v: Reg },
-    /// ヴァリアントの積載値を読む。
+    /// ヴァリアントのペイロードを読む。
     VariantPayload { dst: Reg, v: Reg },
-    /// 形の決まったレコードを作る。`fields` は形の配置の順。
+    /// シェイプの決まったレコードを作る。
+    /// `fields` は、シェイプのラベルの並びと同じ順に並べる。
     RecNew {
         dst: Reg,
         shape: ShapeId,
         fields: Vec<Reg>,
     },
-    /// 形の決まったレコードの `index` 番目のフィールドを読む。
+    /// シェイプの決まったレコードの `index` 番目のフィールドを読む。
     RecGet { dst: Reg, rec: Reg, index: u32 },
-    /// レコードの最も外側にフィールドを足す。
+    /// レコードの最も外側にフィールドを追加する。
     RecExtend {
         dst: Reg,
         rec: Reg,
         label: LabelId,
         value: Reg,
     },
-    /// 外側から `nth` 番目(0 から数える)の `label` のフィールドを読む(全域)。
+    /// ラベルが `label` であるフィールドのうち、外側から 0 始まりで `nth` 番目のものを読む。
+    /// どの入力にも結果を定めていて、そのフィールドがなければ Unit になる。
     RecField {
         dst: Reg,
         rec: Reg,
         label: LabelId,
         nth: u32,
     },
-    /// 外側から `nth` 番目の `label` のフィールドがあるか。
+    /// ラベルが `label` であるフィールドのうち、外側から 0 始まりで `nth` 番目のものがあれば真。
     RecHas {
         dst: Reg,
         rec: Reg,
         label: LabelId,
         nth: u32,
     },
-    /// 最も外側の `label` のフィールドを除く。
+    /// 最も外側の `label` のフィールドを取り除く。
     RecRestrict { dst: Reg, rec: Reg, label: LabelId },
     /// 最も外側の `label` のフィールドを置き換える。
     RecUpdate {
@@ -474,7 +487,7 @@ pub enum Inst {
         func: FuncId,
         caps: Vec<Reg>,
     },
-    /// 作ったばかりのクロージャの捕獲を埋める(`letrec`)。
+    /// 作ったばかりのクロージャのキャプチャを埋める(`letrec`)。
     ClosureSetCap { clo: Reg, index: u32, value: Reg },
     /// メソッドの値を作る。
     MethodNew {
@@ -484,7 +497,7 @@ pub enum Inst {
         dict: Reg,
         own: Vec<Reg>,
     },
-    /// 利用者のインスタンスの辞書を作る。
+    /// ユーザのインスタンスの辞書を作る。
     DictInst {
         dst: Reg,
         inst: InstanceId,
@@ -500,15 +513,16 @@ pub enum Inst {
         dst: Reg,
         fields: Vec<(LabelId, Reg)>,
     },
-    /// 大域の値を読む(初期化の検査をしない)。
+    /// グローバルの値を読む。
+    /// 初期化済みかどうかは検査しない。
     GlobalGet { dst: Reg, global: GlobalId },
-    /// 大域が初期化済みか。
+    /// グローバルが初期化済みなら真。
     GlobalIsInit { dst: Reg, global: GlobalId },
-    /// 大域に値を置く。
+    /// グローバルに値を置く。
     GlobalSet { global: GlobalId, src: Reg },
-    /// 大域を初期化済みにする。
+    /// グローバルを初期化済みにする。
     GlobalMarkInit { global: GlobalId },
-    /// インスタンスが初期化済みか。
+    /// インスタンスが初期化済みなら真。
     InstIsInit { dst: Reg, inst: InstanceId },
     /// インスタンスを初期化済みにする。
     InstMarkInit { inst: InstanceId },
@@ -532,33 +546,37 @@ pub enum Inst {
     RefSet { r: Reg, value: Reg },
     /// `Array.length`。
     ArrayLen { dst: Reg, a: Reg },
-    /// `Array.get`(全域。範囲の外は Unit)。
+    /// `Array.get`。
+    /// どの入力にも結果を定めていて、範囲外の添字では Unit になる。
     ArrayGet { dst: Reg, a: Reg, index: Reg },
-    /// `MutableArray.new`(全域。負の長さは 0)。
+    /// `MutableArray.new`。
+    /// どの入力にも結果を定めていて、負の長さは 0 として扱う。
     MArrayNew { dst: Reg, len: Reg, init: Reg },
     /// `MutableArray.length`。
     MArrayLen { dst: Reg, a: Reg },
-    /// `MutableArray.get`(全域。範囲の外は Unit)。
+    /// `MutableArray.get`。
+    /// どの入力にも結果を定めていて、範囲外の添字では Unit になる。
     MArrayGet { dst: Reg, a: Reg, index: Reg },
-    /// `MutableArray.set`(全域。範囲の外は何もしない)。
+    /// `MutableArray.set`。
+    /// どの入力にも結果を定めていて、範囲外の添字では何もしない。
     MArraySet { a: Reg, index: Reg, value: Reg },
-    /// `MutableArray.freeze`(写しを作る)。
+    /// `MutableArray.freeze`(コピーを作る)。
     MArrayFreeze { dst: Reg, a: Reg },
-    /// 捕獲を持たない関数を末尾でなく直に呼ぶ。
+    /// キャプチャを持たない関数を、非末尾呼び出しで直接呼ぶ。
     CallDirect {
         dst: Reg,
         func: FuncId,
         args: Vec<Reg>,
         yields: bool,
     },
-    /// 値(クロージャ、メソッドの値)を末尾でなく呼ぶ。
+    /// 関数値(クロージャかメソッドの値)を非末尾呼び出しで呼ぶ。
     CallValue {
         dst: Reg,
         callee: Reg,
         args: Vec<Reg>,
         yields: bool,
     },
-    /// 辞書からメソッドを選んで末尾でなく呼ぶ。
+    /// 辞書からメソッドを選んで非末尾呼び出しで呼ぶ。
     CallMethod {
         dst: Reg,
         class: ClassId,
@@ -568,17 +586,19 @@ pub enum Inst {
         args: Vec<Reg>,
         yields: bool,
     },
-    /// 辞書の抽象に辞書を渡す(末尾でない)。
+    /// 辞書の抽象に辞書を渡す、非末尾の呼び出し。
     DictApp { dst: Reg, f: Reg, dicts: Vec<Reg> },
-    /// 標準出力に書く(実行時が処理する `Console.write`)。
+    /// 標準出力に書く(ランタイムが処理する `Console.write`)。
     ConsoleWrite { dst: Reg, s: Reg },
-    /// 未実装の機能に届いた(終了状態 4)。`dst`(`any`)は続きの下ろしのための値で、書かれることはない。
+    /// 未実装の機能に実行が達したことを表す(終了コード 4)。
+    /// `dst`(`any`)は、後に続く命令を変換できるようにするためのレジスタで、この命令が実行時に値を書くことはない。
     ///
-    /// いまの下ろしは出さない(M86 の置き場。パス 8 がエフェクトの命令に置き換えた)。
+    /// `handle`、`perform`、`resume` はパス 8 がエフェクトの命令に変換するので、現在の変換器はこの命令を生成しない。
+    /// LIR への変換がまだない機能のプレースホルダとして残している。
     UnimplementedValue { dst: Reg, what: String },
     /// エフェクトの命令(パス 8。`doc/lir.md` の 16 節)。
     ///
-    /// 被演算子の数と Rep、結果の有無と Rep は [`FxOp::sig`] が決める。
+    /// オペランドの個数と Rep、結果の有無と Rep は [`FxOp::sig`] が決める。
     Fx {
         op: FxOp,
         dst: Option<Reg>,
@@ -586,7 +606,7 @@ pub enum Inst {
     },
 }
 
-/// ハンドラ記録の節の欄。
+/// ハンドラ記録が持つ節のうち、`handler_has` と `handler_get` が指定する節。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum HandlerPart {
     /// `return` 節。
@@ -596,7 +616,7 @@ pub enum HandlerPart {
 }
 
 impl HandlerPart {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             HandlerPart::Ret => "ret",
@@ -608,26 +628,30 @@ impl HandlerPart {
 /// [`Inst::Fx`] の種類。
 ///
 /// 意味は `doc/lir.md` の 16 節にある。
-/// `hr` はハンドラ記録、`k` は継続、`p` は退避した状態語の値で、どれも `any` の語である。
+/// `hr` はハンドラ記録、`k` は継続、`p` は退避した状態ワードの値で、どれも一様表現の値(`any`)である。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FxOp {
-    /// `hr = handler_new E (op class)… [ret] [cancel]`。被演算子は本体、受け継ぐ継続、節の関数の値(書いた順)、
-    /// `return` 節(`has_ret` のとき)、`cancel` 節(`has_cancel` のとき)である。
+    /// `hr = handler_new E (op class)… [ret] [cancel]`。
+    /// オペランドは、本体、引き継ぐ継続、節の関数の値(書いた順)、`return` 節(`has_ret` のとき)、`cancel` 節(`has_cancel` のとき)である。
     HandlerNew {
         effect: u32,
         ops: Vec<(u32, kir::ClauseClass)>,
         has_ret: bool,
         has_cancel: bool,
     },
-    /// `hr = handler_find E op`。連鎖の中でエフェクトが `E` である最も内側のハンドラ記録。
-    /// `op` は、見つからないときの文面に書く操作である。
+    /// `hr = handler_find E op`。
+    /// ハンドラの連鎖の中で、エフェクトが `E` である最も内側のハンドラ記録を結果にする。
+    /// `op` は、見つからないときのメッセージに書く操作である。
     HandlerFind { effect: u32, op: u32 },
-    /// `saved = handlers_get`。今の連鎖の先頭(空なら Unit)。
+    /// `saved = handlers_get`。
+    /// 現在のハンドラの連鎖の先頭を結果にする(空なら Unit)。
     HandlersGet,
-    /// `r = perform E op hr saved (a…)`。末尾でない呼び出しの一種で、再開点を持つ。
+    /// `r = perform E op hr saved (a…)`。
+    /// 非末尾呼び出しの一種で、再開点を持つ。
     Perform { effect: u32, op: u32 },
-    /// `cont_check k`。`nontail` なら、節の外でないこと、再開済みでないこと、再開した `perform` の深さを確かめる。
-    /// そうでなければ再開済みでないことだけを確かめる。
+    /// `cont_check k`。
+    /// `nontail` なら、継続を受け取った節の外で再開しようとしていないこと、継続が再開済みでないこと、再開する `perform` の深さ(`c + Δ`。IRSpec 11.3 節)が上限を超えないことを検査する。
+    /// そうでなければ、再開済みでないことだけを検査する。
     ContCheck { nontail: bool },
     /// `b = is_cont x`。
     IsCont,
@@ -637,9 +661,11 @@ pub enum FxOp {
     HandlerInstall,
     /// `handler_uninstall hr`。
     HandlerUninstall,
-    /// `r = call_body hr`。番兵を受け取る呼び出し。
+    /// `r = call_body hr`。
+    /// 番兵を受け取る呼び出しである。
     CallBody,
-    /// `r = cont_resume k v`。番兵を受け取る呼び出しの一種で、継続を写し戻して続ける。
+    /// `r = cont_resume k v`。
+    /// 番兵を受け取る呼び出しの一種で、継続のフレームを値スタックに復元して実行を続ける。
     ContResume,
     /// `b = is_pending r`。
     IsPending,
@@ -657,7 +683,8 @@ pub enum FxOp {
     PendingSuppress,
     /// `k = cont_make hr`。
     ContMake,
-    /// `r = call_clause k`。番兵を受け取る呼び出し。
+    /// `r = call_clause k`。
+    /// 番兵を受け取る呼び出しである。
     CallClause,
     /// `cont_kill k`。
     ContKill,
@@ -667,7 +694,8 @@ pub enum FxOp {
     HandlerHas(HandlerPart),
     /// `f = handler_get hr ret|cancel`。
     HandlerGet(HandlerPart),
-    /// `r = call_cancel f`。番兵を受け取る呼び出し。
+    /// `r = call_cancel f`。
+    /// 番兵を受け取る呼び出しである。
     CallCancel,
     /// `l = limit_get`(`i64`)。
     LimitGet,
@@ -675,16 +703,18 @@ pub enum FxOp {
     LimitSet,
 }
 
-/// [`FxOp`] の被演算子の決まり。
+/// [`FxOp`] のオペランドの規則。
 pub enum FxArgs {
-    /// 数の決まった被演算子(Rep の列)。
+    /// 個数の決まったオペランド。
+    /// 各オペランドの Rep を順に並べて持つ。
     Fixed(&'static [Rep]),
-    /// 少なくともこの数で、どれも `any`。
+    /// この個数以上のオペランド。
+    /// どれも `any` である。
     AtLeast(usize),
 }
 
 impl FxOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(&self) -> &'static str {
         match self {
             FxOp::HandlerNew { .. } => "handler_new",
@@ -717,7 +747,8 @@ impl FxOp {
         }
     }
 
-    /// 被演算子の決まりと、結果の Rep(結果を持たなければ `None`)。
+    /// オペランドの規則と、結果の Rep を返す。
+    /// 結果を持たなければ、Rep は `None` である。
     pub fn sig(&self) -> (FxArgs, Option<Rep>) {
         use FxArgs::*;
         const A: &[Rep] = &[Rep::Any];
@@ -763,7 +794,7 @@ impl FxOp {
         }
     }
 
-    /// 末尾でない呼び出しの一種(再開点を持つ)か。
+    /// 再開点を持つ、非末尾呼び出しの一種なら真を返す。
     pub fn is_call(&self) -> bool {
         matches!(
             self,
@@ -775,7 +806,8 @@ impl FxOp {
         )
     }
 
-    /// 呼ばれた側が番兵で戻ったとき、伝播せずに番兵を結果に書く呼び出しか。
+    /// 番兵を受け取る呼び出しなら真を返す。
+    /// 呼び出し先が番兵を返して戻ったときに、伝播せずに番兵を結果に書く呼び出しである。
     pub fn catches(&self) -> bool {
         matches!(
             self,
@@ -783,7 +815,7 @@ impl FxOp {
         )
     }
 
-    /// ヒープに確保しうるか。
+    /// ヒープにメモリを確保することがあれば真を返す。
     pub fn allocates(&self) -> bool {
         matches!(
             self,
@@ -795,22 +827,28 @@ impl FxOp {
 /// [`Term::Fx`] の種類(`doc/lir.md` の 16 節)。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FxTermOp {
-    /// `propagate`。状態語が立っているときに、番兵で戻る。
+    /// `propagate`。
+    /// 状態ワードが設定されているときに、番兵を返して戻る。
     Propagate,
-    /// `tail_call_never p`。退避した `DISCARD(hr, NeverBody)` の節の本体を末尾で呼ぶ。
+    /// `tail_call_never p`。
+    /// 退避した `DISCARD(hr, NeverBody)` の節の本体を末尾呼び出しで呼ぶ。
     TailCallNever,
-    /// `clause_value r`。T の節が `resume` せずに値 `r` になった。
+    /// `clause_value r`。
+    /// T の節が `resume` せずに値 `r` になったことを伝える。
     ClauseValue,
-    /// `clause_matched sel`。N か G の節が選ばれた。
+    /// `clause_matched sel`。
+    /// N か G の節が選ばれたことを伝える。
     ClauseMatched,
-    /// `tail_resume v`。G の節の末尾の `resume(v)`。
+    /// `tail_resume v`。
+    /// G の節の末尾 `resume` である `resume(v)` を表す。
     TailResume,
-    /// `tail_call_clause op hr sel (a…)`。次の候補の節を末尾で呼ぶ。
+    /// `tail_call_clause op hr sel (a…)`。
+    /// 次の候補の節を末尾呼び出しで呼ぶ。
     TailCallClause { op: u32 },
 }
 
 impl FxTermOp {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(&self) -> &'static str {
         match self {
             FxTermOp::Propagate => "propagate",
@@ -822,7 +860,8 @@ impl FxTermOp {
         }
     }
 
-    /// 被演算子の数の決まり(どれも `any`)。`(最小, 固定か)`。
+    /// オペランドの個数の規則を、`(最小の個数, 固定かどうか)` の組で返す。
+    /// オペランドはどれも `any` である。
     pub fn arity(&self) -> (usize, bool) {
         match self {
             FxTermOp::Propagate => (0, true),
@@ -840,46 +879,51 @@ impl FxTermOp {
 pub enum RtError {
     /// 1: `hole`。
     Hole,
-    /// 2: 初期化の前の大域を読んだ。
+    /// 2: 初期化前のグローバルを読んだ。
     Unbound(GlobalId),
-    /// 3: `letpat`、仮引数のパターン、`def_pattern` の照合の失敗。被演算子は照合した値(`any`)。
+    /// 3: `letpat`、仮引数のパターン、`def_pattern` の照合の失敗。
+    /// オペランドは照合した値(`any`)である。
     PatternFail,
-    /// 4: `match` のどの節にも一致しない。被演算子は照合した値(`any`)。
+    /// 4: `match` のどの節にも一致しない。
+    /// オペランドは照合した値(`any`)である。
     MatchFail,
-    /// 5: 範囲外の数値リテラル。字面を持つ。
+    /// 5: 範囲外の数値リテラル。
+    /// リテラルの表記を持つ。
     LitRange(String),
-    /// 6: 初期化の前のインスタンスからメソッドを選んだ。
+    /// 6: 初期化前のインスタンスからメソッドを選んだ。
     InstanceNotReady(InstanceId),
     /// 10: 整数のゼロ除算。
     DivZero,
     /// 11: NaN を整数に変換しようとした。
     F64ToIntNan(ConvOp),
-    /// 12: 整数への変換の結果が範囲外。被演算子は元の値(`f64`)。
+    /// 12: 整数への変換の結果が範囲外。
+    /// オペランドは変換前の値(`f64`)である。
     F64ToIntRange(ConvOp),
-    /// 13: `__string_sub` の範囲外。
+    /// 13: `__string_sub` の引数が範囲外。
     StrSubRange,
-    /// 14: `__panic`。被演算子は文面(`str`)。
+    /// 14: `__panic`。
+    /// オペランドはメッセージ(`str`)である。
     Panic,
-    /// 15: 配列の範囲外。
+    /// 15: 配列の添字が範囲外。
     ArrayIndex,
     /// 16: `MutableArray.new` の負の長さ。
     MArrayNegLen,
-    /// 17、18: 実装の無いプリミティブを呼んだ。
+    /// 17、18: 実装のないプリミティブを呼んだ。
     ///
-    /// どちらの番号かは大域の表示名と実装名で決まる([`Program::error_number`])。
+    /// どちらの番号になるかは、グローバルの表示名と実装名で決まる([`Program::error_number`])。
     UnimplPrim(GlobalId),
-    /// 19: メモリの不足。
+    /// 19: メモリ不足。
     ///
-    /// 確保する命令が実行時に起こすもので、下ろしは `error` に使わない(検証器が拒否する)。
-    /// M87、M91、M94 の後段が実行時の状態語に使うために置く(計画 6.5 節)。
+    /// メモリを確保する命令が実行時に起こすエラーで、変換器は `error` に使わない(検証器が拒否する)。
+    /// インタプリタと WasmGC バックエンドは、実行時エラーの種類からメッセージを決める処理で、この種類だけはメッセージを作らず、メモリ不足による終了として扱う。
     OutOfMemory,
 }
 
 impl RtError {
-    /// 付録 B の番号。
+    /// IRSpec 付録 B の番号を返す。
     ///
     /// [`RtError::UnimplPrim`] は 17 と 18 の両方を表し、ここでは 17 を返す。
-    /// 18 を区別するには [`Program::error_number`] を使う。
+    /// 17 と 18 を区別するには [`Program::error_number`] を使う。
     pub fn number(&self) -> u32 {
         match self {
             RtError::Hole => 1,
@@ -900,7 +944,8 @@ impl RtError {
         }
     }
 
-    /// 被演算子に要る Rep(要らなければ `None`)。
+    /// オペランドの Rep を返す。
+    /// オペランドを取らない種類では `None` である。
     pub fn operand_rep(&self) -> Option<Rep> {
         match self {
             RtError::PatternFail | RtError::MatchFail => Some(Rep::Any),
@@ -911,12 +956,12 @@ impl RtError {
     }
 }
 
-/// ブロックの終わり。
+/// ブロックの終端命令。
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Term {
-    /// 無条件に移る。
+    /// 無条件に分岐する。
     Jump(BlockId),
-    /// `cond`(`bool`)で分ける。
+    /// `cond`(`bool`)の値で分岐する。
     Branch {
         cond: Reg,
         then: BlockId,
@@ -924,19 +969,19 @@ pub enum Term {
     },
     /// `any` の値を返す。
     Return(Reg),
-    /// 捕獲を持たない関数を末尾で呼ぶ。
+    /// キャプチャを持たない関数を、末尾呼び出しで直接呼ぶ。
     TailCallDirect {
         func: FuncId,
         args: Vec<Reg>,
         yields: bool,
     },
-    /// 値を末尾で呼ぶ。
+    /// 関数値を末尾呼び出しで呼ぶ。
     TailCallValue {
         callee: Reg,
         args: Vec<Reg>,
         yields: bool,
     },
-    /// 辞書からメソッドを選んで末尾で呼ぶ。
+    /// 辞書からメソッドを選んで末尾呼び出しで呼ぶ。
     TailCallMethod {
         class: ClassId,
         method: u32,
@@ -947,14 +992,15 @@ pub enum Term {
     },
     /// 実行時エラーを起こす。
     Error { kind: RtError, operand: Option<Reg> },
-    /// 未実装の機能に届いた(終了状態 4)。
+    /// 未実装の機能に実行が達したことを表す(終了コード 4)。
     Unimplemented { what: String },
-    /// エフェクトのブロックの終わり(パス 8。`doc/lir.md` の 16 節)。被演算子はどれも `any` である。
+    /// エフェクトの終端命令(パス 8。`doc/lir.md` の 16 節)。
+    /// オペランドはどれも `any` である。
     Fx { op: FxTermOp, args: Vec<Reg> },
 }
 
 impl Term {
-    /// 移る先のブロック。
+    /// 後続ブロックを返す。
     pub fn succs(&self) -> Vec<BlockId> {
         match self {
             Term::Jump(b) => vec![*b],
@@ -963,7 +1009,7 @@ impl Term {
         }
     }
 
-    /// 移る先のブロックを書き換える。
+    /// 後続ブロックを書き換える。
     pub fn map_succs(&mut self, f: impl Fn(BlockId) -> BlockId) {
         match self {
             Term::Jump(b) => *b = f(*b),
@@ -975,14 +1021,15 @@ impl Term {
         }
     }
 
-    /// 読むレジスタ。
+    /// 読むレジスタを返す。
     pub fn uses(&self) -> Vec<Reg> {
         let mut v = Vec::new();
         self.for_each_use(|r| v.push(r));
         v
     }
 
-    /// 読むレジスタを順に `f` に渡す。確保をしない(回収の中で使う)。
+    /// 読むレジスタを順に `f` に渡す。
+    /// メモリを確保しないので、GC の実行中にも使える。
     pub fn for_each_use(&self, mut f: impl FnMut(Reg)) {
         match self {
             Term::Jump(_) | Term::Unimplemented { .. } => {}
@@ -1007,7 +1054,8 @@ impl Term {
 }
 
 impl Inst {
-    /// 書くレジスタ。
+    /// 書くレジスタを返す。
+    /// 何も書かない命令では `None` である。
     pub fn def(&self) -> Option<Reg> {
         use Inst::*;
         match self {
@@ -1084,14 +1132,15 @@ impl Inst {
         }
     }
 
-    /// 読むレジスタ(被演算子の順)。
+    /// 読むレジスタをオペランドの順に返す。
     pub fn uses(&self) -> Vec<Reg> {
         let mut v = Vec::new();
         self.for_each_use(|r| v.push(r));
         v
     }
 
-    /// 読むレジスタを被演算子の順に `f` に渡す。確保をしない(回収の中で使う)。
+    /// 読むレジスタをオペランドの順に `f` に渡す。
+    /// メモリを確保しないので、GC の実行中にも使える。
     pub fn for_each_use(&self, mut f: impl FnMut(Reg)) {
         use Inst::*;
         match self {
@@ -1201,7 +1250,7 @@ impl Inst {
         }
     }
 
-    /// 末尾でない呼び出しか(再開点を持つ命令)。
+    /// 非末尾呼び出し(再開点を持つ命令)なら真を返す。
     pub fn is_call(&self) -> bool {
         match self {
             Inst::CallDirect { .. }
@@ -1213,9 +1262,10 @@ impl Inst {
         }
     }
 
-    /// 末尾でない呼び出しで、再開点で yield を受け取りうると印の付いたものか(パス 11 の前の印)。
+    /// 再開点で yield を受け取ることがあると印の付いた非末尾呼び出しなら真を返す。
+    /// 印は、パス 11 が枝刈りする前のものである。
     ///
-    /// エフェクトの呼び出しの一種はどれも受け取りうる。
+    /// `dict_app` と、エフェクトの命令のうち非末尾呼び出しの一種であるものは、印を持たず、どれも受け取ることがあるものとして扱う。
     pub fn call_yields(&self) -> bool {
         match self {
             Inst::CallDirect { yields, .. }
@@ -1227,7 +1277,9 @@ impl Inst {
         }
     }
 
-    /// ヒープに確保しうるか(GC の安全点)。`regs` はレジスタの Rep の表。
+    /// ヒープにメモリを確保することがあれば真を返す。
+    /// 真を返す命令が GC の安全点になる。
+    /// `regs` はレジスタの Rep の表である。
     pub fn allocates(&self, regs: &[Rep]) -> bool {
         use Inst::*;
         match self {
@@ -1258,31 +1310,31 @@ impl Inst {
 /// 基本ブロック。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
-    /// 命令の列。
+    /// 命令の並び。
     pub insts: Vec<Inst>,
-    /// 終わり。
+    /// 終端命令。
     pub term: Term,
 }
 
 /// 関数の種類。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FuncKind {
-    /// KIR の関数(同じ添字)。
+    /// KIR の関数。
     Kir(FnKind),
-    /// 単位の初期化の手順。
+    /// 単位(コンパイル単位)の初期化関数。
     Init,
-    /// `extern` の大域の値の本体(プリミティブか C の関数)。
+    /// `extern` のグローバルの値の本体(プリミティブか C の関数)。
     Extern,
     /// 組み込みの値の本体。
     Builtin,
     /// 組み込みのインスタンスのメソッドの本体。
     BuiltinMethod,
-    /// ハンドラのフレームの関数 `$rt_handle`(パス 8。`doc/lir.md` の 16 節)。
+    /// ハンドラのフレームになる関数 `$rt_handle`(パス 8。`doc/lir.md` の 16 節)。
     Handler,
 }
 
 impl FuncKind {
-    /// 印字の綴り。
+    /// LIR のテキスト表示(`keleut dump lir` の出力など)での名前を返す。
     pub fn name(self) -> &'static str {
         match self {
             FuncKind::Kir(k) => k.name(),
@@ -1295,145 +1347,154 @@ impl FuncKind {
     }
 }
 
-/// スロット(パス 12 の割り当て)。
+/// パス 12 がレジスタに割り当てるスロット。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Slot {
-    /// `any` の区画(GC が走査する)の番号。
+    /// `any` の領域(GC が走査する)の中の番号。
     Any(u32),
-    /// 生の区画の番号。
+    /// ボックス化していない値の領域の中の番号。
     Raw(u32),
 }
 
-/// パス 12 の結果(フレームの配置)。
+/// パス 12 の結果である、フレームのレイアウト。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Frame {
     /// レジスタごとのスロット。
     pub slot: Vec<Slot>,
-    /// `any` の区画のスロットの数。
+    /// `any` の領域のスロット数。
     pub any_slots: u32,
-    /// 生の区画のスロットの数。
+    /// ボックス化していない値の領域のスロット数。
     pub raw_slots: u32,
-    /// 再開点(末尾でない呼び出し)。番号はこの列の位置である。
+    /// 再開点(非末尾呼び出し)。
+    /// 番号は、この並びの中の位置である。
     ///
-    /// 各点の集合は、呼び出しの後で生きているレジスタ(呼び出しが書くレジスタを除く)である。
+    /// 各点の集合は、呼び出しの後で生存しているレジスタ(呼び出しが書くレジスタを除く)である。
     pub resume_points: Points,
-    /// 確保の安全点。
+    /// 安全点(メモリを確保する命令)。
     ///
-    /// 各点の集合は、確保をまたいで生きているレジスタである。
-    /// 命令の後で生きているもの(命令が書くレジスタを除く)と、命令の被演算子からなる。
+    /// 各点の集合は、確保をまたいで生存しているレジスタである。
+    /// 命令の後で生存しているレジスタ(命令が書くレジスタを除く)と、命令のオペランドからなる。
     pub safepoints: Points,
-    /// 再開点ごとの、yield を受け取りうるか(パス 11。`doc/lir.md` の 17 節)。
+    /// 再開点ごとに、その再開点が yield を受け取ることがあれば真を持つ(パス 11。`doc/lir.md` の 17 節)。
     ///
-    /// 偽の再開点で待っているフレームに yield が届くのは、`may_yield` の印の誤りである。
+    /// 値が偽である再開点で待っているフレームに yield が届くのは、`may_yield` の印が誤っているときである。
+    /// そのとき、バックエンドは内部エラー(`yield が noyield の再開点に届きました(may_yield の印の誤り)`)として終了コード 70 で終了する。
     pub yield_points: Vec<bool>,
 }
 
 /// LIR の関数。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Func {
-    /// 記号。
+    /// 関数のシンボル。
     pub sym: String,
-    /// 種類。
+    /// 関数の種類。
     pub kind: FuncKind,
-    /// `yield` の印(KIR の関数の印。ほかは偽)。
+    /// `yield` の印。
+    /// KIR の関数では KIR の印と同じ値である。
+    /// それ以外の関数では変換器が決め、初期化関数や `Array.each` の本体では真になる。
     pub yields: bool,
-    /// 捕獲の数。
+    /// キャプチャの個数。
     pub ncaps: u32,
-    /// レジスタの Rep。
+    /// レジスタごとの Rep。
     pub regs: Vec<Rep>,
     /// 引数を受け取るレジスタ(どれも `any`)。
     pub params: Vec<Reg>,
-    /// ブロック(先頭が入口)。
+    /// ブロックの並び。
+    /// 先頭が入口である。
     pub blocks: Vec<Block>,
     /// パス 12 の結果。
     pub frame: Option<Frame>,
 }
 
-/// コンストラクタ。
+/// 名目的な型のコンストラクタ。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CtorInfo {
-    /// 名前。
+    /// コンストラクタの名前。
     pub name: String,
-    /// フィールドの数。
+    /// フィールドの個数。
     pub arity: u32,
 }
 
 /// 名目的な型。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeInfo {
-    /// 記号。
+    /// 名目的な型のシンボル。
     pub sym: String,
-    /// コンストラクタ。
+    /// コンストラクタの並び。
     pub ctors: Vec<CtorInfo>,
 }
 
-/// クラス。
+/// 型クラス。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClassInfo {
-    /// 記号。
+    /// 型クラスのシンボル。
     pub sym: String,
     /// メソッドの名前(宣言の順)。
     pub methods: Vec<String>,
 }
 
-/// 大域の種類。
+/// グローバルの種類。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GlobalKind {
-    /// 組み込みの値。値は `func` のクロージャである。
+    /// 組み込みの値。
+    /// 値は `func` のクロージャである。
     Builtin { func: FuncId },
-    /// `extern`。値は `func` のクロージャである。
+    /// `extern`。
+    /// 値は `func` のクロージャである。
     ///
-    /// 実装名が付録 A.5 に無いときは `func` が `None` で、値を呼ぶと実行時エラー(17、18)になる。
+    /// 実装名が IRSpec 付録 A.5 にないときは `func` が `None` で、値を呼ぶと実行時エラー 17 か 18 になる。
     Extern {
-        /// ABI。
+        /// `extern` の ABI。
         abi: Abi,
-        /// 実装名。
+        /// `extern` の実装名。
         name: String,
-        /// 受け取って捨てる辞書の数。
+        /// 受け取って捨てる辞書の個数。
         dicts: u32,
         /// 本体の関数。
         func: Option<FuncId>,
     },
-    /// 関数。値は `func` のクロージャである。
+    /// 関数。
+    /// 値はその関数のクロージャである。
     Fn(FuncId),
-    /// 辞書を受け取る束縛。値は `func` の辞書の抽象である。
+    /// 辞書を受け取る束縛。
+    /// 値はその関数の辞書の抽象である。
     Dictabs(FuncId),
-    /// 初期化の手順が置く値。
+    /// 初期化手順が置く値。
     Value(Rep),
 }
 
-/// 大域。
+/// KIR のグローバル 1 つの情報。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Global {
-    /// 記号。
+    /// グローバルのシンボル。
     pub sym: String,
-    /// 付録 B の文面に書く名前(単位の鍵と末尾の `#n` を除いた修飾名)。
+    /// IRSpec 付録 B のメッセージに書く名前(単位のキーと末尾の `#n` を除いた修飾名)。
     pub display: String,
-    /// 種類。
+    /// グローバルの種類。
     pub kind: GlobalKind,
 }
 
 /// インスタンスのメソッドの実装。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstMethod {
-    /// 実装の関数が受け取る辞書の数(前提の数 + メソッド自身の辞書の数)。
+    /// 実装の関数が受け取る辞書の個数(前提の個数 + メソッド自身の辞書の個数)。
     pub dicts: u32,
     /// 実装の関数。
     pub func: FuncId,
 }
 
-/// インスタンス。
+/// 型クラスのインスタンス。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Instance {
-    /// 記号。
+    /// インスタンスのシンボル。
     pub sym: String,
-    /// クラス。
+    /// インスタンスのクラス。
     pub class: ClassId,
-    /// 頭の型。
+    /// インスタンスの対象の型。
     pub head: TypeId,
-    /// 付録 B の 6 番の文面の `<C>[<T>]`。
+    /// IRSpec 付録 B の 6 番のメッセージに書く `<C>[<T>]`。
     pub display: String,
-    /// 前提の数。
+    /// 前提の個数。
     pub premises: u32,
     /// クラスのメソッドの順に並べた実装。
     pub methods: Vec<InstMethod>,
@@ -1442,11 +1503,11 @@ pub struct Instance {
 /// 組み込みのインスタンスのメソッドの本体。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinMethod {
-    /// クラス。
+    /// インスタンスのクラス。
     pub class: ClassId,
-    /// 型。
+    /// インスタンスの対象の型。
     pub ty: TypeId,
-    /// メソッド(クラスの中の位置)。
+    /// メソッドの番号(クラスの中の位置)。
     pub method: u32,
     /// 本体の関数。
     pub func: FuncId,
@@ -1455,13 +1516,15 @@ pub struct BuiltinMethod {
 /// LIR のプログラム。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
-    /// 関数。先頭の部分は KIR の関数と同じ添字である。
+    /// プログラムの関数の表。
+    /// 先頭の `kir_funcs` 個は KIR の関数で、KIR と同じ添字に置く。
     ///
-    /// 単位を足したプログラム([`crate::Extender`])では、足した単位の KIR の関数が、その前の関数の後ろに続く。
+    /// 単位を追加したプログラム([`crate::Extender`])では、追加した単位の KIR の関数が、それまでの関数の後ろに続く。
     pub funcs: Vec<Func>,
-    /// KIR の関数の数(単位を足したプログラムでは、初めに下ろした単位の KIR の関数の数)。
+    /// KIR の関数の個数。
+    /// 単位を追加したプログラムでは、最初に LIR に変換した単位の KIR の関数の個数である。
     pub kir_funcs: u32,
-    /// 大域(KIR と同じ添字)。
+    /// グローバル(KIR と同じ添字)。
     pub globals: Vec<Global>,
     /// インスタンス(KIR と同じ添字)。
     pub instances: Vec<Instance>,
@@ -1471,40 +1534,43 @@ pub struct Program {
     pub classes: Vec<ClassInfo>,
     /// 組み込みのインスタンスのメソッドの本体。
     pub builtin_methods: Vec<BuiltinMethod>,
-    /// ラベル。
+    /// レコードとヴァリアントのラベル。
     pub labels: Vec<String>,
-    /// レコードの形。各形はラベルの番号の昇順(同名は外側から)に並べた列で、先頭は空の形である。
+    /// レコードのシェイプ。
+    /// 各シェイプは、ラベルを番号の昇順に並べたものである(同じラベルは外側のフィールドから並べる)。
+    /// 表の先頭の項目は空のシェイプである。
     pub shapes: Vec<Vec<LabelId>>,
-    /// 文字列の定数。
+    /// 文字列定数。
     pub strings: Vec<Vec<u8>>,
-    /// 単位の初期化の関数(初期化の順)。
+    /// 単位ごとの初期化関数(初期化の順)。
     pub init: Vec<FuncId>,
     /// エフェクト(KIR と同じ添字)。
     pub effects: Vec<EffectInfo>,
-    /// ハンドラのフレームの関数 `$rt_handle`(プログラムが `handle` を持たなければ `None`)。
+    /// ハンドラのフレームになる関数 `$rt_handle`(プログラムが `handle` を持たなければ `None`)。
     pub rt_handle: Option<FuncId>,
 }
 
-/// エフェクト。
+/// エフェクトとその操作。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectInfo {
-    /// 記号。
+    /// エフェクトのシンボル。
     pub sym: String,
-    /// 付録 B の 9 番の文面に書く名前(単位の鍵を除いた修飾名)。
+    /// IRSpec 付録 B の 9 番のメッセージに書く名前(単位のキーを除いた修飾名)。
     pub display: String,
-    /// 操作の名前と引数の数。
+    /// 操作の名前と引数の個数。
     pub ops: Vec<(String, u32)>,
 }
 
-/// 1 回の確保で作れる要素の数の上限 `N_alloc_max`(IRSpec 11.6 節)。
+/// 1 回の確保で作れる要素数の上限 `N_alloc_max`(IRSpec 11.6 節)。
 ///
-/// 下ろしはこの値を使わない。
-/// 長さを取る確保の命令の意味がこの上限を含み(`doc/lir.md` の 1.7 節)、M87、M91、M94 の後段が
-/// 実行時の確保の関数で確かめる(計画 6.5 節)。
+/// 変換器はこの値を使わない。
+/// 長さを受け取ってメモリを確保する命令は、長さがこの上限を超えるとメモリ不足になる(`doc/lir.md` の 1.7 節)。
+/// ランタイム(`keleut-rt`)のメモリを確保する関数と、WasmGC バックエンドが生成するコードが、長さをこの値と比較する。
 pub const N_ALLOC_MAX: i32 = 1 << 26;
 
 impl Program {
-    /// 空のプログラム([`crate::Extender`] が単位を足していく初めの状態)。
+    /// 空のプログラムを返す。
+    /// [`crate::Extender`] が単位を追加していく最初の状態である。
     pub const fn empty() -> Program {
         Program {
             funcs: Vec::new(),
@@ -1523,9 +1589,9 @@ impl Program {
         }
     }
 
-    /// 実行時エラーの付録 B の番号。
+    /// 実行時エラーの、IRSpec 付録 B での番号を返す。
     ///
-    /// [`RtError::UnimplPrim`] は、大域の表示名が実装名に等しければ 17、違えば 18 である。
+    /// [`RtError::UnimplPrim`] は、グローバルの表示名が実装名に等しければ 17、違えば 18 である。
     pub fn error_number(&self, kind: &RtError) -> u32 {
         if let RtError::UnimplPrim(g) = kind
             && let Some(Global {

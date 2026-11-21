@@ -1,17 +1,20 @@
 //! 辞書と、辞書の定数化(パス 5)。
 //!
-//! 辞書の式はエフェクトを起こさず、実行時エラーにもならない(IRSpec 5.2 節)。
-//! 下ろしは辞書の式を次の 3 つに分ける。
+//! 辞書の式の評価はエフェクトを起こさず、実行時エラーにもならない(IRSpec 5.2 節)。
+//! 変換器は、辞書の式を次の 3 つに分ける。
 //!
 //! - 組み込みのインスタンス `dbuiltin(C, T)`。
-//!   メソッドの呼び出しは、付録 A.3 のプリミティブの命令になる。
-//! - 利用者のインスタンス `dinst(I, ps)`。
-//!   メソッドの呼び出しは、インスタンスの初期化の検査と、実装の値(または実装の関数の直の呼び出し)になる。
-//! - ほか(辞書の引数、捕獲、構造的な辞書)。
-//!   メソッドの呼び出しは、実行時に辞書から選ぶ `call_method` になる。
+//!   メソッドの呼び出しは、IRSpec 付録 A.3 のメソッドに対応するプリミティブの命令になる。
+//!   対応するプリミティブがないとき、引数の個数がプリミティブと合わないとき、メソッド自身の辞書があるときは、実行時に辞書からメソッドを選ぶ呼び出し(`call_method` か `tail_call_method`)になる。
+//! - ユーザのインスタンス `dinst(I, ps)`。
+//!   メソッドの呼び出しは、インスタンスの初期化の検査と、実装の値の呼び出しになる。
+//!   実装の関数が辞書を受け取らなければ、実装の値を `inst_get_value` で読む。
+//!   辞書を受け取るなら、前提の辞書とメソッド自身の辞書を引数にして実装の関数を直接呼び出し、その結果を実装の値とする。
+//! - それ以外(辞書の引数、キャプチャした辞書、構造的な辞書)。
+//!   メソッドの呼び出しは、実行時に辞書からメソッドを選ぶ呼び出し(`call_method` か `tail_call_method`)になる。
 //!
-//! どの形でも、メソッドの選択は引数をすべて評価した後に行い(IRSpec 5.4 節)、
-//! 末尾でない呼び出しは呼ばれた側の深さを `d+1` と数える(IRSpec 11.2 節)。
+//! どの場合も、メソッドの選択は引数をすべて評価した後に行う(IRSpec 5.4 節)。
+//! 非末尾呼び出しでは、呼び出しの位置の深さを `d` として、呼び出し先の深さを `d + 1` と数える(IRSpec 11.2 節)。
 
 use kir::{ClassId, Dict, DictId, ExpId};
 
@@ -19,22 +22,22 @@ use crate::ir::*;
 use crate::lower::{Low, V};
 use crate::numeric;
 
-/// 下ろした辞書。
+/// 辞書の式を LIR に変換した結果。
 #[derive(Clone, Debug)]
 pub(crate) enum DictV {
     /// 組み込みのインスタンス。
     Builtin { class: ClassId, ty: TypeId },
-    /// 利用者のインスタンスと、前提の辞書(一様な語)。
+    /// ユーザのインスタンスと、前提の辞書(一様表現の値を持つレジスタ)。
     Inst {
         inst: InstanceId,
         premises: Vec<Reg>,
     },
-    /// 実行時に決まる辞書(一様な語)。
+    /// 実行時に決まる辞書(一様表現の値を持つレジスタ)。
     Dyn(Reg),
 }
 
 impl Low<'_, '_> {
-    /// 辞書の式を下ろす。
+    /// 辞書の式を LIR に変換する。
     pub(crate) fn dict(&mut self, d: DictId) -> DictV {
         let k = self.p.k;
         let Some(x) = k.nodes.dict(d) else {
@@ -81,7 +84,7 @@ impl Low<'_, '_> {
         }
     }
 
-    /// 辞書を一様な語にする。
+    /// 辞書を一様表現の値にして、その値を持つレジスタを返す。
     pub(crate) fn dict_reg(&mut self, d: DictV) -> Reg {
         match d {
             DictV::Builtin { class, ty } => self.b.konst(Const::DictBuiltin { class, ty }),
@@ -101,7 +104,8 @@ impl Low<'_, '_> {
         }
     }
 
-    /// `method`(呼ばない値として)。
+    /// 式 `method` を変換する。
+    /// メソッドの値を `method_new` で作るだけで、呼び出しは行わない。
     pub(crate) fn method_value(
         &mut self,
         class: ClassId,
@@ -123,7 +127,8 @@ impl Low<'_, '_> {
         V::any(dst)
     }
 
-    /// `opcall`。末尾の呼び出しにはならない。
+    /// 式 `opcall` を変換する。
+    /// 末尾呼び出しにはならない。
     pub(crate) fn opcall(
         &mut self,
         class: ClassId,
@@ -133,11 +138,12 @@ impl Low<'_, '_> {
     ) -> Option<V> {
         let d = self.dict(dict);
         let args = self.args(args)?;
-        // 演算子のメソッドの型は印を持たないので、利用者の実装の呼び出しは yield しうるものとして扱う。
+        // `opcall` は KIR に `yield` の印を持たないので、ユーザの実装の呼び出しは yield することがあるものとして扱う。
         self.method_call(class, method, d, Vec::new(), args, false, true)
     }
 
-    /// メソッドを選んで呼ぶ。引数は評価済みである。
+    /// メソッドを選んで呼ぶ命令を置く。
+    /// 引数は評価済みである。
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn method_call(
         &mut self,
@@ -201,7 +207,7 @@ impl Low<'_, '_> {
                         method,
                     });
                 } else {
-                    // 実装の関数は、呼ばれた側の深さで評価する(深さを増やさない)。
+                    // 実装の関数は呼び出し先の深さで評価するので、ここでは深さを増やさない。
                     let mut ds = premises;
                     ds.extend(own);
                     self.b.emit(Inst::CallDirect {
@@ -233,7 +239,7 @@ impl Low<'_, '_> {
         }
     }
 
-    /// 実行時に辞書からメソッドを選ぶ呼び出し。
+    /// 実行時に辞書からメソッドを選ぶ呼び出し(`call_method` か `tail_call_method`)を置く。
     #[allow(clippy::too_many_arguments)]
     fn dyn_method(
         &mut self,

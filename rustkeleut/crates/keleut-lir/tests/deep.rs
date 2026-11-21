@@ -1,13 +1,10 @@
-//! 深い入れ子の KIR の下ろし。
+//! 深い入れ子の KIR を LIR に変換するテスト。
 //!
-//! `conformance/kir-bad/deep-base.kirt` の `main/total` の本体を、深さ `N_nest` の鎖に置き換えて下ろす。
-//! 下ろしの再帰が、見積もり [`keleut_lir::STACK_BYTES_PER_LEVEL`] のスタックに収まることと、
-//! 生存解析と検証が深い入力でも現実的な時間とメモリで終わることを確かめる。
-//! 値を持ち続けたまま確保や呼び出しを重ねる鎖では、再開点と安全点の集合を持つ量と、
-//! パス 12 の生存解析と検証器の定義の検査の手間([`keleut_lir::dataflow_work`])が
-//! 関数の大きさに比例することも確かめる。
-//! レコードの鎖では、`rec_new` の被演算子の数と形の表の大きさがプログラムの大きさに比例することも確かめる。
-//! 浅い鎖では、再開点と安全点の集合を、ブロックごとに集合を丸ごと持つ素朴な生存解析と比べる。
+//! `conformance/kir-bad/deep-base.kirt` の `main/total` の本体を、深さ `N_nest` の連鎖に置き換えて LIR に変換する。
+//! 変換器の再帰が、[`keleut_lir::STACK_BYTES_PER_LEVEL`] から見積もったスタックに収まることと、生存解析と検証が深い入力でも現実的な時間とメモリで終わることを確かめる。
+//! 値を保持したまま確保や呼び出しを重ねる連鎖では、再開点と安全点の集合として保持するレジスタの個数と、パス 12 の生存解析の処理量と、検証器が行う定義の検査の処理量([`keleut_lir::dataflow_work`])が、関数のサイズに比例することも確かめる。
+//! レコードの連鎖では、`rec_new` のオペランドの個数とシェイプ表のサイズがプログラムのサイズに比例することも確かめる。
+//! 浅い連鎖では、再開点と安全点の集合を、ブロックごとに集合の全体を持つ単純な生存解析の結果と比べる。
 
 use std::path::PathBuf;
 
@@ -19,17 +16,20 @@ fn base() -> String {
     std::fs::read_to_string(p).expect("deep-base.kirt")
 }
 
-/// 結果を値に持ち続ける、match を引数に取る末尾でない呼び出し。
+/// match を引数に取る非末尾呼び出し。
+///
+/// 連鎖の中では、この呼び出しの結果を保持したまま次の段を評価する。
 const CALL_MATCH: &str = "(call ntail yield (global \"main/loop\") (lit i32 3) \
      (match (lit bool true) (clause (lit bool true) (lit i64 1)) (clause (wild) (lit i64 2))))";
 
-/// `kind` の鎖を深さ `n` で作る。
+/// 種類 `kind` の連鎖を深さ `n` で作り、KIR のテキストを返す。
 pub fn chain(n: usize, kind: &str) -> String {
-    // 1 段が 2 つのノード(式と、フィールドか節)からなる鎖の段の数。
+    // 1 段が 2 つのノード(式と、フィールドか節)からなる連鎖の段数。
     let m = n / 2 - 2;
-    // コンストラクタ P のフィールドの数。
+    // コンストラクタ P のフィールドの個数。
     let mut arity = 2;
-    // `main/total` の局所変数の Rep の列(空なら元のまま)。
+    // `main/total` のローカル変数の Rep の並び。
+    // 空なら元のテキストのままにする。
     let mut locals = String::new();
     let mut body = String::from("  ");
     match kind {
@@ -58,7 +58,8 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += &"))".repeat(n - 2);
             body += " (lit i32 0) (lit i32 0))";
         }
-        // 値を持ち続けたまま確保を重ねる鎖(長いリストのリテラルの形)。
+        // 値を保持したまま確保を重ねる連鎖。
+        // 長いリストのリテラルと同じ形である。
         "construct" => {
             body += &"(construct \"main/P\" P (field 0 (lit i32 1)) (field 1 ".repeat(m);
             body += "(lit i32 0)";
@@ -69,7 +70,7 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += "(rec_empty)";
             body += &")".repeat(n - 2);
         }
-        // 同じラベルのフィールドを重ねたレコードを、更新し続ける鎖。
+        // 同じラベルのフィールドを重ねたレコードを、更新し続ける連鎖。
         "rec_update" => {
             let m = n / 2 - 4;
             body += &"(rec_update a ".repeat(m);
@@ -78,7 +79,7 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += &")".repeat(m);
             body += &" (lit i64 2))".repeat(m);
         }
-        // 同じラベルのフィールドを重ねたレコードから、フィールドを除き続ける鎖。
+        // 同じラベルのフィールドを重ねたレコードから、フィールドを取り除き続ける連鎖。
         "rec_restrict" => {
             let m = n / 2 - 4;
             body += &"(rec_restrict a ".repeat(m);
@@ -86,7 +87,7 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += "(rec_empty)";
             body += &")".repeat(2 * m);
         }
-        // `let` で束ねたレコードを、別のラベルで拡張し続ける鎖。
+        // `let` で束縛したレコードを、別のラベルで拡張し続ける連鎖。
         "rec_let" => {
             let m = n / 2 - 4;
             locals = vec!["any"; m].join(" ");
@@ -101,13 +102,14 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += &format!("(local {})", m - 1);
             body += &")".repeat(m);
         }
-        // ガードの中の match の鎖。
+        // ガードの中に match を入れ子にした連鎖。
         "guard" => {
             body += &"(match (lit i64 0) (clause (wild) (guard ".repeat(m);
             body += "(lit bool true)";
             body += &") (lit bool true)))".repeat(m);
         }
-        // 引数の中の末尾でない呼び出しの鎖。外側の呼び出しの引数が、内側の呼び出しをまたいで生きる。
+        // 引数の中に非末尾呼び出しを入れ子にした連鎖。
+        // 外側の呼び出しの引数が、内側の呼び出しをまたいで生存する。
         "args" => {
             body += &"(call ntail yield (global \"main/loop\") (lit i32 3) ".repeat(m);
             body += "(lit i64 0)";
@@ -118,14 +120,14 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += "(lit bool true)";
             body += &")".repeat(n - 2);
         }
-        // 文字列のリテラルのパターンで失敗した先の節の中の match の鎖。
+        // 文字列リテラルのパターンの照合に失敗して進む節の中に、match を入れ子にした連鎖。
         "strpat" => {
             body += &"(match (lit str \"a\") (clause (lit str \"b\") (lit i64 0)) (clause (wild) "
                 .repeat(m);
             body += "(lit i64 1)";
             body += &"))".repeat(m);
         }
-        // 呼び出しの結果を持ち続けたまま、match を引数に取る呼び出しを重ねる鎖。
+        // 呼び出しの結果を保持したまま、match を引数に取る呼び出しを重ねる連鎖。
         "callmatch" => {
             body += &format!("(construct \"main/P\" P (field 0 {CALL_MATCH}) (field 1 ").repeat(m);
             body += "(lit i32 0)";
@@ -140,8 +142,8 @@ pub fn chain(n: usize, kind: &str) -> String {
             body += ")";
             arity = n;
         }
-        // 呼び出しの結果を持ち続けたまま、match の最初の節の中に次の段を入れる鎖。
-        // 最初の節の後に置く節の入口の集合を、長い日誌の先で使う。
+        // 呼び出しの結果を保持したまま、match の最初の節の中に次の段を入れる連鎖。
+        // 最初の節の後ろに置いた節の入口の集合は、変更ログが長く伸びた後で使われる。
         "armnest" => {
             let m = n / 4 - 2;
             body += &format!(
@@ -175,9 +177,10 @@ pub fn chain(n: usize, kind: &str) -> String {
     out
 }
 
-/// 再開点と安全点の集合を、ブロックごとに集合を丸ごと持つ素朴な生存解析で求める(位置の順)。
+/// 点と、その点で生存しているレジスタの集合の組を、位置の順に並べたもの。
 type Sets = Vec<(Point, Vec<Reg>)>;
 
+/// 再開点と安全点の集合を、ブロックごとに集合の全体を持つ単純な生存解析で求める。
 fn naive_points(f: &Func) -> (Sets, Sets) {
     let nr = f.regs.len();
     let mut live_in: Vec<Vec<bool>> = vec![Vec::new(); f.blocks.len()];
@@ -235,8 +238,8 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
         let fr = f.frame.as_ref().expect("frame");
         let size: usize = f.regs.len() + f.blocks.iter().map(|b| b.insts.len() + 1).sum::<usize>();
         total += size;
-        // 形の分かるレコードの配置を写す `rec_new` は、1 つあたり高々上限の数の被演算子を写す。
-        // そのため、被演算子の数は関数の大きさと上限の積に比例する量で抑えられる。
+        // シェイプの分かるレコードのレイアウトをコピーする `rec_new` が 1 つで持つオペランドは、`KNOWN_RECORD_FIELDS` 個以下である。
+        // そのため、オペランドの個数の合計は、関数のサイズに比例する量と、`KNOWN_RECORD_FIELDS` と `rec_new` の個数の積との和を超えない。
         let (news, fields) = f
             .blocks
             .iter()
@@ -251,16 +254,15 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
             "{kind}: {} の rec_new の {news} 個の被演算子が {fields} 個(関数の大きさ {size})",
             f.sym
         );
-        // 再開点と安全点の集合は差分で持つので、持つ量は関数の大きさに比例する。
+        // 再開点と安全点の集合は差分で持つので、保持するレジスタの個数は関数のサイズに比例する。
         let stored = fr.resume_points.stored_regs() + fr.safepoints.stored_regs();
         assert!(
             stored <= 8 * size + 64,
             "{kind}: {} の集合が {stored} 個(関数の大きさ {size})",
             f.sym
         );
-        // 生存解析と定義の検査の手間も、関数の大きさに比例する。
-        // ただし、入口の集合を遠くで使うブロック(armnest の最初の節の後の節)は、
-        // 1 つあたり集合の幅(語の数)に比例する手間を使う。
+        // 生存解析と定義の検査の処理量も、関数のサイズに比例する。
+        // ただし、入口の集合を離れた位置で使うブロック(armnest の、最初の節の後ろに置いた節)では、1 つあたりの処理量が集合の幅(ワード数)に比例する。
         let (live, defs) = keleut_lir::dataflow_work(f);
         let words = (f.regs.len() / 64 + 1) as u64;
         let bound = 32 * size as u64
@@ -291,7 +293,7 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
             );
         }
     }
-    // 形の表の大きさも、プログラムの大きさに比例する。
+    // シェイプ表のサイズも、プログラムのサイズに比例する。
     let shapes: usize = lp.shapes.iter().map(Vec::len).sum();
     assert!(
         shapes <= 2 * total + KNOWN_RECORD_FIELDS * lp.shapes.len(),
@@ -299,7 +301,9 @@ fn lower_chain(kind: &str, n: usize, max_nest: usize) {
     );
 }
 
-/// 鎖の種類ごとに、深さ `N_nest` の鎖を下ろす試験を作る(並べて走らせる)。
+/// 連鎖の種類ごとに、深さ `N_nest` の連鎖を LIR に変換するテストを作る。
+///
+/// 種類ごとに別のテストにするのは、並列に実行するためである。
 macro_rules! deep {
     ($($name:ident: $kind:literal,)*) => {
         $(
@@ -334,7 +338,7 @@ fn match_を引数に取る呼び出しを_n_nest_個並べたコンストラク
     lower_chain("wide", kir::N_NEST, kir::N_NEST);
 }
 
-/// 浅い鎖で、再開点と安全点の集合を素朴な生存解析と比べる。
+/// 浅い連鎖で、再開点と安全点の集合を単純な生存解析の結果と比べる。
 #[test]
 fn 浅い鎖の再開点と安全点は素朴な生存解析と一致する() {
     for kind in [

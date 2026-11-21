@@ -1,15 +1,16 @@
-//! プログラムの全体の下ろし。
+//! プログラム全体の LIR への変換。
 //!
-//! KIR の関数を同じ添字の LIR の関数にし、その後ろに次の関数を足す。
+//! KIR の関数を同じ添字の LIR の関数に変換し、その後ろに、次の関数をこの順で追加する。
 //!
-//! 1. 大域の順に、組み込みの値の本体(`Array.each` には内側のループも)と、
-//!    実装名が付録 A.5 にある `extern` の本体。
-//! 2. 付録 A.3 の順に、組み込みのインスタンスのメソッドの本体。
-//! 3. 単位の順に、単位の初期化の関数。
+//! 1. グローバルの順に、組み込みの値の本体と、実装名が IRSpec の付録 A.5 にある `extern` の本体。
+//!    `Array.each` には、内側のループの関数も追加する。
+//! 2. IRSpec の付録 A.3 の順に、組み込みのインスタンスのメソッドの本体。
+//! 3. プログラムに操作節があれば、ハンドラのフレームになる関数 `$rt_handle`。
+//! 4. 単位の順に、単位の初期化関数。
 //!
-//! 単位の初期化の関数は、手順を順に実行する。
-//! `def_value` などの式は `thunk` の関数を直に呼んで評価し、深さを増やさない
-//! (初期化の手順の深さは 0。IRSpec 11.2 節)。
+//! 単位の初期化関数は、初期化手順を順に実行する。
+//! `def_value` などの式は、`thunk` の関数を直接呼び出して評価し、深さを増やさない。
+//! 初期化手順は深さ 0 で実行するからである(IRSpec 11.2 節)。
 
 use kir::{GlobalKind as KG, Step};
 
@@ -20,7 +21,7 @@ use crate::numeric::{self, Prim};
 use crate::pattern::Target;
 use crate::wrappers;
 
-/// 後ろに足す関数。
+/// KIR の関数の後ろに追加する関数の種類。
 enum Extra {
     Builtin(String),
     EachLoop,
@@ -30,7 +31,8 @@ enum Extra {
     RtHandle,
 }
 
-/// 組み立てを関数にする。
+/// ビルダ `b` が組み立てたブロックから関数を作る。
+/// 使われない入口の `env_get` は取り除く。
 fn func_of(sym: String, kind: FuncKind, yields: bool, ncaps: u32, b: Builder) -> Func {
     let (regs, params, mut blocks) = b.finish();
     crate::lower::drop_unused_env(&mut blocks, regs.len());
@@ -46,7 +48,7 @@ fn func_of(sym: String, kind: FuncKind, yields: bool, ncaps: u32, b: Builder) ->
     }
 }
 
-/// KIR の関数を下ろす。
+/// `i` 番の KIR の関数を LIR に変換する。
 fn lower_kir_fn(prog: &mut Prog, i: usize) -> Func {
     let k = prog.k;
     let f = &k.functions[i];
@@ -68,7 +70,7 @@ fn lower_kir_fn(prog: &mut Prog, i: usize) -> Func {
     )
 }
 
-/// 単位の初期化の関数を組み立てる。
+/// `u` 番の単位の初期化関数を組み立てる。
 fn lower_init(prog: &mut Prog, u: usize) -> Func {
     let k = prog.k;
     let unit = &k.units[u];
@@ -140,9 +142,12 @@ fn lower_init(prog: &mut Prog, u: usize) -> Func {
     func_of(format!("$init:{}", unit.key), FuncKind::Init, true, 0, b)
 }
 
-/// 付録 B の文面に書く名前(単位の鍵と末尾の `#n` を除いた修飾名)。
+/// IRSpec の付録 B のメッセージに書く表示名を返す。
+///
+/// 表示名は、シンボルから単位のキーと末尾の `#n` を取り除いた修飾名である。
 pub(crate) fn display_name(sym: &str) -> String {
-    // 単位の鍵は最後の `/` の前までである(IRSpec 3.1 節。名前の部分は `/` を含まない)。
+    // 単位のキーは、最後の `/` の前までである。
+    // 名前の部分は `/` を含まない(IRSpec 3.1 節)。
     let rest = match sym.rfind('/') {
         Some(i) => &sym[i + 1..],
         None => sym,
@@ -155,35 +160,36 @@ pub(crate) fn display_name(sym: &str) -> String {
     }
 }
 
-/// 単位を足していく下ろしで、前の下ろしから持ち越す状態。
+/// 単位を追加していく変換で、前回の変換から引き継ぐ状態。
 #[derive(Default)]
 pub(crate) struct State {
-    /// ラベル、形、文字列の索引と、パス 8、9 の解析の結果と、関数の添字の対応。
+    /// ラベル、シェイプ、文字列から番号を求める表と、パス 8 とパス 9 の解析の結果と、関数の添字の対応。
     pub parts: ProgParts,
-    /// 下ろし終えた KIR の表の大きさ。
+    /// 変換を終えた時点の、KIR の各表の項目数。
     pub k: kir::verify::Marks,
 }
 
-/// パス 1〜7、9、10 を行う(パス 12 の前の LIR)。
+/// KIR のプログラム全体にパス 1〜10 を行い、パス 11 の前の LIR を作る。
 pub(crate) fn lower_program(k: &kir::Program) -> Result<Program, String> {
     let mut lp = Program::empty();
     extend_program(k, &mut State::default(), &mut lp)?;
     Ok(lp)
 }
 
-/// KIR のプログラム `k` の、`st` が下ろし終えた範囲より後ろの項目を下ろし、`lp` の後ろに足す
-/// (パス 1〜7、9、10)。
+/// KIR のプログラム `k` のうち、`st` が変換を終えた範囲より後ろの項目を LIR に変換し、`lp` の後ろに追加する(パス 1〜10)。
 ///
-/// `lp` は、同じ `st` で前に下ろした LIR(初めは [`Program::empty`])である。
-/// 足した単位の KIR の関数は `lp` の関数の後ろに同じ順で並べ、その後ろに足した単位の次の関数を置く。
+/// `lp` は、同じ `st` で前回までに変換した LIR である。
+/// 初回は [`Program::empty`] を渡す。
+/// 追加した単位の KIR の関数を、`lp` の関数の後ろに同じ順序で並べ、その後ろに、追加した単位のための次の関数をこの順で置く。
 ///
-/// 1. 足した大域の順に、組み込みの値と `extern` の本体(組み込みの値はプログラムの先頭の単位だけにある)。
-/// 2. プログラムの先頭を下ろすときだけ、組み込みのインスタンスのメソッドの本体。
-/// 3. `$rt_handle` が無く、足した関数に操作節があれば `$rt_handle`。
-/// 4. 足した単位の順に、単位の初期化の関数。
+/// 1. 追加したグローバルの順に、組み込みの値の本体と `extern` の本体。
+///    組み込みの値は、プログラムの先頭の単位だけにある。
+/// 2. プログラムの先頭を変換するときだけ、組み込みのインスタンスのメソッドの本体。
+/// 3. `$rt_handle` がまだなく、追加した関数に操作節があれば、`$rt_handle`。
+/// 4. 追加した単位の順に、単位の初期化関数。
 ///
-/// 1 回で下ろすプログラム([`lower_program`])は、空の `st` と `lp` から全体を下ろしたものである。
-/// 誤りを返した後の `st` と `lp` は使えない。
+/// 1 回で変換するプログラム([`lower_program`])は、空の `st` と `lp` から全体を変換したものである。
+/// エラーを返した後の `st` と `lp` は使えない。
 pub(crate) fn extend_program(
     k: &kir::Program,
     st: &mut State,
@@ -271,7 +277,7 @@ pub(crate) fn extend_program(
     let find_class = |name: &str| k.classes.iter().position(|c| c.sym == name);
     let find_type = |name: &str| k.types.iter().position(|t| t.sym == name);
     let mut builtin_methods = Vec::new();
-    // 組み込みのクラスと型はプログラムの先頭の単位だけにある。
+    // 組み込みのクラスと型は、プログラムの先頭の単位だけにある。
     let first = m.classes == 0;
     for &(c, t, m, _) in kir::builtins::METHODS.iter().filter(|_| first) {
         let (Some(ci), Some(ti)) = (
@@ -372,7 +378,7 @@ pub(crate) fn extend_program(
                         func: prog.func(m.func),
                     },
                     None => {
-                        // 検証済みの KIR では、インスタンスはクラスのメソッドをすべて実装する。
+                        // 検証済みの KIR では、インスタンスはクラスのメソッドをすべて実装している。
                         prog.note_bug(format!(
                             "インスタンス {} にメソッド {mi} の実装が無い",
                             x.sym
@@ -458,7 +464,7 @@ mod tests {
 
     #[test]
     fn 表示名は最後の区切りの後で再束縛の印を除く() {
-        // 単位の鍵が `/` を含む(取り込んだ単位)ときも、Diktor の display_of_symbol と同じ名前になる。
+        // 単位のキーが `/` を含むとき(import した単位)も、Diktor の display_of_symbol と同じ名前になる。
         assert_eq!(display_name("lib/x.kel/__no_such"), "__no_such");
         assert_eq!(display_name("lib/x.kel/M.f#1"), "M.f");
         assert_eq!(display_name("main/M.__no_such"), "M.__no_such");

@@ -1,22 +1,23 @@
-//! KIR から LIR への下ろし(計画 261024-1 の 6.4 節のパス 1〜10。パス 11 と 12 は別の走査)。
+//! KIR から LIR への変換(パス 1〜10)。
 //!
-//! 1 回の走査で、KIR の木を基本ブロックのグラフにする。
-//! 各パスの受け持ちは次のとおりである。
+//! KIR の木を 1 回走査して、基本ブロックのグラフにする。
+//! パスの番号は `rustkeleut/doc/lir.md` の 2 節の表の番号である。
+//! 各パスの処理内容と実装箇所は次のとおりである。
 //!
-//! | パス | 受け持ち | 置き場 |
+//! | パス | 処理内容 | 実装箇所 |
 //! |---|---|---|
-//! | 1 環境の配置 | 引数、辞書の引数、捕獲、スロットをレジスタと環境の位置に写す | 本ファイルの [`Low::entry`]、`env`、`closure` |
-//! | 2 パターンの照合 | 後戻りを伴う照合の手順 | [`crate::pattern`] |
-//! | 3 A 正規化 | 子を評価の順に命令にする | 本ファイルの各構文の下ろし |
-//! | 4 Rep と箱 | Rep の違う位置に `box` と `unbox` を置き、関数の境目を `any` にする | 本ファイルの [`Low::coerce`] |
-//! | 5 辞書の定数化 | `dbuiltin` と `dinst` の辞書のメソッドの呼び出しを、プリミティブと直の呼び出しにする | [`crate::dict`] |
-//! | 6 レコードの形 | 形の分かるレコードの操作の位置を定数にする | [`crate::record`] |
-//! | 7 数値の検査 | プリミティブの前の検査 | [`crate::numeric`] |
-//! | 8 エフェクト | `handle`、利用者の操作の `perform`、`resume`、操作節の関数の入口 | [`crate::effect`] |
-//! | 9 初期化の検査の省略 | 大域を読む前の検査を置くかどうか | [`crate::initck`] と本ファイルの [`Low::global_check`] |
-//! | 10 深さの命令 | 入口の `depth_enter`、呼び出しの前後の `depth_push` と `depth_restore`、`depth_check` | [`crate::depth`] |
+//! | 1 環境の配置 | 引数、辞書の引数、キャプチャ、スロットを、レジスタと環境の中の位置に対応させる | 本ファイルの [`Low::entry`]、`env`、`closure` |
+//! | 2 パターンの照合 | パターンを、後戻りを伴う照合の命令にする | [`crate::pattern`] |
+//! | 3 A 正規化 | 子の式を評価の順に命令にする | 本ファイルの、各構文を変換する関数 |
+//! | 4 Rep とボックス化 | Rep が違う箇所に `box` と `unbox` を置き、関数の境界では値を `any` にする | 本ファイルの [`Low::coerce`] |
+//! | 5 辞書の定数化 | `dbuiltin` と `dinst` の辞書のメソッドの呼び出しを、プリミティブと直接呼び出しにする | [`crate::dict`] |
+//! | 6 レコードのシェイプ | シェイプの分かるレコードの操作を、フィールドの位置を定数で指定する命令にする | [`crate::record`] |
+//! | 7 数値の検査 | プリミティブの命令の前に検査を置く | [`crate::numeric`] |
+//! | 8 エフェクト | `handle`、ユーザの操作の `perform`、`resume`、操作節の関数の入口を変換する | [`crate::effect`] |
+//! | 9 初期化の検査の省略 | グローバルを読む前の検査を置くかどうかを決める | [`crate::initck`] と本ファイルの [`Low::global_check`] |
+//! | 10 深さの命令 | 入口の `depth_enter`、呼び出しの前後の `depth_push` と `depth_restore`、`depth_check` を置く | [`crate::depth`] |
 //!
-//! パス 11(yield の刈り込み)とパス 12(生存区間とスロット)は [`crate::frame`] が、下ろした後のグラフに対して行う。
+//! パス 11(yield の枝刈り)とパス 12(生存区間とスロット)は、変換した後のグラフに対して [`crate::frame`] が行う。
 
 use std::collections::HashMap;
 
@@ -27,7 +28,7 @@ use crate::initck;
 use crate::ir::*;
 use crate::numeric::{self, Prim};
 
-/// 値のレジスタと、その Rep。
+/// 値を持つレジスタと、その Rep の組。
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct V {
     pub reg: Reg,
@@ -40,7 +41,9 @@ impl V {
     }
 }
 
-/// プログラムの全体で共有する表(ラベル、形、文字列)と、関数の番号の割り当て。
+/// LIR への変換の間、プログラム全体で共有する状態。
+///
+/// ラベル、シェイプ、文字列の表と、パス 8(操作節の分類)とパス 9(初期化の検査の省略)の解析の結果と、KIR の関数から LIR の関数への添字の対応を持つ。
 pub(crate) struct Prog<'k> {
     pub k: &'k kir::Program,
     pub labels: Vec<String>,
@@ -50,31 +53,39 @@ pub(crate) struct Prog<'k> {
     pub strings: Vec<Vec<u8>>,
     string_ix: HashMap<Vec<u8>, StrId>,
     pub init: initck::Info,
-    /// 大域ごとの、値の本体の関数(`extern` と組み込みの値)。
+    /// グローバルごとの、本体の関数。
+    ///
+    /// 本体の関数を持つのは、組み込みの値と、実装名がプリミティブの表にある `extern` だけである。
     pub global_func: Vec<Option<FuncId>>,
     /// `Array.each` の内側のループの関数。
     pub each_loop: Option<FuncId>,
-    /// 操作節の関数ごとの分類(パス 8。操作節でない関数は `None`)。
+    /// KIR の関数ごとの、操作の番号と操作節の分類の組(パス 8)。
+    /// 操作節でない関数は `None` である。
     pub clause_class: Vec<Option<(u32, kir::ClauseClass)>>,
-    /// ハンドラのフレームの関数 `$rt_handle`(パス 8)。
+    /// ハンドラのフレームになる関数 `$rt_handle`(パス 8)。
     pub rt_handle: Option<FuncId>,
-    /// KIR の関数の添字から LIR の関数の添字へ。
+    /// KIR の関数の添字から LIR の関数の添字への対応。
     ///
-    /// 1 回で下ろしたプログラムでは同じ添字である。
-    /// 単位を足したプログラム([`crate::Extender`])では、足した単位の KIR の関数は、前の関数の後ろに続く。
+    /// 1 回で変換したプログラムでは、両者は同じ添字である。
+    /// 単位を追加したプログラム([`crate::Extender`])では、追加した単位の KIR の関数は、それまでの LIR の関数の後ろに続く。
     pub fn_map: Vec<FuncId>,
-    /// 下ろしの途中で見つけた内部の誤り。
+    /// 変換の途中で見つけた内部エラーのメッセージ。
+    /// 最初の 1 件だけを持つ。
     pub bug: Option<String>,
 }
 
-/// [`Prog`] の、KIR のプログラムを指さない部分。単位を足す下ろしの間で持ち越す。
+/// [`Prog`] のうち、KIR のプログラムを参照しない部分。
+///
+/// 単位を追加していく変換では、前回の変換から次回の変換へ引き継ぐ。
 #[derive(Default)]
 pub(crate) struct ProgParts {
     pub labels: Vec<String>,
     label_ix: HashMap<String, LabelId>,
     pub shapes: Vec<Vec<LabelId>>,
     shape_ix: HashMap<Vec<LabelId>, ShapeId>,
-    /// `shape_ix` に入れた形の数(呼び出し側が `shapes` の後ろに足した形は、まだ入れていない)。
+    /// `shape_ix` に登録済みのシェイプの個数。
+    ///
+    /// 呼び出し元が `shapes` の後ろに追加したシェイプは、まだ登録していない。
     shapes_indexed: usize,
     pub strings: Vec<Vec<u8>>,
     string_ix: HashMap<Vec<u8>, StrId>,
@@ -87,10 +98,10 @@ pub(crate) struct ProgParts {
 }
 
 impl<'k> Prog<'k> {
-    /// 持ち越した部分 `parts` で、KIR のプログラム `k` の下ろしを始める。
+    /// 引き継いだ部分 `parts` を使って、KIR のプログラム `k` の変換を始める。
     ///
-    /// 表が空なら空の形を 0 番に入れる。
-    /// `parts.shapes` の後ろに足された形(実行時が作った形)は、ここで索引に入れる。
+    /// シェイプ表が空なら、空のシェイプを 0 番に登録する。
+    /// 呼び出し元が `parts.shapes` の後ろに追加したシェイプ(ランタイムが作ったシェイプ)は、ここで `shape_ix` に登録する。
     pub(crate) fn resume(k: &'k kir::Program, parts: ProgParts) -> Prog<'k> {
         let ProgParts {
             labels,
@@ -132,7 +143,7 @@ impl<'k> Prog<'k> {
         p
     }
 
-    /// 持ち越す部分を取り出す。
+    /// 次回の変換へ引き継ぐ部分を取り出す。
     pub(crate) fn into_parts(self) -> ProgParts {
         ProgParts {
             shapes_indexed: self.shapes.len(),
@@ -151,7 +162,8 @@ impl<'k> Prog<'k> {
         }
     }
 
-    /// KIR の関数の LIR の添字。
+    /// KIR の関数 `f` に対応する LIR の関数の添字を返す。
+    /// `fn_map` に対応がなければ、KIR と同じ添字を返す。
     pub(crate) fn func(&self, f: FnId) -> FuncId {
         match self.fn_map.get(f.index()) {
             Some(&g) => g,
@@ -159,7 +171,8 @@ impl<'k> Prog<'k> {
         }
     }
 
-    /// ラベルを表に入れて番号を返す。
+    /// ラベルを表に登録して、その番号を返す。
+    /// 登録済みなら同じ番号を返す。
     pub(crate) fn label(&mut self, l: &str) -> LabelId {
         if let Some(&id) = self.label_ix.get(l) {
             return id;
@@ -170,7 +183,8 @@ impl<'k> Prog<'k> {
         id
     }
 
-    /// 形(正準の順のラベルの列)を表に入れて番号を返す。
+    /// シェイプ(正準順に並べたラベルの並び)を表に登録して、その番号を返す。
+    /// 登録済みなら同じ番号を返す。
     pub(crate) fn shape(&mut self, labels: Vec<LabelId>) -> ShapeId {
         if let Some(&id) = self.shape_ix.get(&labels) {
             return id;
@@ -181,7 +195,8 @@ impl<'k> Prog<'k> {
         id
     }
 
-    /// 文字列の定数を表に入れて番号を返す。
+    /// 文字列定数を表に登録して、その番号を返す。
+    /// 登録済みなら同じ番号を返す。
     pub(crate) fn string(&mut self, s: &[u8]) -> StrId {
         if let Some(&id) = self.string_ix.get(s) {
             return id;
@@ -192,7 +207,8 @@ impl<'k> Prog<'k> {
         id
     }
 
-    /// 内部の誤りを覚える(最初の 1 つだけ)。
+    /// 内部エラーのメッセージを記録する。
+    /// 記録するのは最初の 1 件だけである。
     pub(crate) fn note_bug(&mut self, msg: String) {
         if self.bug.is_none() {
             self.bug = Some(msg);
@@ -200,31 +216,38 @@ impl<'k> Prog<'k> {
     }
 }
 
-/// 形の分かるレコードの配置(正準の順の (ラベル, フィールドの値) の列)。
+/// シェイプの分かるレコードのレイアウト。
+///
+/// (ラベル, フィールドの値のレジスタ)の組を正準順に並べたものである。
 pub(crate) type Layout = Vec<(LabelId, Reg)>;
 
-/// 1 つの関数の下ろし。
+/// 1 つの関数を LIR に変換している間の状態。
 pub(crate) struct Low<'p, 'k> {
     pub p: &'p mut Prog<'k>,
-    /// 下ろしている KIR の関数(初期化の関数と本体の関数では `None`)。
+    /// 変換している KIR の関数。
+    /// 単位の初期化関数を作るときは `None` である。
     pub f: Option<&'k kir::Function>,
     pub fid: Option<FnId>,
     pub b: Builder,
-    /// KIR のスロットのレジスタ。
+    /// KIR のスロットごとの、値を持つレジスタ。
+    /// まだ束縛していないスロットは `None` である。
     pub slots: Vec<Option<Reg>>,
-    /// KIR のスロットの Rep。
+    /// KIR のスロットごとの Rep。
     pub slot_rep: Vec<Rep>,
     /// 辞書の引数のレジスタ。
     pub dparams: Vec<Reg>,
-    /// 入口で読んだ捕獲のレジスタ(`any`)。
+    /// 入口で読んだキャプチャのレジスタ(`any`)。
     pub envs: Vec<Reg>,
-    /// 形の分かるレコードのレジスタ(パス 6)。
+    /// シェイプの分かるレコードのレジスタと、そのレイアウト(パス 6)。
     pub known: HashMap<Reg, Layout>,
-    /// 操作節の関数なら、その分類(パス 8。末尾の値と末尾の `resume` の下ろし方を決める)。
+    /// 操作節の関数を変換しているときの、その節の分類(パス 8)。
+    ///
+    /// 末尾の値と末尾 `resume` を何に変換するかを決める。
     pub clause: Option<kir::ClauseClass>,
     /// この関数の中の `resume` が再開する継続のレジスタ(パス 8)。
     ///
-    /// G の節の本体では隠れた引数の継続、ハンドラ式の本体では隠れた引数の受け継いだ継続である。
+    /// 分類 G の節の本体では、暗黙の引数として受け取った継続である。
+    /// ハンドラ式の本体では、暗黙の引数として受け取った、引き継ぐ継続である。
     pub resumption: Option<Reg>,
 }
 
@@ -257,7 +280,8 @@ impl<'p, 'k> Low<'p, 'k> {
         self.p.k
     }
 
-    /// 内部の誤り。覚えて、ブロックを `unimplemented` で終える。
+    /// 内部エラーのメッセージを記録し、現在のブロックがあれば `unimplemented` で終える。
+    /// 常に `None` を返す。
     pub(crate) fn bug(&mut self, msg: impl Into<String>) -> Option<V> {
         let msg = msg.into();
         self.p.note_bug(msg.clone());
@@ -269,9 +293,10 @@ impl<'p, 'k> Low<'p, 'k> {
         None
     }
 
-    // ---- パス 4: Rep と箱 ----
+    // ---- パス 4: Rep とボックス化 ----
 
-    /// 値を Rep `to` のレジスタにする。
+    /// 値 `v` を Rep `to` のレジスタに変換する。
+    /// Rep が違えば `box` と `unbox` のどちらか、または両方を生成する。
     pub(crate) fn coerce(&mut self, v: V, to: Rep) -> Reg {
         if v.rep == to {
             return v.reg;
@@ -284,7 +309,8 @@ impl<'p, 'k> Low<'p, 'k> {
         let src = if v.rep == Rep::Any {
             v.reg
         } else {
-            // 生の Rep どうしの食い違いは型の健全性の上では起きない。一様な語を通す。
+            // `any` 以外の Rep どうしが食い違うことは、型が健全なら起きない。
+            // 起きたときは、一様表現の値を経由して変換する。
             let a = self.b.reg(Rep::Any);
             self.b.emit(Inst::Box { dst: a, src: v.reg });
             a
@@ -294,14 +320,14 @@ impl<'p, 'k> Low<'p, 'k> {
         dst
     }
 
-    /// 値を一様な語にする。
+    /// 値を一様表現の値(Rep `any`)に変換する。
     pub(crate) fn boxed(&mut self, v: V) -> Reg {
         self.coerce(v, Rep::Any)
     }
 
-    /// 値を返してブロックを終える。
+    /// 値を返して、現在のブロックを終える。
     ///
-    /// T の節の本体の末尾の値は、`resume` しない節の値なので `clause_value` にする(パス 8)。
+    /// 分類 T の節の本体では、末尾の値は `resume` しない節の値なので、`return` ではなく `clause_value` で終える(パス 8)。
     pub(crate) fn ret(&mut self, v: V) {
         let r = self.boxed(v);
         if self.clause == Some(kir::ClauseClass::T) {
@@ -314,7 +340,8 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// 末尾の位置なら値を返して終え、そうでなければ値をそのまま渡す。
+    /// `tail` が真なら、[`Low::ret`] で値 `v` を返す終端命令を置いて `None` を返す。
+    /// 偽なら、`v` をそのまま返す。
     pub(crate) fn finish(&mut self, v: Option<V>, tail: bool) -> Option<V> {
         match (v, tail) {
             (Some(v), true) => {
@@ -326,7 +353,10 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// 枝の値を合流させる。`results` は(枝の終わりのブロック、値)で、ブロックはまだ終えていない。
+    /// 分岐したそれぞれの経路の値を、1 つのレジスタに合流させる。
+    ///
+    /// `results` は(経路の最後のブロック, 値)の組の並びで、どのブロックにもまだ終端命令を置いていない。
+    /// 値の Rep がすべて同じならその Rep で、そうでなければ `any` で合流させる。
     pub(crate) fn join(&mut self, results: Vec<(BlockId, V)>) -> Option<V> {
         if results.is_empty() {
             return None;
@@ -351,12 +381,12 @@ impl<'p, 'k> Low<'p, 'k> {
 
     // ---- パス 1: 環境の配置 ----
 
-    /// 関数の入口(深さ、捕獲、引数、辞書の引数)。
+    /// 関数の入口を作る。
+    /// 深さの命令を置き、キャプチャ、引数、辞書の引数をレジスタに読む。
     ///
-    /// 捕獲はすべて `depth_enter` の直後に `env_get` でレジスタに読む。
-    /// 以後は捕獲もほかの値と同じくスロットに置かれ、再開点と安全点の集合に入るので、
-    /// フレームはクロージャ(環境)を持ち続けなくてよい。
-    /// 使わなかった捕獲の `env_get` は [`drop_unused_env`] が除く。
+    /// キャプチャはすべて、`depth_enter` の直後に `env_get` でレジスタに読む。
+    /// その後は、キャプチャもほかの値と同じようにスロットに置かれ、再開点と安全点の集合に入るので、フレームはクロージャ(環境)を保持し続けなくてよい。
+    /// 使わなかったキャプチャの `env_get` は [`drop_unused_env`] が取り除く。
     pub(crate) fn entry(&mut self) {
         crate::depth::enter(&mut self.b);
         let f = self.f.expect("KIR の関数ではない");
@@ -380,7 +410,7 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// 入口で読んだ捕獲のレジスタ。
+    /// 入口で読んだ `i` 番目のキャプチャのレジスタを返す。
     pub(crate) fn env_reg(&mut self, i: u32) -> Reg {
         match self.envs.get(i as usize) {
             Some(&r) => r,
@@ -391,7 +421,7 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// 捕獲を読む。
+    /// `i` 番目のキャプチャを、KIR の関数が宣言している Rep の値として読む。
     fn env(&mut self, i: u32) -> V {
         let dst = self.env_reg(i);
         let rep = self
@@ -402,7 +432,7 @@ impl<'p, 'k> Low<'p, 'k> {
         V { reg, rep }
     }
 
-    /// スロットを読む。
+    /// `i` 番のスロットの値を読む。
     fn local(&mut self, i: u32) -> Option<V> {
         match self.slots.get(i as usize).copied().flatten() {
             Some(reg) => Some(V {
@@ -413,7 +443,7 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// スロットに値を置く。
+    /// `i` 番のスロットに値を置く。
     pub(crate) fn bind_slot(&mut self, i: u32, v: V) {
         let Some(&rep) = self.slot_rep.get(i as usize) else {
             self.bug(format!("範囲の外のスロット {i}"));
@@ -423,7 +453,7 @@ impl<'p, 'k> Low<'p, 'k> {
         self.slots[i as usize] = Some(r);
     }
 
-    /// 捕獲の列の要素を一様な語で読む。
+    /// キャプチャの並びの要素 `c` を、一様表現の値として読む。
     fn cap_any(&mut self, c: Cap) -> Option<Reg> {
         Some(match c {
             Cap::Local(i) => {
@@ -455,9 +485,10 @@ impl<'p, 'k> Low<'p, 'k> {
         Some(V::any(dst))
     }
 
-    // ---- パス 9: 大域を読む ----
+    // ---- パス 9: グローバルを読む ----
 
-    /// 大域 `g` の初期化の検査(省いてよければ何もしない)。
+    /// グローバル `g` が初期化済みかどうかの検査を置く。
+    /// 省いてよい箇所では何も置かない。
     pub(crate) fn global_check(&mut self, g: kir::GlobalId) {
         if self.p.init.may_elide(self.k(), self.fid, g) {
             return;
@@ -469,7 +500,7 @@ impl<'p, 'k> Low<'p, 'k> {
         self.b.fail_if(bad, RtError::Unbound(g), None);
     }
 
-    /// 大域を値として読む。
+    /// グローバルを値として読む。
     fn global(&mut self, g: kir::GlobalId) -> V {
         self.global_check(g);
         let dst = self.b.reg(Rep::Any);
@@ -485,12 +516,12 @@ impl<'p, 'k> Low<'p, 'k> {
 
     // ---- パス 3: 式 ----
 
-    /// 式を下ろす。
+    /// 式を LIR に変換する。
     ///
-    /// `tail` が真なら、式の値が関数の戻り値になる。
-    /// そのときはブロックを終え(`return` か末尾呼び出し)、`None` を返す。
-    /// 偽なら値を返す。
-    /// 必ず実行時エラーになる式も、ブロックを終えて `None` を返す。
+    /// `tail` が真なら、式の値が関数の返り値になる。
+    /// このときは、`return` か末尾呼び出しで現在のブロックを終え、`None` を返す。
+    /// 偽なら、値を返す。
+    /// 必ず実行時エラーになる式でも、ブロックを終えて `None` を返す。
     pub(crate) fn exp(&mut self, e: ExpId, tail: bool) -> Option<V> {
         let k = self.k();
         let Some(x) = k.nodes.exp(e) else {
@@ -649,13 +680,13 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// 引数を左から評価し、一様な語にする。
+    /// 引数を左から順に評価し、それぞれを一様表現の値にする。
     pub(crate) fn args_any(&mut self, args: &[ExpId]) -> Option<Vec<Reg>> {
         let vs = self.args(args)?;
         Some(vs.into_iter().map(|v| self.boxed(v)).collect())
     }
 
-    /// 引数を左から評価する。
+    /// 引数を左から順に評価する。
     pub(crate) fn args(&mut self, args: &[ExpId]) -> Option<Vec<V>> {
         let mut out = Vec::with_capacity(args.len());
         for &a in args {
@@ -732,7 +763,7 @@ impl<'p, 'k> Low<'p, 'k> {
         })
     }
 
-    /// `and`(`is_and` が真)と `or`。
+    /// `and`(`is_and` が真のとき)と `or` を、短絡評価の分岐に変換する。
     #[inline(never)]
     fn and_or(&mut self, is_and: bool, a: ExpId, rhs: ExpId, tail: bool) -> Option<V> {
         let v = self.exp(a, false)?;
@@ -870,7 +901,10 @@ impl<'p, 'k> Low<'p, 'k> {
 
     // ---- 呼び出し ----
 
-    /// `call`。`tail` は末尾の呼び出しにするか、`ret` は値を返して終えるか。
+    /// `call` を変換する。
+    ///
+    /// `tail` が真なら末尾呼び出しにする。
+    /// `tail` が偽で `ret` が真なら、呼び出しの結果を返してブロックを終える。
     #[inline(never)]
     fn call(
         &mut self,
@@ -923,7 +957,8 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// 値の呼び出し。
+    /// 関数値の呼び出しを生成する。
+    /// `tail` が真なら末尾呼び出しにする。
     pub(crate) fn call_value(
         &mut self,
         callee: Reg,
@@ -951,7 +986,8 @@ impl<'p, 'k> Low<'p, 'k> {
         Some(V::any(dst))
     }
 
-    /// 捕獲を持たない関数の直の呼び出し。
+    /// キャプチャを持たない関数の直接呼び出しを生成する。
+    /// `tail` が真なら末尾呼び出しにする。
     pub(crate) fn call_direct(
         &mut self,
         func: FuncId,
@@ -976,7 +1012,7 @@ impl<'p, 'k> Low<'p, 'k> {
         Some(V::any(dst))
     }
 
-    /// 呼び出し先が大域の `call`。
+    /// 呼び出し先がグローバルである `call` を変換する。
     fn call_global(
         &mut self,
         g: kir::GlobalId,
@@ -1055,7 +1091,8 @@ impl<'p, 'k> Low<'p, 'k> {
         }
     }
 
-    /// プリミティブの呼び出し(末尾でなければ深さの検査を伴う)。
+    /// プリミティブの呼び出しを生成する。
+    /// 非末尾呼び出しなら、その前に深さの検査(`depth_check`)を置く。
     pub(crate) fn prim_call(&mut self, p: Prim, vs: &[V], tail: bool) -> Option<V> {
         if !tail {
             crate::depth::check(&mut self.b);
@@ -1083,7 +1120,8 @@ impl<'p, 'k> Low<'p, 'k> {
                 }
                 KGlobalKind::Extern { .. } => {
                     self.global_check(*g);
-                    // 辞書を捨てて自分を返す。深さは末尾でない呼び出しとして数える。
+                    // 辞書を捨てて、グローバルの値そのものを返す。
+                    // 深さは非末尾呼び出しと同じように検査する。
                     crate::depth::check(&mut self.b);
                     let dst = self.b.reg(Rep::Any);
                     self.b.emit(Inst::GlobalGet { dst, global: *g });
@@ -1100,7 +1138,7 @@ impl<'p, 'k> Low<'p, 'k> {
         Some(V::any(dst))
     }
 
-    /// 辞書の式の列を一様な語にする。
+    /// 辞書の式の並びを、それぞれ一様表現の値のレジスタにする。
     pub(crate) fn dict_regs(&mut self, ds: &[kir::DictId]) -> Vec<Reg> {
         ds.iter()
             .map(|&d| {
@@ -1130,7 +1168,7 @@ impl<'p, 'k> Low<'p, 'k> {
         Some(crate::effect::perform(self, effect.0, op, args))
     }
 
-    /// ハンドラ式(パス 8)。
+    /// ハンドラ式を変換する(パス 8)。
     #[inline(never)]
     fn handle(&mut self, h: &kir::Handle, tail: bool) -> Option<V> {
         let body = self.closure(&h.body)?;
@@ -1164,7 +1202,10 @@ impl<'p, 'k> Low<'p, 'k> {
         )
     }
 
-    /// `resume`(パス 8)。`tail` は背骨の上の末尾の `resume` として下ろすか、`ret` は値を返して終えるか。
+    /// `resume` を変換する(パス 8)。
+    ///
+    /// `tail` が真なら、`resume` の背骨の上にある末尾 `resume` として変換する。
+    /// `tail` が偽で `ret` が真なら、非末尾の `resume` の結果を返してブロックを終える。
     #[inline(never)]
     fn resume(&mut self, tail: bool, value: ExpId, ret: bool) -> Option<V> {
         let v = self.exp(value, false)?;
@@ -1187,7 +1228,7 @@ impl<'p, 'k> Low<'p, 'k> {
     }
 }
 
-/// 入口の `env_get` のうち、結果をどこでも読まないものを除く。
+/// 入口の `env_get` のうち、結果がどこでも使われないものを取り除く。
 pub(crate) fn drop_unused_env(blocks: &mut [Block], nregs: usize) {
     let mut used = vec![false; nregs];
     for b in blocks.iter() {

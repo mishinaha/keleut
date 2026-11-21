@@ -1,19 +1,24 @@
 //! 組み込みの値、`extern`、組み込みのインスタンスのメソッドの本体。
 //!
 //! これらの値は、どれも LIR の関数のクロージャである。
-//! 値として渡されて `call_value` で呼ばれても、本体は LIR の命令だけで書いてあるので、
-//! 後段は LIR の命令の意味のほかに組み込みの振る舞いを知らなくてよい。
-//! 直に呼ぶ箇所(`call` の呼び出し先が組み込みの値の大域であるもの)は、[`builtin_inline`] で命令をその場に置く。
+//! 本体は LIR の命令だけで書いてあるので、値として渡されて `call_value` で呼ばれる場合も、バックエンドは LIR の命令の意味だけを実装すればよく、組み込みの値ごとの動作を知らなくてよい。
 //!
-//! 利用者の関数を呼ぶ `Array.each` と `pinned` は、呼び出しを末尾でない呼び出しとして数える
-//! (IRSpec 付録 A.4。組み込みの深さ + 1)。
-//! `Array.each` の繰り返しは、内側のループの関数の自己の末尾呼び出しで書く。
+//! KIR の `call` が組み込みの値のグローバルを直接呼ぶ箇所は、次のように変換する。
+//! [`inline_arity`] が挙げる値を、引数をすべて渡して呼ぶ箇所では、[`builtin_inline`] が命令を呼び出しの位置に展開する。
+//! `Array.each` と `pinned` を、引数をすべて渡して呼ぶ箇所では、本体の関数を直接呼び出しで呼ぶ。
+//! 引数の個数が合わない箇所では、グローバルの値を読んで `call_value` で呼ぶ。
+//!
+//! `Array.each` と `pinned` は、ユーザの関数を呼ぶ。
+//! この呼び出しは非末尾呼び出しとして数えるので、ユーザの関数は組み込みの値の深さに 1 を足した深さで実行される(IRSpec 付録 A.4)。
+//! `Array.each` の繰り返しは、内側のループの関数が自分自身を末尾呼び出しで呼ぶことで行う。
 
 use crate::builder::Builder;
 use crate::ir::*;
 use crate::numeric::{self, Prim};
 
-/// その場に置ける組み込みの値の引数の数。
+/// 呼び出しの位置に命令を展開できる組み込みの値 `name` の、引数の個数を返す。
+///
+/// それ以外の名前には `None` を返す。
 pub(crate) fn inline_arity(name: &str) -> Option<usize> {
     Some(match name {
         "Ref.new" | "Ref.get" | "Array.length" | "MutableArray.length" | "MutableArray.freeze" => 1,
@@ -23,7 +28,9 @@ pub(crate) fn inline_arity(name: &str) -> Option<usize> {
     })
 }
 
-/// 組み込みの値の引数の数。
+/// 組み込みの値 `name` の引数の個数を返す。
+///
+/// 組み込みの値の名前でなければ `None` を返す。
 pub(crate) fn builtin_arity(name: &str) -> Option<usize> {
     match name {
         "Array.each" => Some(2),
@@ -32,7 +39,9 @@ pub(crate) fn builtin_arity(name: &str) -> Option<usize> {
     }
 }
 
-/// 一様な語の `index` を `i32` にし、`0 ≦ index < len` でなければ「配列の範囲外です」にする。
+/// 一様表現の値 `index` を `unbox` で `i32` にして返す。
+///
+/// `0 ≦ index < len` でなければ実行時エラー 15(`配列の範囲外です`)になるように、比較と `error` への分岐を生成する。
 fn checked_index(b: &mut Builder, index: Reg, len: Reg) -> Reg {
     let i = b.reg(Rep::I32);
     b.emit(Inst::Unbox { dst: i, src: index });
@@ -58,7 +67,11 @@ fn checked_index(b: &mut Builder, index: Reg, len: Reg) -> Reg {
     i
 }
 
-/// 組み込みの値をその場に置く。引数も結果も一様な語である。
+/// 組み込みの値 `name` の命令を、現在の位置に生成する。
+///
+/// 引数も結果も一様表現の値である。
+/// 結果のレジスタを返す。
+/// [`inline_arity`] が挙げない名前には `None` を返す。
 pub(crate) fn builtin_inline(b: &mut Builder, name: &str, args: &[Reg]) -> Option<Reg> {
     let dst = b.reg(Rep::Any);
     match name {
@@ -151,7 +164,7 @@ pub(crate) fn builtin_inline(b: &mut Builder, name: &str, args: &[Reg]) -> Optio
     Some(dst)
 }
 
-/// 引数をすべて受け取ったプリミティブの本体を組み立てる。
+/// 引数をすべて受け取ってプリミティブ `p` を実行する関数の本体を組み立てる。
 pub(crate) fn prim_body(p: Prim) -> Builder {
     let mut b = Builder::new();
     crate::depth::enter(&mut b);
@@ -180,7 +193,9 @@ pub(crate) fn prim_body(p: Prim) -> Builder {
     b
 }
 
-/// 組み込みの値の本体を組み立てる。`each_loop` は `Array.each` の内側のループの関数である。
+/// 組み込みの値 `name` の本体を組み立てる。
+///
+/// `each_loop` は `Array.each` の内側のループの関数である。
 pub(crate) fn builtin_body(name: &str, each_loop: FuncId) -> Option<Builder> {
     let mut b = Builder::new();
     crate::depth::enter(&mut b);
@@ -218,7 +233,10 @@ pub(crate) fn builtin_body(name: &str, each_loop: FuncId) -> Option<Builder> {
     Some(b)
 }
 
-/// `Array.each` の内側のループ `(配列, 関数, 位置)` を組み立てる。`me` はこの関数自身である。
+/// `Array.each` の内側のループの関数を組み立てる。
+///
+/// 引数は `(配列, 関数, 添字)` である。
+/// `me` はこの関数自身で、次の要素に進むときに末尾呼び出しで呼ぶ。
 pub(crate) fn each_loop_body(me: FuncId) -> Builder {
     let mut b = Builder::new();
     crate::depth::enter(&mut b);

@@ -1,11 +1,11 @@
-//! KIR の fixture とコーパスの全件を下ろして検証する。
+//! KIR のフィクスチャとコーパスの全件を、LIR に変換して検証する。
 //!
-//! - `crates/kir/tests/fixtures/*.kir` は常に確かめる。
-//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行形を与えると、`conformance/corpus/` の各 `.kel` を
-//!   `diktor --emit-ir` で KIR にし(旗は `index.tsv` のもの。`?` なら旗なしで試し、型検査の誤りなら
-//!   `--no-prelude` で試し直す)、`diktor` が 0 で終わったものをすべて下ろして検証する。
-//!   与えなければ、この部分は何もしない。
-//! - 環境変数 `KIR_CORPUS_DIR` にディレクトリを与えると、その中の `.kir` をすべて下ろして検証する。
+//! - `crates/kir/tests/fixtures/*.kir` は常に変換して検証する。
+//! - 環境変数 `KELEUT_DIKTOR` に Diktor の実行ファイルを設定すると、`conformance/corpus/` の各 `.kel` を `diktor --emit-ir` で KIR にし、`diktor` が終了コード 0 で終了したものをすべて LIR に変換して検証する。
+//!   `diktor` に渡すオプションは、`index.tsv` の 3 列目のものである。
+//!   3 列目が `?` なら、まずオプションなしで実行し、`diktor` が終了コード 1(型エラーなど)で終了したら `--no-prelude` を付けてやり直す。
+//!   `KELEUT_DIKTOR` を設定しなければ、コーパスのテストは何もせずに成功する。
+//! - 環境変数 `KIR_CORPUS_DIR` にディレクトリを設定すると、その中の `.kir` をすべて LIR に変換して検証する。
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,7 +14,9 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// 下ろして検証し、KIR の関数がすべて同じ添字にあることを確かめる。
+/// KIR を読み込んで LIR に変換し(検証を含む)、KIR の関数がすべて LIR でも同じ添字にあることを確かめる。
+///
+/// LIR のテキスト出力が空でないことも確かめる。
 fn check(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let k = kir::load(bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     let p = keleut_lir::lower(&k).map_err(|e| format!("{}: {e}", path.display()))?;

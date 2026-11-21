@@ -1,13 +1,15 @@
-//! レジスタの集合(ビット列と、書き換えの日誌を持つ集合)。
+//! レジスタの集合。
+//!
+//! 固定長のビット列 `Bits` と、変更ログを持つ集合 `Timeline` を定義する。
 
 use std::collections::VecDeque;
 
-/// 固定の大きさのビット列。
+/// 固定長のビット列。レジスタの番号を要素とする集合を表す。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Bits(Vec<u64>);
 
 impl Bits {
-    /// `n` ビットの空の集合。
+    /// `n` ビットの空の集合を作る。
     pub(crate) fn new(n: usize) -> Bits {
         Bits(vec![0; n.div_ceil(64)])
     }
@@ -24,24 +26,24 @@ impl Bits {
         self.0[i / 64] & (1 << (i % 64)) != 0
     }
 
-    /// 語(64 ビット)の数。
+    /// ワード数を返す。1 ワードは 64 ビットである。
     pub(crate) fn words(&self) -> usize {
         self.0.len()
     }
 
-    /// 要素の数。
+    /// 要素の個数を返す。
     fn count(&self) -> usize {
         self.0.iter().map(|w| w.count_ones() as usize).sum()
     }
 
-    /// `o` との積にする。
+    /// `self` を `o` との積集合にする。
     fn and_with(&mut self, o: &Bits) {
         for (a, b) in self.0.iter_mut().zip(o.0.iter()) {
             *a &= *b;
         }
     }
 
-    /// 含む要素を昇順に並べる。
+    /// 要素を昇順に並べて返す。
     fn ones(&self) -> Vec<u32> {
         let mut out = Vec::new();
         for (w, &x) in self.0.iter().enumerate() {
@@ -54,7 +56,7 @@ impl Bits {
         out
     }
 
-    /// `self` と `o` の一方だけが含む要素を昇順に並べる。
+    /// `self` と `o` の一方だけが含む要素を、昇順に並べて返す。
     pub(crate) fn xor_ones(&self, o: &Bits) -> Vec<u32> {
         let mut out = Vec::new();
         for (w, (&a, &b)) in self.0.iter().zip(o.0.iter()).enumerate() {
@@ -68,61 +70,70 @@ impl Bits {
     }
 }
 
-/// 取っておいた集合。
+/// 保存した集合の持ち方。
 enum Snap {
-    /// 日誌の長さが `t` だった時点の集合。
+    /// 変更ログの長さが `t` だった時点の集合。
     Log(usize),
-    /// 要素の列(昇順)。
+    /// 昇順に並べた要素の配列。
     Sparse(Vec<u32>),
     /// ビット列。
     Bits(Bits),
 }
 
-/// 取っておいた集合 `snap` から `rem` を除いたもの。`rem` が空でないのは `snap` が `Log` のときだけである。
+/// 表の項目。保存した集合 `snap` から `rem` の要素を除いた集合を表す。
+/// `rem` が空でないのは、`snap` が `Log` のときだけである。
 struct Slot {
     snap: Snap,
     rem: Vec<u32>,
-    /// `Log` の集合と今の集合の違いを求めるのに費やした手間。
+    /// `Log` の集合と現在の集合の違いを求めるのに、これまでにかけた処理量。
     spent: usize,
 }
 
-/// 書き換えの日誌を持つレジスタの集合と、取っておいた集合の表。
+/// 変更ログを持つレジスタの集合と、保存した集合の表。
 ///
-/// データフロー解析は、1 つの集合(今の集合)を書き換えながらブロックを順にたどる。
-/// 変えたレジスタを日誌に積むので、日誌の長さ `t` が、その時点の集合を指す名前になる。
-/// ブロックの入口や出口の集合は、まず日誌の長さとして取っておき、写しを作らない。
-/// 取っておいた時点の集合と今の集合の違いは、その後の日誌をたどれば分かる。
+/// データフロー解析は、1 つの集合(現在の集合)を書き換えながらブロックを順にたどる。
+/// 変えたレジスタを変更ログに追記するので、変更ログの長さ `t` で、その時点の集合を指定できる。
+/// ブロックの入口や出口の集合は、まず変更ログの長さとして保存し、コピーを作らない。
+/// 保存した時点の集合と現在の集合の違いは、その時点より後の変更ログをたどれば分かる。
 ///
-/// 手間がブロックごとに集合の幅(語の数)に比例する量を超えないよう、次の 3 つの決まりを置く。
+/// ブロック 1 つあたりの処理量が、集合の幅(ワード数)に比例する量を超えないように、次の 3 つの規則を置く。
+/// 以下の `w` は、ワード数の 4 倍に 64 を足した値である。
 ///
-/// - 取っておいた時点から日誌が `w` 個より伸びたら、その集合を作り直して持つ(**書き出し**)。
-///   要素が語の数より少なければ要素の列で、多ければビット列で持つ。
-///   1 つの集合を書き出すのは 1 度だけで、手間は語の数と `w` に比例する。
-/// - 今の集合を一度に大きく変える(違いが `w` 個を超える)ときは、日誌に積まずに書き換える(**跳び**)。
-///   その前に日誌の長さで取っておいた集合をすべて書き出し、日誌を捨てて世代を 1 つ進める。
-///   日誌の長さは世代の中でだけ意味を持つ。
-/// - 移る先の無いブロックは今の集合を使わずに処理できるよう、要素の列を集合として取っておける。
+/// - 保存した時点から変更ログが `w` 個より多く伸びたら、その集合を、変更ログを参照しない表現(要素の配列かビット列)に作り直して保持する(**実体化**)。
+///   要素の個数がワード数以下なら要素の配列に、ワード数より多ければビット列にする。
+///   1 つの集合を実体化するのは 1 度だけで、処理量はワード数と `w` に比例する。
+/// - 現在の集合を一度に大きく変える(違いが `w` 個を超える)ときは、変更ログに追記せずに書き換える(**一括書き換え**)。
+///   その前に、変更ログの長さとして保存した集合をすべて実体化し、変更ログを捨てて世代を 1 つ進める。
+///   変更ログの長さは、同じ世代の中でだけ意味を持つ。
+/// - 後続ブロックを持たないブロックを現在の集合を使わずに処理できるように、要素の配列を集合として保存できる。
 pub(crate) struct Timeline {
+    /// 現在の集合のビット列。
     live: Bits,
-    /// 今の集合の要素(順不同)と、各レジスタの `list` の中の位置(無ければ `u32::MAX`)。
+    /// 現在の集合の要素(順不同)。
     list: Vec<u32>,
+    /// 各レジスタの `list` の中の位置。現在の集合に入っていなければ `u32::MAX` である。
     pos: Vec<u32>,
-    /// 変えたレジスタと、変えた後に含むか。
+    /// 変更ログ。変えたレジスタと、変えた後に集合がそのレジスタを含むかどうかを、変えた順に記録する。
     log: Vec<(u32, bool)>,
+    /// 世代。一括書き換えのたびに 1 つ進む。
     gen_: u32,
+    /// 保存した集合の表。
     slots: Vec<Option<Slot>>,
-    /// 日誌の長さで取っておいた集合(表の添字と時点)。時点の昇順で、古い行が残ることがある。
+    /// 変更ログの長さとして保存した集合を、表の添字と時点の組で持つキュー。
+    /// 時点の昇順に並ぶ。
+    /// 表の項目を上書きしたり捨てたりした後も、古い組が残ることがある。
     queue: VecDeque<(usize, usize)>,
+    /// 実体化と一括書き換えのしきい値。
     w: usize,
-    /// 違いを求めるときに、見たレジスタに付ける印。
+    /// 違いを求めるときに、調べたレジスタに付ける目印。値が `epoch` に等しければ、その回の計算で調べてある。
     stamp: Vec<u32>,
     epoch: u32,
-    /// 手間(日誌の記録と、集合の要素と語を読み書きした数)。
+    /// 処理量のカウンタ。変更ログに追記した回数と、集合の要素やワードを読み書きした回数を足していく。
     work: u64,
 }
 
 impl Timeline {
-    /// `nr` 個のレジスタの空の集合と、`nslots` 行の空の表。
+    /// `nr` 個のレジスタを要素にできる空の集合と、`nslots` 項目の空の表を作る。
     pub(crate) fn new(nr: usize, nslots: usize) -> Timeline {
         let live = Bits::new(nr);
         let w = live.words() * 4 + 64;
@@ -141,31 +152,35 @@ impl Timeline {
         }
     }
 
-    /// これまでの手間。
+    /// これまでの処理量を返す。
     pub(crate) fn work(&self) -> u64 {
         self.work
     }
 
-    /// 今の時点(世代と日誌の長さ)。
+    /// 現在の時点を、世代と変更ログの長さの組で返す。
     pub(crate) fn now(&self) -> (u32, usize) {
         (self.gen_, self.log.len())
     }
 
-    /// 今の集合のビット列。
+    /// 現在の集合をビット列として返す。
     pub(crate) fn bits(&self) -> &Bits {
         &self.live
     }
 
-    /// 今の集合が `r` を含むか。
+    /// 現在の集合が `r` を含めば真を返す。
     pub(crate) fn contains(&self, r: u32) -> bool {
         self.live.contains(r as usize)
     }
 
-    /// 時点 `t`(今の世代)より後に変えたレジスタ(重なることがある)。
+    /// 現在の世代の時点 `t` より後に変えたレジスタを、変えた順に返す。
+    /// 同じレジスタが 2 回以上現れることがある。
     pub(crate) fn changed_since(&self, t: usize) -> impl Iterator<Item = u32> + '_ {
         self.log[t..].iter().map(|&(r, _)| r)
     }
 
+    /// `on` が真なら現在の集合に `r` を追加し、偽なら現在の集合から `r` を取り除く。
+    /// 変更ログには追記しない。
+    /// 集合が変われば真を返す。
     fn set_raw(&mut self, r: u32, on: bool) -> bool {
         let ri = r as usize;
         if self.live.contains(ri) == on {
@@ -187,7 +202,8 @@ impl Timeline {
         true
     }
 
-    /// `r` を足すか(`on`)除き、日誌に積む。
+    /// `on` が真なら現在の集合に `r` を追加し、偽なら現在の集合から `r` を取り除く。
+    /// 集合が変われば、変更ログに追記する。
     pub(crate) fn set(&mut self, r: u32, on: bool) {
         if self.set_raw(r, on) {
             self.log.push((r, on));
@@ -195,6 +211,8 @@ impl Timeline {
         }
     }
 
+    /// `epoch` を 1 つ進めて返す。
+    /// 一周して 0 になったら、`stamp` をすべて 0 にして 1 から始める。
     fn next_epoch(&mut self) -> u32 {
         self.epoch = self.epoch.wrapping_add(1);
         if self.epoch == 0 {
@@ -204,7 +222,7 @@ impl Timeline {
         self.epoch
     }
 
-    /// 今の集合を表の `i` 行に取っておく(日誌の長さで)。
+    /// 現在の集合を、変更ログの長さとして表の `i` 番目の項目に保存する。
     pub(crate) fn save(&mut self, i: usize) {
         let t = self.log.len();
         self.slots[i] = Some(Slot {
@@ -215,7 +233,7 @@ impl Timeline {
         self.queue.push_back((i, t));
     }
 
-    /// 要素の列 `v`(昇順)を表の `i` 行に取っておく。
+    /// 昇順に並べた要素の配列 `v` を、集合として表の `i` 番目の項目に保存する。
     pub(crate) fn save_list(&mut self, i: usize, v: Vec<u32>) {
         self.work += v.len() as u64;
         self.slots[i] = Some(Slot {
@@ -225,17 +243,18 @@ impl Timeline {
         });
     }
 
-    /// 表の `i` 行を捨てる。
+    /// 表の `i` 番目の項目を捨てる。
     pub(crate) fn free(&mut self, i: usize) {
         self.slots[i] = None;
     }
 
-    /// 表の `i` 行に集合があるか。
+    /// 表の `i` 番目の項目に集合があれば真を返す。
     pub(crate) fn has(&self, i: usize) -> bool {
         self.slots[i].is_some()
     }
 
-    /// 表の `i` 行を、日誌に頼らない形で書き出す。
+    /// 表の `i` 番目の項目を実体化する。
+    /// 項目が空のときと、すでに実体化してあるときは、何もしない。
     fn materialize(&mut self, i: usize) {
         let Some(slot) = self.slots[i].as_mut() else {
             return;
@@ -263,7 +282,7 @@ impl Timeline {
         };
     }
 
-    /// 日誌の長さで取っておいた集合のうち、日誌が `w` 個より伸びたものを書き出す。
+    /// 変更ログの長さとして保存した集合のうち、保存した後に変更ログが `w` 個より多く伸びたものを実体化する。
     pub(crate) fn tick(&mut self) {
         let now = self.log.len();
         while let Some(&(i, t)) = self.queue.front() {
@@ -281,9 +300,10 @@ impl Timeline {
         }
     }
 
-    /// 表の `i` 行の集合と今の集合とで違うレジスタと、`i` 行の集合が含むか。
+    /// 表の `i` 番目の項目の集合と現在の集合を比較し、一方だけが含むレジスタを返す。
     ///
-    /// `off` が偽なら、`i` 行の集合だけが含むものを求める。
+    /// 組の 2 番目の値は、項目の集合がそのレジスタを含めば真である。
+    /// `off` が偽なら、項目の集合だけが含むレジスタに限って返す。
     fn diff(&mut self, i: usize, off: bool) -> Vec<(u32, bool)> {
         let e = self.next_epoch();
         let mut out = Vec::new();
@@ -296,7 +316,7 @@ impl Timeline {
                         out.push((r, false));
                     }
                 }
-                // 時点 t の後でレジスタを最初に変えた記録から、時点 t の値が分かる。
+                // 時点 t より後でそのレジスタを最初に変えた記録から、時点 t の集合がそのレジスタを含んでいたかどうかが分かる。
                 for &(r, on) in &self.log[*t..] {
                     let ri = r as usize;
                     if self.stamp[ri] != e {
@@ -353,7 +373,8 @@ impl Timeline {
         out
     }
 
-    /// 違いを当てる。大きければ跳びにする。
+    /// 違い `d` を現在の集合に適用する。
+    /// `d` の要素が `w` 個を超えていれば、変更ログに追記せず、一括書き換えを行う。
     fn apply(&mut self, d: Vec<(u32, bool)>) {
         if d.len() <= self.w {
             for (r, on) in d {
@@ -373,35 +394,36 @@ impl Timeline {
         self.gen_ += 1;
     }
 
-    /// 今の集合を表の `i` 行の集合にする。
+    /// 現在の集合を、表の `i` 番目の項目の集合に置き換える。
     pub(crate) fn restore(&mut self, i: usize) {
         let d = self.diff(i, true);
         self.settle(i);
         self.apply(d);
     }
 
-    /// 違いを求める手間が集合の幅に見合う量を超えた `Log` の行を書き出す。
+    /// 表の `i` 番目の項目が `Log` で、違いを求めるのにかけた処理量の合計が `w` を超えていれば、その項目を実体化する。
     fn settle(&mut self, i: usize) {
         if self.slots[i].as_ref().is_some_and(|s| s.spent > self.w) {
             self.materialize(i);
         }
     }
 
-    /// 今の集合を空にする。
+    /// 現在の集合を空にする。
     pub(crate) fn clear(&mut self) {
         let d: Vec<(u32, bool)> = self.list.iter().map(|&r| (r, false)).collect();
         self.work += d.len() as u64;
         self.apply(d);
     }
 
-    /// 今の集合に表の `i` 行の集合を足す。
+    /// 現在の集合を、表の `i` 番目の項目の集合との和集合にする。
     pub(crate) fn union(&mut self, i: usize) {
         let d = self.diff(i, false);
         self.settle(i);
         self.apply(d);
     }
 
-    /// 表の `i` 行の集合を、今の集合との積にする。行が空なら今の集合を取っておく。
+    /// 表の `i` 番目の項目の集合を、現在の集合との積集合にする。
+    /// 項目が空なら、現在の集合を保存する。
     pub(crate) fn meet_into(&mut self, i: usize) {
         if self.slots[i].is_none() {
             self.save(i);
@@ -409,7 +431,7 @@ impl Timeline {
         }
         let is_log = matches!(self.slots[i].as_ref().map(|s| &s.snap), Some(Snap::Log(_)));
         if is_log {
-            // 積は「今の集合から、行の集合が含まないものを除いたもの」である。
+            // 積集合は、現在の集合から、項目の集合が含まない要素を除いたものである。
             let d = self.diff(i, true);
             let rem: Vec<u32> = d
                 .into_iter()
@@ -450,7 +472,7 @@ impl Timeline {
 mod tests {
     use super::*;
 
-    /// 小さな擬似乱数(xorshift)。
+    /// テスト用の小さな擬似乱数生成器(xorshift)。
     struct Rng(u64);
 
     impl Rng {
@@ -473,7 +495,7 @@ mod tests {
         v
     }
 
-    /// 取っておいた集合を、素朴に持った集合と比べながら、乱数で操作を重ねる。
+    /// 乱数で選んだ操作を重ねながら、現在の集合と保存した集合を、単純な実装で持った集合と比較する。
     #[test]
     fn 取っておいた集合は素朴な写しと一致する() {
         for seed in 1..40u64 {
@@ -535,7 +557,7 @@ mod tests {
                 tl.tick();
                 let want: Vec<u32> = (0..nr as u32).filter(|&r| cur[r as usize]).collect();
                 assert_eq!(set_of(&tl), want, "seed {seed} step {step} op {op}");
-                // 取っておいた集合を戻して確かめ、今の集合に戻す。
+                // 保存した集合を現在の集合に復元して確かめてから、元の集合に戻す。
                 if i != ns - 1 && model[i].is_some() && rng.below(4) == 0 {
                     let m = model[i].clone().unwrap();
                     tl.save(ns - 1);

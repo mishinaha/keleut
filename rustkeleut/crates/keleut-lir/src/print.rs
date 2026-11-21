@@ -1,7 +1,7 @@
-//! LIR の印字(`keleut dump lir`)。
+//! LIR のテキスト出力(`keleut dump lir`)。
 //!
-//! 形は調べるためのもので、互換性を約束しない。
-//! 命令の綴りは `doc/lir.md` の節の見出しと同じである。
+//! 出力の形式は LIR を調べるためのもので、互換性を保証しない。
+//! 命令の名前は、`doc/lir.md` の節の見出しと同じである。
 
 use std::fmt::Write;
 
@@ -546,7 +546,7 @@ impl P<'_> {
     }
 }
 
-/// プログラムを印字する。
+/// プログラム `p` の LIR をテキストにして返す。
 pub fn print(p: &Program) -> String {
     let pr = P { p };
     let mut out = String::new();

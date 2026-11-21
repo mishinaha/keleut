@@ -1,6 +1,6 @@
-//! 単位を足していく下ろし([`keleut_lir::Extender`])の試験。
+//! 単位を追加しながら LIR に変換する [`keleut_lir::Extender`] のテスト。
 //!
-//! `crates/kir/tests/fixtures/*.kir` を、全体を 1 回で足す形と、単位を 1 つずつ足す形で下ろす。
+//! `crates/kir/tests/fixtures/*.kir` を、全体を 1 回で追加する方法と、単位を 1 つずつ追加する方法で LIR に変換する。
 
 use keleut_lir::{Extender, LabelId, Program};
 use std::path::PathBuf;
@@ -22,7 +22,9 @@ fn fixtures() -> Vec<(String, kir::Program)> {
         .collect()
 }
 
-/// プログラム `p` の先頭の `n` 個の単位と、その単位の項目だけを残したもの(表は単位の順に並ぶ)。
+/// プログラム `p` から、先頭の `n` 個の単位と、それらの単位に属する項目だけを残したプログラムを返す。
+///
+/// 各表の項目は単位の順に並んでいるので、残した項目は元の表の先頭の部分である。
 fn prefix(p: &kir::Program, n: usize) -> kir::Program {
     let keys: Vec<&str> = p.units[..n].iter().map(|u| u.key.as_str()).collect();
     let mine = |s: &str| keys.contains(&kir::unit_of_symbol(s));
@@ -37,7 +39,7 @@ fn prefix(p: &kir::Program, n: usize) -> kir::Program {
     q
 }
 
-/// 空の状態から全体を 1 回で足すと、[`keleut_lir::lower`] と同じ LIR になる。
+/// 空の状態から全体を 1 回で追加すると、[`keleut_lir::lower`] と同じ LIR になる。
 #[test]
 fn 全体を_1_回で足すと_lower_と同じ() {
     for (name, k) in fixtures() {
@@ -50,8 +52,12 @@ fn 全体を_1_回で足すと_lower_と同じ() {
     }
 }
 
-/// 単位を 1 つずつ足しても、関数、大域、初期化の関数の数は同じで、全体の検証に通る。
-/// 足す前に形の表の後ろに足した形(実行時が作った形)は、その番号のまま残り、後の形はその後ろに並ぶ。
+/// 単位を 1 つずつ追加しても、関数、グローバル、初期化関数の個数は 1 回で変換したときと同じで、プログラム全体の検証に通る。
+///
+/// 最初の呼び出しでは先頭の 2 個の単位を渡し、その後は単位を 1 個ずつ増やして渡す。
+/// 単位を追加する前にシェイプ表の後ろへ追加しておいたシェイプは、ランタイムが作ったシェイプに相当する。
+/// このシェイプはその番号のまま残り、後から追加されるシェイプはその後ろに並ぶ。
+/// シェイプ表に同じシェイプが 2 つ入らないことも確かめる。
 #[test]
 fn 単位を_1_つずつ足す() {
     for (name, k) in fixtures() {
@@ -64,10 +70,10 @@ fn 単位を_1_つずつ足す() {
             let f0 = lp.funcs.len();
             ext.extend(&q, &mut lp, kir::N_NEST, true)
                 .unwrap_or_else(|e| panic!("{name} の {n} 個の単位: {e}"));
-            // 足した関数は前の関数の後ろに続き、前の関数は変わらない。
+            // 追加した関数は前の関数の後ろに続き、前の関数は変わらない。
             assert!(lp.funcs.len() > f0, "{name}");
             if !lp.labels.is_empty() {
-                // 実行時が作った形の代わりに、どの形とも違う形を足しておく。
+                // ランタイムが作ったシェイプの代わりに、どのシェイプとも違うシェイプを追加しておく。
                 let mut s: Vec<LabelId> = (0..lp.labels.len() as u32).map(LabelId).collect();
                 s.push(LabelId(0));
                 s.sort();

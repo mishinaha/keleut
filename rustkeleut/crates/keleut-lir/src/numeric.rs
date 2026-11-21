@@ -1,19 +1,21 @@
-//! プリミティブと、数値の検査の明示(パス 7)。
+//! プリミティブの変換と、数値の明示的な検査(パス 7)。
 //!
-//! IRSpec の付録 A.5 のプリミティブと C の関数、A.3 の組み込みのインスタンスのメソッドを、
-//! trap しない LIR の命令の列にする。
-//! 誤りになりうる箇所は、命令の前に明示の検査と実行時エラーへの枝を置く。
+//! IRSpec の付録 A.5 のプリミティブと C の関数、付録 A.3 の組み込みのインスタンスのメソッドを、trap しない LIR の命令の並びに変換する。
+//! 実行時エラーになることがある演算では、命令の前に明示的な検査と、実行時エラーへの分岐を置く。
 //!
-//! - 整数の除算と剰余は、除数が 0 なら「ゼロ除算です」にする。
-//!   `MIN / -1` と `MIN % -1` は命令 `div`、`rem` が全域に定める(`MIN` と 0)。
-//! - `Float64` から整数への変換は、NaN と範囲(`-2^31 ≦ trunc(x) < 2^31` など。上端は開区間)を先に確かめる。
-//! - 整数の `+ - *` と符号反転は折り返す。
-//! - `__string_sub` は、位置と長さの範囲を先に確かめる。
+//! - 整数の除算と剰余では、除数が 0 なら実行時エラー `ゼロ除算です` にする。
+//!   `MIN / -1` と `MIN % -1` は検査しない。
+//!   命令 `div` と `rem` が、それぞれの結果を `MIN` と 0 に定めているからである。
+//! - `Float64` から整数への変換では、先に NaN でないことと、範囲に入ることを検査する。
+//!   範囲は、`Int32` へは `-2^31 ≦ trunc(x) < 2^31`、`Int64` へは `-2^63 ≦ trunc(x) < 2^63` で、どちらも上端は開いている。
+//! - 整数の `+ - *` と符号反転は検査しない。
+//!   オーバーフローした結果は折り返す(2 の補数で下位のビットだけが残る)。
+//! - `__string_sub` では、先に位置と長さが範囲に入ることを検査する。
 
 use crate::builder::Builder;
 use crate::ir::*;
 
-/// プリミティブ。
+/// LIR の命令に変換するプリミティブの種類。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Prim {
     /// 整数の二項演算。
@@ -28,29 +30,31 @@ pub(crate) enum Prim {
     FloatNeg,
     /// 浮動小数点数の比較。
     FloatCmp(CmpOp),
-    /// C の数学の関数。
+    /// C の数学関数。
     Math(MathFn),
     /// 文字列の連結。
     StrConcat,
     /// 文字列の比較。
     StrCmp(CmpOp),
-    /// `__string_length`。
+    /// 文字列のバイト数を返す `__string_length`。
     StrLen,
-    /// `__string_sub`。
+    /// 部分文字列を取り出す `__string_sub`。
     StrSub,
-    /// 数の変換。
+    /// 数値変換。
     Conv(ConvOp),
-    /// 値を文字列にする。
+    /// 値の文字列化。
     Show(ShowOp),
-    /// `Show[String]`(文字列そのもの)。
+    /// `Show[String]`。
+    /// 引数の文字列をそのまま結果にする。
     ShowStr,
     /// `Eq[Boolean]`。
     BoolEq,
-    /// `__panic`。
+    /// 実行時エラー `panic: <文字列>` で終了する `__panic`。
     Panic,
 }
 
-/// 実装名からプリミティブを引く。表に無い名前は `None`。
+/// 実装名 `name` に対応するプリミティブを返す。
+/// 対応するプリミティブがなければ `None` を返す。
 pub(crate) fn by_name(abi: Abi, name: &str) -> Option<Prim> {
     use CmpOp::*;
     use IntTy::*;
@@ -122,7 +126,9 @@ pub(crate) fn by_name(abi: Abi, name: &str) -> Option<Prim> {
     })
 }
 
-/// 組み込みのインスタンスのメソッド(IRSpec A.3。名前は `builtin/` を除いたもの)。
+/// 組み込みのインスタンスのメソッドに対応するプリミティブを返す(IRSpec の付録 A.3)。
+///
+/// `class` と `ty` には、シンボルから `builtin/` を取り除いた名前を渡す。
 pub(crate) fn builtin_method(class: &str, ty: &str, method: &str) -> Option<Prim> {
     let row = kir::builtins::METHODS
         .iter()
@@ -140,7 +146,7 @@ pub(crate) fn builtin_method(class: &str, ty: &str, method: &str) -> Option<Prim
     }
 }
 
-/// (引数の Rep, 結果の Rep)。
+/// プリミティブ `p` の引数の Rep の並びと、結果の Rep を返す。
 pub(crate) fn sig(p: Prim) -> (Vec<Rep>, Rep) {
     use Rep::*;
     match p {
@@ -165,16 +171,17 @@ pub(crate) fn sig(p: Prim) -> (Vec<Rep>, Rep) {
     }
 }
 
-/// 2^31 と 2^63 の `f64` のビット列。
+/// 2^31 を表す `f64` のビット列。
+/// `TWO_63`、`MINUS_TWO_31`、`MINUS_TWO_63` も同じように、それぞれ 2^63、-2^31、-2^63 を表す `f64` のビット列である。
 const TWO_31: u64 = 0x41e0_0000_0000_0000;
 const TWO_63: u64 = 0x43e0_0000_0000_0000;
 const MINUS_TWO_31: u64 = 0xc1e0_0000_0000_0000;
 const MINUS_TWO_63: u64 = 0xc3e0_0000_0000_0000;
 
-/// プリミティブを下ろす。`args` は [`sig`] の Rep のレジスタである。
+/// プリミティブ `p` の命令を生成し、結果のレジスタを返す。
 ///
-/// 結果のレジスタを返す。
-/// 必ず実行時エラーになるもの(`__panic`)はブロックを終えて `None` を返す。
+/// `args` は、[`sig`] が返す Rep を持つレジスタでなければならない。
+/// 必ず実行時エラーになるプリミティブ(`__panic`)では、ブロックを終えて `None` を返す。
 pub(crate) fn emit(b: &mut Builder, p: Prim, args: &[Reg]) -> Option<Reg> {
     let (_, res) = sig(p);
     let a = args[0];
@@ -249,7 +256,8 @@ pub(crate) fn emit(b: &mut Builder, p: Prim, args: &[Reg]) -> Option<Reg> {
                 });
                 b.fail_if(bad, RtError::StrSubRange, None);
             }
-            // 0 ≦ len ≦ 長さ < 2^31 なので、長さ - len は桁あふれしない。
+            // 0 ≦ len < 2^31 で、文字列のバイト数 n も 0 ≦ n < 2^31 なので、n - len はオーバーフローしない。
+            // len が n を超えていれば差は負になり、0 以上の pos との比較で範囲外と判定される。
             let n = b.reg(Rep::I32);
             b.emit(Inst::StrLen { dst: n, a });
             let room = b.reg(Rep::I32);
@@ -297,7 +305,7 @@ pub(crate) fn emit(b: &mut Builder, p: Prim, args: &[Reg]) -> Option<Reg> {
     Some(dst)
 }
 
-/// `__f64_to_i32` と `__f64_to_i64` の前の検査(NaN と範囲)。
+/// `__f64_to_i32` と `__f64_to_i64` の変換の前に置く、NaN と範囲の検査を生成する。
 fn f64_to_int_checks(b: &mut Builder, op: ConvOp, x: Reg) {
     let nan = b.reg(Rep::Bool);
     b.emit(Inst::FloatIsNan { dst: nan, a: x });
@@ -330,9 +338,10 @@ fn f64_to_int_checks(b: &mut Builder, op: ConvOp, x: Reg) {
         a: ge,
         b: lt,
     });
-    // ge と lt が等しく、しかも ge が真のときだけ範囲の中である。
-    // trunc(x) < -2^31 なら ge は偽で lt は真、trunc(x) ≧ 2^31 なら ge は真で lt は偽になり、
-    // NaN は先に除いたので ge と lt がともに偽になることはない。
+    // 範囲に入るのは、ge と lt がともに真のときだけである。
+    // trunc(x) が下限(-2^31 か -2^63)より小さければ ge は偽で lt は真になり、上限(2^31 か 2^63)以上なら ge は真で lt は偽になる。
+    // NaN は先の検査でエラーにしたので、ge と lt がともに偽になることはない。
+    // したがって、ge と lt が等しくなければ範囲外である。
     let bad = b.reg(Rep::Bool);
     b.emit(Inst::BoolNot { dst: bad, a: both });
     b.fail_if(bad, RtError::F64ToIntRange(op), Some(x));
